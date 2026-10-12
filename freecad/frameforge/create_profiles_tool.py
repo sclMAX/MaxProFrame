@@ -9,6 +9,7 @@ import FreeCADGui as Gui
 from PySide import QtCore, QtGui
 
 from freecad.frameforge.ff_tools import ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, FormProxy, translate
+from freecad.frameforge.library_manager import LibraryManager
 from freecad.frameforge.profile import Profile, ViewProviderProfile
 
 
@@ -27,15 +28,8 @@ class BaseProfileTaskPanel(ABC):
         # self.initialize_ui() # Must be call in Child class, AFTER openTransaction
 
     def load_data(self):
-        self.profiles = {}
-
-        files = [f for f in os.listdir(PROFILESPATH) if f.endswith(".json")]
-
-        for f in files:
-            material_name = os.path.splitext(f)[0].capitalize()
-
-            with open(os.path.join(PROFILESPATH, f)) as fd:
-                self.profiles[material_name] = json.load(fd)
+        self.library_manager = LibraryManager()
+        self.profiles = self.library_manager.get_all_profiles()
 
     def enable_signals(self, enable):
         # Block signals during initialization to prevent unintended side effects
@@ -269,7 +263,14 @@ class BaseProfileTaskPanel(ABC):
             img_name += "_Fillet"
         img_name += ".png"
 
-        self.form_proxy.label_image.setPixmap(QtGui.QPixmap(os.path.join(PROFILEIMAGES_PATH, material, img_name)))
+        # Check material-specific image directory first, fallback to Metal, then Warehouse.png
+        img_path = os.path.join(PROFILEIMAGES_PATH, material, img_name)
+        if not os.path.exists(img_path):
+            img_path = os.path.join(PROFILEIMAGES_PATH, "Metal", img_name)
+        if not os.path.exists(img_path):
+            img_path = os.path.join(PROFILEIMAGES_PATH, "Warehouse.png")
+
+        self.form_proxy.label_image.setPixmap(QtGui.QPixmap(img_path))
 
     def update_profile(self, profile):
         profile.Proxy.set_properties(

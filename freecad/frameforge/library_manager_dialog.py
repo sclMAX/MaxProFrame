@@ -1,0 +1,531 @@
+import copy
+import os
+
+try:
+    from PySide import QtCore, QtGui, QtWidgets
+except ImportError:
+    from PySide2 import QtCore, QtGui, QtWidgets
+
+import FreeCAD as App
+import FreeCADGui as Gui
+
+from freecad.frameforge.ff_tools import ICONPATH, translate
+from freecad.frameforge.library_manager import (
+    KNOWN_FAMILIES,
+    STANDARD_DENSITIES,
+    LibraryManager,
+    calculate_linear_weight,
+    sanitize_library_name,
+)
+
+
+class ProfileLibraryManagerDialog(QtWidgets.QDialog):
+    """
+    Dialog for managing FrameForge profile libraries:
+    Stock vs User-defined catalogs, families, and dimensional sizes with weight calculations.
+    """
+
+    TABLE_COLUMNS = [
+        ("Size", "Size / Código"),
+        ("Height", "Alto (H) [mm]"),
+        ("Width", "Ancho (W) [mm]"),
+        ("Thickness", "Espesor (T) [mm]"),
+        ("Flange Thickness", "Espesor Ala [mm]"),
+        ("Radius1", "Radio 1 [mm]"),
+        ("Radius2", "Radio 2 [mm]"),
+        ("Weight", "Peso [kg/m]"),
+    ]
+
+    def __init__(self, parent=None, library_manager=None):
+        super().__init__(parent)
+        self.manager = library_manager or LibraryManager()
+        self.current_lib_meta = None
+        self.current_lib_data = {}
+        self.current_family = None
+        self.is_dirty = False
+
+        self.setWindowTitle(translate("frameforge", "FrameForge - Gestor de Bibliotecas de Perfiles"))
+        self.resize(920, 580)
+
+        self._build_ui()
+        self.refresh_libraries()
+
+    def _build_ui(self):
+        main_layout = QtWidgets.QVBoxLayout(self)
+
+        # Header description
+        header = QtWidgets.QLabel(
+            translate(
+                "frameforge",
+                "<b>Gestión de Bibliotecas de Perfiles</b><br>"
+                "Creá, duplicá y modificá bibliotecas personalizadas (ej. Indumatics Aluminio) con dimensiones y pesos específicos.",
+            )
+        )
+        header.setStyleSheet("color: #444; padding-bottom: 6px;")
+        main_layout.addWidget(header)
+
+        # Content Splitter (Left: Libraries, Right: Details/Sizes)
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        main_layout.addWidget(splitter, 1)
+
+        # --- LEFT PANEL: Libraries list & actions ---
+        left_widget = QtWidgets.QWidget()
+        left_layout = QtWidgets.QVBoxLayout(left_widget)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+
+        left_layout.addWidget(QtWidgets.QLabel(translate("frameforge", "<b>Bibliotecas disponibles:</b>")))
+        self.list_libraries = QtWidgets.QListWidget()
+        self.list_libraries.currentItemChanged.connect(self._on_library_selection_changed)
+        left_layout.addWidget(self.list_libraries, 1)
+
+        lib_btn_layout = QtWidgets.QHBoxLayout()
+        self.btn_new_lib = QtWidgets.QPushButton(translate("frameforge", "+ Nueva"))
+        self.btn_new_lib.clicked.connect(self._on_new_library)
+        self.btn_dup_lib = QtWidgets.QPushButton(translate("frameforge", "Duplicar"))
+        self.btn_dup_lib.clicked.connect(self._on_duplicate_library)
+        self.btn_del_lib = QtWidgets.QPushButton(translate("frameforge", "Eliminar"))
+        self.btn_del_lib.clicked.connect(self._on_delete_library)
+
+        lib_btn_layout.addWidget(self.btn_new_lib)
+        lib_btn_layout.addWidget(self.btn_dup_lib)
+        lib_btn_layout.addWidget(self.btn_del_lib)
+        left_layout.addLayout(lib_btn_layout)
+
+        splitter.addWidget(left_widget)
+
+        # --- RIGHT PANEL: Families and Sizes Table ---
+        right_widget = QtWidgets.QWidget()
+        right_layout = QtWidgets.QVBoxLayout(right_widget)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Top banner for library type (Stock read-only vs User editable)
+        self.lbl_lib_banner = QtWidgets.QLabel()
+        self.lbl_lib_banner.setStyleSheet("padding: 4px; font-weight: bold; border-radius: 3px;")
+        right_layout.addWidget(self.lbl_lib_banner)
+
+        # Family selection row
+        family_row = QtWidgets.QHBoxLayout()
+        family_row.addWidget(QtWidgets.QLabel(translate("frameforge", "Familia geométrica:")))
+        self.combo_family = QtWidgets.QComboBox()
+        self.combo_family.currentIndexChanged.connect(self._on_family_changed)
+        family_row.addWidget(self.combo_family, 1)
+
+        self.btn_add_family = QtWidgets.QPushButton(translate("frameforge", "+ Familia"))
+        self.btn_add_family.clicked.connect(self._on_add_family)
+        self.btn_del_family = QtWidgets.QPushButton(translate("frameforge", "- Familia"))
+        self.btn_del_family.clicked.connect(self._on_delete_family)
+        family_row.addWidget(self.btn_add_family)
+        family_row.addWidget(self.btn_del_family)
+        right_layout.addLayout(family_row)
+
+        # Metadata row: Norma & Fillet
+        meta_row = QtWidgets.QHBoxLayout()
+        meta_row.addWidget(QtWidgets.QLabel(translate("frameforge", "Norma / Ref:")))
+        self.le_norm = QtWidgets.QLineEdit()
+        self.le_norm.textChanged.connect(self._mark_dirty)
+        meta_row.addWidget(self.le_norm, 1)
+
+        self.cb_fillet = QtWidgets.QCheckBox(translate("frameforge", "Con redondeos (Fillet)"))
+        self.cb_fillet.toggled.connect(self._mark_dirty)
+        meta_row.addWidget(self.cb_fillet)
+        right_layout.addLayout(meta_row)
+
+        # Sizes Table
+        self.table_sizes = QtWidgets.QTableWidget()
+        self.table_sizes.setColumnCount(len(self.TABLE_COLUMNS))
+        self.table_sizes.setHorizontalHeaderLabels([col[1] for col in self.TABLE_COLUMNS])
+        self.table_sizes.horizontalHeader().setStretchLastSection(True)
+        self.table_sizes.itemChanged.connect(self._on_table_item_changed)
+        right_layout.addWidget(self.table_sizes, 1)
+
+        # Table action buttons
+        table_btn_row = QtWidgets.QHBoxLayout()
+        self.btn_add_size = QtWidgets.QPushButton(translate("frameforge", "+ Agregar Medida"))
+        self.btn_add_size.clicked.connect(self._on_add_size)
+        self.btn_del_size = QtWidgets.QPushButton(translate("frameforge", "- Quitar Medida"))
+        self.btn_del_size.clicked.connect(self._on_delete_size)
+
+        self.btn_calc_weight = QtWidgets.QPushButton(translate("frameforge", "Calcular Peso Teórico"))
+        self.btn_calc_weight.setToolTip(translate("frameforge", "Calcula el peso en kg/m según densidad del material y medidas."))
+        self.btn_calc_weight.clicked.connect(self._on_calc_weight)
+
+        table_btn_row.addWidget(self.btn_add_size)
+        table_btn_row.addWidget(self.btn_del_size)
+        table_btn_row.addStretch()
+        table_btn_row.addWidget(self.btn_calc_weight)
+        right_layout.addLayout(table_btn_row)
+
+        splitter.addWidget(right_widget)
+        splitter.setSizes([260, 640])
+
+        # Bottom Bar: Status and Save / Close
+        bottom_layout = QtWidgets.QHBoxLayout()
+        self.lbl_status = QtWidgets.QLabel("")
+        self.lbl_status.setStyleSheet("color: #006600;")
+        bottom_layout.addWidget(self.lbl_status, 1)
+
+        self.btn_save = QtWidgets.QPushButton(translate("frameforge", "Guardar Cambios"))
+        self.btn_save.setStyleSheet("font-weight: bold; background-color: #2b78e4; color: white; padding: 6px 14px;")
+        self.btn_save.clicked.connect(self._on_save_library)
+        self.btn_close = QtWidgets.QPushButton(translate("frameforge", "Cerrar"))
+        self.btn_close.clicked.connect(self.close)
+
+        bottom_layout.addWidget(self.btn_save)
+        bottom_layout.addWidget(self.btn_close)
+        main_layout.addLayout(bottom_layout)
+
+    def refresh_libraries(self, select_name=None):
+        self.list_libraries.blockSignals(True)
+        self.list_libraries.clear()
+
+        libs = self.manager.list_libraries()
+        target_item = None
+
+        for lib in libs:
+            tag = "[Usuario] " if lib["is_user"] else "[Sistema] "
+            item = QtWidgets.QListWidgetItem(f"{tag}{lib['name']}")
+            item.setData(QtCore.Qt.UserRole, lib)
+            self.list_libraries.addItem(item)
+            if select_name and lib["name"].lower() == select_name.lower():
+                target_item = item
+
+        self.list_libraries.blockSignals(False)
+
+        if target_item:
+            self.list_libraries.setCurrentItem(target_item)
+        elif self.list_libraries.count() > 0:
+            self.list_libraries.setCurrentRow(0)
+
+    def _on_library_selection_changed(self, current, previous):
+        if not current:
+            return
+
+        lib_meta = current.data(QtCore.Qt.UserRole)
+        self.current_lib_meta = lib_meta
+
+        try:
+            self.current_lib_data = self.manager.get_library(lib_meta["name"])
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(e))
+            return
+
+        is_user = lib_meta["is_user"]
+        self.btn_del_lib.setEnabled(is_user)
+        self.btn_save.setEnabled(is_user)
+        self.btn_add_family.setEnabled(is_user)
+        self.btn_del_family.setEnabled(is_user)
+        self.btn_add_size.setEnabled(is_user)
+        self.btn_del_size.setEnabled(is_user)
+        self.le_norm.setEnabled(is_user)
+        self.cb_fillet.setEnabled(is_user)
+
+        if is_user:
+            self.lbl_lib_banner.setText(f"Biblioteca de Usuario: {lib_meta['name']} (Editable)")
+            self.lbl_lib_banner.setStyleSheet("background-color: #e6f4ea; color: #137333; padding: 4px;")
+        else:
+            self.lbl_lib_banner.setText(f"Biblioteca de Sistema: {lib_meta['name']} (Solo lectura - Usá 'Duplicar' para personalizar)")
+            self.lbl_lib_banner.setStyleSheet("background-color: #f1f3f4; color: #5f6368; padding: 4px;")
+
+        self._populate_families()
+        self.is_dirty = False
+        self.lbl_status.setText("")
+
+    def _populate_families(self, select_family=None):
+        self.combo_family.blockSignals(True)
+        self.combo_family.clear()
+
+        families = [k for k in self.current_lib_data.keys() if not k.startswith("_")]
+        families.sort()
+
+        for fam in families:
+            self.combo_family.addItem(fam)
+
+        self.combo_family.blockSignals(False)
+
+        if select_family and select_family in families:
+            self.combo_family.setCurrentText(select_family)
+        elif families:
+            self.combo_family.setCurrentIndex(0)
+
+        self._on_family_changed()
+
+    def _on_family_changed(self):
+        family_name = self.combo_family.currentText()
+        self.current_family = family_name
+
+        if not family_name or family_name not in self.current_lib_data:
+            self.table_sizes.setRowCount(0)
+            self.le_norm.setText("")
+            self.cb_fillet.setChecked(False)
+            return
+
+        fam_data = self.current_lib_data[family_name]
+        self.le_norm.blockSignals(True)
+        self.cb_fillet.blockSignals(True)
+
+        self.le_norm.setText(fam_data.get("norm", ""))
+        self.cb_fillet.setChecked(bool(fam_data.get("fillet", False)))
+
+        self.le_norm.blockSignals(False)
+        self.cb_fillet.blockSignals(False)
+
+        sizes_dict = fam_data.get("sizes", {})
+        self._populate_sizes_table(sizes_dict)
+
+    def _populate_sizes_table(self, sizes_dict):
+        self.table_sizes.blockSignals(True)
+        self.table_sizes.setRowCount(0)
+
+        is_editable = bool(self.current_lib_meta and self.current_lib_meta["is_user"])
+
+        for size_key, size_props in sizes_dict.items():
+            row = self.table_sizes.rowCount()
+            self.table_sizes.insertRow(row)
+
+            for col_idx, (prop_key, _) in enumerate(self.TABLE_COLUMNS):
+                val = size_key if prop_key == "Size" else str(size_props.get(prop_key, "0"))
+                item = QtWidgets.QTableWidgetItem(val)
+                if not is_editable:
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
+                self.table_sizes.setItem(row, col_idx, item)
+
+        self.table_sizes.blockSignals(False)
+
+    def _mark_dirty(self):
+        self.is_dirty = True
+        self.lbl_status.setText(translate("frameforge", "Cambios sin guardar."))
+
+    def _on_table_item_changed(self, item):
+        self._mark_dirty()
+
+    def _on_new_library(self):
+        name, ok = QtWidgets.QInputDialog.getText(
+            self,
+            translate("frameforge", "Nueva Biblioteca"),
+            translate("frameforge", "Nombre de la biblioteca (ej. Indumatics Aluminio):"),
+        )
+        if not ok or not name.strip():
+            return
+
+        name = name.strip()
+        default_data = {
+            "_metadata": {"name": name, "material": "Aluminium"},
+            "Square Hollow": {
+                "norm": "Custom",
+                "unit": "Metric Units",
+                "fillet": False,
+                "sizes": {
+                    "50x50x2": {
+                        "Height": "50",
+                        "Width": "50",
+                        "Thickness": "2",
+                        "Flange Thickness": "0",
+                        "Radius1": "0",
+                        "Radius2": "0",
+                        "Weight": "1.037",
+                    }
+                },
+            },
+        }
+
+        self.manager.save_user_library(name, default_data)
+        self.refresh_libraries(select_name=name)
+        self.lbl_status.setText(f"Biblioteca '{name}' creada con éxito.")
+
+    def _on_duplicate_library(self):
+        if not self.current_lib_meta:
+            return
+
+        source_name = self.current_lib_meta["name"]
+        new_name, ok = QtWidgets.QInputDialog.getText(
+            self,
+            translate("frameforge", "Duplicar Biblioteca"),
+            translate("frameforge", f"Nuevo nombre para la copia de '{source_name}':"),
+            text=f"{source_name} Personalizada",
+        )
+        if not ok or not new_name.strip():
+            return
+
+        new_name = new_name.strip()
+        self.manager.duplicate_library(source_name, new_name)
+        self.refresh_libraries(select_name=new_name)
+        self.lbl_status.setText(f"Biblioteca duplicada como '{new_name}'.")
+
+    def _on_delete_library(self):
+        if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
+            return
+
+        name = self.current_lib_meta["name"]
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            translate("frameforge", "Confirmar eliminación"),
+            translate("frameforge", f"¿Estás seguro de eliminar la biblioteca '{name}'?"),
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if reply == QtWidgets.QMessageBox.Yes:
+            self.manager.delete_user_library(name)
+            self.refresh_libraries()
+            self.lbl_status.setText(f"Biblioteca '{name}' eliminada.")
+
+    def _on_add_family(self):
+        if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
+            return
+
+        fam, ok = QtWidgets.QInputDialog.getItem(
+            self,
+            translate("frameforge", "Agregar Familia"),
+            translate("frameforge", "Seleccioná la familia geométrica:"),
+            KNOWN_FAMILIES,
+            0,
+            False,
+        )
+        if not ok or not fam:
+            return
+
+        if fam not in self.current_lib_data:
+            self.current_lib_data[fam] = {
+                "norm": "Custom",
+                "unit": "Metric Units",
+                "fillet": False,
+                "sizes": {},
+            }
+            self._populate_families(select_family=fam)
+            self._mark_dirty()
+
+    def _on_delete_family(self):
+        if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
+            return
+
+        fam = self.combo_family.currentText()
+        if not fam:
+            return
+
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            translate("frameforge", "Eliminar Familia"),
+            translate("frameforge", f"¿Eliminar la familia '{fam}' y todas sus medidas?"),
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if reply == QtWidgets.QMessageBox.Yes:
+            del self.current_lib_data[fam]
+            self._populate_families()
+            self._mark_dirty()
+
+    def _on_add_size(self):
+        if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
+            return
+
+        row = self.table_sizes.rowCount()
+        self.table_sizes.insertRow(row)
+
+        default_vals = ["Nuevo_50x50x2", "50", "50", "2", "0", "0", "0", "0"]
+        for col, val in enumerate(default_vals):
+            self.table_sizes.setItem(row, col, QtWidgets.QTableWidgetItem(val))
+
+        self.table_sizes.selectRow(row)
+        self._mark_dirty()
+
+    def _on_delete_size(self):
+        if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
+            return
+
+        row = self.table_sizes.currentRow()
+        if row >= 0:
+            self.table_sizes.removeRow(row)
+            self._mark_dirty()
+
+    def _on_calc_weight(self):
+        """Calculates theoretical linear weight for selected row or all rows."""
+        row = self.table_sizes.currentRow()
+        if row < 0:
+            QtWidgets.QMessageBox.information(
+                self, translate("frameforge", "Información"), translate("frameforge", "Seleccioná una fila para calcular el peso.")
+            )
+            return
+
+        # Prompt for material density
+        density_items = [f"{mat} ({dens} g/cm³)" for mat, dens in STANDARD_DENSITIES.items()]
+        item, ok = QtWidgets.QInputDialog.getItem(
+            self,
+            translate("frameforge", "Densidad del Material"),
+            translate("frameforge", "Seleccioná material para el cálculo de peso:"),
+            density_items,
+            0,
+            False,
+        )
+        if not ok:
+            return
+
+        # Extract density
+        mat_key = item.split(" (")[0]
+        density = STANDARD_DENSITIES.get(mat_key, 2.70)
+
+        family = self.combo_family.currentText()
+        try:
+            h = float(self.table_sizes.item(row, 1).text())
+            w = float(self.table_sizes.item(row, 2).text())
+            t = float(self.table_sizes.item(row, 3).text())
+            tf = float(self.table_sizes.item(row, 4).text()) if self.table_sizes.item(row, 4) else 0.0
+
+            calc_weight = calculate_linear_weight(
+                family=family, width=w, height=h, thickness=t, density_g_cm3=density, flange_thickness=tf
+            )
+            # Column 7 is Weight
+            self.table_sizes.setItem(row, 7, QtWidgets.QTableWidgetItem(str(calc_weight)))
+            self._mark_dirty()
+            self.lbl_status.setText(f"Peso calculado: {calc_weight} kg/m ({mat_key})")
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), f"No se pudo calcular el peso: {e}")
+
+    def _on_save_library(self):
+        if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
+            return
+
+        # Read back table into current_lib_data
+        fam = self.combo_family.currentText()
+        if fam and fam in self.current_lib_data:
+            sizes = {}
+            for row in range(self.table_sizes.rowCount()):
+                size_name = self.table_sizes.item(row, 0).text().strip()
+                if not size_name:
+                    continue
+
+                size_entry = {}
+                for col_idx, (prop_key, _) in enumerate(self.TABLE_COLUMNS):
+                    if prop_key == "Size":
+                        continue
+                    item = self.table_sizes.item(row, col_idx)
+                    size_entry[prop_key] = item.text().strip() if item else "0"
+
+                sizes[size_name] = size_entry
+
+            self.current_lib_data[fam]["norm"] = self.le_norm.text().strip()
+            self.current_lib_data[fam]["fillet"] = self.cb_fillet.isChecked()
+            self.current_lib_data[fam]["sizes"] = sizes
+
+        lib_name = self.current_lib_meta["name"]
+        self.manager.save_user_library(lib_name, self.current_lib_data)
+        self.is_dirty = False
+        self.lbl_status.setText(f"Biblioteca '{lib_name}' guardada correctamente.")
+
+
+class ManageProfileLibrariesCommand:
+    """GuiCommand to open the Profile Library Manager Dialog."""
+
+    def GetResources(self):
+        return {
+            "Pixmap": os.path.join(ICONPATH, "warehouse_profiles.svg"),
+            "MenuText": translate("frameforge", "Manage Profile Libraries"),
+            "ToolTip": translate("frameforge", "Create, edit and manage custom profile libraries and dimensions"),
+        }
+
+    def Activated(self):
+        dialog = ProfileLibraryManagerDialog(parent=Gui.getMainWindow())
+        dialog.exec_()
+
+    def IsActive(self):
+        return True
+
+
+if hasattr(Gui, "addCommand"):
+    Gui.addCommand("FrameForge_ManageProfileLibraries", ManageProfileLibrariesCommand())
