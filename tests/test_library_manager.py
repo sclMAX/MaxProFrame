@@ -3,6 +3,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from freecad.frameforge.library_manager import (
     LibraryManager,
@@ -70,6 +71,25 @@ class TestLibraryManager(unittest.TestCase):
         # Check content retrieved
         loaded = self.manager.get_library("Indumatics Aluminio")
         self.assertEqual(loaded, sample_data)
+
+    def test_atomic_save_preserves_original_on_write_failure(self):
+        original_data = {"Square": {"sizes": {"original": {"Height": "10"}}}}
+        target_path = self.manager.save_user_library("AtomicTestLib", original_data)
+        with open(target_path, "r", encoding="utf-8") as f:
+            original_content = f.read()
+
+        def fail_write(data, stream, **kwargs):
+            stream.write('{"partial":')
+            raise IOError("Simulated disk full")
+
+        with patch("freecad.frameforge.library_manager.json.dump", side_effect=fail_write):
+            with self.assertRaisesRegex(IOError, "^Simulated disk full$"):
+                self.manager.save_user_library("AtomicTestLib", {"Square": {"sizes": {}}})
+
+        with open(target_path, "r", encoding="utf-8") as f:
+            self.assertEqual(f.read(), original_content)
+        self.assertEqual(self.manager.get_library("AtomicTestLib"), original_data)
+        self.assertEqual(os.listdir(self.test_user_dir), [os.path.basename(target_path)])
 
     def test_duplicate_library(self):
         # Duplicate stock 'Wood' or 'Metal' to a custom user library

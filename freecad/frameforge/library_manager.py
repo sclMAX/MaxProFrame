@@ -252,8 +252,16 @@ class LibraryManager:
                 data["_metadata"] = {}
             data["_metadata"]["name"] = name
 
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4)
+        temp_path = f"{filepath}.tmp.{os.getpid()}"
+        try:
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4)
+                f.flush()
+            os.replace(temp_path, filepath)
+        except Exception:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            raise
 
         return filepath
 
