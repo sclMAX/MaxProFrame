@@ -21,4 +21,5 @@ L2: "y si agregamos un comando para manejar la bibliotecas, que habra una ventan
 L3: "Estoy de acuerdo, solo me gustaria tener en cuenta a futuro poder agregar a una lib perfiles personalizados como un marco de puerta o un perfil 'C' para tenerlo en cuenta en el desarrollo modular. que opinas?"
 L4: "si"
 L5: Verified multi-path catalog storage, isolated user directory CRUD, theoretical linear weight calculation (Aluminium 2.70 g/cm3), UI dialog integration, and full test suite passing in FreeCAD 1.0/v26-3 AppImage offscreen environment.
-L6: Configured git author as sclMAX <maxi.indumatics@gmail.com> and committed work-unit 575aad6 on branch feature/profile-library-manager.
+L6: Configured git author as sclMAX <maxi.indumatics@gmail.com> and committed work-unit on branch feature/profile-library-manager.
+L7: RDD review identified 3 findings (collision protection, family switch edit persistence, wood density parsing); all 3 resolved and verified with 14 passing tests (commits c5f291d, 112e6d2).

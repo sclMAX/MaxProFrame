@@ -141,6 +141,44 @@ class TestLibraryManagerDialog(unittest.TestCase):
         self.assertEqual(saved["FamilyA"]["sizes"]["A1"]["Height"], "99")
         self.assertEqual(saved["FamilyA"]["norm"], "NormA_Modified")
 
+    def test_dialog_wood_density_calculation(self):
+        try:
+            from PySide import QtWidgets
+        except ImportError:
+            try:
+                from PySide6 import QtWidgets
+            except ImportError:
+                from PySide2 import QtWidgets
+
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
+        from freecad.frameforge.library_manager import STANDARD_DENSITIES, calculate_linear_weight
+        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+
+        test_data = {
+            "_metadata": {"name": "WoodTest"},
+            "Square": {
+                "norm": "Custom",
+                "unit": "Metric Units",
+                "fillet": False,
+                "sizes": {"100x100": {"Height": "100", "Width": "100", "Thickness": "0"}},
+            },
+        }
+        self.manager.save_user_library("WoodTest", test_data)
+        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        dialog.refresh_libraries(select_name="WoodTest")
+
+        # Simulate the item text from QInputDialog for Wood (Soft) and Wood (Hard)
+        for wood_label, expected_key in [
+            ("Wood (Soft) (0.55 g/cm³)", "Wood (Soft)"),
+            ("Wood (Hard) (0.75 g/cm³)", "Wood (Hard)"),
+        ]:
+            parsed_key = wood_label.rsplit(" (", 1)[0]
+            self.assertEqual(parsed_key, expected_key)
+            self.assertIn(parsed_key, STANDARD_DENSITIES)
+            density = STANDARD_DENSITIES[parsed_key]
+            weight = calculate_linear_weight("Square", 100.0, 100.0, 0, density)
+            self.assertAlmostEqual(weight, 5.5 if "Soft" in wood_label else 7.5, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()

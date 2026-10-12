@@ -201,6 +201,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
 
         lib_meta = current.data(QtCore.Qt.UserRole)
+        # Reset current family so previous library's family doesn't commit into new library
+        self.current_family = None
         self.current_lib_meta = lib_meta
 
         try:
