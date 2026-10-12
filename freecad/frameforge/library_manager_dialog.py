@@ -25,6 +25,69 @@ def is_dark_theme(widget):
     return bg.lightness() < 128
 
 
+class NewLibraryDialog(QtWidgets.QDialog):
+    """Modal dialog for creating or duplicating a library with material selection."""
+
+    def __init__(
+        self,
+        parent=None,
+        title="New Library",
+        default_name="",
+        default_material="Steel",
+        is_duplicate=False,
+    ):
+        super().__init__(parent)
+        self.setWindowTitle(translate("frameforge", title))
+        self.resize(380, 160)
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        # Name row
+        layout.addWidget(QtWidgets.QLabel(translate("frameforge", "Library Name:")))
+        self.le_name = QtWidgets.QLineEdit(default_name)
+        layout.addWidget(self.le_name)
+
+        # Material row
+        layout.addWidget(QtWidgets.QLabel(translate("frameforge", "Material / Density:")))
+        self.combo_material = QtWidgets.QComboBox()
+        for mat, dens in STANDARD_DENSITIES.items():
+            self.combo_material.addItem(
+                f"{translate('frameforge', mat)} ({dens} g/cm³)", (mat, dens)
+            )
+
+        # Preselect default material
+        for i in range(self.combo_material.count()):
+            mat_key, _ = self.combo_material.itemData(i)
+            if mat_key.lower() == default_material.lower():
+                self.combo_material.setCurrentIndex(i)
+                break
+        layout.addWidget(self.combo_material)
+
+        self.cb_recalc = None
+        if is_duplicate:
+            self.cb_recalc = QtWidgets.QCheckBox(
+                translate("frameforge", "Recalculate theoretical weights for new material")
+            )
+            self.cb_recalc.setChecked(True)
+            layout.addWidget(self.cb_recalc)
+
+        # Buttons
+        btn_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
+        btn_box.accepted.connect(self.accept)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+
+    def get_values(self):
+        name = self.le_name.text().strip()
+        mat_data = self.combo_material.itemData(self.combo_material.currentIndex())
+        mat = mat_data[0] if mat_data else "Steel"
+        dens = mat_data[1] if mat_data else 7.85
+        recalc = self.cb_recalc.isChecked() if self.cb_recalc else False
+        return name, mat, dens, recalc
+
+
 class ProfileLibraryManagerDialog(QtWidgets.QDialog):
     """
     Dialog for managing FrameForge profile libraries:
@@ -192,16 +255,6 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.table_sizes.itemChanged.connect(self._on_table_item_changed)
         right_layout.addWidget(self.table_sizes, 1)
 
-        # Table action buttons
-        table_btn_row = QtWidgets.QHBoxLayout()
-        self.btn_calc_weight = QtWidgets.QPushButton(translate("frameforge", "Calculate Theoretical Weight"))
-        self.btn_calc_weight.setToolTip(translate("frameforge", "Calculates theoretical weight in kg/m based on material density and dimensions."))
-        self.btn_calc_weight.clicked.connect(self._on_calc_weight)
-
-        table_btn_row.addStretch()
-        table_btn_row.addWidget(self.btn_calc_weight)
-        right_layout.addLayout(table_btn_row)
-
         splitter.addWidget(right_widget)
         splitter.setSizes([320, 640])
 
@@ -323,8 +376,13 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
     def _update_banner(self, is_user, name):
         dark = is_dark_theme(self)
+        mat, dens = self.manager.get_library_material_info(name)
+        mat_display = f"{translate('frameforge', mat)} ({dens} g/cm³)"
         if is_user:
-            self.lbl_lib_banner.setText(translate("frameforge", "User Library: %s (Editable)") % name)
+            self.lbl_lib_banner.setText(
+                translate("frameforge", "User Library: %s | Material: %s (Editable)")
+                % (name, mat_display)
+            )
             if dark:
                 self.lbl_lib_banner.setStyleSheet(
                     "background-color: #1b3824; color: #81c784; border: 1px solid #2e7d32; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
@@ -335,7 +393,11 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 )
         else:
             self.lbl_lib_banner.setText(
-                translate("frameforge", "System Library: %s (Read-only - Use 'Duplicate' to customize)") % name
+                translate(
+                    "frameforge",
+                    "System Library: %s | Material: %s (Read-only - Use 'Duplicate' to customize)",
+                )
+                % (name, mat_display)
             )
             if dark:
                 self.lbl_lib_banner.setStyleSheet(
@@ -574,21 +636,85 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.is_dirty = True
         self._set_status(translate("frameforge", "Unsaved changes."), is_warning=True)
 
-    def _on_table_item_changed(self, item):
-        self._mark_dirty()
-
-    def _on_new_library(self):
-        name, ok = QtWidgets.QInputDialog.getText(
-            self,
-            translate("frameforge", "New Library"),
-            translate("frameforge", "Library name (e.g. Aluminum Tubes):"),
-        )
-        if not ok or not name.strip():
+    def _recalculate_row_weight(self, row):
+        if not self.current_family or not self.current_lib_meta:
             return
 
-        name = name.strip()
+        lib_name = self.current_lib_meta.get("name", "")
+        _, density = self.manager.get_library_material_info(lib_name)
+
+        try:
+            h_item = self.table_sizes.item(row, 1)
+            w_item = self.table_sizes.item(row, 2)
+            t_item = self.table_sizes.item(row, 3)
+            tf_item = self.table_sizes.item(row, 4)
+
+            if not (h_item and w_item and t_item):
+                return
+
+            h_str = h_item.text().strip()
+            w_str = w_item.text().strip()
+            t_str = t_item.text().strip()
+            tf_str = tf_item.text().strip() if tf_item else ""
+
+            if not (h_str and w_str and t_str):
+                return
+
+            h = float(h_str)
+            w = float(w_str)
+            t = float(t_str)
+            tf = float(tf_str) if tf_str else 0.0
+
+            calc_weight = calculate_linear_weight(
+                family=self.current_family,
+                width=w,
+                height=h,
+                thickness=t,
+                density_g_cm3=density,
+                flange_thickness=tf,
+            )
+
+            self.table_sizes.blockSignals(True)
+            weight_item = self.table_sizes.item(row, 7)
+            if not weight_item:
+                weight_item = QtWidgets.QTableWidgetItem(str(calc_weight))
+                self.table_sizes.setItem(row, 7, weight_item)
+            else:
+                weight_item.setText(str(calc_weight))
+            self.table_sizes.blockSignals(False)
+        except Exception:
+            pass
+
+    def _on_table_item_changed(self, item):
+        self._mark_dirty()
+        if item and item.column() in (1, 2, 3, 4):
+            self._recalculate_row_weight(item.row())
+
+    def _on_new_library(self):
+        dlg = NewLibraryDialog(self, title="New Library", default_material="Steel")
+        if dlg.exec_() != QtWidgets.QDialog.Accepted:
+            return
+
+        name, mat, dens, _ = dlg.get_values()
+        if not name:
+            return
+
+        initial_weight = "1.037"
+        try:
+            initial_weight = str(
+                calculate_linear_weight(
+                    family="Square Hollow",
+                    width=50,
+                    height=50,
+                    thickness=2,
+                    density_g_cm3=dens,
+                )
+            )
+        except Exception:
+            pass
+
         default_data = {
-            "_metadata": {"name": name, "material": "Aluminium"},
+            "_metadata": {"name": name, "material": mat, "density": dens},
             "Square Hollow": {
                 "norm": "Custom",
                 "unit": "Metric Units",
@@ -601,14 +727,16 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                         "Flange Thickness": "0",
                         "Radius1": "0",
                         "Radius2": "0",
-                        "Weight": "1.037",
+                        "Weight": initial_weight,
                     }
                 },
             },
         }
 
         try:
-            self.manager.save_user_library(name, default_data, overwrite=False)
+            self.manager.save_user_library(
+                name, default_data, overwrite=False, material=mat, density=dens
+            )
         except FileExistsError:
             QtWidgets.QMessageBox.warning(
                 self,
@@ -625,18 +753,32 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
 
         source_name = self.current_lib_meta["name"]
-        new_name, ok = QtWidgets.QInputDialog.getText(
+        source_mat, _ = self.manager.get_library_material_info(source_name)
+        default_name = translate("frameforge", "%s Custom") % source_name
+
+        dlg = NewLibraryDialog(
             self,
-            translate("frameforge", "Duplicate Library"),
-            translate("frameforge", "New name for copy of '%s':") % source_name,
-            text=translate("frameforge", "%s Custom") % source_name,
+            title="Duplicate Library",
+            default_name=default_name,
+            default_material=source_mat,
+            is_duplicate=True,
         )
-        if not ok or not new_name.strip():
+        if dlg.exec_() != QtWidgets.QDialog.Accepted:
             return
 
-        new_name = new_name.strip()
+        new_name, target_mat, target_dens, recalc = dlg.get_values()
+        if not new_name:
+            return
+
         try:
-            self.manager.duplicate_library(source_name, new_name, overwrite=False)
+            self.manager.duplicate_library(
+                source_name,
+                new_name,
+                overwrite=False,
+                target_material=target_mat,
+                target_density=target_dens,
+                recalculate_weights=recalc,
+            )
         except FileExistsError:
             QtWidgets.QMessageBox.warning(
                 self,
@@ -734,7 +876,24 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         row = self.table_sizes.rowCount()
         self.table_sizes.insertRow(row)
 
-        default_vals = [candidate_code, "50", "50", "2", "0", "0", "0", "0"]
+        calc_w = "0"
+        try:
+            lib_name = self.current_lib_meta.get("name", "")
+            _, density = self.manager.get_library_material_info(lib_name)
+            calc_w = str(
+                calculate_linear_weight(
+                    family=self.current_family,
+                    width=50.0,
+                    height=50.0,
+                    thickness=2.0,
+                    density_g_cm3=density,
+                    flange_thickness=0.0,
+                )
+            )
+        except Exception:
+            pass
+
+        default_vals = [candidate_code, "50", "50", "2", "0", "0", "0", calc_w]
         for col, val in enumerate(default_vals):
             self.table_sizes.setItem(row, col, QtWidgets.QTableWidgetItem(val))
 

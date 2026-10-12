@@ -232,6 +232,54 @@
         <translation>Nueva Biblioteca</translation>
     </message>
     <message>
+        <source>Library Name:</source>
+        <translation>Nombre de la Biblioteca:</translation>
+    </message>
+    <message>
+        <source>Material / Density:</source>
+        <translation>Material / Densidad:</translation>
+    </message>
+    <message>
+        <source>Recalculate theoretical weights for new material</source>
+        <translation>Recalcular pesos teóricos para el nuevo material</translation>
+    </message>
+    <message>
+        <source>User Library: %s | Material: %s (Editable)</source>
+        <translation>Biblioteca de Usuario: %s | Material: %s (Editable)</translation>
+    </message>
+    <message>
+        <source>System Library: %s | Material: %s (Read-only - Use 'Duplicate' to customize)</source>
+        <translation>Biblioteca de Sistema: %s | Material: %s (Solo lectura - Usá 'Duplicar' para personalizar)</translation>
+    </message>
+    <message>
+        <source>Aluminium</source>
+        <translation>Aluminio</translation>
+    </message>
+    <message>
+        <source>Steel</source>
+        <translation>Acero</translation>
+    </message>
+    <message>
+        <source>Stainless Steel</source>
+        <translation>Acero Inoxidable</translation>
+    </message>
+    <message>
+        <source>Copper</source>
+        <translation>Cobre</translation>
+    </message>
+    <message>
+        <source>Brass</source>
+        <translation>Latón</translation>
+    </message>
+    <message>
+        <source>Wood (Soft)</source>
+        <translation>Madera (Blanda)</translation>
+    </message>
+    <message>
+        <source>Wood (Hard)</source>
+        <translation>Madera (Dura)</translation>
+    </message>
+    <message>
         <source>Library name (e.g. Aluminum Tubes):</source>
         <translation>Nombre de la biblioteca (ej. Tubos Aluminio):</translation>
     </message>

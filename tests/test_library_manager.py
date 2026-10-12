@@ -118,8 +118,79 @@ class TestLibraryManager(unittest.TestCase):
         self.assertIsNotNone(dup_lib)
         self.assertTrue(dup_lib["is_user"])
 
-        dup_data = self.manager.get_library(dup_name)
-        self.assertIn("Square Hollow", dup_data)
+    def test_duplicate_library_with_material_recalculation(self):
+        steel_data = {
+            "_metadata": {"name": "SteelSource", "material": "Steel", "density": 7.85},
+            "Square Hollow": {
+                "norm": "Custom",
+                "unit": "Metric Units",
+                "fillet": False,
+                "sizes": {
+                    "50x50x2": {
+                        "Height": "50",
+                        "Width": "50",
+                        "Thickness": "2",
+                        "Weight": "2.983",
+                    }
+                },
+            },
+        }
+        self.manager.save_user_library("SteelSource", steel_data)
+
+        self.manager.duplicate_library(
+            "SteelSource",
+            "AluTarget",
+            target_material="Aluminium",
+            target_density=2.70,
+            recalculate_weights=True,
+        )
+
+        alu_lib = self.manager.get_library("AluTarget")
+        self.assertEqual(alu_lib["_metadata"]["material"], "Aluminium")
+        self.assertEqual(alu_lib["_metadata"]["density"], 2.70)
+        recalc_w = float(alu_lib["Square Hollow"]["sizes"]["50x50x2"]["Weight"])
+        self.assertAlmostEqual(recalc_w, 1.037, places=2)
+
+    def test_malformed_metadata_density_does_not_crash_list_libraries(self):
+        malformed_data = {
+            "_metadata": {"name": "BadDensityLib", "material": "Steel", "density": "invalid_number"},
+            "Square": {"sizes": {}},
+        }
+        # First save with valid metadata
+        self.manager.save_user_library("BadDensityLib", {"_metadata": {"name": "BadDensityLib"}, "Square": {"sizes": {}}})
+        # Directly inject corrupt density in file to test parsing resilience
+        path = os.path.join(self.test_user_dir, "baddensitylib.json")
+        import json
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(malformed_data, f)
+
+        libs = self.manager.list_libraries()
+        bad_lib = next(lib for lib in libs if lib["name"] == "BadDensityLib")
+        self.assertIsInstance(bad_lib["density"], float)
+        self.assertEqual(bad_lib["density"], 7.85)
+
+    def test_partial_legacy_aluminium_metadata_resolves_2_70_density(self):
+        partial_data = {
+            "_metadata": {"name": "PipesWithoutKeyword", "material": "Aluminium"},
+            "Pipe": {"sizes": {}},
+        }
+        self.manager.save_user_library("PipesWithoutKeyword", partial_data)
+        libs = self.manager.list_libraries()
+        lib_entry = next(lib for lib in libs if lib["name"] == "PipesWithoutKeyword")
+        self.assertEqual(lib_entry["material"], "Aluminium")
+        self.assertEqual(lib_entry["density"], 2.70)
+        getter_mat, getter_dens = self.manager.get_library_material_info("PipesWithoutKeyword")
+        self.assertEqual(getter_mat, "Aluminium")
+        self.assertEqual(getter_dens, 2.70)
+
+    def test_save_user_library_enforces_s4_material_immutability(self):
+        initial_data = {
+            "_metadata": {"name": "ImmutableLib", "material": "Aluminium", "density": 2.70},
+            "Square": {"sizes": {}},
+        }
+        self.manager.save_user_library("ImmutableLib", initial_data)
+        with self.assertRaises(ValueError):
+            self.manager.save_user_library("ImmutableLib", initial_data, material="Steel")
 
     def test_delete_user_library(self):
         dummy_data = {"Square": {"norm": "-", "sizes": {}}}

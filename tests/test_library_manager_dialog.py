@@ -297,6 +297,51 @@ class TestLibraryManagerDialog(unittest.TestCase):
         self.assertEqual(saved_one["FamOne"]["norm"], "ChangedNorm")
         self.assertEqual(saved_one["FamOne"]["sizes"]["S1"]["Height"], "88")
 
+    def test_auto_calculate_linear_weight_on_dimension_edits_and_manual_override(self):
+        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog, QtWidgets
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
+
+        alu_data = {
+            "_metadata": {"name": "AutoAlu", "material": "Aluminium", "density": 2.70},
+            "Square Hollow": {
+                "norm": "Custom",
+                "unit": "Metric Units",
+                "fillet": False,
+                "sizes": {
+                    "50x50x2": {
+                        "Height": "50",
+                        "Width": "50",
+                        "Thickness": "2",
+                        "Weight": "1.037",
+                    }
+                },
+            },
+        }
+        self.manager.save_user_library("AutoAlu", alu_data)
+        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        dialog.refresh_libraries(select_name="AutoAlu")
+
+        # Verify banner displays material and density
+        from freecad.frameforge.ff_tools import translate
+        self.assertIn(translate("frameforge", "Aluminium"), dialog.lbl_lib_banner.text())
+        self.assertIn("2.7", dialog.lbl_lib_banner.text())
+
+        # Change Height (col 1) from 50 to 100
+        dialog.table_sizes.item(0, 1).setText("100")
+        new_w = float(dialog.table_sizes.item(0, 7).text())
+        self.assertAlmostEqual(new_w, 1.577, places=2)
+
+        # Test manual override: user explicitly types a custom weight
+        dialog.table_sizes.item(0, 7).setText("1.999")
+        self.assertEqual(dialog.table_sizes.item(0, 7).text(), "1.999")
+
+        # Test adding a size automatically computes initial weight with library density
+        initial_count = dialog.table_sizes.rowCount()
+        dialog._on_add_size()
+        self.assertEqual(dialog.table_sizes.rowCount(), initial_count + 1)
+        added_w = float(dialog.table_sizes.item(initial_count, 7).text())
+        self.assertAlmostEqual(added_w, 1.037, places=2)
+
     def test_dialog_wood_density_calculation(self):
         try:
             from PySide import QtWidgets

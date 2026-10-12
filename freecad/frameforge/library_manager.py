@@ -161,7 +161,7 @@ class LibraryManager:
             for filename in sorted(os.listdir(self.user_dir)):
                 if filename.endswith(".json"):
                     filepath = os.path.join(self.user_dir, filename)
-                    name = self._extract_library_name(filename, filepath)
+                    name, mat, dens = self._extract_library_metadata(filename, filepath)
                     seen_names.add(name.lower())
                     libraries.append(
                         {
@@ -170,6 +170,8 @@ class LibraryManager:
                             "path": filepath,
                             "is_user": True,
                             "can_delete": True,
+                            "material": mat,
+                            "density": dens,
                         }
                     )
 
@@ -178,7 +180,7 @@ class LibraryManager:
             for filename in sorted(os.listdir(self.stock_dir)):
                 if filename.endswith(".json"):
                     filepath = os.path.join(self.stock_dir, filename)
-                    name = self._extract_library_name(filename, filepath)
+                    name, mat, dens = self._extract_library_metadata(filename, filepath)
                     if name.lower() not in seen_names:
                         libraries.append(
                             {
@@ -187,26 +189,101 @@ class LibraryManager:
                                 "path": filepath,
                                 "is_user": False,
                                 "can_delete": False,
+                                "material": mat,
+                                "density": dens,
                             }
                         )
 
         return sorted(libraries, key=lambda x: (not x["is_user"], x["name"].lower()))
 
-    def _extract_library_name(self, filename, filepath):
-        """Extracts display name from file, formatting appropriately."""
-        # Try reading title or name from JSON metadata if present
+    def _extract_library_metadata(self, filename, filepath):
+        """Extracts display name, material, and density from file."""
+        name = None
+        material = None
+        density = None
+
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if isinstance(data, dict) and "_metadata" in data and "name" in data["_metadata"]:
-                    return data["_metadata"]["name"]
+                if isinstance(data, dict) and "_metadata" in data:
+                    meta = data["_metadata"]
+                    name = meta.get("name")
+                    material = meta.get("material")
+                    raw_dens = meta.get("density")
+                    if raw_dens is not None:
+                        try:
+                            density = float(raw_dens)
+                        except (ValueError, TypeError):
+                            density = None
         except Exception:
             pass
 
-        base = os.path.splitext(filename)[0]
-        # Capitalize words separated by underscores or hyphens
-        parts = re.split(r"[_\-]+", base)
-        return " ".join(part.capitalize() for part in parts if part) or base.capitalize()
+        if not name:
+            base = os.path.splitext(filename)[0]
+            parts = re.split(r"[_\-]+", base)
+            name = " ".join(part.capitalize() for part in parts if part) or base.capitalize()
+
+        # If material is already defined in metadata, lookup its density from STANDARD_DENSITIES first!
+        if material:
+            if density is None and material in STANDARD_DENSITIES:
+                density = float(STANDARD_DENSITIES[material])
+
+        # If still missing, infer from library name
+        if not material or density is None:
+            lname = name.lower()
+            if "alumin" in lname:
+                material = material or "Aluminium"
+                density = density if density is not None else 2.70
+            elif "wood" in lname or "mader" in lname:
+                material = material or "Wood (Soft)"
+                density = density if density is not None else 0.55
+            else:
+                material = material or "Steel"
+                density = density if density is not None else 7.85
+
+        try:
+            density = float(density)
+        except (ValueError, TypeError):
+            density = 7.85
+
+        return name, str(material), float(density)
+
+    def _extract_library_name(self, filename, filepath):
+        """Extracts display name from file, formatting appropriately."""
+        name, _, _ = self._extract_library_metadata(filename, filepath)
+        return name
+
+    def get_library_material_info(self, name):
+        """
+        Returns (material_name, density_g_cm3) for a given library name.
+        """
+        target_name = name.strip().lower()
+
+        # Check discovered libraries first to ensure 100% consistency with list_libraries
+        for lib in self.list_libraries():
+            if lib["name"].strip().lower() == target_name:
+                return lib["material"], lib["density"]
+
+        # Fallback to direct library load
+        try:
+            data = self.get_library(name)
+            meta = data.get("_metadata", {})
+            mat = meta.get("material")
+            dens = meta.get("density")
+            if mat:
+                if dens is None and mat in STANDARD_DENSITIES:
+                    dens = STANDARD_DENSITIES[mat]
+                if dens is not None:
+                    return str(mat), float(dens)
+        except Exception:
+            pass
+
+        lname = name.lower()
+        if "alumin" in lname:
+            return "Aluminium", 2.70
+        elif "wood" in lname or "mader" in lname:
+            return "Wood (Soft)", 0.55
+        return "Steel", 7.85
 
     def get_library(self, name):
         """
@@ -236,10 +313,11 @@ class LibraryManager:
 
         raise FileNotFoundError(f"Library '{name}' not found.")
 
-    def save_user_library(self, name, data, overwrite=True):
+    def save_user_library(self, name, data, overwrite=True, material=None, density=None):
         """
         Saves or updates a user library JSON in user_dir.
         If overwrite is False, raises FileExistsError if target file already exists.
+        Enforces S4 immutability: once created, existing user library material cannot be mutated.
         """
         os.makedirs(self.user_dir, exist_ok=True)
         file_slug = sanitize_library_name(name)
@@ -249,11 +327,55 @@ class LibraryManager:
         if not overwrite and os.path.exists(filepath):
             raise FileExistsError(f"A library file '{filename}' already exists.")
 
-        # Ensure _metadata preserves exact user display name
+        # S4 Immutability: If file already exists, prevent changing its material
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    existing_data = json.load(f)
+                if isinstance(existing_data, dict) and "_metadata" in existing_data:
+                    existing_meta = existing_data["_metadata"]
+                    existing_mat = existing_meta.get("material")
+                    existing_dens = existing_meta.get("density")
+
+                    if not existing_mat:
+                        existing_mat, inferred_dens = self.get_library_material_info(name)
+                        if existing_dens is None:
+                            existing_dens = inferred_dens
+
+                    requested_mat = material or (
+                        data.get("_metadata", {}).get("material")
+                        if isinstance(data, dict)
+                        else None
+                    )
+                    if existing_mat and requested_mat and requested_mat != existing_mat:
+                        raise ValueError(
+                            f"Library material is immutable. Cannot change material of '{name}' from '{existing_mat}' to '{requested_mat}'. Use duplicate_library instead."
+                        )
+                    if existing_mat and material is None:
+                        material = existing_mat
+                    if existing_dens is not None and density is None:
+                        density = existing_dens
+            except ValueError:
+                raise
+            except Exception:
+                pass
+
+        # Ensure _metadata preserves exact user display name and material
         if isinstance(data, dict):
             if "_metadata" not in data:
                 data["_metadata"] = {}
             data["_metadata"]["name"] = name
+            if material is not None:
+                data["_metadata"]["material"] = str(material)
+                if density is not None:
+                    data["_metadata"]["density"] = float(density)
+                elif material in STANDARD_DENSITIES:
+                    data["_metadata"]["density"] = float(STANDARD_DENSITIES[material])
+            elif "material" not in data["_metadata"]:
+                # Default fallback inferred from name
+                inferred_mat, inferred_dens = self.get_library_material_info(name)
+                data["_metadata"]["material"] = inferred_mat
+                data["_metadata"]["density"] = inferred_dens
 
         temp_path = f"{filepath}.tmp.{os.getpid()}"
         try:
@@ -295,24 +417,72 @@ class LibraryManager:
 
         raise FileNotFoundError(f"Library '{name}' not found in user libraries.")
 
-    def duplicate_library(self, source_name, target_name, overwrite=False):
+    def duplicate_library(
+        self,
+        source_name,
+        target_name,
+        overwrite=False,
+        target_material=None,
+        target_density=None,
+        recalculate_weights=False,
+    ):
         """
         Clones an existing library (stock or user) into a new user library.
         If overwrite is False, raises FileExistsError if target already exists.
+        If target_material is provided, assigns it to the clone.
+        If recalculate_weights is True, recalculates theoretical weights with target_density.
         """
         source_data = self.get_library(source_name)
         # Deep copy via serialization
         cloned_data = json.loads(json.dumps(source_data))
 
-        # Update metadata if present
-        if "_metadata" in cloned_data:
-            cloned_data["_metadata"]["name"] = target_name
-            cloned_data["_metadata"]["cloned_from"] = source_name
+        # Determine target material and density
+        if target_material is None:
+            source_mat, source_dens = self.get_library_material_info(source_name)
+            target_material = source_mat
+            target_density = source_dens if target_density is None else float(target_density)
         else:
-            cloned_data["_metadata"] = {
-                "name": target_name,
-                "cloned_from": source_name,
-            }
+            if target_density is None:
+                target_density = STANDARD_DENSITIES.get(target_material, 7.85)
+            else:
+                target_density = float(target_density)
+
+        # Update metadata
+        if "_metadata" not in cloned_data:
+            cloned_data["_metadata"] = {}
+        cloned_data["_metadata"]["name"] = target_name
+        cloned_data["_metadata"]["cloned_from"] = source_name
+        cloned_data["_metadata"]["material"] = target_material
+        cloned_data["_metadata"]["density"] = float(target_density)
+
+        if recalculate_weights:
+            for fam_name, fam_data in cloned_data.items():
+                if fam_name.startswith("_") or not isinstance(fam_data, dict):
+                    continue
+                sizes = fam_data.get("sizes", {})
+                for size_key, size_props in sizes.items():
+                    if not isinstance(size_props, dict):
+                        continue
+                    try:
+                        h = float(size_props.get("Height", 0))
+                        w = float(size_props.get("Width", 0))
+                        t = float(size_props.get("Thickness", 0))
+                        tf = (
+                            float(size_props.get("Flange Thickness", 0))
+                            if "Flange Thickness" in size_props
+                            else None
+                        )
+                        new_weight = calculate_linear_weight(
+                            family=fam_name,
+                            width=w,
+                            height=h,
+                            thickness=t,
+                            density_g_cm3=target_density,
+                            flange_thickness=tf,
+                        )
+                        size_props["Weight"] = str(new_weight)
+                    except Exception:
+                        pass
 
         return self.save_user_library(target_name, cloned_data, overwrite=overwrite)
 
