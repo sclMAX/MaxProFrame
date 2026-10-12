@@ -192,6 +192,14 @@
         <translation>- Quitar Medida</translation>
     </message>
     <message>
+        <source>Add Size</source>
+        <translation>Agregar Medida</translation>
+    </message>
+    <message>
+        <source>Remove Size</source>
+        <translation>Quitar Medida</translation>
+    </message>
+    <message>
         <source>Calculate Theoretical Weight</source>
         <translation>Calcular Peso Teórico</translation>
     </message>

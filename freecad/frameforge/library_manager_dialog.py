@@ -143,22 +143,46 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         right_layout = QtWidgets.QVBoxLayout(right_widget)
         right_layout.setContentsMargins(0, 0, 0, 0)
 
+        # Header: Family Preview Icon on left, Banner & Metadata on right
+        header_layout = QtWidgets.QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(8)
+
+        self.lbl_family_icon = QtWidgets.QLabel()
+        self.lbl_family_icon.setFixedSize(120, 60)
+        self.lbl_family_icon.setAlignment(QtCore.Qt.AlignCenter)
+        header_layout.addWidget(self.lbl_family_icon)
+
+        header_details_layout = QtWidgets.QVBoxLayout()
+        header_details_layout.setContentsMargins(0, 0, 0, 0)
+        header_details_layout.setSpacing(4)
+
         # Top banner for library type (Stock read-only vs User editable)
         self.lbl_lib_banner = QtWidgets.QLabel()
         self.lbl_lib_banner.setStyleSheet("padding: 4px; font-weight: bold; border-radius: 3px;")
-        right_layout.addWidget(self.lbl_lib_banner)
+        header_details_layout.addWidget(self.lbl_lib_banner)
 
-        # Metadata row: Norma & Fillet
+        # Metadata row: Norma & Fillet & Size compact actions
         meta_row = QtWidgets.QHBoxLayout()
+        meta_row.setContentsMargins(0, 0, 0, 0)
         meta_row.addWidget(QtWidgets.QLabel(translate("frameforge", "Standard / Ref:")))
         self.le_norm = QtWidgets.QLineEdit()
         self.le_norm.textChanged.connect(self._mark_dirty)
         meta_row.addWidget(self.le_norm, 1)
 
         self.cb_fillet = QtWidgets.QCheckBox(translate("frameforge", "With Fillet"))
-        self.cb_fillet.toggled.connect(self._mark_dirty)
+        self.cb_fillet.toggled.connect(self._on_fillet_toggled)
         meta_row.addWidget(self.cb_fillet)
-        right_layout.addLayout(meta_row)
+
+        self.btn_add_size = self._compact_button("list-add.svg", "Add Size", self._on_add_size)
+        self.btn_del_size = self._compact_button("list-remove.svg", "Remove Size", self._on_delete_size)
+        meta_row.addWidget(self.btn_add_size)
+        meta_row.addWidget(self.btn_del_size)
+
+        header_details_layout.addLayout(meta_row)
+        header_layout.addLayout(header_details_layout, 1)
+
+        right_layout.addLayout(header_layout)
 
         # Sizes Table
         self.table_sizes = QtWidgets.QTableWidget()
@@ -170,17 +194,10 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         # Table action buttons
         table_btn_row = QtWidgets.QHBoxLayout()
-        self.btn_add_size = QtWidgets.QPushButton(translate("frameforge", "+ Add Size"))
-        self.btn_add_size.clicked.connect(self._on_add_size)
-        self.btn_del_size = QtWidgets.QPushButton(translate("frameforge", "- Remove Size"))
-        self.btn_del_size.clicked.connect(self._on_delete_size)
-
         self.btn_calc_weight = QtWidgets.QPushButton(translate("frameforge", "Calculate Theoretical Weight"))
         self.btn_calc_weight.setToolTip(translate("frameforge", "Calculates theoretical weight in kg/m based on material density and dimensions."))
         self.btn_calc_weight.clicked.connect(self._on_calc_weight)
 
-        table_btn_row.addWidget(self.btn_add_size)
-        table_btn_row.addWidget(self.btn_del_size)
         table_btn_row.addStretch()
         table_btn_row.addWidget(self.btn_calc_weight)
         right_layout.addLayout(table_btn_row)
@@ -372,6 +389,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             self.table_sizes.setRowCount(0)
             self.le_norm.setText("")
             self.cb_fillet.setChecked(False)
+            self._update_family_icon()
             return
 
         fam_data = self.current_lib_data[family_name]
@@ -384,8 +402,77 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.le_norm.blockSignals(False)
         self.cb_fillet.blockSignals(False)
 
+        self._update_family_icon()
+
         sizes_dict = fam_data.get("sizes", {})
         self._populate_sizes_table(sizes_dict)
+
+    def _get_family_image_path(self, family_name=None, fillet=None):
+        fam = family_name or self.current_family
+        if not fam:
+            warehouse = os.path.join(PROFILEIMAGES_PATH, "Warehouse.png")
+            return warehouse if os.path.isfile(warehouse) else ""
+
+        if fillet is None:
+            fillet = self.cb_fillet.isChecked() if hasattr(self, "cb_fillet") else False
+
+        lib_name = (self.current_lib_meta or {}).get("name", "Metal")
+        base_name = fam.replace(" ", "_")
+
+        candidates = []
+        if fillet:
+            candidates.append(f"{base_name}_Fillet.png")
+        candidates.append(f"{base_name}.png")
+
+        dirs = [lib_name, "Metal"]
+        for c in candidates:
+            for d in dirs:
+                p = os.path.join(PROFILEIMAGES_PATH, d, c)
+                if os.path.isfile(p):
+                    return p
+
+        warehouse = os.path.join(PROFILEIMAGES_PATH, "Warehouse.png")
+        if os.path.isfile(warehouse):
+            return warehouse
+        return ""
+
+    def _update_family_icon(self):
+        dark = is_dark_theme(self)
+        if dark:
+            self.lbl_family_icon.setStyleSheet(
+                "background-color: #202428; border: 1px solid #455a64; border-radius: 4px;"
+            )
+        else:
+            self.lbl_family_icon.setStyleSheet(
+                "background-color: #f5f7f8; border: 1px solid #cfd8dc; border-radius: 4px;"
+            )
+
+        if not self.current_family or self.current_family not in self.current_lib_data:
+            self.lbl_family_icon.clear()
+            self.lbl_family_icon.setToolTip("")
+            return
+
+        img_path = self._get_family_image_path(self.current_family)
+        if img_path and os.path.isfile(img_path):
+            pixmap = QtGui.QPixmap(img_path)
+            if not pixmap.isNull():
+                target_w = max(self.lbl_family_icon.width() - 8, 20)
+                target_h = max(self.lbl_family_icon.height() - 8, 20)
+                scaled = pixmap.scaled(
+                    QtCore.QSize(target_w, target_h),
+                    QtCore.Qt.KeepAspectRatio,
+                    QtCore.Qt.SmoothTransformation,
+                )
+                self.lbl_family_icon.setPixmap(scaled)
+                self.lbl_family_icon.setToolTip(translate("frameforge", self.current_family))
+                return
+
+        self.lbl_family_icon.clear()
+        self.lbl_family_icon.setToolTip("")
+
+    def _on_fillet_toggled(self, checked):
+        self._mark_dirty()
+        self._update_family_icon()
 
     def _populate_sizes_table(self, sizes_dict):
         self.table_sizes.blockSignals(True)

@@ -64,11 +64,16 @@ class TestLibraryManagerDialog(unittest.TestCase):
             self.assertEqual(dialog.table_sizes.item(0, 0).text(), next(iter(data[key]["sizes"])))
             self.assertEqual(dialog.le_norm.text(), data[key]["norm"])
             self.assertEqual(dialog.cb_fillet.isChecked(), data[key]["fillet"])
+            self.assertIsNotNone(dialog.lbl_family_icon.pixmap())
+            self.assertFalse(dialog.lbl_family_icon.pixmap().isNull())
+        self.assertEqual(dialog.lbl_family_icon.size(), QtCore.QSize(120, 60))
         for button, tooltip in [(dialog.btn_new_lib, "New Library"),
                                 (dialog.btn_dup_lib, "Duplicate Library"),
                                 (dialog.btn_del_lib, "Delete Library"),
                                 (dialog.btn_add_family, "Add Family"),
-                                (dialog.btn_del_family, "Delete Family")]:
+                                (dialog.btn_del_family, "Delete Family"),
+                                (dialog.btn_add_size, "Add Size"),
+                                (dialog.btn_del_size, "Remove Size")]:
             self.assertEqual(button.size(), QtCore.QSize(26, 26))
             self.assertEqual(button.minimumSize(), button.maximumSize())
             self.assertEqual(button.text(), "")
@@ -76,10 +81,13 @@ class TestLibraryManagerDialog(unittest.TestCase):
             self.assertEqual(button.toolTip(), translate("frameforge", tooltip))
             expected_parent = (dialog.list_libraries.parentWidget()
                                if button in (dialog.btn_new_lib, dialog.btn_dup_lib, dialog.btn_del_lib)
-                               else families.parentWidget())
+                               else families.parentWidget()
+                               if button in (dialog.btn_add_family, dialog.btn_del_family)
+                               else dialog.table_sizes.parentWidget())
             self.assertEqual(button.parentWidget(), expected_parent)
         dialog.combo_family.setCurrentText("Pipe")
         self.assertEqual(families.currentItem().data(QtCore.Qt.UserRole), "Pipe")
+        self.assertFalse(dialog.lbl_family_icon.pixmap().isNull())
 
     def test_family_toolbar_crud_and_edit_preservation(self):
         from unittest.mock import patch
@@ -121,6 +129,8 @@ class TestLibraryManagerDialog(unittest.TestCase):
         self.assertEqual(dialog.table_sizes.rowCount(), 0)
         self.assertFalse(dialog.btn_del_family.isEnabled())
         self.assertFalse(dialog.btn_add_size.isEnabled())
+        self.assertFalse(dialog.btn_del_size.isEnabled())
+        self.assertTrue(dialog.lbl_family_icon.pixmap().isNull() if dialog.lbl_family_icon.pixmap() else True)
         dialog.btn_save.click()
         self.assertEqual(set(self.manager.get_library("FamilyToolbar")), {"_metadata"})
 
@@ -356,6 +366,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
         self.assertFalse(dialog.btn_del_family.isEnabled())
         self.assertFalse(dialog.btn_add_size.isEnabled())
         self.assertFalse(dialog.btn_del_size.isEnabled())
+        self.assertTrue(dialog.lbl_family_icon.pixmap().isNull() if dialog.lbl_family_icon.pixmap() else True)
         self.assertEqual(dialog.table_sizes.rowCount(), 0)
 
         dialog._on_add_size()
