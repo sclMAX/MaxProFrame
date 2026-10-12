@@ -161,6 +161,21 @@ class TestLibraryManager(unittest.TestCase):
         )
         self.assertAlmostEqual(weight_pipe, 2.37, places=2)
 
+    def test_calculate_linear_weight_rejects_unsupported_geometry(self):
+        for family in ("T-Slot", "V-Slot", "Custom Profile", "Arbitrary Slotted Profile"):
+            with self.subTest(family=family):
+                with self.assertRaises(ValueError) as error:
+                    calculate_linear_weight(family, 50, 50, 2)
+                self.assertEqual(
+                    str(error.exception),
+                    f"Theoretical weight calculation is not supported for complex or slotted geometry '{family}'. Please enter weight manually.",
+                )
+
+    def test_calculate_linear_weight_preserves_standard_sections(self):
+        for family in ("HEA", "HEB", "HEM", "IPE", "IPN", "UPE", "UPN"):
+            with self.subTest(family=family):
+                self.assertEqual(calculate_linear_weight(family, 50, 50, 2), 19.625)
+
     def test_save_collision_rejection(self):
         data1 = {"Square": {"sizes": {"orig": {"Height": "10", "Width": "10", "Thickness": "1"}}}}
         data2 = {"Square": {"sizes": {"new": {"Height": "20", "Width": "20", "Thickness": "2"}}}}

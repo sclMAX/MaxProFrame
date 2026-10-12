@@ -94,9 +94,13 @@ def calculate_linear_weight(family, width, height, thickness, density_g_cm3=7.85
             area_mm2 = (t * (h - 2 * tf)) + (2 * w * tf)
         else:
             area_mm2 = w * h
-    else:
-        # Fallback to outer rectangular area
+    elif family in ("HEA", "HEB", "HEM", "IPE", "IPN", "UPE", "UPN"):
+        # Preserve the existing approximation for standard sections.
         area_mm2 = w * h
+    else:
+        raise ValueError(
+            f"Theoretical weight calculation is not supported for complex or slotted geometry '{family}'. Please enter weight manually."
+        )
 
     # Section area in mm2 equals volume in cm3 for 1000 mm length
     weight_kg_m = (area_mm2 * density) / 1000.0
