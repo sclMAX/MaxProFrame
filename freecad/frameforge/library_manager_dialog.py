@@ -9,7 +9,7 @@ except ImportError:
 import FreeCAD as App
 import FreeCADGui as Gui
 
-from freecad.frameforge.ff_tools import ICONPATH, TRANSLATIONSPATH, translate
+from freecad.frameforge.ff_tools import ICONPATH, PROFILEIMAGES_PATH, TRANSLATIONSPATH, translate
 from freecad.frameforge.library_manager import (
     KNOWN_FAMILIES,
     STANDARD_DENSITIES,
@@ -94,29 +94,49 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         main_layout.addWidget(splitter, 1)
 
         # --- LEFT PANEL: Libraries list & actions ---
-        left_widget = QtWidgets.QWidget()
-        left_layout = QtWidgets.QVBoxLayout(left_widget)
-        left_layout.setContentsMargins(0, 0, 0, 0)
+        self.left_splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+        self.left_splitter.setHandleWidth(6)
+        self.left_splitter.setStyleSheet("QSplitter::handle:horizontal { background: palette(mid); }")
+        lib_widget = QtWidgets.QWidget()
+        lib_layout = QtWidgets.QVBoxLayout(lib_widget)
+        lib_layout.setContentsMargins(0, 0, 0, 0)
 
-        left_layout.addWidget(QtWidgets.QLabel(translate("frameforge", "<b>Available Libraries:</b>")))
+        lib_header = QtWidgets.QHBoxLayout()
+        lib_header.addWidget(QtWidgets.QLabel(translate("frameforge", "<b>Available Libraries:</b>")), 1)
+        self.btn_new_lib = self._compact_button("list-add.svg", "New Library", self._on_new_library)
+        self.btn_dup_lib = self._compact_button("duplicate.svg", "Duplicate Library", self._on_duplicate_library)
+        self.btn_del_lib = self._compact_button("list-remove.svg", "Delete Library", self._on_delete_library)
+        for button in (self.btn_new_lib, self.btn_dup_lib, self.btn_del_lib):
+            lib_header.addWidget(button)
+        lib_layout.addLayout(lib_header)
         self.list_libraries = QtWidgets.QListWidget()
         self.list_libraries.currentItemChanged.connect(self._on_library_selection_changed)
-        left_layout.addWidget(self.list_libraries, 1)
+        lib_layout.addWidget(self.list_libraries, 1)
 
-        lib_btn_layout = QtWidgets.QHBoxLayout()
-        self.btn_new_lib = QtWidgets.QPushButton(translate("frameforge", "+ New"))
-        self.btn_new_lib.clicked.connect(self._on_new_library)
-        self.btn_dup_lib = QtWidgets.QPushButton(translate("frameforge", "Duplicate"))
-        self.btn_dup_lib.clicked.connect(self._on_duplicate_library)
-        self.btn_del_lib = QtWidgets.QPushButton(translate("frameforge", "Delete"))
-        self.btn_del_lib.clicked.connect(self._on_delete_library)
+        family_widget = QtWidgets.QWidget()
+        family_layout = QtWidgets.QVBoxLayout(family_widget)
+        family_layout.setContentsMargins(0, 0, 0, 0)
+        family_header = QtWidgets.QHBoxLayout()
+        family_header.addWidget(QtWidgets.QLabel(translate("frameforge", "<b>Library Families:</b>")), 1)
+        self.btn_add_family = self._compact_button("list-add.svg", "Add Family", self._on_add_family)
+        self.btn_del_family = self._compact_button("list-remove.svg", "Delete Family", self._on_delete_family)
+        family_header.addWidget(self.btn_add_family)
+        family_header.addWidget(self.btn_del_family)
+        family_layout.addLayout(family_header)
+        self.list_families = QtWidgets.QListWidget()
+        self.list_families.setIconSize(QtCore.QSize(60, 30))
+        self.list_families.currentItemChanged.connect(self._on_family_selection_changed)
+        family_layout.addWidget(self.list_families, 1)
 
-        lib_btn_layout.addWidget(self.btn_new_lib)
-        lib_btn_layout.addWidget(self.btn_dup_lib)
-        lib_btn_layout.addWidget(self.btn_del_lib)
-        left_layout.addLayout(lib_btn_layout)
+        # Hidden raw-key selector retained for legacy callers; the list is the visible selector.
+        self.combo_family = QtWidgets.QComboBox(family_widget)
+        self.combo_family.hide()
+        self.combo_family.currentIndexChanged.connect(self._on_family_changed)
 
-        splitter.addWidget(left_widget)
+        self.left_splitter.addWidget(lib_widget)
+        self.left_splitter.addWidget(family_widget)
+        self.left_splitter.setSizes([180, 320])
+        splitter.addWidget(self.left_splitter)
 
         # --- RIGHT PANEL: Families and Sizes Table ---
         right_widget = QtWidgets.QWidget()
@@ -127,21 +147,6 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.lbl_lib_banner = QtWidgets.QLabel()
         self.lbl_lib_banner.setStyleSheet("padding: 4px; font-weight: bold; border-radius: 3px;")
         right_layout.addWidget(self.lbl_lib_banner)
-
-        # Family selection row
-        family_row = QtWidgets.QHBoxLayout()
-        family_row.addWidget(QtWidgets.QLabel(translate("frameforge", "Geometric Family:")))
-        self.combo_family = QtWidgets.QComboBox()
-        self.combo_family.currentIndexChanged.connect(self._on_family_changed)
-        family_row.addWidget(self.combo_family, 1)
-
-        self.btn_add_family = QtWidgets.QPushButton(translate("frameforge", "+ Family"))
-        self.btn_add_family.clicked.connect(self._on_add_family)
-        self.btn_del_family = QtWidgets.QPushButton(translate("frameforge", "- Family"))
-        self.btn_del_family.clicked.connect(self._on_delete_family)
-        family_row.addWidget(self.btn_add_family)
-        family_row.addWidget(self.btn_del_family)
-        right_layout.addLayout(family_row)
 
         # Metadata row: Norma & Fillet
         meta_row = QtWidgets.QHBoxLayout()
@@ -181,7 +186,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         right_layout.addLayout(table_btn_row)
 
         splitter.addWidget(right_widget)
-        splitter.setSizes([260, 640])
+        splitter.setSizes([320, 640])
 
         # Bottom Bar: Status and Save / Close
         bottom_layout = QtWidgets.QHBoxLayout()
@@ -213,6 +218,14 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         bottom_layout.addWidget(self.btn_save)
         bottom_layout.addWidget(self.btn_close)
         main_layout.addLayout(bottom_layout)
+
+    def _compact_button(self, icon_name, tooltip, callback):
+        button = QtWidgets.QPushButton()
+        button.setIcon(QtGui.QIcon(os.path.join(ICONPATH, icon_name)))
+        button.setToolTip(translate("frameforge", tooltip))
+        button.setFixedSize(26, 26)
+        button.clicked.connect(callback)
+        return button
 
     def refresh_libraries(self, select_name=None):
         self.list_libraries.blockSignals(True)
@@ -300,24 +313,44 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
     def _populate_families(self, select_family=None):
         self.combo_family.blockSignals(True)
+        self.list_families.blockSignals(True)
         self.combo_family.clear()
+        self.list_families.clear()
 
-        families = [k for k in self.current_lib_data.keys() if not k.startswith("_")]
-        families.sort()
+        families = sorted(k for k in self.current_lib_data if not k.startswith("_"))
+        for fam_key in families:
+            self.combo_family.addItem(fam_key)
+            img_name = f"{fam_key.replace(' ', '_')}.png"
+            img_path = os.path.join(PROFILEIMAGES_PATH, "Metal", img_name)
+            if not os.path.isfile(img_path):
+                img_path = os.path.join(PROFILEIMAGES_PATH, "Warehouse.png")
+            item = QtWidgets.QListWidgetItem(translate("frameforge", fam_key))
+            if os.path.isfile(img_path):
+                item.setIcon(QtGui.QIcon(img_path))
+            item.setData(QtCore.Qt.UserRole, fam_key)
+            self.list_families.addItem(item)
 
-        for fam in families:
-            self.combo_family.addItem(fam)
-
+        if families:
+            row = families.index(select_family) if select_family in families else 0
+            self.combo_family.setCurrentIndex(row)
+            self.list_families.setCurrentRow(row)
         self.combo_family.blockSignals(False)
+        self.list_families.blockSignals(False)
+        self._on_family_changed()
 
-        if select_family and select_family in families:
-            self.combo_family.setCurrentText(select_family)
-        elif families:
-            self.combo_family.setCurrentIndex(0)
-
+    def _on_family_selection_changed(self, current, previous):
+        self.combo_family.blockSignals(True)
+        self.combo_family.setCurrentIndex(
+            self.combo_family.findText(current.data(QtCore.Qt.UserRole)) if current else -1
+        )
+        self.combo_family.blockSignals(False)
         self._on_family_changed()
 
     def _on_family_changed(self):
+        # Synchronize legacy combo-driven selection without emitting a second change.
+        self.list_families.blockSignals(True)
+        self.list_families.setCurrentRow(self.combo_family.currentIndex())
+        self.list_families.blockSignals(False)
         try:
             self._commit_current_family_edits()
         except ValueError as e:

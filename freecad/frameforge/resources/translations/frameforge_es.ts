@@ -16,6 +16,94 @@
         <translation>&lt;b&gt;Bibliotecas disponibles:&lt;/b&gt;</translation>
     </message>
     <message>
+        <source>&lt;b&gt;Library Families:&lt;/b&gt;</source>
+        <translation>&lt;b&gt;Familias en la biblioteca:&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>Library Families</source>
+        <translation>Familias en la biblioteca</translation>
+    </message>
+    <message>
+        <source>Delete Library</source>
+        <translation>Eliminar Biblioteca</translation>
+    </message>
+    <message>
+        <source>Square Hollow</source>
+        <translation>Tubo Cuadrado Hueco</translation>
+    </message>
+    <message>
+        <source>Rectangular Hollow</source>
+        <translation>Tubo Rectangular Hueco</translation>
+    </message>
+    <message>
+        <source>Pipe</source>
+        <translation>Tubo Redondo (Caño)</translation>
+    </message>
+    <message>
+        <source>Equal Leg Angles</source>
+        <translation>Ángulo de Alas Iguales</translation>
+    </message>
+    <message>
+        <source>Unequal Leg Angles</source>
+        <translation>Ángulo de Alas Desiguales</translation>
+    </message>
+    <message>
+        <source>Flat Sections</source>
+        <translation>Planchuelas / Pletinas</translation>
+    </message>
+    <message>
+        <source>Round Bar</source>
+        <translation>Barra Redonda Maciza</translation>
+    </message>
+    <message>
+        <source>Square</source>
+        <translation>Barra Cuadrada Maciza</translation>
+    </message>
+    <message>
+        <source>Channels</source>
+        <translation>Canales</translation>
+    </message>
+    <message>
+        <source>T-Slot</source>
+        <translation>Perfil con ranura en T</translation>
+    </message>
+    <message>
+        <source>V-Slot</source>
+        <translation>Perfil con ranura en V</translation>
+    </message>
+    <message>
+        <source>Custom Profile</source>
+        <translation>Perfil personalizado</translation>
+    </message>
+    <message>
+        <source>HEA</source>
+        <translation>HEA</translation>
+    </message>
+    <message>
+        <source>HEB</source>
+        <translation>HEB</translation>
+    </message>
+    <message>
+        <source>HEM</source>
+        <translation>HEM</translation>
+    </message>
+    <message>
+        <source>IPE</source>
+        <translation>IPE</translation>
+    </message>
+    <message>
+        <source>IPN</source>
+        <translation>IPN</translation>
+    </message>
+    <message>
+        <source>UPE</source>
+        <translation>UPE</translation>
+    </message>
+    <message>
+        <source>UPN</source>
+        <translation>UPN</translation>
+    </message>
+    <message>
         <source>+ New</source>
         <translation>+ Nueva</translation>
     </message>

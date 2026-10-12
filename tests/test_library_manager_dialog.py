@@ -23,6 +23,107 @@ class TestLibraryManagerDialog(unittest.TestCase):
         if os.path.exists(self.test_user_dir):
             shutil.rmtree(self.test_user_dir)
 
+    def test_master_detail_families_list_and_icons(self):
+        from freecad.frameforge.library_manager_dialog import (
+            ProfileLibraryManagerDialog, QtCore, QtGui, QtWidgets,
+        )
+        from freecad.frameforge.ff_tools import PROFILEIMAGES_PATH, translate
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
+        data = {"_metadata": {"name": "MasterDetail"}}
+        for key, code, fillet in [("Square Hollow", "S1", True), ("Pipe", "P1", False),
+                                  ("Custom Family", "C1", False)]:
+            data[key] = {"norm": key + " standard", "fillet": fillet,
+                         "sizes": {code: {"Height": "20", "Width": "20", "Thickness": "2"}}}
+        self.manager.save_user_library("MasterDetail", data)
+        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        self.addCleanup(dialog.close)
+        dialog.refresh_libraries(select_name="MasterDetail")
+        families = dialog.list_families
+        self.assertEqual(families.count(), 3)
+        self.assertGreaterEqual(families.iconSize().width(), 50)
+        self.assertEqual(families.iconSize(), QtCore.QSize(60, 30))
+        self.assertEqual(dialog.left_splitter.orientation(), QtCore.Qt.Vertical)
+        self.assertEqual(dialog.left_splitter.handleWidth(), 6)
+        self.assertEqual(dialog.left_splitter.count(), 2)
+        self.assertEqual(dialog.left_splitter.widget(0), dialog.list_libraries.parentWidget())
+        self.assertEqual(dialog.left_splitter.widget(1), families.parentWidget())
+        self.assertTrue(dialog.combo_family.isHidden())
+        for row in range(families.count()):
+            item = families.item(row)
+            key = item.data(QtCore.Qt.UserRole)
+            self.assertEqual(item.text(), translate("frameforge", key))
+            self.assertFalse(item.icon().isNull())
+            image = os.path.join(PROFILEIMAGES_PATH, "Metal", key.replace(" ", "_") + ".png")
+            if not os.path.isfile(image):
+                image = os.path.join(PROFILEIMAGES_PATH, "Warehouse.png")
+            self.assertEqual(item.icon().pixmap(60, 30).toImage(),
+                             QtGui.QIcon(image).pixmap(60, 30).toImage())
+            families.setCurrentItem(item)
+            self.assertEqual(dialog.combo_family.currentText(), key)
+            self.assertEqual(dialog.table_sizes.rowCount(), 1)
+            self.assertEqual(dialog.table_sizes.item(0, 0).text(), next(iter(data[key]["sizes"])))
+            self.assertEqual(dialog.le_norm.text(), data[key]["norm"])
+            self.assertEqual(dialog.cb_fillet.isChecked(), data[key]["fillet"])
+        for button, tooltip in [(dialog.btn_new_lib, "New Library"),
+                                (dialog.btn_dup_lib, "Duplicate Library"),
+                                (dialog.btn_del_lib, "Delete Library"),
+                                (dialog.btn_add_family, "Add Family"),
+                                (dialog.btn_del_family, "Delete Family")]:
+            self.assertEqual(button.size(), QtCore.QSize(26, 26))
+            self.assertEqual(button.minimumSize(), button.maximumSize())
+            self.assertEqual(button.text(), "")
+            self.assertFalse(button.icon().isNull())
+            self.assertEqual(button.toolTip(), translate("frameforge", tooltip))
+            expected_parent = (dialog.list_libraries.parentWidget()
+                               if button in (dialog.btn_new_lib, dialog.btn_dup_lib, dialog.btn_del_lib)
+                               else families.parentWidget())
+            self.assertEqual(button.parentWidget(), expected_parent)
+        dialog.combo_family.setCurrentText("Pipe")
+        self.assertEqual(families.currentItem().data(QtCore.Qt.UserRole), "Pipe")
+
+    def test_family_toolbar_crud_and_edit_preservation(self):
+        from unittest.mock import patch
+        from freecad.frameforge.library_manager_dialog import (
+            ProfileLibraryManagerDialog, QtCore, QtWidgets,
+        )
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
+        self.manager.save_user_library("FamilyToolbar", {
+            "_metadata": {"name": "FamilyToolbar"},
+            "Square Hollow": {"norm": "Original", "fillet": False,
+                              "sizes": {"S1": {"Height": "20"}}},
+        })
+        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        self.addCleanup(dialog.close)
+        dialog.refresh_libraries(select_name="FamilyToolbar")
+        dialog.le_norm.setText("Edited")
+        dialog.table_sizes.item(0, 1).setText("99")
+        with patch.object(QtWidgets.QInputDialog, "getItem", return_value=("Pipe", True)):
+            dialog.btn_add_family.click()
+        self.assertEqual(dialog.list_families.count(), 2)
+        self.assertEqual(dialog.list_families.currentItem().data(QtCore.Qt.UserRole), "Pipe")
+        self.assertEqual(dialog.table_sizes.rowCount(), 0)
+        dialog.btn_save.click()
+        saved = self.manager.get_library("FamilyToolbar")
+        self.assertEqual(saved["Square Hollow"]["norm"], "Edited")
+        self.assertEqual(saved["Square Hollow"]["sizes"]["S1"]["Height"], "99")
+        self.assertIn("Pipe", saved)
+        with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.No):
+            dialog.btn_del_family.click()
+        self.assertEqual(dialog.list_families.count(), 2)
+        self.assertFalse(dialog.is_dirty)
+        with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Yes):
+            dialog.btn_del_family.click()
+            self.assertEqual(dialog.list_families.count(), 1)
+            self.assertEqual(dialog.combo_family.currentText(), "Square Hollow")
+            dialog.btn_del_family.click()
+        self.assertEqual(dialog.list_families.count(), 0)
+        self.assertEqual(dialog.combo_family.currentText(), "")
+        self.assertEqual(dialog.table_sizes.rowCount(), 0)
+        self.assertFalse(dialog.btn_del_family.isEnabled())
+        self.assertFalse(dialog.btn_add_size.isEnabled())
+        dialog.btn_save.click()
+        self.assertEqual(set(self.manager.get_library("FamilyToolbar")), {"_metadata"})
+
     def test_dialog_lifecycle_and_crud(self):
         try:
             from PySide import QtWidgets
@@ -297,12 +398,12 @@ class TestLibraryManagerDialog(unittest.TestCase):
             QtCore.QLocale.setDefault(QtCore.QLocale("es_ES"))
             dialog = cls(library_manager=self.manager)
             gc.collect()
-            self.assertEqual(dialog.btn_new_lib.text(), "+ Nueva")
+            self.assertEqual(dialog.btn_new_lib.toolTip(), "Nueva Biblioteca")
             self.assertEqual(dialog.windowTitle(), "FrameForge - Gestor de Bibliotecas de Perfiles")
             # A second dialog proves translation still works after the loader returns
             # and garbage collection, rather than merely retaining existing labels.
             fresh_dialog = cls(library_manager=self.manager)
-            self.assertEqual(fresh_dialog.btn_new_lib.text(), "+ Nueva")
+            self.assertEqual(fresh_dialog.btn_new_lib.toolTip(), "Nueva Biblioteca")
             self.assertEqual(fresh_dialog.windowTitle(), "FrameForge - Gestor de Bibliotecas de Perfiles")
 
             # Preserve untranslated English UI when no matching catalog is loaded.
@@ -310,7 +411,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
             cls._translator_installed = False
             QtCore.QLocale.setDefault(QtCore.QLocale("en_US"))
             english_dialog = cls(library_manager=self.manager)
-            self.assertEqual(english_dialog.btn_new_lib.text(), "+ New")
+            self.assertEqual(english_dialog.btn_new_lib.toolTip(), "New Library")
             self.assertEqual(english_dialog.windowTitle(), "FrameForge - Profile Library Manager")
         finally:
             if english_dialog is not None:
@@ -347,10 +448,37 @@ class TestLibraryManagerDialog(unittest.TestCase):
             dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
             # Under Spanish translator:
             self.assertEqual(dialog.windowTitle(), "FrameForge - Gestor de Bibliotecas de Perfiles")
-            self.assertEqual(dialog.btn_new_lib.text(), "+ Nueva")
-            self.assertEqual(dialog.btn_dup_lib.text(), "Duplicar")
-            self.assertEqual(dialog.btn_del_lib.text(), "Eliminar")
+            self.assertEqual(dialog.btn_new_lib.toolTip(), "Nueva Biblioteca")
+            self.assertEqual(dialog.btn_dup_lib.toolTip(), "Duplicar Biblioteca")
+            self.assertEqual(dialog.btn_del_lib.toolTip(), "Eliminar Biblioteca")
             self.assertEqual(dialog.btn_save.text(), "Guardar Cambios")
+            expected_families = {
+                "Square Hollow": "Tubo Cuadrado Hueco",
+                "Rectangular Hollow": "Tubo Rectangular Hueco",
+                "Pipe": "Tubo Redondo (Caño)",
+                "Equal Leg Angles": "Ángulo de Alas Iguales",
+                "Unequal Leg Angles": "Ángulo de Alas Desiguales",
+                "Flat Sections": "Planchuelas / Pletinas",
+                "Round Bar": "Barra Redonda Maciza",
+                "Square": "Barra Cuadrada Maciza",
+                "Channels": "Canales",
+                "T-Slot": "Perfil con ranura en T",
+                "V-Slot": "Perfil con ranura en V",
+                "Custom Profile": "Perfil personalizado",
+                **{key: key for key in ("HEA", "HEB", "HEM", "IPE", "IPN", "UPE", "UPN")},
+            }
+            for source, expected in expected_families.items():
+                self.assertEqual(translator.translate("frameforge", source), expected)
+            self.assertEqual(translator.translate("frameforge", "Library Families"),
+                             "Familias en la biblioteca")
+            self.assertIn("<b>Familias en la biblioteca:</b>",
+                          [label.text() for label in dialog.findChildren(QtWidgets.QLabel)])
+            self.assertEqual(dialog.btn_add_family.toolTip(), "Agregar Familia")
+            self.assertEqual(dialog.btn_del_family.toolTip(), "Eliminar Familia")
+            for row in range(dialog.list_families.count()):
+                item = dialog.list_families.item(row)
+                key = item.data(QtCore.Qt.UserRole)
+                self.assertEqual(item.text(), expected_families.get(key, key))
 
             # Verify 'Indumatics' is nowhere in the dialog texts
             # and replaced with 'Tubos Aluminio'
