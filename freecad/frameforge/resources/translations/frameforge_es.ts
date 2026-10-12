@@ -156,6 +156,10 @@
         <translation>Código</translation>
     </message>
     <message>
+        <source>Diameter [mm]</source>
+        <translation>Diámetro [mm]</translation>
+    </message>
+    <message>
         <source>Height [mm]</source>
         <translation>Alto [mm]</translation>
     </message>

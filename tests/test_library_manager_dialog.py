@@ -23,6 +23,57 @@ class TestLibraryManagerDialog(unittest.TestCase):
         if os.path.exists(self.test_user_dir):
             shutil.rmtree(self.test_user_dir)
 
+    def test_dynamic_family_columns_and_hidden_value_preservation(self):
+        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog, QtWidgets
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
+        families = {
+            "Round Bar": {0, 1, 7}, "Pipe": {0, 1, 3, 7},
+            "Flat Sections": {0, 1, 2, 7}, "Square": {0, 1, 2, 7},
+            "Square Hollow": {0, 1, 2, 3, 5, 6, 7},
+            "Rectangular Hollow": {0, 1, 2, 3, 5, 6, 7},
+            "Equal Leg Angles": {0, 1, 2, 3, 5, 6, 7},
+            "Unequal Leg Angles": {0, 1, 2, 3, 5, 6, 7},
+            "IPE": {0, 1, 2, 3, 4, 5, 7},
+            "UPE": set(range(8)), "T-Slot": {0, 1, 2, 7},
+            "Unknown": set(range(8)),
+        }
+        self.manager.save_user_library("Dynamic", {
+            "_metadata": {"name": "Dynamic"},
+            **{name: {"norm": "Test", "fillet": True,
+                       "sizes": {"S1": {"Height": "20", "Width": "20",
+                                        "Thickness": "2", "Radius1": "4", "Radius2": "2"}}}
+               for name in families},
+        })
+        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        self.addCleanup(dialog.close)
+        dialog.refresh_libraries(select_name="Dynamic")
+        for name, expected in families.items():
+            with self.subTest(family=name):
+                dialog.combo_family.setCurrentText(name)
+                visible = {i for i in range(8) if not dialog.table_sizes.isColumnHidden(i)}
+                self.assertEqual(visible, expected)
+        dialog.combo_family.setCurrentText("Square Hollow")
+        dialog.cb_fillet.setChecked(False)
+        self.assertTrue(dialog.table_sizes.isColumnHidden(5))
+        self.assertTrue(dialog.table_sizes.isColumnHidden(6))
+        dialog.table_sizes.item(0, 0).setText("Renamed")
+        dialog.table_sizes.item(0, 1).setText("30")
+        dialog.btn_save.click()
+        saved = self.manager.get_library("Dynamic")["Square Hollow"]["sizes"]["Renamed"]
+        self.assertEqual(saved["Radius1"], "4")
+        self.assertEqual(saved["Radius2"], "2")
+        self.assertEqual(saved["Height"], "30")
+        dialog.cb_fillet.setChecked(True)
+        self.assertFalse(dialog.table_sizes.isColumnHidden(5))
+        self.assertEqual(dialog.table_sizes.item(0, 5).text(), "4")
+        dialog.combo_family.setCurrentText("Pipe")
+        from freecad.frameforge.ff_tools import translate
+        self.assertEqual(dialog.table_sizes.horizontalHeaderItem(1).text(),
+                         translate("frameforge", "Diameter [mm]"))
+        dialog.combo_family.setCurrentText("Square")
+        self.assertEqual(dialog.table_sizes.horizontalHeaderItem(1).text(),
+                         translate("frameforge", "Height [mm]"))
+
     def test_master_detail_families_list_and_icons(self):
         from freecad.frameforge.library_manager_dialog import (
             ProfileLibraryManagerDialog, QtCore, QtGui, QtWidgets,

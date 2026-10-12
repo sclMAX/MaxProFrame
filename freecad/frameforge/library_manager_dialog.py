@@ -581,9 +581,41 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.lbl_family_icon.clear()
         self.lbl_family_icon.setToolTip("")
 
+    def _update_size_columns(self):
+        # Keep stable column indices and all cell values for persistence/autocalc.
+        fields = {
+            "Round Bar": {"Height"},
+            "Pipe": {"Height", "Thickness"},
+            "Flat Sections": {"Height", "Width"},
+            "Square": {"Height", "Width"},
+            "Square Hollow": {"Height", "Width", "Thickness", "Radius1", "Radius2"},
+            "Rectangular Hollow": {"Height", "Width", "Thickness", "Radius1", "Radius2"},
+            "Equal Leg Angles": {"Height", "Width", "Thickness", "Radius1", "Radius2"},
+            "Unequal Leg Angles": {"Height", "Width", "Thickness", "Radius1", "Radius2"},
+        }
+        for family in ("HEA", "HEB", "HEM", "IPE"):
+            fields[family] = {"Height", "Width", "Thickness", "Flange Thickness", "Radius1"}
+        for family in ("UPE", "UPN", "IPN"):
+            fields[family] = {key for key, _ in self.TABLE_COLUMNS}
+        for family in ("V-Slot", "T-Slot", "T-Slot 3-Slots", "T-Slot 2-Slots",
+                       "T-Slot 2-Slots Opp", "T-Slot 1-Slot"):
+            fields[family] = {"Height", "Width"}
+
+        # Unknown/custom geometries retain the full editor rather than lose access.
+        visible = set(fields.get(self.current_family, {key for key, _ in self.TABLE_COLUMNS}))
+        visible.update(("Size", "Weight"))
+        if not self.cb_fillet.isChecked():
+            visible.difference_update(("Radius1", "Radius2"))
+        for index, (key, label) in enumerate(self.TABLE_COLUMNS):
+            if key == "Height" and self.current_family in ("Round Bar", "Pipe"):
+                label = "Diameter [mm]"
+            self.table_sizes.horizontalHeaderItem(index).setText(translate("frameforge", label))
+            self.table_sizes.setColumnHidden(index, key not in visible)
+
     def _on_fillet_toggled(self, checked):
         self._mark_dirty()
         self._update_family_icon()
+        self._update_size_columns()
 
     def _populate_sizes_table(self, sizes_dict):
         self.table_sizes.blockSignals(True)
@@ -602,6 +634,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                     item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
                 self.table_sizes.setItem(row, col_idx, item)
 
+        self._update_size_columns()
         self.table_sizes.blockSignals(False)
         self.table_sizes.resizeColumnsToContents()
         for col in range(self.table_sizes.columnCount()):

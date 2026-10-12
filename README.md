@@ -39,6 +39,10 @@ For a start, we are going to create a simple frame.
 
 5. Close the Sketch edit mode.
 
+### Profile library table
+
+The Profile Library Manager displays only the dimension columns used by the selected family. Circular profiles show **Diameter** instead of Height. Radius columns appear only when **With Fillet** is enabled and the family uses them. Hidden cell values remain stored when editing and saving; switching families does not discard them. Unknown/custom families retain the full set of columns (with radii hidden when Fillet is off).
+
 ### Create the frame
 
 1. Launch the FrameForge Profile tool
