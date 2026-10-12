@@ -9,7 +9,7 @@ except ImportError:
 import FreeCAD as App
 import FreeCADGui as Gui
 
-from freecad.frameforge.ff_tools import ICONPATH, translate
+from freecad.frameforge.ff_tools import ICONPATH, TRANSLATIONSPATH, translate
 from freecad.frameforge.library_manager import (
     KNOWN_FAMILIES,
     STANDARD_DENSITIES,
@@ -32,25 +32,43 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
     """
 
     TABLE_COLUMNS = [
-        ("Size", "Size / Código"),
-        ("Height", "Alto (H) [mm]"),
-        ("Width", "Ancho (W) [mm]"),
-        ("Thickness", "Espesor (T) [mm]"),
-        ("Flange Thickness", "Espesor Ala [mm]"),
-        ("Radius1", "Radio 1 [mm]"),
-        ("Radius2", "Radio 2 [mm]"),
-        ("Weight", "Peso [kg/m]"),
+        ("Size", "Code"),
+        ("Height", "Height [mm]"),
+        ("Width", "Width [mm]"),
+        ("Thickness", "Thickness [mm]"),
+        ("Flange Thickness", "Flange Thickness [mm]"),
+        ("Radius1", "Radius 1 [mm]"),
+        ("Radius2", "Radius 2 [mm]"),
+        ("Weight", "Weight [kg/m]"),
     ]
+
+    @classmethod
+    def ensure_translations_loaded(cls):
+        """Ensures that the locale translation file from TRANSLATIONSPATH is loaded in QApplication."""
+        if getattr(cls, "_translator_installed", False):
+            return
+        cls._translator_installed = True
+        try:
+            translator = QtCore.QTranslator()
+            locale = QtCore.QLocale()
+            for prefix in ["frameforge", "FrameForge"]:
+                if translator.load(locale, prefix, "_", TRANSLATIONSPATH):
+                    QtWidgets.QApplication.installTranslator(translator)
+                    cls._translator = translator
+                    break
+        except Exception:
+            pass
 
     def __init__(self, parent=None, library_manager=None):
         super().__init__(parent)
+        self.ensure_translations_loaded()
         self.manager = library_manager or LibraryManager()
         self.current_lib_meta = None
         self.current_lib_data = {}
         self.current_family = None
         self.is_dirty = False
 
-        self.setWindowTitle(translate("frameforge", "FrameForge - Gestor de Bibliotecas de Perfiles"))
+        self.setWindowTitle(translate("frameforge", "FrameForge - Profile Library Manager"))
         self.resize(920, 580)
 
         self._build_ui()
@@ -63,8 +81,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         header = QtWidgets.QLabel(
             translate(
                 "frameforge",
-                "<b>Gestión de Bibliotecas de Perfiles</b><br>"
-                "Creá, duplicá y modificá bibliotecas personalizadas (ej. Indumatics Aluminio) con dimensiones y pesos específicos.",
+                "<b>Profile Library Management</b><br>"
+                "Create, duplicate and modify custom libraries (e.g. Aluminum Tubes) with specific dimensions and material weights.",
             )
         )
         header.setWordWrap(True)
@@ -80,17 +98,17 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         left_layout = QtWidgets.QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
 
-        left_layout.addWidget(QtWidgets.QLabel(translate("frameforge", "<b>Bibliotecas disponibles:</b>")))
+        left_layout.addWidget(QtWidgets.QLabel(translate("frameforge", "<b>Available Libraries:</b>")))
         self.list_libraries = QtWidgets.QListWidget()
         self.list_libraries.currentItemChanged.connect(self._on_library_selection_changed)
         left_layout.addWidget(self.list_libraries, 1)
 
         lib_btn_layout = QtWidgets.QHBoxLayout()
-        self.btn_new_lib = QtWidgets.QPushButton(translate("frameforge", "+ Nueva"))
+        self.btn_new_lib = QtWidgets.QPushButton(translate("frameforge", "+ New"))
         self.btn_new_lib.clicked.connect(self._on_new_library)
-        self.btn_dup_lib = QtWidgets.QPushButton(translate("frameforge", "Duplicar"))
+        self.btn_dup_lib = QtWidgets.QPushButton(translate("frameforge", "Duplicate"))
         self.btn_dup_lib.clicked.connect(self._on_duplicate_library)
-        self.btn_del_lib = QtWidgets.QPushButton(translate("frameforge", "Eliminar"))
+        self.btn_del_lib = QtWidgets.QPushButton(translate("frameforge", "Delete"))
         self.btn_del_lib.clicked.connect(self._on_delete_library)
 
         lib_btn_layout.addWidget(self.btn_new_lib)
@@ -112,14 +130,14 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         # Family selection row
         family_row = QtWidgets.QHBoxLayout()
-        family_row.addWidget(QtWidgets.QLabel(translate("frameforge", "Familia geométrica:")))
+        family_row.addWidget(QtWidgets.QLabel(translate("frameforge", "Geometric Family:")))
         self.combo_family = QtWidgets.QComboBox()
         self.combo_family.currentIndexChanged.connect(self._on_family_changed)
         family_row.addWidget(self.combo_family, 1)
 
-        self.btn_add_family = QtWidgets.QPushButton(translate("frameforge", "+ Familia"))
+        self.btn_add_family = QtWidgets.QPushButton(translate("frameforge", "+ Family"))
         self.btn_add_family.clicked.connect(self._on_add_family)
-        self.btn_del_family = QtWidgets.QPushButton(translate("frameforge", "- Familia"))
+        self.btn_del_family = QtWidgets.QPushButton(translate("frameforge", "- Family"))
         self.btn_del_family.clicked.connect(self._on_delete_family)
         family_row.addWidget(self.btn_add_family)
         family_row.addWidget(self.btn_del_family)
@@ -127,12 +145,12 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         # Metadata row: Norma & Fillet
         meta_row = QtWidgets.QHBoxLayout()
-        meta_row.addWidget(QtWidgets.QLabel(translate("frameforge", "Norma / Ref:")))
+        meta_row.addWidget(QtWidgets.QLabel(translate("frameforge", "Standard / Ref:")))
         self.le_norm = QtWidgets.QLineEdit()
         self.le_norm.textChanged.connect(self._mark_dirty)
         meta_row.addWidget(self.le_norm, 1)
 
-        self.cb_fillet = QtWidgets.QCheckBox(translate("frameforge", "Con redondeos (Fillet)"))
+        self.cb_fillet = QtWidgets.QCheckBox(translate("frameforge", "With Fillet"))
         self.cb_fillet.toggled.connect(self._mark_dirty)
         meta_row.addWidget(self.cb_fillet)
         right_layout.addLayout(meta_row)
@@ -140,20 +158,20 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         # Sizes Table
         self.table_sizes = QtWidgets.QTableWidget()
         self.table_sizes.setColumnCount(len(self.TABLE_COLUMNS))
-        self.table_sizes.setHorizontalHeaderLabels([col[1] for col in self.TABLE_COLUMNS])
+        self.table_sizes.setHorizontalHeaderLabels([translate("frameforge", col[1]) for col in self.TABLE_COLUMNS])
         self.table_sizes.horizontalHeader().setStretchLastSection(True)
         self.table_sizes.itemChanged.connect(self._on_table_item_changed)
         right_layout.addWidget(self.table_sizes, 1)
 
         # Table action buttons
         table_btn_row = QtWidgets.QHBoxLayout()
-        self.btn_add_size = QtWidgets.QPushButton(translate("frameforge", "+ Agregar Medida"))
+        self.btn_add_size = QtWidgets.QPushButton(translate("frameforge", "+ Add Size"))
         self.btn_add_size.clicked.connect(self._on_add_size)
-        self.btn_del_size = QtWidgets.QPushButton(translate("frameforge", "- Quitar Medida"))
+        self.btn_del_size = QtWidgets.QPushButton(translate("frameforge", "- Remove Size"))
         self.btn_del_size.clicked.connect(self._on_delete_size)
 
-        self.btn_calc_weight = QtWidgets.QPushButton(translate("frameforge", "Calcular Peso Teórico"))
-        self.btn_calc_weight.setToolTip(translate("frameforge", "Calcula el peso en kg/m según densidad del material y medidas."))
+        self.btn_calc_weight = QtWidgets.QPushButton(translate("frameforge", "Calculate Theoretical Weight"))
+        self.btn_calc_weight.setToolTip(translate("frameforge", "Calculates theoretical weight in kg/m based on material density and dimensions."))
         self.btn_calc_weight.clicked.connect(self._on_calc_weight)
 
         table_btn_row.addWidget(self.btn_add_size)
@@ -171,7 +189,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.lbl_status.setStyleSheet("color: #006600;")
         bottom_layout.addWidget(self.lbl_status, 1)
 
-        self.btn_save = QtWidgets.QPushButton(translate("frameforge", "Guardar Cambios"))
+        self.btn_save = QtWidgets.QPushButton(translate("frameforge", "Save Changes"))
         self.btn_save.setStyleSheet("""
             QPushButton {
                 font-weight: bold;
@@ -189,7 +207,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             }
         """)
         self.btn_save.clicked.connect(self._on_save_library)
-        self.btn_close = QtWidgets.QPushButton(translate("frameforge", "Cerrar"))
+        self.btn_close = QtWidgets.QPushButton(translate("frameforge", "Close"))
         self.btn_close.clicked.connect(self.close)
 
         bottom_layout.addWidget(self.btn_save)
@@ -204,7 +222,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         target_item = None
 
         for lib in libs:
-            tag = "[Usuario] " if lib["is_user"] else "[Sistema] "
+            tag = translate("frameforge", "[User] ") if lib["is_user"] else translate("frameforge", "[System] ")
             item = QtWidgets.QListWidgetItem(f"{tag}{lib['name']}")
             item.setData(QtCore.Qt.UserRole, lib)
             self.list_libraries.addItem(item)
@@ -247,7 +265,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
     def _update_banner(self, is_user, name):
         dark = is_dark_theme(self)
         if is_user:
-            self.lbl_lib_banner.setText(f"Biblioteca de Usuario: {name} (Editable)")
+            self.lbl_lib_banner.setText(translate("frameforge", "User Library: %s (Editable)") % name)
             if dark:
                 self.lbl_lib_banner.setStyleSheet(
                     "background-color: #1b3824; color: #81c784; border: 1px solid #2e7d32; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
@@ -257,7 +275,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                     "background-color: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
                 )
         else:
-            self.lbl_lib_banner.setText(f"Biblioteca de Sistema: {name} (Solo lectura - Usá 'Duplicar' para personalizar)")
+            self.lbl_lib_banner.setText(
+                translate("frameforge", "System Library: %s (Read-only - Use 'Duplicate' to customize)") % name
+            )
             if dark:
                 self.lbl_lib_banner.setStyleSheet(
                     "background-color: #2b3036; color: #cfd8dc; border: 1px solid #455a64; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
@@ -301,7 +321,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         try:
             self._commit_current_family_edits()
         except ValueError as e:
-            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Aviso"), str(e))
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Warning"), str(e))
 
         family_name = self.combo_family.currentText()
         self.current_family = family_name
@@ -390,7 +410,11 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         if duplicates:
             raise ValueError(
-                f"Códigos de medida duplicados encontrados: {', '.join(duplicates)}. Cada medida debe tener un código único."
+                translate(
+                    "frameforge",
+                    "Duplicate size codes found: %s. Each size must have a unique code.",
+                )
+                % (", ".join(duplicates))
             )
 
         self.current_lib_data[self.current_family]["norm"] = self.le_norm.text().strip()
@@ -399,7 +423,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
     def _mark_dirty(self):
         self.is_dirty = True
-        self._set_status(translate("frameforge", "Cambios sin guardar."), is_warning=True)
+        self._set_status(translate("frameforge", "Unsaved changes."), is_warning=True)
 
     def _on_table_item_changed(self, item):
         self._mark_dirty()
@@ -407,8 +431,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
     def _on_new_library(self):
         name, ok = QtWidgets.QInputDialog.getText(
             self,
-            translate("frameforge", "Nueva Biblioteca"),
-            translate("frameforge", "Nombre de la biblioteca (ej. Indumatics Aluminio):"),
+            translate("frameforge", "New Library"),
+            translate("frameforge", "Library name (e.g. Aluminum Tubes):"),
         )
         if not ok or not name.strip():
             return
@@ -440,12 +464,12 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             QtWidgets.QMessageBox.warning(
                 self,
                 translate("frameforge", "Error"),
-                translate("frameforge", f"Ya existe una biblioteca con el nombre '{name}' o archivo equivalente."),
+                translate("frameforge", "A library named '%s' or equivalent file already exists.") % name,
             )
             return
 
         self.refresh_libraries(select_name=name)
-        self._set_status(f"Biblioteca '{name}' creada con éxito.")
+        self._set_status(translate("frameforge", "Library '%s' created successfully.") % name)
 
     def _on_duplicate_library(self):
         if not self.current_lib_meta:
@@ -454,9 +478,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         source_name = self.current_lib_meta["name"]
         new_name, ok = QtWidgets.QInputDialog.getText(
             self,
-            translate("frameforge", "Duplicar Biblioteca"),
-            translate("frameforge", f"Nuevo nombre para la copia de '{source_name}':"),
-            text=f"{source_name} Personalizada",
+            translate("frameforge", "Duplicate Library"),
+            translate("frameforge", "New name for copy of '%s':") % source_name,
+            text=translate("frameforge", "%s Custom") % source_name,
         )
         if not ok or not new_name.strip():
             return
@@ -468,12 +492,12 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             QtWidgets.QMessageBox.warning(
                 self,
                 translate("frameforge", "Error"),
-                translate("frameforge", f"Ya existe una biblioteca con el nombre '{new_name}' o archivo equivalente."),
+                translate("frameforge", "A library named '%s' or equivalent file already exists.") % new_name,
             )
             return
 
         self.refresh_libraries(select_name=new_name)
-        self._set_status(f"Biblioteca duplicada como '{new_name}'.")
+        self._set_status(translate("frameforge", "Library duplicated as '%s'.") % new_name)
 
     def _on_delete_library(self):
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
@@ -482,14 +506,14 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         name = self.current_lib_meta["name"]
         reply = QtWidgets.QMessageBox.question(
             self,
-            translate("frameforge", "Confirmar eliminación"),
-            translate("frameforge", f"¿Estás seguro de eliminar la biblioteca '{name}'?"),
+            translate("frameforge", "Confirm deletion"),
+            translate("frameforge", "Are you sure you want to delete library '%s'?") % name,
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         if reply == QtWidgets.QMessageBox.Yes:
             self.manager.delete_user_library(name)
             self.refresh_libraries()
-            self._set_status(f"Biblioteca '{name}' eliminada.")
+            self._set_status(translate("frameforge", "Library '%s' deleted.") % name)
 
     def _on_add_family(self):
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
@@ -497,8 +521,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         fam, ok = QtWidgets.QInputDialog.getItem(
             self,
-            translate("frameforge", "Agregar Familia"),
-            translate("frameforge", "Seleccioná la familia geométrica:"),
+            translate("frameforge", "Add Family"),
+            translate("frameforge", "Select geometric family:"),
             KNOWN_FAMILIES,
             0,
             False,
@@ -526,8 +550,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         reply = QtWidgets.QMessageBox.question(
             self,
-            translate("frameforge", "Eliminar Familia"),
-            translate("frameforge", f"¿Eliminar la familia '{fam}' y todas sus medidas?"),
+            translate("frameforge", "Delete Family"),
+            translate("frameforge", "Delete family '%s' and all its dimensions?") % fam,
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         if reply == QtWidgets.QMessageBox.Yes:
@@ -540,7 +564,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
         if not self.current_family or self.current_family not in self.current_lib_data:
             self._set_status(
-                translate("frameforge", "Debe seleccionar o crear una familia antes de agregar medidas."),
+                translate("frameforge", "You must select or create a family before adding dimensions."),
                 is_warning=True,
             )
             return
@@ -551,7 +575,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             if item and item.text().strip():
                 existing_codes.add(item.text().strip())
 
-        base_code = "Nuevo_50x50x2"
+        base_code = "New_50x50x2"
         candidate_code = base_code
         counter = 1
         while candidate_code in existing_codes:
@@ -582,7 +606,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         row = self.table_sizes.currentRow()
         if row < 0:
             QtWidgets.QMessageBox.information(
-                self, translate("frameforge", "Información"), translate("frameforge", "Seleccioná una fila para calcular el peso.")
+                self, translate("frameforge", "Information"), translate("frameforge", "Select a row to calculate weight.")
             )
             return
 
@@ -590,8 +614,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         density_items = [f"{mat} ({dens} g/cm³)" for mat, dens in STANDARD_DENSITIES.items()]
         item, ok = QtWidgets.QInputDialog.getItem(
             self,
-            translate("frameforge", "Densidad del Material"),
-            translate("frameforge", "Seleccioná material para el cálculo de peso:"),
+            translate("frameforge", "Material Density"),
+            translate("frameforge", "Select material for weight calculation:"),
             density_items,
             0,
             False,
@@ -616,10 +640,10 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             # Column 7 is Weight
             self.table_sizes.setItem(row, 7, QtWidgets.QTableWidgetItem(str(calc_weight)))
             self._mark_dirty()
-            self._set_status(f"Peso calculado: {calc_weight} kg/m ({mat_key})")
+            self._set_status(translate("frameforge", "Calculated weight: %s kg/m (%s)") % (calc_weight, mat_key))
         except Exception as e:
-            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), f"No se pudo calcular el peso: {e}")
-            self._set_status(f"Error al calcular peso: {e}", is_error=True)
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), translate("frameforge", "Could not calculate weight: %s") % e)
+            self._set_status(translate("frameforge", "Error calculating weight: %s") % e, is_error=True)
 
     def _on_save_library(self):
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
@@ -627,7 +651,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         if self.table_sizes.rowCount() > 0 and (not self.current_family or self.current_family not in self.current_lib_data):
             self._set_status(
-                translate("frameforge", "No se pueden guardar medidas huérfanas sin una familia activa."),
+                translate("frameforge", "Cannot save orphan dimensions without an active family."),
                 is_error=True,
             )
             return
@@ -643,7 +667,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         lib_name = self.current_lib_meta["name"]
         self.manager.save_user_library(lib_name, self.current_lib_data, overwrite=True)
         self.is_dirty = False
-        self._set_status(f"Biblioteca '{lib_name}' guardada correctamente.")
+        self._set_status(translate("frameforge", "Library '%s' saved successfully.") % lib_name)
 
 
 class ManageProfileLibrariesCommand:

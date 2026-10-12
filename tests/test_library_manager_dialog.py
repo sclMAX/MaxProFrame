@@ -1,3 +1,5 @@
+import ast
+import gc
 import os
 import shutil
 import tempfile
@@ -214,8 +216,8 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
         # Codes must be distinct
         self.assertNotEqual(code1, code2)
-        self.assertEqual(code1, "Nuevo_50x50x2")
-        self.assertEqual(code2, "Nuevo_50x50x2_1")
+        self.assertEqual(code1, "New_50x50x2")
+        self.assertEqual(code2, "New_50x50x2_1")
 
         # Edit dimensions on both
         dialog.table_sizes.item(0, 1).setText("50")
@@ -261,6 +263,101 @@ class TestLibraryManagerDialog(unittest.TestCase):
         dialog._on_save_library()
         reloaded = self.manager.get_library("OrphanGuardLib")
         self.assertNotIn("SoloFamily", reloaded)
+
+    def test_warning_uses_english_source(self):
+        from freecad.frameforge import library_manager_dialog
+
+        with open(library_manager_dialog.__file__, encoding="utf-8") as source_file:
+            tree = ast.parse(source_file.read())
+        strings = [
+            node.value for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+        ]
+        self.assertNotIn("Aviso", strings)
+        self.assertIn("Warning", strings)
+
+    def test_spanish_locale_translation_survives(self):
+        from freecad.frameforge.library_manager_dialog import (
+            ProfileLibraryManagerDialog, QtCore, QtWidgets,
+        )
+
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
+        cls = ProfileLibraryManagerDialog
+        original_locale = QtCore.QLocale()
+        original_installed = getattr(cls, "_translator_installed", False)
+        original_translator = getattr(cls, "_translator", None)
+        if original_translator is not None:
+            app.removeTranslator(original_translator)
+        dialog = None
+        fresh_dialog = None
+        english_dialog = None
+        try:
+            cls._translator_installed = False
+            cls._translator = None
+            QtCore.QLocale.setDefault(QtCore.QLocale("es_ES"))
+            dialog = cls(library_manager=self.manager)
+            gc.collect()
+            self.assertEqual(dialog.btn_new_lib.text(), "+ Nueva")
+            self.assertEqual(dialog.windowTitle(), "FrameForge - Gestor de Bibliotecas de Perfiles")
+            # A second dialog proves translation still works after the loader returns
+            # and garbage collection, rather than merely retaining existing labels.
+            fresh_dialog = cls(library_manager=self.manager)
+            self.assertEqual(fresh_dialog.btn_new_lib.text(), "+ Nueva")
+            self.assertEqual(fresh_dialog.windowTitle(), "FrameForge - Gestor de Bibliotecas de Perfiles")
+
+            # Preserve untranslated English UI when no matching catalog is loaded.
+            app.removeTranslator(cls._translator)
+            cls._translator_installed = False
+            QtCore.QLocale.setDefault(QtCore.QLocale("en_US"))
+            english_dialog = cls(library_manager=self.manager)
+            self.assertEqual(english_dialog.btn_new_lib.text(), "+ New")
+            self.assertEqual(english_dialog.windowTitle(), "FrameForge - Profile Library Manager")
+        finally:
+            if english_dialog is not None:
+                english_dialog.close()
+            if fresh_dialog is not None:
+                fresh_dialog.close()
+            if dialog is not None:
+                dialog.close()
+            translator = getattr(cls, "_translator", None)
+            if translator is not None:
+                app.removeTranslator(translator)
+            cls._translator = original_translator
+            cls._translator_installed = original_installed
+            QtCore.QLocale.setDefault(original_locale)
+            if original_translator is not None:
+                app.installTranslator(original_translator)
+
+    def test_translations_and_indumatics_removal(self):
+        from PySide import QtCore, QtWidgets
+        from freecad.frameforge.ff_tools import TRANSLATIONSPATH
+        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
+
+        # 1. Verify Spanish translation loads and translates core UI elements
+        translator = QtCore.QTranslator()
+        qm_path = os.path.join(TRANSLATIONSPATH, "frameforge_es.qm")
+        self.assertTrue(os.path.isfile(qm_path), f"QM file not found at {qm_path}")
+        loaded = translator.load(qm_path)
+        self.assertTrue(loaded, "Failed to load frameforge_es.qm")
+
+        app.installTranslator(translator)
+        try:
+            dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+            # Under Spanish translator:
+            self.assertEqual(dialog.windowTitle(), "FrameForge - Gestor de Bibliotecas de Perfiles")
+            self.assertEqual(dialog.btn_new_lib.text(), "+ Nueva")
+            self.assertEqual(dialog.btn_dup_lib.text(), "Duplicar")
+            self.assertEqual(dialog.btn_del_lib.text(), "Eliminar")
+            self.assertEqual(dialog.btn_save.text(), "Guardar Cambios")
+
+            # Verify 'Indumatics' is nowhere in the dialog texts
+            # and replaced with 'Tubos Aluminio'
+            self.assertNotIn("Indumatics", dialog.findChildren(QtWidgets.QLabel)[0].text())
+            self.assertIn("Tubos Aluminio", dialog.findChildren(QtWidgets.QLabel)[0].text())
+        finally:
+            app.removeTranslator(translator)
 
 
 
