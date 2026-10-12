@@ -179,6 +179,56 @@ class TestLibraryManagerDialog(unittest.TestCase):
             weight = calculate_linear_weight("Square", 100.0, 100.0, 0, density)
             self.assertAlmostEqual(weight, 5.5 if "Soft" in wood_label else 7.5, places=2)
 
+    def test_add_multiple_sizes_generates_unique_codes_and_persists(self):
+        try:
+            from PySide import QtWidgets
+        except ImportError:
+            try:
+                from PySide6 import QtWidgets
+            except ImportError:
+                from PySide2 import QtWidgets
+
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
+        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+
+        test_data = {
+            "_metadata": {"name": "UniqueSizesLib"},
+            "Square": {
+                "norm": "Custom",
+                "unit": "Metric Units",
+                "fillet": False,
+                "sizes": {},
+            },
+        }
+        self.manager.save_user_library("UniqueSizesLib", test_data)
+        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        dialog.refresh_libraries(select_name="UniqueSizesLib")
+
+        # Add two sizes
+        dialog._on_add_size()
+        dialog._on_add_size()
+
+        self.assertEqual(dialog.table_sizes.rowCount(), 2)
+        code1 = dialog.table_sizes.item(0, 0).text()
+        code2 = dialog.table_sizes.item(1, 0).text()
+
+        # Codes must be distinct
+        self.assertNotEqual(code1, code2)
+        self.assertEqual(code1, "Nuevo_50x50x2")
+        self.assertEqual(code2, "Nuevo_50x50x2_1")
+
+        # Edit dimensions on both
+        dialog.table_sizes.item(0, 1).setText("50")
+        dialog.table_sizes.item(1, 1).setText("70")
+
+        # Save and reload
+        dialog._on_save_library()
+        reloaded = self.manager.get_library("UniqueSizesLib")
+        self.assertIn(code1, reloaded["Square"]["sizes"])
+        self.assertIn(code2, reloaded["Square"]["sizes"])
+        self.assertEqual(reloaded["Square"]["sizes"][code1]["Height"], "50")
+        self.assertEqual(reloaded["Square"]["sizes"][code2]["Height"], "70")
+
 
 if __name__ == "__main__":
     unittest.main()

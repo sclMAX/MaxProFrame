@@ -252,8 +252,10 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self._on_family_changed()
 
     def _on_family_changed(self):
-        # Commit previous family edits before switching
-        self._commit_current_family_edits()
+        try:
+            self._commit_current_family_edits()
+        except ValueError as e:
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Aviso"), str(e))
 
         family_name = self.combo_family.currentText()
         self.current_family = family_name
@@ -304,6 +306,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
 
         sizes = {}
+        seen_codes = set()
+        duplicates = []
         for row in range(self.table_sizes.rowCount()):
             size_item = self.table_sizes.item(row, 0)
             if not size_item:
@@ -311,6 +315,10 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             size_name = size_item.text().strip()
             if not size_name:
                 continue
+
+            if size_name in seen_codes:
+                duplicates.append(size_name)
+            seen_codes.add(size_name)
 
             size_entry = {}
             for col_idx, (prop_key, _) in enumerate(self.TABLE_COLUMNS):
@@ -320,6 +328,11 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 size_entry[prop_key] = item.text().strip() if item else "0"
 
             sizes[size_name] = size_entry
+
+        if duplicates:
+            raise ValueError(
+                f"Códigos de medida duplicados encontrados: {', '.join(duplicates)}. Cada medida debe tener un código único."
+            )
 
         self.current_lib_data[self.current_family]["norm"] = self.le_norm.text().strip()
         self.current_lib_data[self.current_family]["fillet"] = self.cb_fillet.isChecked()
@@ -467,10 +480,23 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
             return
 
+        existing_codes = set()
+        for r in range(self.table_sizes.rowCount()):
+            item = self.table_sizes.item(r, 0)
+            if item and item.text().strip():
+                existing_codes.add(item.text().strip())
+
+        base_code = "Nuevo_50x50x2"
+        candidate_code = base_code
+        counter = 1
+        while candidate_code in existing_codes:
+            candidate_code = f"{base_code}_{counter}"
+            counter += 1
+
         row = self.table_sizes.rowCount()
         self.table_sizes.insertRow(row)
 
-        default_vals = ["Nuevo_50x50x2", "50", "50", "2", "0", "0", "0", "0"]
+        default_vals = [candidate_code, "50", "50", "2", "0", "0", "0", "0"]
         for col, val in enumerate(default_vals):
             self.table_sizes.setItem(row, col, QtWidgets.QTableWidgetItem(val))
 
@@ -534,7 +560,12 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
 
         # Commit active family edits before saving
-        self._commit_current_family_edits()
+        try:
+            self._commit_current_family_edits()
+        except ValueError as e:
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(e))
+            self.lbl_status.setText(str(e))
+            return
 
         lib_name = self.current_lib_meta["name"]
         self.manager.save_user_library(lib_name, self.current_lib_data, overwrite=True)
