@@ -141,6 +141,32 @@ class TestLibraryManager(unittest.TestCase):
         )
         self.assertAlmostEqual(weight_pipe, 2.37, places=2)
 
+    def test_save_collision_rejection(self):
+        data1 = {"Square": {"sizes": {"orig": {"Height": "10", "Width": "10", "Thickness": "1"}}}}
+        data2 = {"Square": {"sizes": {"new": {"Height": "20", "Width": "20", "Thickness": "2"}}}}
+
+        self.manager.save_user_library("Shop A", data1, overwrite=False)
+
+        # 'Shop_A' sanitizes to same filename 'shop_a.json'
+        with self.assertRaises(FileExistsError):
+            self.manager.save_user_library("Shop_A", data2, overwrite=False)
+
+        # Assert original catalog is unchanged
+        loaded = self.manager.get_library("Shop A")
+        self.assertIn("orig", loaded["Square"]["sizes"])
+        self.assertNotIn("new", loaded["Square"]["sizes"])
+
+    def test_wood_density_calculations(self):
+        from freecad.frameforge.library_manager import STANDARD_DENSITIES
+
+        # Beam 100x100 mm: Area = 10000 mm2 = 100 cm3 per 1000mm length
+        weight_soft = calculate_linear_weight("Square", 100.0, 100.0, 0, STANDARD_DENSITIES["Wood (Soft)"])
+        weight_hard = calculate_linear_weight("Square", 100.0, 100.0, 0, STANDARD_DENSITIES["Wood (Hard)"])
+
+        self.assertEqual(weight_soft, 5.5)  # 100 * 0.55 = 55.0 / 10 = 5.5 kg/m
+        self.assertEqual(weight_hard, 7.5)  # 100 * 0.75 = 75.0 / 10 = 7.5 kg/m
+        self.assertNotEqual(weight_soft, 27.0)  # Must NOT be aluminium density 2.70
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -93,6 +93,54 @@ class TestLibraryManagerDialog(unittest.TestCase):
         self.assertIn("60x60x3", reloaded["Square Hollow"]["sizes"])
         self.assertEqual(reloaded["Square Hollow"]["sizes"]["60x60x3"]["Height"], "60")
 
+    def test_family_switch_preserves_edits(self):
+        try:
+            from PySide import QtWidgets
+        except ImportError:
+            try:
+                from PySide6 import QtWidgets
+            except ImportError:
+                from PySide2 import QtWidgets
+
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
+        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+
+        test_data = {
+            "_metadata": {"name": "MultiFamily"},
+            "FamilyA": {
+                "norm": "NormA",
+                "unit": "Metric Units",
+                "fillet": False,
+                "sizes": {"A1": {"Height": "10", "Width": "10", "Thickness": "1"}},
+            },
+            "FamilyB": {
+                "norm": "NormB",
+                "unit": "Metric Units",
+                "fillet": False,
+                "sizes": {"B1": {"Height": "20", "Width": "20", "Thickness": "2"}},
+            },
+        }
+        self.manager.save_user_library("MultiFamily", test_data)
+        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        dialog.refresh_libraries(select_name="MultiFamily")
+
+        # Select FamilyA and edit table
+        dialog.combo_family.setCurrentText("FamilyA")
+        dialog.table_sizes.item(0, 1).setText("99")  # Change Height of A1 to 99
+        dialog.le_norm.setText("NormA_Modified")
+
+        # Switch to FamilyB
+        dialog.combo_family.setCurrentText("FamilyB")
+        self.assertEqual(dialog.combo_family.currentText(), "FamilyB")
+
+        # Save library
+        dialog._on_save_library()
+
+        # Reload from disk and verify FamilyA edits were committed and persisted
+        saved = self.manager.get_library("MultiFamily")
+        self.assertEqual(saved["FamilyA"]["sizes"]["A1"]["Height"], "99")
+        self.assertEqual(saved["FamilyA"]["norm"], "NormA_Modified")
+
 
 if __name__ == "__main__":
     unittest.main()

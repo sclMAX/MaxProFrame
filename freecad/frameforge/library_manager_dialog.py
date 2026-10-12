@@ -250,6 +250,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self._on_family_changed()
 
     def _on_family_changed(self):
+        # Commit previous family edits before switching
+        self._commit_current_family_edits()
+
         family_name = self.combo_family.currentText()
         self.current_family = family_name
 
@@ -291,6 +294,35 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         self.table_sizes.blockSignals(False)
 
+    def _commit_current_family_edits(self):
+        """Commits table and metadata edits from widgets into current_lib_data for current_family."""
+        if not self.current_family or self.current_family not in self.current_lib_data:
+            return
+        if not (self.current_lib_meta and self.current_lib_meta["is_user"]):
+            return
+
+        sizes = {}
+        for row in range(self.table_sizes.rowCount()):
+            size_item = self.table_sizes.item(row, 0)
+            if not size_item:
+                continue
+            size_name = size_item.text().strip()
+            if not size_name:
+                continue
+
+            size_entry = {}
+            for col_idx, (prop_key, _) in enumerate(self.TABLE_COLUMNS):
+                if prop_key == "Size":
+                    continue
+                item = self.table_sizes.item(row, col_idx)
+                size_entry[prop_key] = item.text().strip() if item else "0"
+
+            sizes[size_name] = size_entry
+
+        self.current_lib_data[self.current_family]["norm"] = self.le_norm.text().strip()
+        self.current_lib_data[self.current_family]["fillet"] = self.cb_fillet.isChecked()
+        self.current_lib_data[self.current_family]["sizes"] = sizes
+
     def _mark_dirty(self):
         self.is_dirty = True
         self.lbl_status.setText(translate("frameforge", "Cambios sin guardar."))
@@ -328,7 +360,16 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             },
         }
 
-        self.manager.save_user_library(name, default_data)
+        try:
+            self.manager.save_user_library(name, default_data, overwrite=False)
+        except FileExistsError:
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Error"),
+                translate("frameforge", f"Ya existe una biblioteca con el nombre '{name}' o archivo equivalente."),
+            )
+            return
+
         self.refresh_libraries(select_name=name)
         self.lbl_status.setText(f"Biblioteca '{name}' creada con éxito.")
 
@@ -347,7 +388,16 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
 
         new_name = new_name.strip()
-        self.manager.duplicate_library(source_name, new_name)
+        try:
+            self.manager.duplicate_library(source_name, new_name, overwrite=False)
+        except FileExistsError:
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Error"),
+                translate("frameforge", f"Ya existe una biblioteca con el nombre '{new_name}' o archivo equivalente."),
+            )
+            return
+
         self.refresh_libraries(select_name=new_name)
         self.lbl_status.setText(f"Biblioteca duplicada como '{new_name}'.")
 
@@ -457,7 +507,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
 
         # Extract density
-        mat_key = item.split(" (")[0]
+        mat_key = item.rsplit(" (", 1)[0]
         density = STANDARD_DENSITIES.get(mat_key, 2.70)
 
         family = self.combo_family.currentText()
@@ -481,30 +531,11 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
             return
 
-        # Read back table into current_lib_data
-        fam = self.combo_family.currentText()
-        if fam and fam in self.current_lib_data:
-            sizes = {}
-            for row in range(self.table_sizes.rowCount()):
-                size_name = self.table_sizes.item(row, 0).text().strip()
-                if not size_name:
-                    continue
-
-                size_entry = {}
-                for col_idx, (prop_key, _) in enumerate(self.TABLE_COLUMNS):
-                    if prop_key == "Size":
-                        continue
-                    item = self.table_sizes.item(row, col_idx)
-                    size_entry[prop_key] = item.text().strip() if item else "0"
-
-                sizes[size_name] = size_entry
-
-            self.current_lib_data[fam]["norm"] = self.le_norm.text().strip()
-            self.current_lib_data[fam]["fillet"] = self.cb_fillet.isChecked()
-            self.current_lib_data[fam]["sizes"] = sizes
+        # Commit active family edits before saving
+        self._commit_current_family_edits()
 
         lib_name = self.current_lib_meta["name"]
-        self.manager.save_user_library(lib_name, self.current_lib_data)
+        self.manager.save_user_library(lib_name, self.current_lib_data, overwrite=True)
         self.is_dirty = False
         self.lbl_status.setText(f"Biblioteca '{lib_name}' guardada correctamente.")
 

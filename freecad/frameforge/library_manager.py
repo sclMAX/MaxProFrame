@@ -233,14 +233,18 @@ class LibraryManager:
 
         raise FileNotFoundError(f"Library '{name}' not found.")
 
-    def save_user_library(self, name, data):
+    def save_user_library(self, name, data, overwrite=True):
         """
         Saves or updates a user library JSON in user_dir.
+        If overwrite is False, raises FileExistsError if target file already exists.
         """
         os.makedirs(self.user_dir, exist_ok=True)
         file_slug = sanitize_library_name(name)
         filename = f"{file_slug}.json"
         filepath = os.path.join(self.user_dir, filename)
+
+        if not overwrite and os.path.exists(filepath):
+            raise FileExistsError(f"A library file '{filename}' already exists.")
 
         # Ensure _metadata preserves exact user display name
         if isinstance(data, dict):
@@ -280,9 +284,10 @@ class LibraryManager:
 
         raise FileNotFoundError(f"Library '{name}' not found in user libraries.")
 
-    def duplicate_library(self, source_name, target_name):
+    def duplicate_library(self, source_name, target_name, overwrite=False):
         """
         Clones an existing library (stock or user) into a new user library.
+        If overwrite is False, raises FileExistsError if target already exists.
         """
         source_data = self.get_library(source_name)
         # Deep copy via serialization
@@ -298,7 +303,7 @@ class LibraryManager:
                 "cloned_from": source_name,
             }
 
-        return self.save_user_library(target_name, cloned_data)
+        return self.save_user_library(target_name, cloned_data, overwrite=overwrite)
 
     def get_all_profiles(self):
         """
