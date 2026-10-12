@@ -19,6 +19,12 @@ from freecad.frameforge.library_manager import (
 )
 
 
+def is_dark_theme(widget):
+    """Detects if the current Qt palette corresponds to a dark theme."""
+    bg = widget.palette().color(QtGui.QPalette.Window)
+    return bg.lightness() < 128
+
+
 class ProfileLibraryManagerDialog(QtWidgets.QDialog):
     """
     Dialog for managing FrameForge profile libraries:
@@ -61,7 +67,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 "Creá, duplicá y modificá bibliotecas personalizadas (ej. Indumatics Aluminio) con dimensiones y pesos específicos.",
             )
         )
-        header.setStyleSheet("color: #444; padding-bottom: 6px;")
+        header.setWordWrap(True)
+        header.setStyleSheet("padding-bottom: 6px;")
         main_layout.addWidget(header)
 
         # Content Splitter (Left: Libraries, Right: Details/Sizes)
@@ -165,7 +172,22 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         bottom_layout.addWidget(self.lbl_status, 1)
 
         self.btn_save = QtWidgets.QPushButton(translate("frameforge", "Guardar Cambios"))
-        self.btn_save.setStyleSheet("font-weight: bold; background-color: #2b78e4; color: white; padding: 6px 14px;")
+        self.btn_save.setStyleSheet("""
+            QPushButton {
+                font-weight: bold;
+                background-color: #1976d2;
+                color: #ffffff;
+                border: 1px solid #1565c0;
+                border-radius: 4px;
+                padding: 6px 16px;
+            }
+            QPushButton:hover {
+                background-color: #2196f3;
+            }
+            QPushButton:pressed {
+                background-color: #0d47a1;
+            }
+        """)
         self.btn_save.clicked.connect(self._on_save_library)
         self.btn_close = QtWidgets.QPushButton(translate("frameforge", "Cerrar"))
         self.btn_close.clicked.connect(self.close)
@@ -221,16 +243,45 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.le_norm.setEnabled(is_user)
         self.cb_fillet.setEnabled(is_user)
 
-        if is_user:
-            self.lbl_lib_banner.setText(f"Biblioteca de Usuario: {lib_meta['name']} (Editable)")
-            self.lbl_lib_banner.setStyleSheet("background-color: #e6f4ea; color: #137333; padding: 4px;")
-        else:
-            self.lbl_lib_banner.setText(f"Biblioteca de Sistema: {lib_meta['name']} (Solo lectura - Usá 'Duplicar' para personalizar)")
-            self.lbl_lib_banner.setStyleSheet("background-color: #f1f3f4; color: #5f6368; padding: 4px;")
+        self._update_banner(is_user, lib_meta["name"])
 
         self._populate_families()
         self.is_dirty = False
-        self.lbl_status.setText("")
+        self._set_status("")
+
+    def _update_banner(self, is_user, name):
+        dark = is_dark_theme(self)
+        if is_user:
+            self.lbl_lib_banner.setText(f"Biblioteca de Usuario: {name} (Editable)")
+            if dark:
+                self.lbl_lib_banner.setStyleSheet(
+                    "background-color: #1b3824; color: #81c784; border: 1px solid #2e7d32; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
+                )
+            else:
+                self.lbl_lib_banner.setStyleSheet(
+                    "background-color: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
+                )
+        else:
+            self.lbl_lib_banner.setText(f"Biblioteca de Sistema: {name} (Solo lectura - Usá 'Duplicar' para personalizar)")
+            if dark:
+                self.lbl_lib_banner.setStyleSheet(
+                    "background-color: #2b3036; color: #cfd8dc; border: 1px solid #455a64; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
+                )
+            else:
+                self.lbl_lib_banner.setStyleSheet(
+                    "background-color: #eceff1; color: #37474f; border: 1px solid #cfd8dc; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
+                )
+
+    def _set_status(self, text, is_error=False, is_warning=False):
+        dark = is_dark_theme(self)
+        if is_error:
+            color = "#ef5350" if dark else "#c62828"
+        elif is_warning:
+            color = "#ffb74d" if dark else "#e65100"
+        else:
+            color = "#81c784" if dark else "#2e7d32"
+        self.lbl_status.setStyleSheet(f"color: {color}; font-weight: bold;")
+        self.lbl_status.setText(text)
 
     def _populate_families(self, select_family=None):
         self.combo_family.blockSignals(True)
@@ -297,6 +348,10 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 self.table_sizes.setItem(row, col_idx, item)
 
         self.table_sizes.blockSignals(False)
+        self.table_sizes.resizeColumnsToContents()
+        for col in range(self.table_sizes.columnCount()):
+            w = max(self.table_sizes.columnWidth(col), 85)
+            self.table_sizes.setColumnWidth(col, w)
 
     def _commit_current_family_edits(self):
         """Commits table and metadata edits from widgets into current_lib_data for current_family."""
@@ -340,7 +395,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
     def _mark_dirty(self):
         self.is_dirty = True
-        self.lbl_status.setText(translate("frameforge", "Cambios sin guardar."))
+        self._set_status(translate("frameforge", "Cambios sin guardar."), is_warning=True)
 
     def _on_table_item_changed(self, item):
         self._mark_dirty()
@@ -386,7 +441,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
 
         self.refresh_libraries(select_name=name)
-        self.lbl_status.setText(f"Biblioteca '{name}' creada con éxito.")
+        self._set_status(f"Biblioteca '{name}' creada con éxito.")
 
     def _on_duplicate_library(self):
         if not self.current_lib_meta:
@@ -414,7 +469,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
 
         self.refresh_libraries(select_name=new_name)
-        self.lbl_status.setText(f"Biblioteca duplicada como '{new_name}'.")
+        self._set_status(f"Biblioteca duplicada como '{new_name}'.")
 
     def _on_delete_library(self):
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
@@ -430,7 +485,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         if reply == QtWidgets.QMessageBox.Yes:
             self.manager.delete_user_library(name)
             self.refresh_libraries()
-            self.lbl_status.setText(f"Biblioteca '{name}' eliminada.")
+            self._set_status(f"Biblioteca '{name}' eliminada.")
 
     def _on_add_family(self):
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
@@ -551,9 +606,10 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             # Column 7 is Weight
             self.table_sizes.setItem(row, 7, QtWidgets.QTableWidgetItem(str(calc_weight)))
             self._mark_dirty()
-            self.lbl_status.setText(f"Peso calculado: {calc_weight} kg/m ({mat_key})")
+            self._set_status(f"Peso calculado: {calc_weight} kg/m ({mat_key})")
         except Exception as e:
             QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), f"No se pudo calcular el peso: {e}")
+            self._set_status(f"Error al calcular peso: {e}", is_error=True)
 
     def _on_save_library(self):
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
@@ -570,7 +626,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         lib_name = self.current_lib_meta["name"]
         self.manager.save_user_library(lib_name, self.current_lib_data, overwrite=True)
         self.is_dirty = False
-        self.lbl_status.setText(f"Biblioteca '{lib_name}' guardada correctamente.")
+        self._set_status(f"Biblioteca '{lib_name}' guardada correctamente.")
 
 
 class ManageProfileLibrariesCommand:
@@ -578,7 +634,7 @@ class ManageProfileLibrariesCommand:
 
     def GetResources(self):
         return {
-            "Pixmap": os.path.join(ICONPATH, "warehouse_profiles.svg"),
+            "Pixmap": os.path.join(ICONPATH, "manage_profile_libraries.svg"),
             "MenuText": translate("frameforge", "Manage Profile Libraries"),
             "ToolTip": translate("frameforge", "Create, edit and manage custom profile libraries and dimensions"),
         }
