@@ -220,6 +220,14 @@
         <translation>Cambios sin guardar.</translation>
     </message>
     <message>
+        <source>Unsaved Changes</source>
+        <translation>Cambios sin guardar</translation>
+    </message>
+    <message>
+        <source>You have unsaved changes. Do you want to save them before switching libraries?</source>
+        <translation>Tenés cambios sin guardar. ¿Querés guardarlos antes de cambiar de biblioteca?</translation>
+    </message>
+    <message>
         <source>New Library</source>
         <translation>Nueva Biblioteca</translation>
     </message>

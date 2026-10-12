@@ -211,29 +211,28 @@ class LibraryManager:
     def get_library(self, name):
         """
         Loads the catalog JSON for the specified library name.
-        Searches user libraries first, then stock.
+        Prioritizes exact display-name match over filename slug aliases.
         """
         target_name = name.strip().lower()
 
-        # Check user directory
-        if os.path.exists(self.user_dir):
-            for filename in os.listdir(self.user_dir):
-                if filename.endswith(".json"):
-                    filepath = os.path.join(self.user_dir, filename)
-                    lib_name = self._extract_library_name(filename, filepath).lower()
-                    if lib_name == target_name or os.path.splitext(filename)[0].lower() == target_name:
-                        with open(filepath, "r", encoding="utf-8") as f:
-                            return json.load(f)
+        # Pass 1: exact display-name match (stock first to guard system libraries, then user)
+        candidates = []
+        for is_user, directory in [(False, self.stock_dir), (True, self.user_dir)]:
+            if os.path.exists(directory):
+                for filename in os.listdir(directory):
+                    if filename.endswith(".json"):
+                        filepath = os.path.join(directory, filename)
+                        lib_name = self._extract_library_name(filename, filepath).lower()
+                        if lib_name == target_name:
+                            with open(filepath, "r", encoding="utf-8") as f:
+                                return json.load(f)
+                        candidates.append((filename, filepath))
 
-        # Check stock directory
-        if os.path.exists(self.stock_dir):
-            for filename in os.listdir(self.stock_dir):
-                if filename.endswith(".json"):
-                    filepath = os.path.join(self.stock_dir, filename)
-                    lib_name = self._extract_library_name(filename, filepath).lower()
-                    if lib_name == target_name or os.path.splitext(filename)[0].lower() == target_name:
-                        with open(filepath, "r", encoding="utf-8") as f:
-                            return json.load(f)
+        # Pass 2: filename slug alias fallback
+        for filename, filepath in candidates:
+            if os.path.splitext(filename)[0].lower() == target_name:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    return json.load(f)
 
         raise FileNotFoundError(f"Library '{name}' not found.")
 

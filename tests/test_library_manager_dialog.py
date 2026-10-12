@@ -254,6 +254,49 @@ class TestLibraryManagerDialog(unittest.TestCase):
         self.assertEqual(saved["FamilyA"]["sizes"]["A1"]["Height"], "99")
         self.assertEqual(saved["FamilyA"]["norm"], "NormA_Modified")
 
+    def test_library_switch_dirty_guard_save_and_cancel(self):
+        from unittest.mock import patch
+        from PySide import QtWidgets, QtCore
+        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
+        self.manager.save_user_library("LibOne", {
+            "_metadata": {"name": "LibOne"},
+            "FamOne": {"norm": "Original", "fillet": False, "sizes": {"S1": {"Height": "10"}}},
+        })
+        self.manager.save_user_library("LibTwo", {
+            "_metadata": {"name": "LibTwo"},
+            "FamTwo": {"norm": "Original", "fillet": False, "sizes": {"S2": {"Height": "20"}}},
+        })
+
+        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        dialog.refresh_libraries(select_name="LibOne")
+
+        # Edit LibOne
+        dialog.le_norm.setText("ChangedNorm")
+        dialog.table_sizes.item(0, 1).setText("88")
+        self.assertTrue(dialog.is_dirty)
+
+        # 1. Test Cancel: should abort switch and keep LibOne selected and dirty
+        with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Cancel):
+            item_two = [dialog.list_libraries.item(i) for i in range(dialog.list_libraries.count())
+                        if dialog.list_libraries.item(i).data(QtCore.Qt.UserRole)["name"] == "LibTwo"][0]
+            dialog.list_libraries.setCurrentItem(item_two)
+
+        self.assertEqual(dialog.current_lib_meta["name"], "LibOne")
+        self.assertEqual(dialog.le_norm.text(), "ChangedNorm")
+        self.assertTrue(dialog.is_dirty)
+
+        # 2. Test Save: should save LibOne then switch to LibTwo
+        with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Save):
+            dialog.list_libraries.setCurrentItem(item_two)
+
+        self.assertEqual(dialog.current_lib_meta["name"], "LibTwo")
+        # Verify LibOne changes were persisted
+        saved_one = self.manager.get_library("LibOne")
+        self.assertEqual(saved_one["FamOne"]["norm"], "ChangedNorm")
+        self.assertEqual(saved_one["FamOne"]["sizes"]["S1"]["Height"], "88")
+
     def test_dialog_wood_density_calculation(self):
         try:
             from PySide import QtWidgets

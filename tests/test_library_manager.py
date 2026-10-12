@@ -39,6 +39,23 @@ class TestLibraryManager(unittest.TestCase):
         self.assertIn("Square Hollow", data)
         self.assertIn("sizes", data["Square Hollow"])
 
+    def test_stock_alias_resolution_preserves_stock_access(self):
+        # User creates a library "Metal!" whose slug is "metal.json"
+        user_data = {
+            "_metadata": {"name": "Metal!"},
+            "CustomMetalFamily": {"sizes": {"CM1": {"Height": "10"}}},
+        }
+        self.manager.save_user_library("Metal!", user_data)
+        # Verify get_library("Metal") still resolves stock catalog
+        stock_metal = self.manager.get_library("Metal")
+        self.assertIn("Square Hollow", stock_metal)
+        self.assertNotIn("CustomMetalFamily", stock_metal)
+
+        # And get_library("Metal!") resolves user catalog
+        user_metal = self.manager.get_library("Metal!")
+        self.assertIn("CustomMetalFamily", user_metal)
+        self.assertEqual(user_metal.get("_metadata", {}).get("name"), "Metal!")
+
     def test_save_and_load_user_library(self):
         sample_data = {
             "Square Hollow": {

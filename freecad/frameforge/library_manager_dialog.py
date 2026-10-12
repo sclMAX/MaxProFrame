@@ -270,6 +270,35 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         if not current:
             return
 
+        if self.is_dirty and previous:
+            try:
+                self._commit_current_family_edits()
+            except ValueError as e:
+                QtWidgets.QMessageBox.warning(self, translate("frameforge", "Warning"), str(e))
+
+            reply = QtWidgets.QMessageBox.question(
+                self,
+                translate("frameforge", "Unsaved Changes"),
+                translate(
+                    "frameforge",
+                    "You have unsaved changes. Do you want to save them before switching libraries?",
+                ),
+                QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Discard | QtWidgets.QMessageBox.Cancel,
+                QtWidgets.QMessageBox.Save,
+            )
+            if reply == QtWidgets.QMessageBox.Save:
+                self._on_save_library()
+                if self.is_dirty:
+                    self.list_libraries.blockSignals(True)
+                    self.list_libraries.setCurrentItem(previous)
+                    self.list_libraries.blockSignals(False)
+                    return
+            elif reply == QtWidgets.QMessageBox.Cancel:
+                self.list_libraries.blockSignals(True)
+                self.list_libraries.setCurrentItem(previous)
+                self.list_libraries.blockSignals(False)
+                return
+
         lib_meta = current.data(QtCore.Qt.UserRole)
         # Reset current family so previous library's family doesn't commit into new library
         self.current_family = None
