@@ -237,11 +237,6 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.btn_del_lib.setEnabled(is_user)
         self.btn_save.setEnabled(is_user)
         self.btn_add_family.setEnabled(is_user)
-        self.btn_del_family.setEnabled(is_user)
-        self.btn_add_size.setEnabled(is_user)
-        self.btn_del_size.setEnabled(is_user)
-        self.le_norm.setEnabled(is_user)
-        self.cb_fillet.setEnabled(is_user)
 
         self._update_banner(is_user, lib_meta["name"])
 
@@ -311,7 +306,16 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         family_name = self.combo_family.currentText()
         self.current_family = family_name
 
-        if not family_name or family_name not in self.current_lib_data:
+        is_user = bool(self.current_lib_meta and self.current_lib_meta.get("is_user"))
+        has_family = bool(family_name and family_name in self.current_lib_data)
+
+        self.btn_del_family.setEnabled(is_user and has_family)
+        self.btn_add_size.setEnabled(is_user and has_family)
+        self.btn_del_size.setEnabled(is_user and has_family)
+        self.le_norm.setEnabled(is_user and has_family)
+        self.cb_fillet.setEnabled(is_user and has_family)
+
+        if not has_family:
             self.table_sizes.setRowCount(0)
             self.le_norm.setText("")
             self.cb_fillet.setChecked(False)
@@ -534,6 +538,12 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
     def _on_add_size(self):
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
             return
+        if not self.current_family or self.current_family not in self.current_lib_data:
+            self._set_status(
+                translate("frameforge", "Debe seleccionar o crear una familia antes de agregar medidas."),
+                is_warning=True,
+            )
+            return
 
         existing_codes = set()
         for r in range(self.table_sizes.rowCount()):
@@ -613,6 +623,13 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
     def _on_save_library(self):
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
+            return
+
+        if self.table_sizes.rowCount() > 0 and (not self.current_family or self.current_family not in self.current_lib_data):
+            self._set_status(
+                translate("frameforge", "No se pueden guardar medidas huérfanas sin una familia activa."),
+                is_error=True,
+            )
             return
 
         # Commit active family edits before saving

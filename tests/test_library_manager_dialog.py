@@ -229,6 +229,40 @@ class TestLibraryManagerDialog(unittest.TestCase):
         self.assertEqual(reloaded["Square"]["sizes"][code1]["Height"], "50")
         self.assertEqual(reloaded["Square"]["sizes"][code2]["Height"], "70")
 
+    def test_delete_only_family_disables_size_actions_and_guards_orphan_sizes(self):
+        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog, QtWidgets
+
+        _app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
+        test_data = {
+            "_metadata": {"name": "OrphanGuardLib"},
+            "SoloFamily": {
+                "norm": "Custom",
+                "unit": "Metric Units",
+                "fillet": False,
+                "sizes": {"Size_1": {"Height": "50", "Width": "50", "Thickness": "2"}},
+            },
+        }
+        self.manager.save_user_library("OrphanGuardLib", test_data)
+        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        dialog.refresh_libraries(select_name="OrphanGuardLib")
+
+        self.assertTrue(dialog.btn_add_size.isEnabled())
+        del dialog.current_lib_data["SoloFamily"]
+        dialog._populate_families()
+
+        self.assertFalse(dialog.btn_del_family.isEnabled())
+        self.assertFalse(dialog.btn_add_size.isEnabled())
+        self.assertFalse(dialog.btn_del_size.isEnabled())
+        self.assertEqual(dialog.table_sizes.rowCount(), 0)
+
+        dialog._on_add_size()
+        self.assertEqual(dialog.table_sizes.rowCount(), 0)
+
+        dialog._on_save_library()
+        reloaded = self.manager.get_library("OrphanGuardLib")
+        self.assertNotIn("SoloFamily", reloaded)
+
+
 
 if __name__ == "__main__":
     unittest.main()
