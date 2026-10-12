@@ -192,6 +192,23 @@ class TestLibraryManager(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.manager.save_user_library("ImmutableLib", initial_data, material="Steel")
 
+    def test_cannot_create_user_library_colliding_with_stock_name(self):
+        with self.assertRaises(ValueError) as ctx:
+            self.manager.save_user_library("Metal", {"_metadata": {"name": "Metal"}})
+        self.assertIn("reserved system library name", str(ctx.exception))
+
+    def test_duplicate_library_with_unsupported_family_recalculation_fails_cleanly(self):
+        tslot_data = {
+            "_metadata": {"name": "TSlotSource", "material": "Aluminium", "density": 2.70},
+            "T-Slot": {"sizes": {"TS1": {"Height": "20", "Width": "20", "Thickness": "2", "Weight": "0.5"}}},
+        }
+        self.manager.save_user_library("TSlotSource", tslot_data)
+        with self.assertRaises(ValueError) as ctx:
+            self.manager.duplicate_library(
+                "TSlotSource", "TSlotClone", target_material="Steel", recalculate_weights=True
+            )
+        self.assertIn("Cannot recalculate weights for unsupported complex families", str(ctx.exception))
+
     def test_delete_user_library(self):
         dummy_data = {"Square": {"norm": "-", "sizes": {}}}
         self.manager.save_user_library("Temporal", dummy_data)

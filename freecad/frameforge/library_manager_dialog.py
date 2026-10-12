@@ -447,6 +447,18 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self._on_family_changed()
 
     def _on_family_selection_changed(self, current, previous):
+        if not current:
+            return
+        try:
+            self._commit_current_family_edits()
+        except ValueError as e:
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Warning"), str(e))
+            if previous:
+                self.list_families.blockSignals(True)
+                self.list_families.setCurrentItem(previous)
+                self.list_families.blockSignals(False)
+            return
+
         self.combo_family.blockSignals(True)
         self.combo_family.setCurrentIndex(
             self.combo_family.findText(current.data(QtCore.Qt.UserRole)) if current else -1
@@ -463,6 +475,14 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             self._commit_current_family_edits()
         except ValueError as e:
             QtWidgets.QMessageBox.warning(self, translate("frameforge", "Warning"), str(e))
+            if self.current_family:
+                self.list_families.blockSignals(True)
+                prev_idx = self.combo_family.findText(self.current_family)
+                if prev_idx >= 0:
+                    self.combo_family.setCurrentIndex(prev_idx)
+                    self.list_families.setCurrentRow(prev_idx)
+                self.list_families.blockSignals(False)
+            return
 
         family_name = self.combo_family.currentText()
         self.current_family = family_name
@@ -779,11 +799,11 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 target_density=target_dens,
                 recalculate_weights=recalc,
             )
-        except FileExistsError:
+        except (FileExistsError, ValueError) as err:
             QtWidgets.QMessageBox.warning(
                 self,
                 translate("frameforge", "Error"),
-                translate("frameforge", "A library named '%s' or equivalent file already exists.") % new_name,
+                str(err),
             )
             return
 

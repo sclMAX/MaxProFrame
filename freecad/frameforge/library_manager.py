@@ -292,9 +292,9 @@ class LibraryManager:
         """
         target_name = name.strip().lower()
 
-        # Pass 1: exact display-name match (stock first to guard system libraries, then user)
+        # Pass 1: exact display-name match (user first, then stock, matching list_libraries precedence)
         candidates = []
-        for is_user, directory in [(False, self.stock_dir), (True, self.user_dir)]:
+        for is_user, directory in [(True, self.user_dir), (False, self.stock_dir)]:
             if os.path.exists(directory):
                 for filename in os.listdir(directory):
                     if filename.endswith(".json"):
@@ -326,6 +326,15 @@ class LibraryManager:
 
         if not overwrite and os.path.exists(filepath):
             raise FileExistsError(f"A library file '{filename}' already exists.")
+
+        # Check collision with bundled stock libraries to protect reserved identities
+        if os.path.exists(self.stock_dir):
+            for fname in os.listdir(self.stock_dir):
+                if fname.endswith(".json"):
+                    fpath = os.path.join(self.stock_dir, fname)
+                    s_name = self._extract_library_name(fname, fpath)
+                    if s_name.lower() == name.strip().lower():
+                        raise ValueError(f"Cannot create user library with reserved system library name '{s_name}'.")
 
         # S4 Immutability: If file already exists, prevent changing its material
         if os.path.exists(filepath):
@@ -456,6 +465,7 @@ class LibraryManager:
         cloned_data["_metadata"]["density"] = float(target_density)
 
         if recalculate_weights:
+            unrecalculated = []
             for fam_name, fam_data in cloned_data.items():
                 if fam_name.startswith("_") or not isinstance(fam_data, dict):
                     continue
@@ -481,8 +491,13 @@ class LibraryManager:
                             flange_thickness=tf,
                         )
                         size_props["Weight"] = str(new_weight)
-                    except Exception:
-                        pass
+                    except Exception as err:
+                        unrecalculated.append(f"{fam_name}/{size_key}")
+
+            if unrecalculated:
+                raise ValueError(
+                    f"Cannot recalculate weights for unsupported complex families: {', '.join(unrecalculated[:3])}. Duplicate without weight recalculation to preserve nominal weights."
+                )
 
         return self.save_user_library(target_name, cloned_data, overwrite=overwrite)
 

@@ -254,6 +254,38 @@ class TestLibraryManagerDialog(unittest.TestCase):
         self.assertEqual(saved["FamilyA"]["sizes"]["A1"]["Height"], "99")
         self.assertEqual(saved["FamilyA"]["norm"], "NormA_Modified")
 
+    def test_family_switch_with_duplicate_code_validation_failure_preserves_edits(self):
+        from unittest.mock import patch
+        from PySide import QtWidgets, QtCore
+        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
+        self.manager.save_user_library("DupCheckLib", {
+            "_metadata": {"name": "DupCheckLib"},
+            "FamilyA": {"norm": "NormA", "fillet": False, "sizes": {"A1": {"Height": "50"}, "A2": {"Height": "60"}}},
+            "FamilyB": {"norm": "NormB", "fillet": False, "sizes": {"B1": {"Height": "70"}}},
+        })
+
+        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        dialog.refresh_libraries(select_name="DupCheckLib")
+
+        # Select FamilyA and edit size A2 to be A1 (duplicate code!) and modify height
+        dialog.combo_family.setCurrentText("FamilyA")
+        dialog.table_sizes.item(1, 0).setText("A1")
+        dialog.table_sizes.item(0, 1).setText("999")
+
+        # Attempt to switch to FamilyB: should fail validation and abort switch
+        with patch.object(QtWidgets.QMessageBox, "warning") as mock_warn:
+            item_b = [dialog.list_families.item(i) for i in range(dialog.list_families.count())
+                      if dialog.list_families.item(i).data(QtCore.Qt.UserRole) == "FamilyB"][0]
+            dialog.list_families.setCurrentItem(item_b)
+            mock_warn.assert_called_once()
+
+        # Selection must still be FamilyA and edits must remain in table
+        self.assertEqual(dialog.combo_family.currentText(), "FamilyA")
+        self.assertEqual(dialog.table_sizes.item(0, 1).text(), "999")
+        self.assertEqual(dialog.table_sizes.item(1, 0).text(), "A1")
+
     def test_library_switch_dirty_guard_save_and_cancel(self):
         from unittest.mock import patch
         from PySide import QtWidgets, QtCore
