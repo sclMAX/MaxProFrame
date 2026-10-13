@@ -45,7 +45,7 @@ The Profile Library Manager displays only the dimension columns used by the sele
 
 ### Add family variants
 
-In the Profile Library Manager, **Add Family** opens a list with translated names and section icons. Select a geometry and, where supported, enable **With Fillet** before adding it. Plain and filleted variants can coexist in one library with independent size tables. Duplicate variants are rejected without overwriting existing entries.
+In the Profile Library Manager, **Add Family** opens a list with translated names and section icons. Custom libraries can select every family in the bundled **Metal** catalog, including **HEA, HEB, HEM, IPE, IPN, UPE and UPN**, alongside the existing channel, slot and custom profile options. Select a geometry and, where supported, enable **With Fillet** before adding it. Plain and filleted variants can coexist in one library with independent size tables. Duplicate variants are rejected without overwriting existing entries.
 
 New entries store their canonical geometry separately from the catalog key. Their family-level Fillet setting is read-only; choose the variant when adding the family. Legacy catalogs retain their existing keys and behavior. If a legacy filleted entry already occupies the plain base name, its new plain counterpart uses a **(No Fillet)** suffix.
 

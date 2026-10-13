@@ -56,6 +56,42 @@ class TestFamilyVariantPicker(unittest.TestCase):
         if os.path.exists(self.test_user_dir):
             shutil.rmtree(self.test_user_dir)
 
+    def test_add_family_offers_all_stock_metal_families(self):
+        """Every stock Metal family is selectable, without losing existing choices."""
+        from freecad.frameforge.library_manager_dialog import AddFamilyDialog
+
+        dialog = AddFamilyDialog()
+        self.addCleanup(dialog.close)
+        stock_families = {
+            key for key in self.manager.get_library("Metal") if not key.startswith("_")
+        }
+        previous_choices = {
+            "Square Hollow", "Rectangular Hollow", "Pipe", "Equal Leg Angles",
+            "Unequal Leg Angles", "Channels", "Square", "Round Bar",
+            "Flat Sections", "T-Slot", "V-Slot", "Custom Profile",
+        }
+        offered = [
+            dialog.list_families.item(row).data(QtCore.Qt.UserRole)
+            for row in range(dialog.list_families.count())
+        ]
+        self.assertEqual(len(offered), len(set(offered)))
+        self.assertTrue(previous_choices.issubset(offered))
+        self.assertTrue(stock_families.issubset(offered),
+                        f"Missing Metal families: {sorted(stock_families - set(offered))}")
+        for family in sorted(stock_families):
+            with self.subTest(family=family):
+                dialog.select_family(family)
+                self.assertEqual(dialog.get_values(), (family, False))
+                item = dialog.list_families.currentItem()
+                self.assertEqual(item.text(), translate("frameforge", family))
+                self.assertFalse(item.icon().isNull())
+                self.assertFalse(dialog.lbl_preview.pixmap().isNull())
+                self.assertEqual(dialog.cb_fillet.isEnabled(), family in FILLET_FAMILIES)
+                if family in FILLET_FAMILIES:
+                    dialog.cb_fillet.setChecked(True)
+                    self.assertEqual(dialog.get_values(), (family, True))
+                    dialog.cb_fillet.setChecked(False)
+
     def test_s3_add_family_dialog_translated_names_and_icons(self):
         """S3: AddFamilyDialog displays translated family names and valid icons for all known families."""
         from freecad.frameforge.library_manager_dialog import AddFamilyDialog
