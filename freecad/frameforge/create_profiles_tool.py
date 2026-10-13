@@ -9,8 +9,24 @@ import FreeCADGui as Gui
 from PySide import QtCore, QtGui
 
 from freecad.frameforge.ff_tools import ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, FormProxy, translate
-from freecad.frameforge.library_manager import LibraryManager
+from freecad.frameforge.library_manager import LibraryManager, get_canonical_family
 from freecad.frameforge.profile import Profile, ViewProviderProfile
+
+
+def load_ui_file(path):
+    if hasattr(Gui, "PySideUic") and hasattr(Gui.PySideUic, "loadUi"):
+        return Gui.PySideUic.loadUi(path)
+    from PySide import QtCore, QtUiTools, QtWidgets
+
+    _ = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    f = QtCore.QFile(path)
+    if f.open(QtCore.QFile.ReadOnly):
+        try:
+            loader = QtUiTools.QUiLoader()
+            return loader.load(f)
+        finally:
+            f.close()
+    raise RuntimeError(f"Unable to load UI file: {path}")
 
 
 class BaseProfileTaskPanel(ABC):
@@ -18,8 +34,8 @@ class BaseProfileTaskPanel(ABC):
         self._objects = {}
 
         self.form = [
-            Gui.PySideUic.loadUi(os.path.join(UIPATH, "create_profiles1.ui")),
-            Gui.PySideUic.loadUi(os.path.join(UIPATH, "create_profiles2.ui")),
+            load_ui_file(os.path.join(UIPATH, "create_profiles1.ui")),
+            load_ui_file(os.path.join(UIPATH, "create_profiles2.ui")),
         ]
 
         self.form_proxy = FormProxy(self.form)
@@ -37,6 +53,7 @@ class BaseProfileTaskPanel(ABC):
         self.form_proxy.combo_family.blockSignals(not enable)
         self.form_proxy.combo_size.blockSignals(not enable)
 
+        self.form_proxy.cb_make_fillet.blockSignals(not enable)
         self.form_proxy.sb_width.blockSignals(not enable)
         self.form_proxy.sb_height.blockSignals(not enable)
         self.form_proxy.sb_main_thickness.blockSignals(not enable)
@@ -256,9 +273,27 @@ class BaseProfileTaskPanel(ABC):
 
     def update_image(self):
         material = str(self.form_proxy.combo_material.currentText())
-        family = str(self.form_proxy.combo_family.currentText())
+        family_key = str(self.form_proxy.combo_family.currentText())
 
-        img_name = family.replace(" ", "_")
+        family_data = (
+            self.profiles.get(material, {}).get(family_key)
+            if hasattr(self, "profiles") and self.profiles
+            else None
+        )
+        if family_data is not None:
+            canonical_family = get_canonical_family(family_key, family_data)
+        else:
+            profile = getattr(self, "profile", None)
+            if profile is not None:
+                saved_catalog_family = getattr(profile, "CatalogFamily", None) or getattr(profile, "Family", "")
+                if family_key == saved_catalog_family and hasattr(profile, "Family") and profile.Family:
+                    canonical_family = profile.Family
+                else:
+                    canonical_family = get_canonical_family(family_key, None)
+            else:
+                canonical_family = get_canonical_family(family_key, None)
+
+        img_name = canonical_family.replace(" ", "_")
         if self.form_proxy.cb_make_fillet.isChecked():
             img_name += "_Fillet"
         img_name += ".png"
@@ -270,9 +305,28 @@ class BaseProfileTaskPanel(ABC):
         if not os.path.exists(img_path):
             img_path = os.path.join(PROFILEIMAGES_PATH, "Warehouse.png")
 
+        self.current_image_path = img_path
         self.form_proxy.label_image.setPixmap(QtGui.QPixmap(img_path))
 
     def update_profile(self, profile):
+        material_name = self.form_proxy.combo_material.currentText()
+        selected_family = self.form_proxy.combo_family.currentText()
+        family_data = (
+            self.profiles.get(material_name, {}).get(selected_family)
+            if hasattr(self, "profiles") and self.profiles
+            else None
+        )
+        if family_data is not None:
+            canonical_family = get_canonical_family(selected_family, family_data)
+        else:
+            # Catalog unavailable or missing family entry in present library:
+            # preserve saved canonical Family when selected identity unchanged, without guessing suffix
+            saved_catalog_family = getattr(profile, "CatalogFamily", None) or getattr(profile, "Family", "")
+            if selected_family == saved_catalog_family and hasattr(profile, "Family") and profile.Family:
+                canonical_family = profile.Family
+            else:
+                canonical_family = get_canonical_family(selected_family, None)
+
         profile.Proxy.set_properties(
             profile,
             self.form_proxy.sb_width.value(),
@@ -286,12 +340,13 @@ class BaseProfileTaskPanel(ABC):
             self.form_proxy.sb_unitprice.value(),
             self.form_proxy.cb_make_fillet.isChecked(),  # and self.form_proxy.family.currentText() not in ["Flat Sections", "Square", "Round Bar"],
             *self.get_anchor(),
-            self.form_proxy.combo_material.currentText(),
-            self.form_proxy.combo_family.currentText(),
+            material_name,
+            canonical_family,
             self.form_proxy.combo_size.currentText(),
             init_mirror_h=self.form_proxy.cb_mirror_h.isChecked(),
             init_mirror_v=self.form_proxy.cb_mirror_v.isChecked(),
             init_rotation=self.get_rotation(),
+            catalog_family=selected_family,
         )
 
     @abstractmethod
@@ -502,6 +557,11 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
         obj.MapPathParameter = 1
 
+        material_name = self.form_proxy.combo_material.currentText()
+        selected_family = self.form_proxy.combo_family.currentText()
+        family_data = self.profiles.get(material_name, {}).get(selected_family) if hasattr(self, "profiles") and self.profiles else None
+        canonical_family = get_canonical_family(selected_family, family_data)
+
         Profile(
             obj,
             self.form_proxy.sb_width.value(),
@@ -515,8 +575,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             self.form_proxy.sb_unitprice.value(),
             self.form_proxy.cb_make_fillet.isChecked(),  # and self.form_proxy.family.currentText() not in ["Flat Sections", "Square", "Round Bar"],
             *self.get_anchor(),
-            self.form_proxy.combo_material.currentText(),
-            self.form_proxy.combo_family.currentText(),
+            material_name,
+            canonical_family,
             self.form_proxy.combo_size.currentText(),
             self.form_proxy.cb_combined_bevel.isChecked(),
             link_sub,
@@ -525,6 +585,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             init_rotation=self.get_rotation(),
             init_offset_a=init_offset,
             init_offset_b=init_offset,
+            catalog_family=selected_family,
         )
 
         # Create a ViewObject in current GUI
@@ -587,4 +648,5 @@ class CreateProfilesCommand:
         return App.ActiveDocument is not None
 
 
-Gui.addCommand("FrameForge_CreateProfiles", CreateProfilesCommand())
+if hasattr(Gui, "addCommand"):
+    Gui.addCommand("FrameForge_CreateProfiles", CreateProfilesCommand())

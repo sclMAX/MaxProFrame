@@ -59,11 +59,12 @@ def traverse_assembly(profiles_data, links_data, obj, parent="", full_parent_pat
         p["parent"] = parent
         p["ID"] = obj.PID
         p["label"] = obj.Label
-        p["family"] = (
-            getattr(getattr(obj.CustomProfile, "LinkedObject", obj), "Label", "CustomProfile")
-            if obj.CustomProfile
-            else getattr(obj, "Family", "N/A")
-        )
+        if obj.CustomProfile:
+            family_name = getattr(getattr(obj.CustomProfile, "LinkedObject", obj), "Label", "CustomProfile")
+        else:
+            cat_fam = getattr(obj, "CatalogFamily", None)
+            family_name = cat_fam if cat_fam else getattr(obj, "Family", "N/A")
+        p["family"] = family_name
         p["size_name"] = obj.SizeName
         p["material"] = obj.Material
         p["length"] = f"{obj.Length.Value:.1f}"

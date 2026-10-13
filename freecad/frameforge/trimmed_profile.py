@@ -64,6 +64,9 @@ class TrimmedProfile:
         obj.addProperty("App::PropertyString", "Family", "Profile", "")
         obj.setEditorMode("Family", 1)
 
+        obj.addProperty("App::PropertyString", "CatalogFamily", "Profile", "")
+        obj.setEditorMode("CatalogFamily", 1)
+
         obj.addProperty("App::PropertyLink", "CustomProfile", "Profile", "Target profile").CustomProfile = None
         obj.setEditorMode("CustomProfile", 1)
 
@@ -212,6 +215,11 @@ class TrimmedProfile:
         obj.Width = prof.ProfileWidth
         obj.Height = prof.ProfileHeight
         obj.Family = prof.Family
+        if not hasattr(obj, "CatalogFamily"):
+            obj.addProperty("App::PropertyString", "CatalogFamily", "Profile", "")
+            obj.setEditorMode("CatalogFamily", 1)
+        cat_fam = getattr(prof, "CatalogFamily", None)
+        obj.CatalogFamily = cat_fam if cat_fam is not None else getattr(prof, "Family", "")
         obj.CustomProfile = prof.CustomProfile
         obj.SizeName = prof.SizeName
         obj.Material = prof.Material

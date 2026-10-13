@@ -43,6 +43,10 @@ For a start, we are going to create a simple frame.
 
 The Profile Library Manager displays only the dimension columns used by the selected family. Circular profiles show **Diameter** instead of Height. Radius columns appear only when **With Fillet** is enabled and the family uses them. Hidden cell values remain stored when editing and saving; switching families does not discard them. Unknown/custom families retain the full set of columns (with radii hidden when Fillet is off).
 
+### Catalog identity and geometry
+
+Profiles retain `Family` as their geometric type and store the selected entry in `CatalogFamily`. The BOM uses that catalog identity to distinguish variants, including trimmed/cutout profiles. Older profiles without it fall back to `Family`. The creation-time **Make Fillets** option still controls the individual profile's modeled detail; it does not rename the catalog entry.
+
 ### Create the frame
 
 1. Launch the FrameForge Profile tool

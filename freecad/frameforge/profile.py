@@ -68,6 +68,7 @@ class Profile:
         init_rotation=0.0,
         init_offset_a=0.0,
         init_offset_b=0.0,
+        catalog_family=None,
     ):
         """
         Constructor. Add properties to FreeCAD Profile object. Profile object have 11 nominal properties associated
@@ -104,6 +105,13 @@ class Profile:
             "Profile",
             "",
         ).Family = fam
+
+        obj.addProperty(
+            "App::PropertyString",
+            "CatalogFamily",
+            "Profile",
+            "Catalog family variant name",
+        ).CatalogFamily = catalog_family if catalog_family is not None else fam
 
         obj.addProperty("App::PropertyLink", "CustomProfile", "Profile", "Target profile").CustomProfile = None
 
@@ -219,6 +227,8 @@ class Profile:
         if custom_profile:
             obj.CustomProfile = custom_profile
             obj.Family = "Custom Profile"
+            if hasattr(obj, "CatalogFamily"):
+                obj.CatalogFamily = "Custom Profile"
 
             obj.ProfileWidth = custom_profile.Shape.BoundBox.XLength
             obj.ProfileHeight = custom_profile.Shape.BoundBox.YLength
@@ -280,12 +290,23 @@ class Profile:
         init_mirror_h=False,
         init_mirror_v=False,
         init_rotation=0.0,
+        catalog_family=None,
     ):
         self.run_compatibility_migrations(obj)
 
         obj.Material = material
         obj.Family = fam
         obj.SizeName = size_name
+
+        catalog_fam = catalog_family if catalog_family is not None else fam
+        if not hasattr(obj, "CatalogFamily"):
+            obj.addProperty(
+                "App::PropertyString",
+                "CatalogFamily",
+                "Profile",
+                "Catalog family variant name",
+            )
+        obj.CatalogFamily = catalog_fam
 
         obj.ProfileHeight = init_h
         obj.ProfileWidth = init_w

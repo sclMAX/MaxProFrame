@@ -29,6 +29,36 @@ KNOWN_FAMILIES = [
     "Custom Profile",
 ]
 
+FILLET_FAMILIES = frozenset(
+    {
+        "Square Hollow",
+        "Rectangular Hollow",
+        "Equal Leg Angles",
+        "Unequal Leg Angles",
+        "HEA",
+        "HEB",
+        "HEM",
+        "IPE",
+        "IPN",
+        "UPE",
+        "UPN",
+    }
+)
+
+
+def get_canonical_family(family_key, family_data=None):
+    """
+    Returns explicit canonical_family from family metadata when present,
+    otherwise returns family_key unchanged.
+    Does not guess from suffixes or alter unknown keys.
+    """
+    if isinstance(family_data, dict):
+        canonical = family_data.get("canonical_family")
+        if canonical:
+            return str(canonical)
+    return family_key
+
+
 
 def sanitize_library_name(name):
     """
@@ -482,8 +512,9 @@ class LibraryManager:
                             if "Flange Thickness" in size_props
                             else None
                         )
+                        canonical = get_canonical_family(fam_name, fam_data)
                         new_weight = calculate_linear_weight(
-                            family=fam_name,
+                            family=canonical,
                             width=w,
                             height=h,
                             thickness=t,
