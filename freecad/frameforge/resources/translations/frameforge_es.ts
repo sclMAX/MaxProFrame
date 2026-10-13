@@ -392,6 +392,18 @@
         <translation>Aviso</translation>
     </message>
     <message>
+        <source>A family variant for '%s' (%s) already exists in this library.</source>
+        <translation>Ya existe una variante de la familia '%s' (%s) en esta biblioteca.</translation>
+    </message>
+    <message>
+        <source>Fillet</source>
+        <translation>Fillet</translation>
+    </message>
+    <message>
+        <source>No Fillet</source>
+        <translation>Sin Fillet</translation>
+    </message>
+    <message>
         <source>Manage Profile Libraries</source>
         <translation>Gestionar Bibliotecas de Perfiles</translation>
     </message>

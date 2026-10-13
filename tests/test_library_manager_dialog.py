@@ -156,7 +156,10 @@ class TestLibraryManagerDialog(unittest.TestCase):
         dialog.refresh_libraries(select_name="FamilyToolbar")
         dialog.le_norm.setText("Edited")
         dialog.table_sizes.item(0, 1).setText("99")
-        with patch.object(QtWidgets.QInputDialog, "getItem", return_value=("Pipe", True)):
+        with patch("freecad.frameforge.library_manager_dialog.AddFamilyDialog") as mock_dlg_cls:
+            mock_dlg = mock_dlg_cls.return_value
+            mock_dlg.exec_.return_value = QtWidgets.QDialog.Accepted
+            mock_dlg.get_values.return_value = ("Pipe", False)
             dialog.btn_add_family.click()
         self.assertEqual(dialog.list_families.count(), 2)
         self.assertEqual(dialog.list_families.currentItem().data(QtCore.Qt.UserRole), "Pipe")

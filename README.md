@@ -43,6 +43,12 @@ For a start, we are going to create a simple frame.
 
 The Profile Library Manager displays only the dimension columns used by the selected family. Circular profiles show **Diameter** instead of Height. Radius columns appear only when **With Fillet** is enabled and the family uses them. Hidden cell values remain stored when editing and saving; switching families does not discard them. Unknown/custom families retain the full set of columns (with radii hidden when Fillet is off).
 
+### Add family variants
+
+In the Profile Library Manager, **Add Family** opens a list with translated names and section icons. Select a geometry and, where supported, enable **With Fillet** before adding it. Plain and filleted variants can coexist in one library with independent size tables. Duplicate variants are rejected without overwriting existing entries.
+
+New entries store their canonical geometry separately from the catalog key. Their family-level Fillet setting is read-only; choose the variant when adding the family. Legacy catalogs retain their existing keys and behavior. If a legacy filleted entry already occupies the plain base name, its new plain counterpart uses a **(No Fillet)** suffix.
+
 ### Catalog identity and geometry
 
 Profiles retain `Family` as their geometric type and store the selected entry in `CatalogFamily`. The BOM uses that catalog identity to distinguish variants, including trimmed/cutout profiles. Older profiles without it fall back to `Family`. The creation-time **Make Fillets** option still controls the individual profile's modeled detail; it does not rename the catalog entry.

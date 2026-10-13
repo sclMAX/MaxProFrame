@@ -18,6 +18,29 @@ from freecad.frameforge.library_manager import (
     sanitize_library_name,
 )
 
+try:
+    from freecad.frameforge.library_manager import FILLET_FAMILIES, get_canonical_family
+except ImportError:
+    FILLET_FAMILIES = frozenset([
+        "Square Hollow",
+        "Rectangular Hollow",
+        "Equal Leg Angles",
+        "Unequal Leg Angles",
+        "HEA",
+        "HEB",
+        "HEM",
+        "IPE",
+        "IPN",
+        "UPE",
+        "UPN",
+    ])
+
+    def get_canonical_family(family_key, family_data=None):
+        if family_data and isinstance(family_data, dict) and "canonical_family" in family_data:
+            return family_data["canonical_family"]
+        return family_key
+
+
 
 def is_dark_theme(widget):
     """Detects if the current Qt palette corresponds to a dark theme."""
@@ -86,6 +109,145 @@ class NewLibraryDialog(QtWidgets.QDialog):
         dens = mat_data[1] if mat_data else 7.85
         recalc = self.cb_recalc.isChecked() if self.cb_recalc else False
         return name, mat, dens, recalc
+
+
+class AddFamilyDialog(QtWidgets.QDialog):
+    """Modal dialog for selecting a profile family and choosing fillet variant at creation time."""
+
+    def __init__(self, parent=None, current_lib_meta=None):
+        super().__init__(parent)
+        self.setWindowTitle(translate("frameforge", "Add Family"))
+        self.resize(360, 420)
+        self.current_lib_meta = current_lib_meta
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        layout.addWidget(QtWidgets.QLabel(translate("frameforge", "Select geometric family:")))
+
+        self.list_families = QtWidgets.QListWidget()
+        self.list_families.setIconSize(QtCore.QSize(60, 30))
+        for fam_key in KNOWN_FAMILIES:
+            img_name = f"{fam_key.replace(' ', '_')}.png"
+            img_path = os.path.join(PROFILEIMAGES_PATH, "Metal", img_name)
+            if not os.path.isfile(img_path):
+                img_path = os.path.join(PROFILEIMAGES_PATH, "Warehouse.png")
+            item = QtWidgets.QListWidgetItem(translate("frameforge", fam_key))
+            if os.path.isfile(img_path):
+                item.setIcon(QtGui.QIcon(img_path))
+            item.setData(QtCore.Qt.UserRole, fam_key)
+            self.list_families.addItem(item)
+
+        self.list_families.currentItemChanged.connect(self._on_family_selected)
+        layout.addWidget(self.list_families, 1)
+
+        # Preview diagram
+        preview_container = QtWidgets.QHBoxLayout()
+        self.lbl_preview = QtWidgets.QLabel()
+        self.lbl_preview.setFixedSize(120, 60)
+        self.lbl_preview.setAlignment(QtCore.Qt.AlignCenter)
+        dark = is_dark_theme(self)
+        if dark:
+            self.lbl_preview.setStyleSheet(
+                "background-color: #202428; border: 1px solid #455a64; border-radius: 4px;"
+            )
+        else:
+            self.lbl_preview.setStyleSheet(
+                "background-color: #f5f7f8; border: 1px solid #cfd8dc; border-radius: 4px;"
+            )
+        preview_container.addStretch()
+        preview_container.addWidget(self.lbl_preview)
+        preview_container.addStretch()
+        layout.addLayout(preview_container)
+
+        # Fillet option
+        self.cb_fillet = QtWidgets.QCheckBox(translate("frameforge", "With Fillet"))
+        self.cb_fillet.toggled.connect(self._on_fillet_toggled)
+        layout.addWidget(self.cb_fillet)
+
+        # Buttons
+        btn_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
+        btn_box.accepted.connect(self.accept)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+
+        if self.list_families.count() > 0:
+            self.list_families.setCurrentRow(0)
+
+    def select_family(self, fam_key):
+        for row in range(self.list_families.count()):
+            item = self.list_families.item(row)
+            if item.data(QtCore.Qt.UserRole) == fam_key or item.text() == fam_key:
+                self.list_families.setCurrentItem(item)
+                break
+
+    def _on_family_selected(self, current, previous):
+        if not current:
+            self.cb_fillet.setEnabled(False)
+            self.cb_fillet.setChecked(False)
+            self._update_preview()
+            return
+        fam_key = current.data(QtCore.Qt.UserRole)
+        can_fillet = fam_key in FILLET_FAMILIES
+        self.cb_fillet.setEnabled(can_fillet)
+        if not can_fillet and self.cb_fillet.isChecked():
+            self.cb_fillet.setChecked(False)
+        self._update_preview()
+
+    def _on_fillet_toggled(self, checked):
+        self._update_preview()
+
+    def _update_preview(self):
+        current = self.list_families.currentItem()
+        if not current:
+            self.lbl_preview.clear()
+            return
+        fam_key = current.data(QtCore.Qt.UserRole)
+        fillet = self.cb_fillet.isChecked() and self.cb_fillet.isEnabled()
+        base_name = fam_key.replace(" ", "_")
+        candidates = []
+        if fillet:
+            candidates.append(f"{base_name}_Fillet.png")
+        candidates.append(f"{base_name}.png")
+
+        img_path = None
+        lib_name = (self.current_lib_meta or {}).get("name", "Metal")
+        for c in candidates:
+            for d in [lib_name, "Metal"]:
+                p = os.path.join(PROFILEIMAGES_PATH, d, c)
+                if os.path.isfile(p):
+                    img_path = p
+                    break
+            if img_path:
+                break
+        if not img_path:
+            wh = os.path.join(PROFILEIMAGES_PATH, "Warehouse.png")
+            if os.path.isfile(wh):
+                img_path = wh
+
+        if img_path and os.path.isfile(img_path):
+            pix = QtGui.QPixmap(img_path)
+            if not pix.isNull():
+                target_w = max(self.lbl_preview.width() - 8, 20)
+                target_h = max(self.lbl_preview.height() - 8, 20)
+                scaled = pix.scaled(
+                    QtCore.QSize(target_w, target_h),
+                    QtCore.Qt.KeepAspectRatio,
+                    QtCore.Qt.SmoothTransformation,
+                )
+                self.lbl_preview.setPixmap(scaled)
+                return
+        self.lbl_preview.clear()
+
+    def get_values(self):
+        current = self.list_families.currentItem()
+        if not current:
+            return None, False
+        fam_key = current.data(QtCore.Qt.UserRole)
+        fillet = self.cb_fillet.isChecked() and self.cb_fillet.isEnabled()
+        return fam_key, fillet
+
 
 
 class ProfileLibraryManagerDialog(QtWidgets.QDialog):
@@ -419,6 +581,22 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.lbl_status.setStyleSheet(f"color: {color}; font-weight: bold;")
         self.lbl_status.setText(text)
 
+    def _get_family_display_name(self, family_key, family_data=None):
+        if not family_key:
+            return ""
+        if family_data is None:
+            family_data = self.current_lib_data.get(family_key, {})
+        if isinstance(family_data, dict) and "canonical_family" in family_data:
+            canonical = family_data["canonical_family"]
+            has_fillet = bool(family_data.get("fillet", False))
+            if has_fillet:
+                return f"{translate('frameforge', canonical)} ({translate('frameforge', 'Fillet')})"
+            elif family_key.endswith(" (No Fillet)"):
+                return f"{translate('frameforge', canonical)} ({translate('frameforge', 'No Fillet')})"
+            else:
+                return translate("frameforge", canonical)
+        return translate("frameforge", family_key)
+
     def _populate_families(self, select_family=None):
         self.combo_family.blockSignals(True)
         self.list_families.blockSignals(True)
@@ -428,12 +606,18 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         families = sorted(k for k in self.current_lib_data if not k.startswith("_"))
         for fam_key in families:
             self.combo_family.addItem(fam_key)
-            img_name = f"{fam_key.replace(' ', '_')}.png"
-            img_path = os.path.join(PROFILEIMAGES_PATH, "Metal", img_name)
-            if not os.path.isfile(img_path):
-                img_path = os.path.join(PROFILEIMAGES_PATH, "Warehouse.png")
-            item = QtWidgets.QListWidgetItem(translate("frameforge", fam_key))
-            if os.path.isfile(img_path):
+            fam_data = self.current_lib_data.get(fam_key, {})
+            has_fillet = bool(fam_data.get("fillet", False)) if isinstance(fam_data, dict) else False
+            is_explicit = bool(isinstance(fam_data, dict) and "canonical_family" in fam_data)
+
+            if is_explicit and has_fillet:
+                img_path = self._get_family_image_path(fam_key, fillet=True)
+            else:
+                img_path = self._get_family_image_path(fam_key, fillet=False)
+
+            display_name = self._get_family_display_name(fam_key, fam_data)
+            item = QtWidgets.QListWidgetItem(display_name)
+            if img_path and os.path.isfile(img_path):
                 item.setIcon(QtGui.QIcon(img_path))
             item.setData(QtCore.Qt.UserRole, fam_key)
             self.list_families.addItem(item)
@@ -490,11 +674,14 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         is_user = bool(self.current_lib_meta and self.current_lib_meta.get("is_user"))
         has_family = bool(family_name and family_name in self.current_lib_data)
 
+        fam_data = self.current_lib_data.get(family_name, {}) if has_family else {}
+        is_explicit = bool(isinstance(fam_data, dict) and "canonical_family" in fam_data)
+
         self.btn_del_family.setEnabled(is_user and has_family)
         self.btn_add_size.setEnabled(is_user and has_family)
         self.btn_del_size.setEnabled(is_user and has_family)
         self.le_norm.setEnabled(is_user and has_family)
-        self.cb_fillet.setEnabled(is_user and has_family)
+        self.cb_fillet.setEnabled(is_user and has_family and not is_explicit)
 
         if not has_family:
             self.table_sizes.setRowCount(0)
@@ -503,7 +690,6 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             self._update_family_icon()
             return
 
-        fam_data = self.current_lib_data[family_name]
         self.le_norm.blockSignals(True)
         self.cb_fillet.blockSignals(True)
 
@@ -524,11 +710,17 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             warehouse = os.path.join(PROFILEIMAGES_PATH, "Warehouse.png")
             return warehouse if os.path.isfile(warehouse) else ""
 
+        fam_data = self.current_lib_data.get(fam, {}) if isinstance(self.current_lib_data, dict) else {}
+        canonical = get_canonical_family(fam, fam_data)
+
         if fillet is None:
-            fillet = self.cb_fillet.isChecked() if hasattr(self, "cb_fillet") else False
+            if fam == self.current_family and hasattr(self, "cb_fillet"):
+                fillet = self.cb_fillet.isChecked()
+            else:
+                fillet = bool(fam_data.get("fillet", False)) if isinstance(fam_data, dict) else False
 
         lib_name = (self.current_lib_meta or {}).get("name", "Metal")
-        base_name = fam.replace(" ", "_")
+        base_name = canonical.replace(" ", "_")
 
         candidates = []
         if fillet:
@@ -563,7 +755,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             self.lbl_family_icon.setToolTip("")
             return
 
+        fam_data = self.current_lib_data.get(self.current_family, {})
         img_path = self._get_family_image_path(self.current_family)
+        display_name = self._get_family_display_name(self.current_family, fam_data)
         if img_path and os.path.isfile(img_path):
             pixmap = QtGui.QPixmap(img_path)
             if not pixmap.isNull():
@@ -575,7 +769,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                     QtCore.Qt.SmoothTransformation,
                 )
                 self.lbl_family_icon.setPixmap(scaled)
-                self.lbl_family_icon.setToolTip(translate("frameforge", self.current_family))
+                self.lbl_family_icon.setToolTip(display_name)
                 return
 
         self.lbl_family_icon.clear()
@@ -601,13 +795,16 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                        "T-Slot 2-Slots Opp", "T-Slot 1-Slot"):
             fields[family] = {"Height", "Width"}
 
+        fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
+        canonical = get_canonical_family(self.current_family, fam_data)
+
         # Unknown/custom geometries retain the full editor rather than lose access.
-        visible = set(fields.get(self.current_family, {key for key, _ in self.TABLE_COLUMNS}))
+        visible = set(fields.get(canonical, {key for key, _ in self.TABLE_COLUMNS}))
         visible.update(("Size", "Weight"))
         if not self.cb_fillet.isChecked():
             visible.difference_update(("Radius1", "Radius2"))
         for index, (key, label) in enumerate(self.TABLE_COLUMNS):
-            if key == "Height" and self.current_family in ("Round Bar", "Pipe"):
+            if key == "Height" and canonical in ("Round Bar", "Pipe"):
                 label = "Diameter [mm]"
             self.table_sizes.horizontalHeaderItem(index).setText(translate("frameforge", label))
             self.table_sizes.setColumnHidden(index, key not in visible)
@@ -718,8 +915,10 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             t = float(t_str)
             tf = float(tf_str) if tf_str else 0.0
 
+            fam_data = self.current_lib_data.get(self.current_family, {})
+            canonical = get_canonical_family(self.current_family, fam_data)
             calc_weight = calculate_linear_weight(
-                family=self.current_family,
+                family=canonical,
                 width=w,
                 height=h,
                 thickness=t,
@@ -863,26 +1062,73 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
             return
 
-        fam, ok = QtWidgets.QInputDialog.getItem(
-            self,
-            translate("frameforge", "Add Family"),
-            translate("frameforge", "Select geometric family:"),
-            KNOWN_FAMILIES,
-            0,
-            False,
-        )
-        if not ok or not fam:
+        dlg = AddFamilyDialog(self, current_lib_meta=self.current_lib_meta)
+        if dlg.exec_() != QtWidgets.QDialog.Accepted:
             return
 
-        if fam not in self.current_lib_data:
-            self.current_lib_data[fam] = {
-                "norm": "Custom",
-                "unit": "Metric Units",
-                "fillet": False,
-                "sizes": {},
-            }
-            self._populate_families(select_family=fam)
-            self._mark_dirty()
+        canonical_family, with_fillet = dlg.get_values()
+        if not canonical_family:
+            return
+
+        # Check for duplicates by canonical type + fillet setting
+        for existing_key, existing_data in self.current_lib_data.items():
+            if existing_key.startswith("_") or not isinstance(existing_data, dict):
+                continue
+            existing_canonical = get_canonical_family(existing_key, existing_data)
+            existing_fillet = bool(existing_data.get("fillet", False))
+            if existing_canonical == canonical_family and existing_fillet == with_fillet:
+                fillet_label = (
+                    translate("frameforge", "With Fillet")
+                    if with_fillet
+                    else translate("frameforge", "No Fillet")
+                )
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    translate("frameforge", "Warning"),
+                    translate(
+                        "frameforge",
+                        "A family variant for '%s' (%s) already exists in this library.",
+                    )
+                    % (translate("frameforge", canonical_family), fillet_label),
+                )
+                return
+
+        # Determine dictionary key
+        if with_fillet:
+            new_family_key = f"{canonical_family} (Fillet)"
+        else:
+            if canonical_family in self.current_lib_data:
+                new_family_key = f"{canonical_family} (No Fillet)"
+            else:
+                new_family_key = canonical_family
+
+        # Guard against destination-key collision before insertion
+        if new_family_key in self.current_lib_data:
+            fillet_label = (
+                translate("frameforge", "With Fillet")
+                if with_fillet
+                else translate("frameforge", "No Fillet")
+            )
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Warning"),
+                translate(
+                    "frameforge",
+                    "A family variant for '%s' (%s) already exists in this library.",
+                )
+                % (translate("frameforge", canonical_family), fillet_label),
+            )
+            return
+
+        self.current_lib_data[new_family_key] = {
+            "canonical_family": canonical_family,
+            "norm": "Custom",
+            "unit": "Metric Units",
+            "fillet": with_fillet,
+            "sizes": {},
+        }
+        self._populate_families(select_family=new_family_key)
+        self._mark_dirty()
 
     def _on_delete_family(self):
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
@@ -933,9 +1179,11 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         try:
             lib_name = self.current_lib_meta.get("name", "")
             _, density = self.manager.get_library_material_info(lib_name)
+            fam_data = self.current_lib_data.get(self.current_family, {})
+            canonical = get_canonical_family(self.current_family, fam_data)
             calc_w = str(
                 calculate_linear_weight(
-                    family=self.current_family,
+                    family=canonical,
                     width=50.0,
                     height=50.0,
                     thickness=2.0,
@@ -989,6 +1237,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         density = STANDARD_DENSITIES.get(mat_key, 2.70)
 
         family = self.combo_family.currentText()
+        fam_data = self.current_lib_data.get(family, {})
+        canonical = get_canonical_family(family, fam_data)
         try:
             h = float(self.table_sizes.item(row, 1).text())
             w = float(self.table_sizes.item(row, 2).text())
@@ -996,7 +1246,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             tf = float(self.table_sizes.item(row, 4).text()) if self.table_sizes.item(row, 4) else 0.0
 
             calc_weight = calculate_linear_weight(
-                family=family, width=w, height=h, thickness=t, density_g_cm3=density, flange_thickness=tf
+                family=canonical, width=w, height=h, thickness=t, density_g_cm3=density, flange_thickness=tf
             )
             # Column 7 is Weight
             self.table_sizes.setItem(row, 7, QtWidgets.QTableWidgetItem(str(calc_weight)))
