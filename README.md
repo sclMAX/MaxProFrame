@@ -51,6 +51,8 @@ New entries store their canonical geometry separately from the catalog key. Thei
 
 ### Catalog identity and geometry
 
+**Channels** generates a straight C-section, open toward positive X before mirroring or rotation. Height and Width are the outer dimensions; Thickness controls the web and Flange Thickness controls both parallel flanges. This plain section is distinct from UPE and tapered UPN profiles.
+
 Profiles retain `Family` as their geometric type and store the selected entry in `CatalogFamily`. The BOM uses that catalog identity to distinguish variants, including trimmed/cutout profiles. Older profiles without it fall back to `Family`. The creation-time **Make Fillets** option still controls the individual profile's modeled detail; it does not rename the catalog entry.
 
 ### Create the frame

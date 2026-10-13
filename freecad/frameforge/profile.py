@@ -604,6 +604,22 @@ class Profile:
             else:
                 p = Part.Face(wire1)
 
+        if obj.Family == "Channels":
+            # A straight web and two parallel flanges, open toward positive X.
+            points = [
+                vec(w, h, 0),
+                vec(w, H + h, 0),
+                vec(W + w, H + h, 0),
+                vec(W + w, H - TF + h, 0),
+                vec(TW + w, H - TF + h, 0),
+                vec(TW + w, TF + h, 0),
+                vec(W + w, TF + h, 0),
+                vec(W + w, h, 0),
+                vec(w, h, 0),
+            ]
+            wire1 = Part.makePolygon(points)
+            p = Part.Face(wire1)
+
         if obj.Family == "UPE" or obj.Family == "UPN":
             if obj.MakeFillet == False:  # UPE ou UPN sans arrondis
 
