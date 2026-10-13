@@ -188,6 +188,22 @@
         <translation>Peso [kg/m]</translation>
     </message>
     <message>
+        <source>Lip Length</source>
+        <translation>Labio</translation>
+    </message>
+    <message>
+        <source>Lip Length [mm]</source>
+        <translation>Labio [mm]</translation>
+    </message>
+    <message>
+        <source>Exterior radius</source>
+        <translation>Radio exterior</translation>
+    </message>
+    <message>
+        <source>Exterior Radius [mm]</source>
+        <translation>Radio exterior [mm]</translation>
+    </message>
+    <message>
         <source>+ Add Size</source>
         <translation>+ Agregar Medida</translation>
     </message>

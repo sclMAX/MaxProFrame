@@ -33,6 +33,7 @@ except ImportError:
         "IPN",
         "UPE",
         "UPN",
+        "C",
     ])
 
     def get_canonical_family(family_key, family_data=None):
@@ -189,7 +190,7 @@ class AddFamilyDialog(QtWidgets.QDialog):
             self._update_preview()
             return
         fam_key = current.data(QtCore.Qt.UserRole)
-        can_fillet = fam_key in FILLET_FAMILIES
+        can_fillet = (fam_key in FILLET_FAMILIES) or (fam_key == "C")
         self.cb_fillet.setEnabled(can_fillet)
         if not can_fillet and self.cb_fillet.isChecked():
             self.cb_fillet.setChecked(False)
@@ -265,6 +266,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         ("Radius1", "Radius 1 [mm]"),
         ("Radius2", "Radius 2 [mm]"),
         ("Weight", "Weight [kg/m]"),
+        ("Lip Length", "Lip Length [mm]"),
     ]
 
     @classmethod
@@ -786,11 +788,12 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             "Rectangular Hollow": {"Height", "Width", "Thickness", "Radius1", "Radius2"},
             "Equal Leg Angles": {"Height", "Width", "Thickness", "Radius1", "Radius2"},
             "Unequal Leg Angles": {"Height", "Width", "Thickness", "Radius1", "Radius2"},
+            "C": {"Height", "Width", "Thickness", "Lip Length", "Radius1"},
         }
         for family in ("HEA", "HEB", "HEM", "IPE"):
             fields[family] = {"Height", "Width", "Thickness", "Flange Thickness", "Radius1"}
         for family in ("UPE", "UPN", "IPN"):
-            fields[family] = {key for key, _ in self.TABLE_COLUMNS}
+            fields[family] = {key for key, _ in self.TABLE_COLUMNS if key != "Lip Length"}
         for family in ("V-Slot", "T-Slot", "T-Slot 3-Slots", "T-Slot 2-Slots",
                        "T-Slot 2-Slots Opp", "T-Slot 1-Slot"):
             fields[family] = {"Height", "Width"}
@@ -801,18 +804,33 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         # Unknown/custom geometries retain the full editor rather than lose access.
         visible = set(fields.get(canonical, {key for key, _ in self.TABLE_COLUMNS}))
         visible.update(("Size", "Weight"))
+        if canonical != "C":
+            visible.discard("Lip Length")
         if not self.cb_fillet.isChecked():
             visible.difference_update(("Radius1", "Radius2"))
         for index, (key, label) in enumerate(self.TABLE_COLUMNS):
             if key == "Height" and canonical in ("Round Bar", "Pipe"):
                 label = "Diameter [mm]"
+            elif key == "Radius1" and canonical == "C":
+                label = "Exterior Radius [mm]"
             self.table_sizes.horizontalHeaderItem(index).setText(translate("frameforge", label))
             self.table_sizes.setColumnHidden(index, key not in visible)
+
+        # Reorder presentation only; logical indices still drive editing and serialization.
+        order = [0, 1, 2, 8, 3, 5, 7, 4, 6] if canonical == "C" else list(range(len(self.TABLE_COLUMNS)))
+        header = self.table_sizes.horizontalHeader()
+        for visual_index, logical_index in enumerate(order):
+            header.moveSection(header.visualIndex(logical_index), visual_index)
 
     def _on_fillet_toggled(self, checked):
         self._mark_dirty()
         self._update_family_icon()
         self._update_size_columns()
+        fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
+        canonical = get_canonical_family(self.current_family, fam_data)
+        if canonical == "C":
+            for row in range(self.table_sizes.rowCount()):
+                self._recalculate_row_weight(row)
 
     def _populate_sizes_table(self, sizes_dict):
         self.table_sizes.blockSignals(True)
@@ -845,6 +863,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         if not (self.current_lib_meta and self.current_lib_meta["is_user"]):
             return
 
+        fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
+        canonical = get_canonical_family(self.current_family, fam_data)
+
         sizes = {}
         seen_codes = set()
         duplicates = []
@@ -863,6 +884,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             size_entry = {}
             for col_idx, (prop_key, _) in enumerate(self.TABLE_COLUMNS):
                 if prop_key == "Size":
+                    continue
+                if prop_key == "Lip Length" and canonical != "C":
                     continue
                 item = self.table_sizes.item(row, col_idx)
                 size_entry[prop_key] = item.text().strip() if item else "0"
@@ -917,14 +940,35 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
             fam_data = self.current_lib_data.get(self.current_family, {})
             canonical = get_canonical_family(self.current_family, fam_data)
-            calc_weight = calculate_linear_weight(
-                family=canonical,
-                width=w,
-                height=h,
-                thickness=t,
-                density_g_cm3=density,
-                flange_thickness=tf,
-            )
+
+            if canonical == "C":
+                r1_item = self.table_sizes.item(row, 5)
+                lip_item = self.table_sizes.item(row, 8) if self.table_sizes.columnCount() > 8 else None
+                r1_str = r1_item.text().strip() if r1_item else ""
+                lip_str = lip_item.text().strip() if lip_item else ""
+                r1 = float(r1_str) if r1_str else 0.0
+                lip = float(lip_str) if lip_str else 0.0
+                is_fillet = bool(self.cb_fillet.isChecked())
+                calc_weight = calculate_linear_weight(
+                    family=canonical,
+                    width=w,
+                    height=h,
+                    thickness=t,
+                    density_g_cm3=density,
+                    flange_thickness=tf,
+                    lip_length=lip,
+                    radius=r1,
+                    make_fillet=is_fillet,
+                )
+            else:
+                calc_weight = calculate_linear_weight(
+                    family=canonical,
+                    width=w,
+                    height=h,
+                    thickness=t,
+                    density_g_cm3=density,
+                    flange_thickness=tf,
+                )
 
             self.table_sizes.blockSignals(True)
             weight_item = self.table_sizes.item(row, 7)
@@ -939,8 +983,16 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
     def _on_table_item_changed(self, item):
         self._mark_dirty()
-        if item and item.column() in (1, 2, 3, 4):
+        if not item:
+            return
+        col = item.column()
+        if col in (1, 2, 3, 4):
             self._recalculate_row_weight(item.row())
+        elif col in (5, 8):
+            fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
+            canonical = get_canonical_family(self.current_family, fam_data)
+            if canonical == "C":
+                self._recalculate_row_weight(item.row())
 
     def _on_new_library(self):
         dlg = NewLibraryDialog(self, title="New Library", default_material="Steel")
@@ -1194,8 +1246,19 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         except Exception:
             pass
 
-        default_vals = [candidate_code, "50", "50", "2", "0", "0", "0", calc_w]
-        for col, val in enumerate(default_vals):
+        default_vals = {
+            "Size": candidate_code,
+            "Height": "50",
+            "Width": "50",
+            "Thickness": "2",
+            "Flange Thickness": "0",
+            "Radius1": "0",
+            "Radius2": "0",
+            "Weight": calc_w,
+            "Lip Length": "0",
+        }
+        for col, (prop_key, _) in enumerate(self.TABLE_COLUMNS):
+            val = default_vals.get(prop_key, "0")
             self.table_sizes.setItem(row, col, QtWidgets.QTableWidgetItem(val))
 
         self.table_sizes.selectRow(row)
@@ -1244,10 +1307,32 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             w = float(self.table_sizes.item(row, 2).text())
             t = float(self.table_sizes.item(row, 3).text())
             tf = float(self.table_sizes.item(row, 4).text()) if self.table_sizes.item(row, 4) else 0.0
-
-            calc_weight = calculate_linear_weight(
-                family=canonical, width=w, height=h, thickness=t, density_g_cm3=density, flange_thickness=tf
-            )
+            if canonical == "C":
+                r1_item = self.table_sizes.item(row, 5)
+                r1 = float(r1_item.text()) if (r1_item and r1_item.text().strip()) else 0.0
+                lip_item = self.table_sizes.item(row, 8) if self.table_sizes.columnCount() > 8 else None
+                lip = float(lip_item.text()) if (lip_item and lip_item.text().strip()) else 0.0
+                is_fillet = bool(self.cb_fillet.isChecked())
+                calc_weight = calculate_linear_weight(
+                    family=canonical,
+                    width=w,
+                    height=h,
+                    thickness=t,
+                    density_g_cm3=density,
+                    flange_thickness=tf,
+                    lip_length=lip,
+                    radius=r1,
+                    make_fillet=is_fillet,
+                )
+            else:
+                calc_weight = calculate_linear_weight(
+                    family=canonical,
+                    width=w,
+                    height=h,
+                    thickness=t,
+                    density_g_cm3=density,
+                    flange_thickness=tf,
+                )
             # Column 7 is Weight
             self.table_sizes.setItem(row, 7, QtWidgets.QTableWidgetItem(str(calc_weight)))
             self._mark_dirty()

@@ -60,6 +60,8 @@ class BaseProfileTaskPanel(ABC):
         self.form_proxy.sb_flange_thickness.blockSignals(not enable)
         self.form_proxy.sb_radius1.blockSignals(not enable)
         self.form_proxy.sb_radius2.blockSignals(not enable)
+        if hasattr(self.form_proxy, "sb_lip_length"):
+            self.form_proxy.sb_lip_length.blockSignals(not enable)
         self.form_proxy.sb_length.blockSignals(not enable)
         self.form_proxy.cb_mirror_h.blockSignals(not enable)
         self.form_proxy.cb_mirror_v.blockSignals(not enable)
@@ -151,12 +153,37 @@ class BaseProfileTaskPanel(ABC):
         self.form_proxy.sb_flange_thickness.valueChanged.connect(self.proceed)
         self.form_proxy.sb_radius1.valueChanged.connect(self.proceed)
         self.form_proxy.sb_radius2.valueChanged.connect(self.proceed)
+        if hasattr(self.form_proxy, "sb_lip_length"):
+            self.form_proxy.sb_lip_length.valueChanged.connect(self.proceed)
         self.form_proxy.sb_length.valueChanged.connect(self.proceed)
 
         self.form_proxy.cb_sketch_in_name.stateChanged.connect(self.proceed)
         self.form_proxy.cb_family_in_name.stateChanged.connect(self.proceed)
         self.form_proxy.cb_size_in_name.stateChanged.connect(self.proceed)
         self.form_proxy.cb_prefix_profile_in_name.stateChanged.connect(self.proceed)
+
+    def _update_family_controls(self, canonical_family):
+        is_c = (canonical_family == "C")
+        if hasattr(self.form_proxy, "sb_lip_length"):
+            self.form_proxy.sb_lip_length.setVisible(is_c)
+        if hasattr(self.form_proxy, "label_lip_length"):
+            self.form_proxy.label_lip_length.setText(translate("frameforge", "Lip Length"))
+            self.form_proxy.label_lip_length.setVisible(is_c)
+
+        if hasattr(self.form_proxy, "label_8"):
+            if is_c:
+                self.form_proxy.label_8.setText(translate("frameforge", "Exterior radius"))
+            else:
+                self.form_proxy.label_8.setText(translate("frameforge", "Large Radius"))
+
+        if hasattr(self.form_proxy, "label_7"):
+            self.form_proxy.label_7.setVisible(not is_c)
+        if hasattr(self.form_proxy, "sb_flange_thickness"):
+            self.form_proxy.sb_flange_thickness.setVisible(not is_c)
+        if hasattr(self.form_proxy, "label_9"):
+            self.form_proxy.label_9.setVisible(not is_c)
+        if hasattr(self.form_proxy, "sb_radius2"):
+            self.form_proxy.sb_radius2.setVisible(not is_c)
 
     def get_anchor(self):
         """Return (anchor_x, anchor_y) 0=left/bottom, 1=center, 2=right/top."""
@@ -203,6 +230,14 @@ class BaseProfileTaskPanel(ABC):
         material = str(self.form_proxy.combo_material.currentText())
         family = str(self.form_proxy.combo_family.currentText())
 
+        family_data = (
+            self.profiles.get(material, {}).get(family)
+            if hasattr(self, "profiles") and self.profiles
+            else None
+        )
+        canonical = get_canonical_family(family, family_data)
+        self._update_family_controls(canonical)
+
         self.form_proxy.cb_make_fillet.setChecked(self.profiles[material][family]["fillet"])
         self.form_proxy.cb_make_fillet.setEnabled(self.profiles[material][family]["fillet"])
 
@@ -234,6 +269,8 @@ class BaseProfileTaskPanel(ABC):
                 "Radius2": self.form_proxy.sb_radius2,
                 "Weight": self.form_proxy.sb_weight,
             }
+            if hasattr(self.form_proxy, "sb_lip_length"):
+                SETTING_MAP["Lip Length"] = self.form_proxy.sb_lip_length
 
             self.enable_signals(False)
 
@@ -249,6 +286,9 @@ class BaseProfileTaskPanel(ABC):
             self.form_proxy.sb_radius1.setValue(0.0)
             self.form_proxy.sb_radius2.setEnabled(False)
             self.form_proxy.sb_radius2.setValue(0.0)
+            if hasattr(self.form_proxy, "sb_lip_length"):
+                self.form_proxy.sb_lip_length.setEnabled(False)
+                self.form_proxy.sb_lip_length.setValue(0.0)
             self.form_proxy.sb_weight.setEnabled(False)
             self.form_proxy.sb_weight.setValue(0.0)
 
@@ -327,6 +367,15 @@ class BaseProfileTaskPanel(ABC):
             else:
                 canonical_family = get_canonical_family(selected_family, None)
 
+        kwargs = {
+            "init_mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
+            "init_mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
+            "init_rotation": self.get_rotation(),
+            "catalog_family": selected_family,
+        }
+        if canonical_family == "C" and hasattr(self.form_proxy, "sb_lip_length"):
+            kwargs["init_lip_length"] = self.form_proxy.sb_lip_length.value()
+
         profile.Proxy.set_properties(
             profile,
             self.form_proxy.sb_width.value(),
@@ -343,10 +392,7 @@ class BaseProfileTaskPanel(ABC):
             material_name,
             canonical_family,
             self.form_proxy.combo_size.currentText(),
-            init_mirror_h=self.form_proxy.cb_mirror_h.isChecked(),
-            init_mirror_v=self.form_proxy.cb_mirror_v.isChecked(),
-            init_rotation=self.get_rotation(),
-            catalog_family=selected_family,
+            **kwargs,
         )
 
     @abstractmethod
@@ -386,7 +432,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         return True
 
     def accept(self):
-        if len(Gui.Selection.getSelectionEx()) or self.form_proxy.sb_length.value() > 0:
+        has_sel = len(Gui.Selection.getSelectionEx()) if hasattr(Gui, "Selection") else 0
+        if has_sel or self.form_proxy.sb_length.value() > 0:
             App.Console.PrintMessage(translate("frameforge", "Accepting CreateProfile\n"))
 
             param = App.ParamGet("User parameter:BaseApp/Preferences/Frameforge")
@@ -416,8 +463,9 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             self.clean()
 
             for o in self._objects.values():
-                o.ViewObject.Transparency = 0
-                o.ViewObject.ShapeColor = (0.44, 0.47, 0.5)
+                if getattr(o, "ViewObject", None) is not None:
+                    o.ViewObject.Transparency = 0
+                    o.ViewObject.ShapeColor = (0.44, 0.47, 0.5)
 
             App.ActiveDocument.commitTransaction()
             App.ActiveDocument.recompute()
@@ -436,13 +484,14 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             return False
 
     def clean(self):
-        Gui.Selection.removeObserver(self)
-        Gui.Selection.removeSelectionGate()
+        if hasattr(Gui, "Selection"):
+            Gui.Selection.removeObserver(self)
+            Gui.Selection.removeSelectionGate()
 
     def proceed(self):
         seen_profiles = []
 
-        selection_list = Gui.Selection.getSelectionEx()
+        selection_list = Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else []
 
         p_name = "Profile_" if self.form_proxy.cb_prefix_profile_in_name.isChecked() else ""
 
@@ -529,8 +578,9 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         obj = App.ActiveDocument.addObject("Part::FeaturePython", name)
         obj.addExtension("Part::AttachExtensionPython")
 
-        obj.ViewObject.Transparency = 80
-        obj.ViewObject.ShapeColor = (0.0, 0.8, 0.0)
+        if getattr(obj, "ViewObject", None) is not None:
+            obj.ViewObject.Transparency = 80
+            obj.ViewObject.ShapeColor = (0.0, 0.8, 0.0)
 
         # move it to the sketch's parent if possible
         if sketch is not None and len(sketch.Parents) > 0:
@@ -562,6 +612,17 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         family_data = self.profiles.get(material_name, {}).get(selected_family) if hasattr(self, "profiles") and self.profiles else None
         canonical_family = get_canonical_family(selected_family, family_data)
 
+        kwargs = {
+            "init_mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
+            "init_mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
+            "init_rotation": self.get_rotation(),
+            "init_offset_a": init_offset,
+            "init_offset_b": init_offset,
+            "catalog_family": selected_family,
+        }
+        if canonical_family == "C" and hasattr(self.form_proxy, "sb_lip_length"):
+            kwargs["init_lip_length"] = self.form_proxy.sb_lip_length.value()
+
         Profile(
             obj,
             self.form_proxy.sb_width.value(),
@@ -580,16 +641,12 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             self.form_proxy.combo_size.currentText(),
             self.form_proxy.cb_combined_bevel.isChecked(),
             link_sub,
-            init_mirror_h=self.form_proxy.cb_mirror_h.isChecked(),
-            init_mirror_v=self.form_proxy.cb_mirror_v.isChecked(),
-            init_rotation=self.get_rotation(),
-            init_offset_a=init_offset,
-            init_offset_b=init_offset,
-            catalog_family=selected_family,
+            **kwargs,
         )
 
         # Create a ViewObject in current GUI
-        ViewProviderProfile(obj.ViewObject)
+        if getattr(obj, "ViewObject", None) is not None:
+            ViewProviderProfile(obj.ViewObject)
 
         return obj
 
@@ -600,12 +657,13 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self.update_selection()
 
     def update_selection(self):
-        if len(Gui.Selection.getSelectionEx()) > 0:
+        selection_list = Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else []
+        if len(selection_list) > 0:
             self.form_proxy.sb_length.setEnabled(False)
             self.form_proxy.sb_length.setValue(0.0)
 
             obj_name = ""
-            for sel in Gui.Selection.getSelectionEx():
+            for sel in selection_list:
                 selected_obj_name = sel.ObjectName
                 subs = ""
                 for sub in sel.SubElementNames:
