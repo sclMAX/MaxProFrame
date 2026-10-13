@@ -155,6 +155,7 @@ class TestCatalogFamilyProfiles(unittest.TestCase):
                 "Rectangular Hollow",
                 "Equal Leg Angles",
                 "Unequal Leg Angles",
+                "C",
                 "HEA",
                 "HEB",
                 "HEM",

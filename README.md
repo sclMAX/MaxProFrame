@@ -53,6 +53,8 @@ New entries store their canonical geometry separately from the catalog key. Thei
 
 **Channels** generates a straight C-section, open toward positive X before mirroring or rotation. Height and Width are the outer dimensions; Thickness controls the web and Flange Thickness controls both parallel flanges. This plain section is distinct from UPE and tapered UPN profiles.
 
+**C** profiles generate a lipped C-channel open toward positive X, with uniform Thickness `e`, outside Height `H`, outside Width `B`, and inward Lip Length `L` (flange-to-tip outer extent). Both plain and filleted variants are supported. In filleted C profiles, the specified radius is the exterior radius `R`, with the interior radius automatically derived as `R - e` across four concentric 90° corner pairs. Theoretical cross-section area is `e * (H + 2*B + 2*L - 4*e)` for plain C sections, and filleted variants subtract `(4 - pi) * (R^2 - (R - e)^2)`.
+
 Profiles retain `Family` as their geometric type and store the selected entry in `CatalogFamily`. The BOM uses that catalog identity to distinguish variants, including trimmed/cutout profiles. Older profiles without it fall back to `Family`. The creation-time **Make Fillets** option still controls the individual profile's modeled detail; it does not rename the catalog entry.
 
 ### Create the frame

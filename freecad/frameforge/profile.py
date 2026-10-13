@@ -69,6 +69,7 @@ class Profile:
         init_offset_a=0.0,
         init_offset_b=0.0,
         catalog_family=None,
+        init_lip_length=0.0,
     ):
         """
         Constructor. Add properties to FreeCAD Profile object. Profile object have 11 nominal properties associated
@@ -143,6 +144,11 @@ class Profile:
         obj.addProperty(
             "App::PropertyBool", "MakeFillet", "Profile", "Whether to draw the fillets or not"
         ).MakeFillet = init_mf
+
+        if fam == "C":
+            obj.addProperty(
+                "App::PropertyFloat", "LipLength", "Profile", "Lip length for C profiles"
+            ).LipLength = float(init_lip_length)
 
         if not bevels_combined:
             obj.addProperty(
@@ -291,6 +297,7 @@ class Profile:
         init_mirror_v=False,
         init_rotation=0.0,
         catalog_family=None,
+        init_lip_length=None,
     ):
         self.run_compatibility_migrations(obj)
 
@@ -318,6 +325,14 @@ class Profile:
         obj.RadiusLarge = init_r1
         obj.RadiusSmall = init_r2
         obj.MakeFillet = init_mf
+
+        if fam == "C":
+            if not hasattr(obj, "LipLength"):
+                obj.addProperty(
+                    "App::PropertyFloat", "LipLength", "Profile", "Lip length for C profiles"
+                ).LipLength = 0.0
+            if init_lip_length is not None:
+                obj.LipLength = float(init_lip_length)
 
         # if not bevels_combined:
         #     obj.BevelACutY", "Profile",
@@ -351,6 +366,9 @@ class Profile:
         # obj.OffsetB = .0  # Property for structure
 
     def on_changed(self, obj, p):
+        if getattr(obj, "Family", None) == "C" and p in ("LipLength", "RadiusLarge", "MakeFillet"):
+            self.execute(obj)
+            return
 
         if (
             p == "ProfileWidth"
@@ -619,6 +637,27 @@ class Profile:
             ]
             wire1 = Part.makePolygon(points)
             p = Part.Face(wire1)
+
+        if obj.Family == "C":
+            lip = getattr(obj, "LipLength", None)
+            if lip is None:
+                raise ValueError("LipLength property missing for C profile")
+            if obj.MakeFillet:
+                derived_r = obj.RadiusLarge - obj.Thickness
+                if not hasattr(obj, "RadiusSmall") or obj.RadiusSmall != derived_r:
+                    obj.RadiusSmall = derived_r
+            from freecad.frameforge.c_profile import build_c_face
+            p = build_c_face(
+                width=W,
+                height=H,
+                thickness=TW,
+                lip_length=float(lip),
+                radius=R,
+                make_fillet=bool(obj.MakeFillet),
+                w=w,
+                h=h,
+            )
+            wire1 = p.OuterWire
 
         if obj.Family == "UPE" or obj.Family == "UPN":
             if obj.MakeFillet == False:  # UPE ou UPN sans arrondis
@@ -1378,6 +1417,24 @@ class Profile:
 
                 # update version
                 obj.FrameforgeVersion = ff_version
+
+        if getattr(obj, "Family", None) == "C" and not hasattr(obj, "LipLength"):
+            obj.addProperty(
+                "App::PropertyFloat",
+                "LipLength",
+                "Profile",
+                "Lip length for C profiles",
+            ).LipLength = 0.0
+
+    def onDocumentRestored(self, obj):
+        if getattr(obj, "Family", None) == "C":
+            if not hasattr(obj, "LipLength"):
+                obj.addProperty(
+                    "App::PropertyFloat",
+                    "LipLength",
+                    "Profile",
+                    "Lip length for C profiles",
+                ).LipLength = 0.0
 
 
 class ViewProviderProfile:

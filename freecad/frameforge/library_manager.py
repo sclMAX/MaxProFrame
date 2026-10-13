@@ -21,6 +21,7 @@ KNOWN_FAMILIES = [
     "Equal Leg Angles",
     "Unequal Leg Angles",
     "Channels",
+    "C",
     "HEA",
     "HEB",
     "HEM",
@@ -42,6 +43,7 @@ FILLET_FAMILIES = frozenset(
         "Rectangular Hollow",
         "Equal Leg Angles",
         "Unequal Leg Angles",
+        "C",
         "HEA",
         "HEB",
         "HEM",
@@ -84,7 +86,17 @@ def sanitize_library_name(name):
     return clean or "unnamed_library"
 
 
-def calculate_linear_weight(family, width, height, thickness, density_g_cm3=7.85, flange_thickness=None):
+def calculate_linear_weight(
+    family,
+    width,
+    height,
+    thickness,
+    density_g_cm3=7.85,
+    flange_thickness=None,
+    lip_length=None,
+    radius=None,
+    make_fillet=False,
+):
     """
     Calculates the theoretical linear mass (weight in kg/m) of a profile
     based on its dimensions (in mm) and material density (in g/cm3).
@@ -131,6 +143,16 @@ def calculate_linear_weight(family, width, height, thickness, density_g_cm3=7.85
             area_mm2 = (t * (h - 2 * tf)) + (2 * w * tf)
         else:
             area_mm2 = w * h
+    elif family in ("C",):
+        from freecad.frameforge.c_profile import calculate_c_area
+        area_mm2 = calculate_c_area(
+            height=h,
+            width=w,
+            thickness=t,
+            lip_length=lip_length,
+            radius=radius,
+            make_fillet=make_fillet,
+        )
     elif family in ("HEA", "HEB", "HEM", "IPE", "IPN", "UPE", "UPN"):
         # Preserve the existing approximation for standard sections.
         area_mm2 = w * h
@@ -520,14 +542,38 @@ class LibraryManager:
                             else None
                         )
                         canonical = get_canonical_family(fam_name, fam_data)
-                        new_weight = calculate_linear_weight(
-                            family=canonical,
-                            width=w,
-                            height=h,
-                            thickness=t,
-                            density_g_cm3=target_density,
-                            flange_thickness=tf,
-                        )
+                        if canonical == "C":
+                            lip = (
+                                float(size_props.get("Lip Length", 0))
+                                if "Lip Length" in size_props
+                                else None
+                            )
+                            r1 = (
+                                float(size_props.get("Radius1", 0))
+                                if "Radius1" in size_props
+                                else None
+                            )
+                            make_fillet = bool(fam_data.get("fillet", False))
+                            new_weight = calculate_linear_weight(
+                                family=canonical,
+                                width=w,
+                                height=h,
+                                thickness=t,
+                                density_g_cm3=target_density,
+                                flange_thickness=tf,
+                                lip_length=lip,
+                                radius=r1,
+                                make_fillet=make_fillet,
+                            )
+                        else:
+                            new_weight = calculate_linear_weight(
+                                family=canonical,
+                                width=w,
+                                height=h,
+                                thickness=t,
+                                density_g_cm3=target_density,
+                                flange_thickness=tf,
+                            )
                         size_props["Weight"] = str(new_weight)
                     except Exception as err:
                         unrecalculated.append(f"{fam_name}/{size_key}")
