@@ -8,7 +8,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtGui
 
-from freecad.frameforge.ff_tools import ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, FormProxy, translate
+from freecad.frameforge.ff_tools import ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, FormProxy, move_profile_to_parent_if_supported, translate
 from freecad.frameforge.library_manager import LibraryManager, get_canonical_family
 from freecad.frameforge.profile import Profile, ViewProviderProfile
 
@@ -585,7 +585,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         # move it to the sketch's parent if possible
         if sketch is not None and len(sketch.Parents) > 0:
             sk_parent = sketch.Parents[-1][0]
-            sk_parent.addObject(obj)
+            move_profile_to_parent_if_supported(obj, sk_parent)
 
         if sketch is not None and edge is not None:
             # Tuple assignment for edge

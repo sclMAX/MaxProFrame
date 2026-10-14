@@ -59,6 +59,18 @@ The C catalog editor displays Height, Width, Lip Length, Thickness, and Weight i
 
 Profiles retain `Family` as their geometric type and store the selected entry in `CatalogFamily`. The BOM uses that catalog identity to distinguish variants, including trimmed/cutout profiles. Older profiles without it fall back to `Family`. The creation-time **Make Fillets** option still controls the individual profile's modeled detail; it does not rename the catalog entry.
 
+### Fillets meeting at section boundaries
+
+Filleted equal/unequal leg angles and square/rectangular hollow profiles support radii that leave zero-length straight segments between arcs. Segments whose endpoints are within `1e-7 mm` are omitted while preserving the arcs and hollow inner boundary. Ordinary fillets retain their existing geometry; this does not change zero-length beam previews.
+
+### Edit a profile
+
+Close the current task dialog before double-clicking a profile to edit it. If another task dialog is active, FrameForge leaves it open, does not open the profile editor, and prints `FrameForge: close the active task dialog before editing a profile.` in the Report view. Close the active dialog and retry.
+
+### Profiles attached to a sketch in a Body
+
+Standard and custom profiles follow the sketch's parent when it accepts them. A PartDesign Body cannot contain these profile objects: FrameForge keeps the new profile at document root, preserves its sketch-edge attachment, and prints `FrameForge: parent <label> (<type>) does not accept Part::FeaturePython, keeping at document root` in the Report view. The sketch stays in its original container. Newly created profiles use a global-scope `Target` link, allowing a profile at document root to reference an edge of a sketch inside a Body without an out-of-scope warning. The association continues to update when the sketch changes and survives saving/reopening. Existing profiles are not migrated automatically; recreate them to obtain the corrected link.
+
 ### Create the frame
 
 1. Launch the FrameForge Profile tool

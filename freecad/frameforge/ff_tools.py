@@ -15,6 +15,17 @@ TRANSLATIONSPATH = os.path.join(RESSOURCESPATH, "translations")
 translate = FreeCAD.Qt.translate
 
 
+def move_profile_to_parent_if_supported(obj, parent):
+    """Keep a new profile at document root when its parent rejects its type."""
+    try:
+        parent.addObject(obj)
+    except ValueError:
+        FreeCAD.Console.PrintMessage(
+            f"FrameForge: parent {parent.Label} ({parent.TypeId}) does not accept {obj.TypeId}, "
+            "keeping at document root\n"
+        )
+
+
 class FormProxy(object):
     def __init__(self, form):
         self.members = {o: f for f in form for o in vars(f)}
