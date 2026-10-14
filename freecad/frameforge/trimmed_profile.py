@@ -211,7 +211,7 @@ class TrimmedProfile:
         prof = get_profile_from_trimmedbody(obj)
         angles = get_trimmed_profile_all_cutting_angles(obj)
 
-        obj.PID = prof.PID
+        obj.PID = str(prof.PID)
         obj.Width = prof.ProfileWidth
         obj.Height = prof.ProfileHeight
         obj.Family = prof.Family
