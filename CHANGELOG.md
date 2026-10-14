@@ -1,5 +1,9 @@
 ## Changelog
 
+* Unreleased
+  - Load linear weight correctly when editing a profile and leave stored profile data unchanged on opening.
+  - Preserve the original profile color and transparency when accepting edits; cancellation still rolls back changes.
+
 * v0.2.1
   - Adding pre-extend profile to create profile
   - revert PR #112, causing problems with standards mitter cut.

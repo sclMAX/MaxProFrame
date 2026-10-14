@@ -16,6 +16,7 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
         self._initializing = True
         self.profile = profile
         self.dump = profile.dumpContent()
+        self._original_appearance = None
 
         super().__init__()
 
@@ -74,7 +75,7 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
             lip_val = float(getattr(self.profile, "LipLength", 0.0))
             self.form_proxy.sb_lip_length.setValue(lip_val)
         self.form_proxy.sb_length.setValue(self.profile.ProfileLength)
-        self.form_proxy.sb_weight.setValue(self.profile.ApproxWeight)
+        self.form_proxy.sb_weight.setValue(self.profile.LinearWeight)
         try:
             self.form_proxy.sb_unitprice.setValue(self.profile.UnitPrice)
         except:
@@ -109,11 +110,15 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
         self._initializing = False
 
     def open(self):
+        if getattr(self.profile, "ViewObject", None) is not None:
+            self._original_appearance = (
+                self.profile.ViewObject.ShapeColor,
+                self.profile.ViewObject.Transparency,
+            )
+
         App.ActiveDocument.openTransaction("Edit Profile")
 
         self.initialize_ui()
-
-        self.proceed()
 
         if getattr(self.profile, "ViewObject", None) is not None:
             self.profile.ViewObject.Transparency = 50
@@ -128,9 +133,10 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
     def accept(self):
         self.proceed()
 
-        if getattr(self.profile, "ViewObject", None) is not None:
-            self.profile.ViewObject.Transparency = 0
-            self.profile.ViewObject.ShapeColor = (0.44, 0.47, 0.5)
+        if getattr(self.profile, "ViewObject", None) is not None and self._original_appearance is not None:
+            color, transparency = self._original_appearance
+            self.profile.ViewObject.ShapeColor = color
+            self.profile.ViewObject.Transparency = transparency
 
         App.ActiveDocument.commitTransaction()
         App.ActiveDocument.recompute()
