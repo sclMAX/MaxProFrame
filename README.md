@@ -69,7 +69,7 @@ Close the current task dialog before double-clicking a profile to edit it. If an
 
 ### Profiles attached to a sketch in a Body
 
-Standard and custom profiles follow the sketch's parent when it accepts them. A PartDesign Body cannot contain these profile objects: FrameForge keeps the new profile at document root, preserves its sketch-edge attachment, and prints `FrameForge: parent <label> (<type>) does not accept Part::FeaturePython, keeping at document root` in the Report view. The sketch stays in its original container.
+Standard and custom profiles follow the sketch's parent when it accepts them. A PartDesign Body cannot contain these profile objects: FrameForge keeps the new profile at document root, preserves its sketch-edge attachment, and prints `FrameForge: parent <label> (<type>) does not accept Part::FeaturePython, keeping at document root` in the Report view. The sketch stays in its original container. Newly created profiles use a global-scope `Target` link, allowing a profile at document root to reference an edge of a sketch inside a Body without an out-of-scope warning. The association continues to update when the sketch changes and survives saving/reopening. Existing profiles are not migrated automatically; recreate them to obtain the corrected link.
 
 ### Create the frame
 

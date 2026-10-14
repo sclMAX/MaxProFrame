@@ -241,7 +241,8 @@ class Profile:
         obj.setExpression(".AttachmentOffset.Rotation.Angle", "RotationAngle")
 
         if link_sub:
-            obj.addProperty("App::PropertyLinkSub", "Target", "Base", "Target face").Target = link_sub
+            # A profile may stay at document root while its sketch belongs to a Body.
+            obj.addProperty("App::PropertyLinkSubGlobal", "Target", "Base", "Target face").Target = link_sub
 
         if custom_profile:
             obj.CustomProfile = custom_profile

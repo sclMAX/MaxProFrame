@@ -1,4 +1,6 @@
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -17,9 +19,11 @@ with patch.object(Gui, "addCommand", create=True):
 class TestProfileParentGuard(unittest.TestCase):
     def setUp(self):
         self.doc = App.newDocument("ProfileParentGuardTest")
-        self.addCleanup(App.closeDocument, self.doc.Name)
+        name = self.doc.Name
+        self.addCleanup(lambda: App.closeDocument(name) if name in App.listDocuments() else None)
         self.path = self.doc.addObject("Sketcher::SketchObject", "Path")
         self.path.addGeometry(Part.LineSegment(App.Vector(0, 0, 0), App.Vector(100, 0, 0)), False)
+        self.path.addConstraint(Sketcher.Constraint("Distance", 0, 100.0))
         self.section = self.doc.addObject("Sketcher::SketchObject", "Section")
         points = [(0, 0), (20, 0), (20, 10), (0, 10), (0, 0)]
         for start, end in zip(points, points[1:]):
@@ -71,6 +75,9 @@ class TestProfileParentGuard(unittest.TestCase):
         parent = self.doc.addObject(parent_type, "Parent") if parent_type else None
         if parent:
             parent.addObject(self.path)
+            if custom and parent_type == "App::Part":
+                # Keep the separate custom-section link within its existing local scope.
+                parent.addObject(self.section)
         self.doc.recompute()
         before_path = self.path.dumpContent()
         before_group = tuple(parent.Group) if parent else ()
@@ -92,6 +99,78 @@ class TestProfileParentGuard(unittest.TestCase):
                     self.assertEqual(profile.Parents, [])
         self.assertEqual(self.path.dumpContent(), before_path)
         self.assertEqual(tuple(self.doc.Objects), before_objects + (profile,))
+        self.doc.recompute()
+        self.assertEqual(profile.getTypeIdOfProperty("Target"), "App::PropertyLinkSubGlobal")
+        self.assert_parametric_profile(profile, 100)
+        self.path.setDatum(0, App.Units.Quantity("150 mm"))
+        self.doc.recompute()
+        self.assert_parametric_profile(profile, 150)
+        with tempfile.TemporaryDirectory(prefix=".frameforge-test-", dir=Path(__file__).resolve().parents[1]) as directory:
+            filename = str(Path(directory) / "roundtrip.FCStd")
+            self.doc.saveAs(filename)
+            App.closeDocument(self.doc.Name)
+            self.doc = App.openDocument(filename)
+            name = self.doc.Name
+            self.addCleanup(lambda: App.closeDocument(name) if name in App.listDocuments() else None)
+            self.path = self.doc.getObject("Path")
+            profile = self.doc.getObject("Profile")
+            self.doc.recompute()
+            self.assertEqual(profile.getTypeIdOfProperty("Target"), "App::PropertyLinkSubGlobal")
+            self.assert_parametric_profile(profile, 150)
+            self.path.setDatum(0, App.Units.Quantity("200 mm"))
+            self.doc.recompute()
+            self.assert_parametric_profile(profile, 200)
+            parent = self.doc.getObject("Parent")
+            if parent_type == "PartDesign::Body":
+                self.assertIn(self.path, parent.Group)
+                self.assertNotIn(profile, parent.Group)
+                self.assertEqual(profile.Parents, [])
+            elif parent:
+                self.assertIn(self.path, parent.Group)
+                self.assertIn(profile, parent.Group)
+            else:
+                self.assertEqual(profile.Parents, [])
+            App.closeDocument(self.doc.Name)
+
+    def assert_parametric_profile(self, profile, length):
+        self.assertEqual(profile.Target[0], self.path)
+        self.assertEqual(tuple(profile.Target[1]), ("Edge1",))
+        support = profile.AttachmentSupport
+        if isinstance(support, list):
+            support = support[0]
+        self.assertEqual(support[0], self.path)
+        self.assertEqual(tuple(support[1]), ("Edge1",))
+        self.assertAlmostEqual(profile.ProfileLength, length)
+        self.assertFalse(profile.Shape.isNull())
+        self.assertTrue(profile.Shape.isValid())
+        self.assertEqual(len(profile.Shape.Solids), 1)
+        self.assertAlmostEqual(profile.Shape.Volume, 200 * length)
+        self.assertNotIn("Invalid", profile.State)
+        self.assertNotIn("Error", profile.State)
+
+    def test_legacy_local_target_is_not_migrated_on_reopen(self):
+        profile = self.create(False)
+        target = profile.Target
+        profile.removeProperty("Target")
+        profile.addProperty("App::PropertyLinkSub", "Target", "Base", "Target face").Target = target
+        self.doc.recompute()
+        with tempfile.TemporaryDirectory(prefix=".frameforge-test-", dir=Path(__file__).resolve().parents[1]) as directory:
+            filename = str(Path(directory) / "legacy.FCStd")
+            self.doc.saveAs(filename)
+            App.closeDocument(self.doc.Name)
+            self.doc = App.openDocument(filename)
+            name = self.doc.Name
+            self.addCleanup(lambda: App.closeDocument(name) if name in App.listDocuments() else None)
+            self.path = self.doc.getObject("Path")
+            profile = self.doc.getObject("Profile")
+            self.doc.recompute()
+            self.assertEqual(profile.getTypeIdOfProperty("Target"), "App::PropertyLinkSub")
+            self.assert_parametric_profile(profile, 100)
+            self.path.setDatum(0, App.Units.Quantity("150 mm"))
+            self.doc.recompute()
+            self.assertEqual(profile.getTypeIdOfProperty("Target"), "App::PropertyLinkSub")
+            self.assert_parametric_profile(profile, 150)
+            App.closeDocument(self.doc.Name)
 
     def test_standard_body_rejection_finishes_profile_at_root(self):
         self.check_parent("PartDesign::Body", False)
