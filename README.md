@@ -39,6 +39,26 @@ For a start, we are going to create a simple frame.
 
 5. Close the Sketch edit mode.
 
+### Profile library table
+
+The Profile Library Manager displays only the dimension columns used by the selected family. Circular profiles show **Diameter** instead of Height. Radius columns appear only when **With Fillet** is enabled and the family uses them. Hidden cell values remain stored when editing and saving; switching families does not discard them. Unknown/custom families retain the full set of columns (with radii hidden when Fillet is off).
+
+### Add family variants
+
+In the Profile Library Manager, **Add Family** opens a list with translated names and section icons. Custom libraries can select every family in the bundled **Metal** catalog, including **HEA, HEB, HEM, IPE, IPN, UPE and UPN**, alongside the existing channel, slot and custom profile options. Select a geometry and, where supported, enable **With Fillet** before adding it. Plain and filleted variants can coexist in one library with independent size tables. Duplicate variants are rejected without overwriting existing entries.
+
+New entries store their canonical geometry separately from the catalog key. Their family-level Fillet setting is read-only; choose the variant when adding the family. Legacy catalogs retain their existing keys and behavior. If a legacy filleted entry already occupies the plain base name, its new plain counterpart uses a **(No Fillet)** suffix.
+
+### Catalog identity and geometry
+
+**Channels** generates a straight C-section, open toward positive X before mirroring or rotation. Height and Width are the outer dimensions; Thickness controls the web and Flange Thickness controls both parallel flanges. This plain section is distinct from UPE and tapered UPN profiles.
+
+**C** profiles generate a lipped C-channel open toward positive X, with uniform Thickness `e`, outside Height `H`, outside Width `B`, and inward Lip Length `L` (flange-to-tip outer extent). Both plain and filleted variants are supported. In filleted C profiles, the specified radius is the exterior radius `R`, with the interior radius automatically derived as `R - e` across four concentric 90° corner pairs. Theoretical cross-section area is `e * (H + 2*B + 2*L - 4*e)` for plain C sections, and filleted variants subtract `(4 - pi) * (R^2 - (R - e)^2)`.
+
+The C catalog editor displays Height, Width, Lip Length, Thickness, and Weight in that order; filleted C adds Exterior Radius before Weight. Spanish labels use **Labio** and **Radio exterior** in both the catalog editor and creation/edit panels.
+
+Profiles retain `Family` as their geometric type and store the selected entry in `CatalogFamily`. The BOM uses that catalog identity to distinguish variants, including trimmed/cutout profiles. Older profiles without it fall back to `Family`. The creation-time **Make Fillets** option still controls the individual profile's modeled detail; it does not rename the catalog entry.
+
 ### Create the frame
 
 1. Launch the FrameForge Profile tool

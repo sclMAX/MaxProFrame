@@ -183,6 +183,7 @@ class FrameForge(Gui.Workbench):
     toolbox_frameforge = [
         "FrameForge_CreateProfiles",
         "FrameForge_CreateCustomProfiles",
+        "FrameForge_ManageProfileLibraries",
         "FrameForge_TrimProfiles",
         "FrameForge_EndMiter",
         "FrameForge_AddExtrudeCutout",
@@ -220,6 +221,7 @@ class FrameForge(Gui.Workbench):
             create_profiles_tool,
             create_trimmed_profiles_tool,
             edit_profile_tool,
+            library_manager_dialog,
             parametric_line,
             populate_ids_tool,
             utilities,

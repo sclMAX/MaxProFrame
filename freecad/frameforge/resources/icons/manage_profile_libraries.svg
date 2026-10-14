@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Cantilever Storage Rack (Industrial Safety Orange) -->
+  <g id="rack_frame">
+    <!-- Heavy Base Foot -->
+    <path d="M 2,52 L 24,59 L 34,54 L 14,47 Z" fill="#f57900" stroke="#15181b" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M 2,52 L 24,59 L 24,63 L 2,56 Z" fill="#ce5c00" stroke="#15181b" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M 24,59 L 34,54 L 34,58 L 24,63 Z" fill="#994500" stroke="#15181b" stroke-width="1.8" stroke-linejoin="round"/>
+
+    <!-- Vertical Post / Column -->
+    <path d="M 6,5 L 13,2 L 18,4 L 11,7 Z" fill="#fcaf3e" stroke="#15181b" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M 6,5 L 11,7 L 11,49 L 6,47 Z" fill="#f57900" stroke="#15181b" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M 11,7 L 18,4 L 18,46 L 11,49 Z" fill="#ce5c00" stroke="#15181b" stroke-width="2" stroke-linejoin="round"/>
+
+    <!-- Upper Cantilever Arm with Safety Stop Pin -->
+    <path d="M 11,19 L 34,24 L 34,29 L 11,24 Z" fill="#f57900" stroke="#15181b" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M 31,21 L 34,22 L 34,29 L 31,28 Z" fill="#fcaf3e" stroke="#15181b" stroke-width="1.8" stroke-linejoin="round"/>
+
+    <!-- Lower Cantilever Arm with Safety Stop Pin -->
+    <path d="M 11,37 L 36,42 L 36,47 L 11,42 Z" fill="#f57900" stroke="#15181b" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M 33,39 L 36,40 L 36,47 L 33,46 Z" fill="#fcaf3e" stroke="#15181b" stroke-width="1.8" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Top Profile: Blue Beam / Channel (Larger & Saturated) -->
+  <g id="top_beam">
+    <!-- Top illuminated face -->
+    <path d="M 16,11 L 49,1 L 61,6 L 28,16 Z" fill="#729fcf" stroke="#15181b" stroke-width="2" stroke-linejoin="round"/>
+    <!-- Right side shadow face -->
+    <path d="M 28,16 L 61,6 L 61,18 L 28,28 Z" fill="#204a87" stroke="#15181b" stroke-width="2" stroke-linejoin="round"/>
+    <!-- Front cut face -->
+    <path d="M 16,11 L 28,16 L 28,28 L 16,23 Z" fill="#3465a4" stroke="#15181b" stroke-width="2" stroke-linejoin="round"/>
+    <!-- Dashed centerline -->
+    <path d="M 22,18 L 54,8" stroke="#d6e4f5" stroke-width="1.4" stroke-dasharray="2.5, 2.5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Bottom Profile: Yellow Hollow Square Tube (Chunky & Bold) -->
+  <g id="bottom_tube">
+    <!-- Top illuminated face -->
+    <path d="M 20,29 L 49,19 L 63,25 L 34,35 Z" fill="#ffe066" stroke="#15181b" stroke-width="2" stroke-linejoin="round"/>
+    <!-- Right side shadow face -->
+    <path d="M 34,35 L 63,25 L 63,44 L 34,54 Z" fill="#c4a000" stroke="#15181b" stroke-width="2" stroke-linejoin="round"/>
+    <!-- Front cut face -->
+    <path d="M 15,31 L 34,35 L 34,54 L 15,50 Z" fill="#ffbf00" stroke="#15181b" stroke-width="2" stroke-linejoin="round"/>
+    <!-- Inner hollow opening -->
+    <path d="M 20,36 L 29,38 L 29,49 L 20,47 Z" fill="#2b1e00" stroke="#15181b" stroke-width="1.8" stroke-linejoin="round"/>
+    <!-- Dashed red centerline -->
+    <path d="M 25,43 L 56,33" stroke="#880303" stroke-width="1.4" stroke-dasharray="2.5, 2.5" stroke-linecap="round"/>
+  </g>
+</svg>
