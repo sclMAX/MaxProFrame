@@ -1753,6 +1753,10 @@ class ViewProviderProfile:
         if mode != 0:
             return None
 
+        if Gui.Control.activeDialog():
+            App.Console.PrintMessage("FrameForge: close the active task dialog before editing a profile.\n")
+            return False
+
         import freecad.frameforge.edit_profile_tool
 
         taskd = freecad.frameforge.edit_profile_tool.EditProfileTaskPanel(self.Object)

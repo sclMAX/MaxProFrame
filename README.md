@@ -59,6 +59,10 @@ The C catalog editor displays Height, Width, Lip Length, Thickness, and Weight i
 
 Profiles retain `Family` as their geometric type and store the selected entry in `CatalogFamily`. The BOM uses that catalog identity to distinguish variants, including trimmed/cutout profiles. Older profiles without it fall back to `Family`. The creation-time **Make Fillets** option still controls the individual profile's modeled detail; it does not rename the catalog entry.
 
+### Edit a profile
+
+Close the current task dialog before double-clicking a profile to edit it. If another task dialog is active, FrameForge leaves it open, does not open the profile editor, and prints `FrameForge: close the active task dialog before editing a profile.` in the Report view. Close the active dialog and retry.
+
 ### Create the frame
 
 1. Launch the FrameForge Profile tool
