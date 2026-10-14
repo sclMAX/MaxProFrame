@@ -63,6 +63,10 @@ Profiles retain `Family` as their geometric type and store the selected entry in
 
 Close the current task dialog before double-clicking a profile to edit it. If another task dialog is active, FrameForge leaves it open, does not open the profile editor, and prints `FrameForge: close the active task dialog before editing a profile.` in the Report view. Close the active dialog and retry.
 
+### Profiles attached to a sketch in a Body
+
+Standard and custom profiles follow the sketch's parent when it accepts them. A PartDesign Body cannot contain these profile objects: FrameForge keeps the new profile at document root, preserves its sketch-edge attachment, and prints `FrameForge: parent <label> (<type>) does not accept Part::FeaturePython, keeping at document root` in the Report view. The sketch stays in its original container.
+
 ### Create the frame
 
 1. Launch the FrameForge Profile tool
