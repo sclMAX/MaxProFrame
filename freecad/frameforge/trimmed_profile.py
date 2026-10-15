@@ -265,62 +265,37 @@ class TrimmedProfile:
         if not hasattr(obj, "FrameforgeVersion"):
             # migrate parents
             for link in obj.TrimmingBoundary:
-                link[0].Proxy.execute(link[0])
+                proxy = getattr(link[0], "Proxy", None)
+                execute = getattr(proxy, "execute", None)
+                if callable(execute):
+                    execute(link[0])
             obj.TrimmedBody.Proxy.execute(obj.TrimmedBody)
 
             App.Console.PrintMessage(f"Frameforge::object migration : Migrate {obj.Label} to 0.1.8\n")
 
+            def add_missing_property(prop_type, name, group, description=""):
+                # Partial migrations may already contain some or all fields.
+                # Keep their values; new properties use FreeCAD's type defaults.
+                if not hasattr(obj, name):
+                    obj.addProperty(prop_type, name, group, description)
+                obj.setEditorMode(name, 1)
+
             # related to Profile
-            obj.addProperty(
-                "App::PropertyString",
-                "PID",
-                "Profile",
-                "Profile ID",
-            ).PID = ""
-            obj.setEditorMode("PID", 1)
-
-            obj.addProperty("App::PropertyString", "Family", "Profile", "")
-            obj.setEditorMode("Family", 1)
-
-            obj.addProperty("App::PropertyLink", "CustomProfile", "Profile", "Target profile").CustomProfile = None
-            obj.setEditorMode("CustomProfile", 1)
-
-            obj.addProperty("App::PropertyString", "SizeName", "Profile", "")
-            obj.setEditorMode("SizeName", 1)
-
-            obj.addProperty("App::PropertyString", "Material", "Profile", "")
-            obj.setEditorMode("Material", 1)
-
-            obj.addProperty("App::PropertyFloat", "ApproxWeight", "Base", "Approximate weight in Kilogram")
-            obj.setEditorMode("ApproxWeight", 1)
-
-            obj.addProperty("App::PropertyFloat", "Price", "Base", "Profile Price")
-            obj.setEditorMode("Price", 1)
+            add_missing_property("App::PropertyString", "PID", "Profile", "Profile ID")
+            add_missing_property("App::PropertyString", "Family", "Profile")
+            add_missing_property("App::PropertyLink", "CustomProfile", "Profile", "Target profile")
+            add_missing_property("App::PropertyString", "SizeName", "Profile")
+            add_missing_property("App::PropertyString", "Material", "Profile")
+            add_missing_property("App::PropertyFloat", "ApproxWeight", "Base", "Approximate weight in Kilogram")
+            add_missing_property("App::PropertyFloat", "Price", "Base", "Profile Price")
 
             # structure
-            obj.addProperty("App::PropertyLength", "Width", "Structure", "Parameter for structure")
-            obj.addProperty("App::PropertyLength", "Height", "Structure", "Parameter for structure")
-            obj.addProperty("App::PropertyLength", "Length", "Structure", "Parameter for structure")
-            obj.addProperty("App::PropertyBool", "Cutout", "Structure", "Has Cutout").Cutout = False
-            obj.setEditorMode("Width", 1)  # user doesn't change !
-            obj.setEditorMode("Height", 1)
-            obj.setEditorMode("Length", 1)
-            obj.setEditorMode("Cutout", 1)
-
-            obj.addProperty(
-                "App::PropertyString",
-                "CuttingAngleA",
-                "Structure",
-                "Cutting Angle A",
-            )
-            obj.setEditorMode("CuttingAngleA", 1)
-            obj.addProperty(
-                "App::PropertyString",
-                "CuttingAngleB",
-                "Structure",
-                "Cutting Angle B",
-            )
-            obj.setEditorMode("CuttingAngleB", 1)
+            add_missing_property("App::PropertyLength", "Width", "Structure", "Parameter for structure")
+            add_missing_property("App::PropertyLength", "Height", "Structure", "Parameter for structure")
+            add_missing_property("App::PropertyLength", "Length", "Structure", "Parameter for structure")
+            add_missing_property("App::PropertyBool", "Cutout", "Structure", "Has Cutout")
+            add_missing_property("App::PropertyString", "CuttingAngleA", "Structure", "Cutting Angle A")
+            add_missing_property("App::PropertyString", "CuttingAngleB", "Structure", "Cutting Angle B")
 
             # add version
             obj.addProperty(

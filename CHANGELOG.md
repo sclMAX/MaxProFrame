@@ -1,6 +1,7 @@
 ## Changelog
 
 * Unreleased
+  - Allow versionless trimmed-profile migrations to use native trimming boundaries and retain existing migration properties instead of adding them again.
   - Center end-miter cuts on the profile intersection for different anchor modes, while retaining endpoint-based cuts for matching anchors. Mixed-anchor profiles must intersect; otherwise add offsets.
   - Report unavailable standard cutting angles as N/A so combined-bevel profiles recompute without a formatting error.
   - Copy legacy numeric profile IDs as text when recomputing extruded cutouts, without changing the source ID.
