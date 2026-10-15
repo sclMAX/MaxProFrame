@@ -326,6 +326,9 @@ def get_readable_cutting_angles(ba_y, ba_x, bb_y, bb_x, *trim_cuts):
     end_bevels = [bb_y, bb_x]
 
     if len(trim_cuts) == 0:
+        if all(b == "N/A" for b in all_bevels):
+            return ("N/A", "N/A")
+
         # a real profile
         if all([b == 0 for b in all_bevels]):
             return ("0.0", "0.0")
