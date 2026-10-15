@@ -1,6 +1,7 @@
 ## Changelog
 
 * Unreleased
+  - Copy legacy numeric profile IDs as text when recomputing extruded cutouts, without changing the source ID.
   - Copy legacy numeric profile IDs as text when recomputing trimmed profiles, without changing the source ID.
   - Load linear weight correctly when editing a profile and leave stored profile data unchanged on opening.
   - Preserve the original profile color and transparency when accepting edits; cancellation still rolls back changes.

@@ -187,7 +187,7 @@ class ExtrudedCutout:
         else:
             angles = ()
 
-        obj.PID = prof.PID
+        obj.PID = str(prof.PID)
         obj.Width = prof.ProfileWidth
         obj.Height = prof.ProfileHeight
         obj.Family = prof.Family
