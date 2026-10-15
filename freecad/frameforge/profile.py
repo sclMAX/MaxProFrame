@@ -1126,6 +1126,17 @@ class Profile:
             else:
                 raise ValueError("T-Slot 1-Slot H/W")
 
+        if obj.Family in (
+            "V-Slot",
+            "T-Slot",
+            "T-Slot 3-Slots",
+            "T-Slot 2-Slots",
+            "T-Slot 2-Slots Opp",
+            "T-Slot 1-Slot",
+        ):
+            p = p.copy()
+            p.translate(vec(w - p.BoundBox.XMin, h - p.BoundBox.YMin, 0))
+
         mirror_h = getattr(obj, "MirrorH", False)
         mirror_v = getattr(obj, "MirrorV", False)
         center_pt = vec(W / 2 + w, H / 2 + h, 0)
