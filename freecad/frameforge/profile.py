@@ -1615,6 +1615,8 @@ class ViewProviderProfile:
             return
 
         edge = obj.Target[0].getSubObject(obj.Target[1][0])
+        if len(edge.Vertexes) < 2:
+            return
         p1 = edge.Vertexes[1].Point
         p2 = edge.Vertexes[0].Point
 
