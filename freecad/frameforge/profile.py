@@ -411,6 +411,7 @@ class Profile:
 
     def execute(self, obj):
         self.run_compatibility_migrations(obj)
+        self._validate_angle_fillets(obj)
 
         try:
             L = obj.Target[0].getSubObject(obj.Target[1][0]).Length
@@ -1197,6 +1198,44 @@ class Profile:
         obj.Placement = pl
         obj.positionBySupport()
         obj.recompute()
+
+    def _validate_angle_fillets(self, obj):
+        if getattr(obj, "Family", None) not in ("Equal Leg Angles", "Unequal Leg Angles"):
+            return
+        if not bool(getattr(obj, "MakeFillet", False)):
+            return
+
+        R = getattr(obj, "RadiusLarge", 0.0)
+        r = getattr(obj, "RadiusSmall", 0.0)
+        W = getattr(obj, "ProfileWidth", 0.0)
+        H = getattr(obj, "ProfileHeight", 0.0)
+        TW = getattr(obj, "Thickness", 0.0)
+
+        if not math.isfinite(R):
+            raise ValueError(f"RadiusLarge must be a finite number, got {R}")
+        if not math.isfinite(r):
+            raise ValueError(f"RadiusSmall must be a finite number, got {r}")
+        if R < 0:
+            raise ValueError(f"RadiusLarge cannot be negative, got {R}")
+        if R == 0:
+            raise ValueError(f"RadiusLarge must be greater than zero for filleted angle profiles, got {R}")
+        if r < 0:
+            raise ValueError(f"RadiusSmall cannot be negative, got {r}")
+        if r == 0:
+            raise ValueError(f"RadiusSmall must be greater than zero for filleted angle profiles, got {r}")
+
+        if r - TW > EDGE_EPSILON:
+            raise ValueError(
+                f"RadiusSmall ({r}) cannot exceed Thickness ({TW}) for filleted angle profiles"
+            )
+
+        min_dim = min(W, H)
+        available = min_dim - TW
+        if (R + r) - available > EDGE_EPSILON:
+            raise ValueError(
+                f"Fillet radii overlap: RadiusLarge ({R}) + RadiusSmall ({r}) = {R + r} "
+                f"exceeds available leg length min(ProfileWidth={W}, ProfileHeight={H}) - Thickness ({TW}) = {available}"
+            )
 
     def _update_structure_data(self, obj):
         if obj.Family == "Custom Profile":
