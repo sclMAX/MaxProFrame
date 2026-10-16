@@ -1,6 +1,7 @@
 ## Changelog
 
 * Unreleased
+  - Reserve existing numeric and letter IDs with an Include Count suffix when continuing numbering, filling gaps, or numbering from a fixed start.
   - Keep compact icon buttons in the Profile Library Manager at 26x26 pixels under FreeCAD stylesheets.
   - Align V-Slot and T-Slot aluminium profile sections to the selected path anchor (`AnchorX` / `AnchorY`).
   - Skip visual profile helper updates for edges with fewer than two vertices, avoiding an additional attachment error without changing model geometry or circular-path support.

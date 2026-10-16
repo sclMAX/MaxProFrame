@@ -1,4 +1,5 @@
 import os
+import re
 from collections import defaultdict
 
 import FreeCAD as App
@@ -79,7 +80,8 @@ class IdGenerator:
         self.used = set()
         for s in used_ids:
             try:
-                self.used.add(self.to_int(s))
+                # Reserve the ID, not the optional count appended by populate_ids.
+                self.used.add(self.to_int(re.sub(r" x[1-9][0-9]*\Z", "", s)))
             except Exception:
                 pass  # ignore invalid IDs if needed
 
