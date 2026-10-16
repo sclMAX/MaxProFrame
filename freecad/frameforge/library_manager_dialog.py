@@ -454,7 +454,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         main_layout.addLayout(bottom_layout)
 
     def _compact_button(self, icon_name, tooltip, callback):
-        button = QtWidgets.QPushButton()
+        button = QtWidgets.QToolButton()
         button.setIcon(QtGui.QIcon(os.path.join(ICONPATH, icon_name)))
         button.setToolTip(translate("frameforge", tooltip))
         button.setFixedSize(26, 26)
