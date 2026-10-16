@@ -119,6 +119,18 @@ class IdGenerator:
         return self.from_int(n)
 
 
+def _set_profile_pid(profile, pid):
+    source = profile
+    if is_trimmedbody(profile):
+        source = get_profile_from_trimmedbody(profile)
+    elif is_extrudedcutout(profile):
+        source = get_profile_from_extrudedcutout(profile)
+    source.PID = pid
+    # Keep the selected object's BOM data current without waiting for recompute.
+    if source is not profile:
+        profile.PID = pid
+
+
 def populate_ids(
     sel_profiles,
     sel_links,
@@ -221,11 +233,7 @@ def populate_ids(
             if include_part_count_in_pid:
                 pid += f" x{len(group)}"
             for p in group:
-                if is_trimmedbody(p):
-                    p = get_profile_from_trimmedbody(p)
-                elif is_extrudedcutout(p):
-                    p = get_profile_from_extrudedcutout(p)
-                p.PID = pid
+                _set_profile_pid(p, pid)
 
         for sl in sel_links:
             links_grouped[group_links_key_func(sl)].append(sl)
@@ -239,6 +247,6 @@ def populate_ids(
 
     else:
         for sp in sel_profiles:
-            sp.PID = gen_profiles.next()
+            _set_profile_pid(sp, gen_profiles.next())
         for sl in sel_links:
             sl.PID = gen_links.next()

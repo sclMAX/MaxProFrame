@@ -1,6 +1,7 @@
 ## Changelog
 
 * Unreleased
+  - Assign populated IDs to both selected trimmed profiles or extruded cutouts and their source profiles, so BOM IDs are current immediately and survive recomputation.
   - Reserve existing numeric and letter IDs with an Include Count suffix when continuing numbering, filling gaps, or numbering from a fixed start.
   - Keep compact icon buttons in the Profile Library Manager at 26x26 pixels under FreeCAD stylesheets.
   - Align V-Slot and T-Slot aluminium profile sections to the selected path anchor (`AnchorX` / `AnchorY`).
