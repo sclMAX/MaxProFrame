@@ -204,7 +204,7 @@ def populate_ids(
         group_profiles_key_func = lambda obj: (
             # obj.Parent, # ???
             (
-                getattr(getattr(obj.CustomProfile, "LinkedObject", obj), "Label", "CustomProfile")
+                getattr(getattr(obj.CustomProfile, "LinkedObject", obj.CustomProfile), "Label", "CustomProfile")
                 if obj.CustomProfile
                 else getattr(obj, "Family", "N/A")
             ),
