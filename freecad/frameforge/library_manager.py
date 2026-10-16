@@ -1,7 +1,9 @@
+import copy
 import json
 import math
 import os
 import re
+import tempfile
 
 # Standard densities in g/cm3 (equivalent to kg/dm3)
 STANDARD_DENSITIES = {
@@ -203,13 +205,246 @@ class LibraryManager:
     validation, cloning, and formatting for FreeCAD UI tools.
     """
 
-    def __init__(self, user_dir=None, stock_dir=None):
+    def __init__(self, user_dir=None, stock_dir=None, registry_path=None):
         self.stock_dir = stock_dir or get_default_stock_profiles_dir()
         self.user_dir = user_dir or get_default_user_profiles_dir()
+        self.registry_path = registry_path or os.path.join(self.user_dir, ".registry", "folders.json")
+
+    @staticmethod
+    def _validate_not_symlink_escape(canonical_root, file_path):
+        """
+        Validates that file_path (or its symlink target) does not escape canonical_root.
+        Raises ValueError if file_path is a symlink escaping canonical_root.
+        """
+        if os.path.islink(file_path):
+            target = os.path.realpath(file_path)
+            try:
+                common = os.path.commonpath([canonical_root, target])
+            except ValueError:
+                common = None
+            if common != canonical_root:
+                raise ValueError(
+                    f"Manifest '{file_path}' is a symlink escaping folder root '{canonical_root}'."
+                )
+
+    @staticmethod
+    def _validate_folder_catalog_data(data, material=None, density=None, require_name=True):
+        """
+        Validates catalog data, material, and density for folder libraries.
+        Ensures dictionary root, valid family dictionaries, string material,
+        and finite positive density.
+        """
+        if not isinstance(data, dict):
+            raise ValueError(f"Catalog data must be a dictionary, got {type(data).__name__}.")
+
+        # Validate families (all non-underscore keys)
+        for k, v in data.items():
+            if not k.startswith("_"):
+                if not isinstance(v, dict):
+                    raise ValueError(f"Family '{k}' must be a dictionary, got {type(v).__name__}.")
+
+        # Validate _metadata if present
+        meta = data.get("_metadata")
+        if meta is not None:
+            if not isinstance(meta, dict):
+                raise ValueError("'_metadata' must be a dictionary.")
+            if require_name:
+                name = meta.get("name")
+                if not name or not isinstance(name, str) or not name.strip():
+                    raise ValueError("Manifest '_metadata.name' display name must be a non-empty string.")
+            elif "name" in meta:
+                name = meta.get("name")
+                if not isinstance(name, str) or not name.strip():
+                    raise ValueError("Manifest '_metadata.name' display name must be a non-empty string.")
+
+            meta_mat = meta.get("material")
+            if meta_mat is not None:
+                if not isinstance(meta_mat, str) or not meta_mat.strip():
+                    raise ValueError("Manifest '_metadata.material' must be a non-empty string.")
+
+            meta_dens = meta.get("density")
+            if meta_dens is not None:
+                try:
+                    d_val = float(meta_dens)
+                except (TypeError, ValueError) as err:
+                    raise ValueError(f"Manifest density must be a valid number: {err}")
+                if not math.isfinite(d_val) or d_val <= 0:
+                    raise ValueError(f"Manifest density must be a finite positive number, got {meta_dens}.")
+
+        # Validate explicit material argument if provided
+        if material is not None:
+            if not isinstance(material, str) or not material.strip():
+                raise ValueError("Material must be a non-empty string.")
+
+        # Validate explicit density argument if provided
+        if density is not None:
+            try:
+                d_val = float(density)
+            except (TypeError, ValueError) as err:
+                raise ValueError(f"Density must be a valid number: {err}")
+            if not math.isfinite(d_val) or d_val <= 0:
+                raise ValueError(f"Density must be a finite positive number, got {density}.")
+
+    def _load_registry(self):
+        """
+        Loads list of canonical registered folder paths from self.registry_path.
+        Fails closed on permission errors, decode errors, or schema corruption.
+        Returns empty list only when self.registry_path does not exist.
+        """
+        if not os.path.exists(self.registry_path):
+            return []
+        try:
+            with open(self.registry_path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except (OSError, UnicodeDecodeError):
+            raise
+
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError as err:
+            raise ValueError(f"Corrupt registry JSON at '{self.registry_path}': {err}")
+
+        if isinstance(data, dict):
+            raw_folders = data.get("folders")
+            if not isinstance(raw_folders, list):
+                raise ValueError(
+                    f"Corrupt registry schema at '{self.registry_path}': 'folders' must be a list."
+                )
+        elif isinstance(data, list):
+            raw_folders = data
+        else:
+            raise ValueError(
+                f"Corrupt registry schema at '{self.registry_path}': root must be a dict or list."
+            )
+
+        canonical_folders = []
+        seen = set()
+        for p in raw_folders:
+            if not isinstance(p, str):
+                raise ValueError(
+                    f"Corrupt registry schema at '{self.registry_path}': folder entry must be a string."
+                )
+            p_strip = p.strip()
+            if p_strip:
+                canon = os.path.realpath(p_strip)
+                if canon not in seen:
+                    seen.add(canon)
+                    canonical_folders.append(canon)
+        return canonical_folders
+
+    def _save_registry(self, folder_paths):
+        """
+        Atomically saves the list of canonical registered folder paths using
+        an unpredictable temporary file in the registry directory.
+        """
+        reg_dir = os.path.dirname(self.registry_path)
+        if reg_dir:
+            os.makedirs(reg_dir, exist_ok=True)
+        seen = set()
+        unique_paths = []
+        for p in folder_paths:
+            if isinstance(p, str) and p.strip():
+                canon = os.path.realpath(p.strip())
+                if canon not in seen:
+                    seen.add(canon)
+                    unique_paths.append(canon)
+
+        data = {"version": 1, "folders": unique_paths}
+        fd, temp_path = tempfile.mkstemp(prefix="tmp_reg_", dir=reg_dir or ".")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, self.registry_path)
+        except Exception:
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+            raise
+
+    def _get_registered_folder(self, name_or_path):
+        """
+        Finds registered canonical folder path matching display name or path.
+        Returns canonical_path or None.
+        """
+        folders = self._load_registry()
+        if not folders:
+            return None
+
+        # 1. Direct path match
+        canon_input = os.path.realpath(os.path.abspath(name_or_path))
+        if canon_input in folders:
+            return canon_input
+
+        # 2. Display name match
+        target_name = name_or_path.strip().lower()
+        for fpath in folders:
+            if os.path.isdir(fpath):
+                mpath = os.path.join(fpath, "library.json")
+                if os.path.isfile(mpath):
+                    try:
+                        self._validate_not_symlink_escape(fpath, mpath)
+                        with open(mpath, "r", encoding="utf-8") as f:
+                            d = json.load(f)
+                            if isinstance(d, dict) and "_metadata" in d:
+                                name = d["_metadata"].get("name")
+                                if isinstance(name, str) and name.strip().lower() == target_name:
+                                    return fpath
+                    except Exception:
+                        continue
+        return None
+
+    def _check_name_collision(self, name, current_canonical_root=None):
+        """
+        Checks whether name collides with existing stock, user, or registered folder libraries.
+        """
+        target_name = name.strip().lower()
+
+        # Check stock libraries
+        if os.path.exists(self.stock_dir):
+            for fname in os.listdir(self.stock_dir):
+                if fname.endswith(".json"):
+                    fpath = os.path.join(self.stock_dir, fname)
+                    s_name = self._extract_library_name(fname, fpath)
+                    if s_name.lower() == target_name:
+                        raise ValueError(f"Library name '{name}' collides with an existing library.")
+
+        # Check legacy user libraries
+        if os.path.exists(self.user_dir):
+            for fname in os.listdir(self.user_dir):
+                if fname.endswith(".json"):
+                    fpath = os.path.join(self.user_dir, fname)
+                    u_name = self._extract_library_name(fname, fpath)
+                    if u_name.lower() == target_name:
+                        raise ValueError(f"Library name '{name}' collides with an existing library.")
+
+        # Check registered folder libraries
+        folders = self._load_registry()
+        for fpath in folders:
+            if current_canonical_root and fpath == current_canonical_root:
+                continue
+            if os.path.isdir(fpath):
+                mpath = os.path.join(fpath, "library.json")
+                if os.path.isfile(mpath):
+                    try:
+                        self._validate_not_symlink_escape(fpath, mpath)
+                        with open(mpath, "r", encoding="utf-8") as f:
+                            d = json.load(f)
+                            if isinstance(d, dict) and "_metadata" in d:
+                                reg_name = d["_metadata"].get("name")
+                                if isinstance(reg_name, str) and reg_name.strip().lower() == target_name:
+                                    raise ValueError(f"Library name '{name}' collides with an existing library.")
+                    except ValueError:
+                        raise
+                    except Exception:
+                        pass
 
     def list_libraries(self):
         """
-        Discovers all available libraries across stock and user directories.
+        Discovers all available libraries across stock, user, and registered folder directories.
         Returns a list of metadata dictionaries.
         """
         libraries = []
@@ -234,7 +469,37 @@ class LibraryManager:
                         }
                     )
 
-        # 2. Discover stock libraries
+        # 2. Discover registered folder libraries
+        folders = self._load_registry()
+        for fpath in folders:
+            if not os.path.isdir(fpath):
+                continue
+            mpath = os.path.join(fpath, "library.json")
+            if not os.path.isfile(mpath):
+                continue
+            try:
+                self._validate_not_symlink_escape(fpath, mpath)
+                name, mat, dens = self._extract_library_metadata("library.json", mpath)
+                if name.lower() not in seen_names:
+                    seen_names.add(name.lower())
+                    libraries.append(
+                        {
+                            "name": name,
+                            "filename": "library.json",
+                            "path": mpath,
+                            "is_user": True,
+                            "can_delete": False,
+                            "is_folder": True,
+                            "folder_path": fpath,
+                            "can_unregister": True,
+                            "material": mat,
+                            "density": dens,
+                        }
+                    )
+            except Exception:
+                continue
+
+        # 3. Discover stock libraries
         if os.path.exists(self.stock_dir):
             for filename in sorted(os.listdir(self.stock_dir)):
                 if filename.endswith(".json"):
@@ -283,29 +548,31 @@ class LibraryManager:
             name = " ".join(part.capitalize() for part in parts if part) or base.capitalize()
 
         # If material is already defined in metadata, lookup its density from STANDARD_DENSITIES first!
-        if material:
+        if material and isinstance(material, str):
             if density is None and material in STANDARD_DENSITIES:
                 density = float(STANDARD_DENSITIES[material])
 
         # If still missing, infer from library name
-        if not material or density is None:
+        if not material or not isinstance(material, str) or density is None:
             lname = name.lower()
             if "alumin" in lname:
-                material = material or "Aluminium"
+                material = material if isinstance(material, str) and material else "Aluminium"
                 density = density if density is not None else 2.70
             elif "wood" in lname or "mader" in lname:
-                material = material or "Wood (Soft)"
+                material = material if isinstance(material, str) and material else "Wood (Soft)"
                 density = density if density is not None else 0.55
             else:
-                material = material or "Steel"
+                material = material if isinstance(material, str) and material else "Steel"
                 density = density if density is not None else 7.85
 
         try:
             density = float(density)
+            if not math.isfinite(density) or density <= 0:
+                density = 7.85
         except (ValueError, TypeError):
             density = 7.85
 
-        return name, str(material), float(density)
+        return name, str(material) if isinstance(material, str) and material else "Steel", float(density)
 
     def _extract_library_name(self, filename, filepath):
         """Extracts display name from file, formatting appropriately."""
@@ -349,6 +616,14 @@ class LibraryManager:
         Loads the catalog JSON for the specified library name.
         Prioritizes exact display-name match over filename slug aliases.
         """
+        # Pass 0: registered folder library match
+        folder_match = self._get_registered_folder(name)
+        if folder_match:
+            mpath = os.path.join(folder_match, "library.json")
+            self._validate_not_symlink_escape(folder_match, mpath)
+            with open(mpath, "r", encoding="utf-8") as f:
+                return json.load(f)
+
         target_name = name.strip().lower()
 
         # Pass 1: exact display-name match (user first, then stock, matching list_libraries precedence)
@@ -372,12 +647,298 @@ class LibraryManager:
 
         raise FileNotFoundError(f"Library '{name}' not found.")
 
+    def create_folder_library(self, folder_path, name, material=None, density=None, data=None):
+        """
+        Creates a new folder library with an initialized library.json manifest and registers it.
+        Refuses to overwrite an existing manifest or populate an unrelated non-empty directory.
+        Fails atomically without leaking unmanaged manifests on registry error.
+        """
+        # Preflight registry load and directory access to fail closed before any file creation
+        folders = self._load_registry()
+        reg_dir = os.path.dirname(self.registry_path)
+        if reg_dir:
+            os.makedirs(reg_dir, exist_ok=True)
+
+        if not name or not isinstance(name, str) or not name.strip():
+            raise ValueError("A valid non-empty library name is required.")
+        display_name = name.strip()
+
+        # Validate supplied data and arguments before any file operations
+        catalog_input = data if data is not None else {}
+        self._validate_folder_catalog_data(
+            catalog_input, material=material, density=density, require_name=False
+        )
+
+        canonical_root = os.path.realpath(os.path.abspath(folder_path))
+        manifest_path = os.path.join(canonical_root, "library.json")
+
+        # Symlink escape check
+        self._validate_not_symlink_escape(canonical_root, manifest_path)
+
+        if os.path.islink(manifest_path) or os.path.exists(manifest_path):
+            raise FileExistsError(f"A library manifest already exists in '{canonical_root}'.")
+
+        if os.path.exists(canonical_root):
+            if not os.path.isdir(canonical_root):
+                raise ValueError(f"Path '{canonical_root}' is not a directory.")
+            existing_entries = os.listdir(canonical_root)
+            if existing_entries:
+                raise ValueError(
+                    f"Directory '{canonical_root}' is not empty. Cannot create library in folder with existing content."
+                )
+
+        # Check name collision against stock, legacy user, and folder libraries
+        self._check_name_collision(display_name, current_canonical_root=canonical_root)
+
+        # Material and density resolution
+        if material is None:
+            material = "Steel"
+        if density is None:
+            density = STANDARD_DENSITIES.get(material, 7.85)
+        else:
+            density = float(density)
+
+        # Deep copy data to avoid mutating caller's input
+        manifest_data = copy.deepcopy(catalog_input)
+        if "_metadata" not in manifest_data or not isinstance(manifest_data["_metadata"], dict):
+            manifest_data["_metadata"] = {}
+        manifest_data["_metadata"]["name"] = display_name
+        manifest_data["_metadata"]["material"] = str(material)
+        manifest_data["_metadata"]["density"] = float(density)
+        manifest_data["_metadata"]["is_folder"] = True
+
+        os.makedirs(canonical_root, exist_ok=True)
+
+        # Write manifest using unpredictable mkstemp in canonical_root
+        fd, temp_path = tempfile.mkstemp(prefix="tmp_manifest_", dir=canonical_root)
+        created_manifest = False
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(manifest_data, f, indent=4)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, manifest_path)
+            created_manifest = True
+
+            if canonical_root not in folders:
+                folders.append(canonical_root)
+                self._save_registry(folders)
+        except Exception:
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+            if created_manifest and os.path.isfile(manifest_path):
+                try:
+                    with open(manifest_path, "r", encoding="utf-8") as f:
+                        check_data = json.load(f)
+                    if check_data.get("_metadata", {}).get("name") == display_name:
+                        os.remove(manifest_path)
+                except Exception:
+                    pass
+            raise
+
+        return manifest_path
+
+    def register_folder_library(self, folder_path):
+        """
+        Registers an existing folder library in the local registry.
+        Validates manifest shape, metadata, and root confinement.
+        Never modifies or writes to the registered folder.
+        Canonical path registration is idempotent.
+        """
+        # Preflight registry load to fail closed if registry is damaged
+        folders = self._load_registry()
+
+        if not os.path.exists(folder_path):
+            raise FileNotFoundError(f"Folder '{folder_path}' does not exist.")
+        if not os.path.isdir(folder_path):
+            raise ValueError(f"Path '{folder_path}' is not a directory.")
+
+        canonical_root = os.path.realpath(os.path.abspath(folder_path))
+        manifest_path = os.path.join(canonical_root, "library.json")
+
+        self._validate_not_symlink_escape(canonical_root, manifest_path)
+
+        if not os.path.isfile(manifest_path):
+            raise FileNotFoundError(f"Folder '{canonical_root}' does not contain 'library.json'.")
+
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except json.JSONDecodeError as err:
+            raise ValueError(f"Invalid JSON in manifest '{manifest_path}': {err}")
+        except Exception as err:
+            raise ValueError(f"Cannot read manifest '{manifest_path}': {err}")
+
+        # Validate entire catalog data shape, families, and metadata
+        self._validate_folder_catalog_data(data, require_name=True)
+
+        meta = data["_metadata"]
+        display_name = meta["name"].strip()
+
+        # Idempotent registration: update registry ONLY if not already present
+        if canonical_root not in folders:
+            self._check_name_collision(display_name, current_canonical_root=canonical_root)
+            folders.append(canonical_root)
+            self._save_registry(folders)
+
+        _lib_name, mat_name, dens_val = self._extract_library_metadata("library.json", manifest_path)
+        return {
+            "name": display_name,
+            "path": manifest_path,
+            "folder_path": canonical_root,
+            "is_user": True,
+            "can_delete": False,
+            "is_folder": True,
+            "can_unregister": True,
+            "material": mat_name,
+            "density": dens_val,
+        }
+
+    register_existing = register_folder_library
+
+    def unregister_folder_library(self, folder_path_or_name):
+        """
+        Removes folder library from local registry only.
+        Keeps folder contents and manifest intact.
+        Fails closed if registry is damaged.
+        """
+        # Load registry first to validate registry integrity; fails closed if corrupt/inaccessible
+        folders = self._load_registry()
+
+        canonical_path = self._get_registered_folder(folder_path_or_name)
+        if not canonical_path or canonical_path not in folders:
+            raise FileNotFoundError(f"Folder library '{folder_path_or_name}' is not registered.")
+
+        updated = [p for p in folders if p != canonical_path]
+        self._save_registry(updated)
+        return True
+
+    def save_folder_library(self, folder_path_or_name, data, overwrite=True, material=None, density=None):
+        """
+        Saves or updates catalog data in a registered folder library.
+        Preserves material immutability, prevents name collisions with other libraries,
+        and uses unpredictable temporary files for atomic replacement.
+        """
+        # Preflight registry load to ensure registry is healthy
+        self._load_registry()
+
+        folder_match = self._get_registered_folder(folder_path_or_name)
+        if not folder_match:
+            raise FileNotFoundError(f"Folder library '{folder_path_or_name}' is not registered.")
+
+        manifest_path = os.path.join(folder_match, "library.json")
+        self._validate_not_symlink_escape(folder_match, manifest_path)
+
+        if not overwrite and os.path.exists(manifest_path):
+            raise FileExistsError(f"A library manifest already exists in '{folder_match}'.")
+
+        # Validate input data, material, and density before any mutation or writes
+        self._validate_folder_catalog_data(
+            data, material=material, density=density, require_name=False
+        )
+
+        # Material immutability check
+        existing_name = None
+        if os.path.exists(manifest_path):
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    existing_data = json.load(f)
+                if isinstance(existing_data, dict) and "_metadata" in existing_data:
+                    existing_meta = existing_data["_metadata"]
+                    existing_name = existing_meta.get("name")
+                    existing_mat = existing_meta.get("material")
+                    existing_dens = existing_meta.get("density")
+
+                    lib_name = existing_name or os.path.basename(folder_match)
+                    if not existing_mat:
+                        existing_mat, inferred_dens = self.get_library_material_info(lib_name)
+                        if existing_dens is None:
+                            existing_dens = inferred_dens
+
+                    requested_mat = material or (
+                        data.get("_metadata", {}).get("material")
+                        if isinstance(data, dict)
+                        else None
+                    )
+                    if existing_mat and requested_mat and requested_mat != existing_mat:
+                        raise ValueError(
+                            f"Library material is immutable. Cannot change material of '{lib_name}' from '{existing_mat}' to '{requested_mat}'. Use duplicate_library instead."
+                        )
+                    if existing_mat and material is None:
+                        material = existing_mat
+                    if existing_dens is not None and density is None:
+                        density = existing_dens
+            except ValueError:
+                raise
+            except Exception:
+                pass
+
+        # Determine proposed display name
+        manifest_data = copy.deepcopy(data)
+        if "_metadata" not in manifest_data or not isinstance(manifest_data["_metadata"], dict):
+            manifest_data["_metadata"] = {}
+
+        proposed_name = manifest_data["_metadata"].get("name")
+        if not proposed_name or not isinstance(proposed_name, str) or not proposed_name.strip():
+            proposed_name = existing_name or os.path.basename(folder_match)
+        proposed_name = proposed_name.strip()
+
+        # B5: Validate proposed name collision across all namespaces excluding only current folder root
+        self._check_name_collision(proposed_name, current_canonical_root=folder_match)
+
+        manifest_data["_metadata"]["name"] = proposed_name
+        manifest_data["_metadata"]["is_folder"] = True
+
+        if material is not None:
+            manifest_data["_metadata"]["material"] = str(material)
+            if density is not None:
+                manifest_data["_metadata"]["density"] = float(density)
+            elif material in STANDARD_DENSITIES:
+                manifest_data["_metadata"]["density"] = float(STANDARD_DENSITIES[material])
+        elif "material" not in manifest_data["_metadata"]:
+            inferred_mat, inferred_dens = self.get_library_material_info(proposed_name)
+            manifest_data["_metadata"]["material"] = inferred_mat
+            manifest_data["_metadata"]["density"] = inferred_dens
+
+        # Write manifest using unpredictable mkstemp in folder_match
+        fd, temp_path = tempfile.mkstemp(prefix="tmp_manifest_", dir=folder_match)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(manifest_data, f, indent=4)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, manifest_path)
+        except Exception:
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+            raise
+
+        return manifest_path
+
     def save_user_library(self, name, data, overwrite=True, material=None, density=None):
         """
-        Saves or updates a user library JSON in user_dir.
+        Saves or updates a user library JSON in user_dir, or routes to registered folder library
+        if name matches a registered folder library.
         If overwrite is False, raises FileExistsError if target file already exists.
         Enforces S4 immutability: once created, existing user library material cannot be mutated.
         """
+        # If name matches a registered folder library, route save to that folder
+        folder_match = self._get_registered_folder(name)
+        if folder_match:
+            return self.save_folder_library(
+                folder_match,
+                data,
+                overwrite=overwrite,
+                material=material,
+                density=density,
+            )
+
         os.makedirs(self.user_dir, exist_ok=True)
         file_slug = sanitize_library_name(name)
         filename = f"{file_slug}.json"
@@ -394,6 +955,27 @@ class LibraryManager:
                     s_name = self._extract_library_name(fname, fpath)
                     if s_name.lower() == name.strip().lower():
                         raise ValueError(f"Cannot create user library with reserved system library name '{s_name}'.")
+
+        # Check collision with registered folder libraries
+        folders = self._load_registry()
+        for fpath in folders:
+            if os.path.isdir(fpath):
+                mpath = os.path.join(fpath, "library.json")
+                if os.path.isfile(mpath):
+                    try:
+                        self._validate_not_symlink_escape(fpath, mpath)
+                        with open(mpath, "r", encoding="utf-8") as f:
+                            d = json.load(f)
+                            if isinstance(d, dict) and "_metadata" in d:
+                                reg_name = d["_metadata"].get("name")
+                                if isinstance(reg_name, str) and reg_name.strip().lower() == name.strip().lower():
+                                    raise ValueError(
+                                        f"Cannot create user library with name '{name}' which collides with registered folder library."
+                                    )
+                    except ValueError:
+                        raise
+                    except Exception:
+                        pass
 
         # S4 Immutability: If file already exists, prevent changing its material
         if os.path.exists(filepath):
@@ -460,8 +1042,14 @@ class LibraryManager:
 
     def delete_user_library(self, name):
         """
-        Deletes a user-defined library. Raises ValueError if library is stock.
+        Deletes a user-defined library. Raises ValueError if library is stock or a registered folder library.
         """
+        folder_match = self._get_registered_folder(name)
+        if folder_match:
+            raise ValueError(
+                f"'{name}' is a registered folder library and cannot be deleted via delete_user_library. Use unregister_folder_library instead."
+            )
+
         target_name = name.strip().lower()
 
         # Find in user dir
