@@ -232,6 +232,11 @@ class Boundary(helper.TestPortableLibraryProfileInstantiation):
         self.pick(self.p1)
         panel = self.panel()
         first_name = self.valid(panel, 80000).CustomProfile.Name
+        # Under T7, unreferenced session preview sketches are pruned on size/library switches.
+        # Commit the first profile so its source sketch remains genuinely referenced and alive in the document.
+        self.assertTrue(panel.accept())
+        self.pick(self.p1)
+        panel = self.panel()
         self.choose(panel, "OtherRoot", "Custom Profile", "A")
         other_name = self.valid(panel, 80000).CustomProfile.Name
         self.assertNotEqual(first_name, other_name)

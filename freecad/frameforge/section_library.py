@@ -410,7 +410,7 @@ class SectionEditSession:
             self.staged_asset_path = None
 
 
-def get_or_import_section_sketch(library_root, asset_path, object_name, target_doc, asset_id=""):
+def get_or_import_section_sketch(library_root, asset_path, object_name, target_doc, asset_id="", profile_code=None):
     """Returns an autonomous document-local SketchObject in target_doc for the specified asset.
 
     1. Validates canonical path confinement using resolve_and_validate_asset_path.
@@ -422,6 +422,8 @@ def get_or_import_section_sketch(library_root, asset_path, object_name, target_d
        - If not open, opens the asset document in FreeCAD and marks it as importer-opened.
        - Extracts the EXACT object_name (must be a SketchObject).
        - Uses capture_section_sketch to create an autonomous copy in target_doc.
+       - Assigns visible Label from profile_code if supplied.
+       - Sets ViewObject.ShowInTree=False and ViewObject.Visibility=False for new auxiliary imports.
        - Tags the imported sketch with composite provenance properties.
        - Closes the asset document only if opened by this importer.
        - Restores the active document to target_doc.
@@ -536,7 +538,25 @@ def get_or_import_section_sketch(library_root, asset_path, object_name, target_d
             )
         captured_sketch.FF_AssetPath = norm_asset_path
 
+        if profile_code is not None:
+            captured_sketch.Label = str(profile_code)
+
+        vo = getattr(captured_sketch, "ViewObject", None)
+        if vo is not None:
+            if hasattr(vo, "ShowInTree"):
+                vo.ShowInTree = False
+            if hasattr(vo, "Visibility"):
+                vo.Visibility = False
+
         target_doc.recompute()
+
+        vo = getattr(captured_sketch, "ViewObject", None)
+        if vo is not None:
+            if hasattr(vo, "ShowInTree"):
+                vo.ShowInTree = False
+            if hasattr(vo, "Visibility"):
+                vo.Visibility = False
+
         return captured_sketch
 
     finally:

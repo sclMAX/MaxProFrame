@@ -72,96 +72,100 @@ class BaseProfileTaskPanel(ABC):
                 getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}").blockSignals(not enable)
 
     def initialize_ui(self):
-        def execute_if_has_bool(key, func):
-            if key in [k for t, k, v in param.GetContents()]:
-                func(param.GetBool(key))
+        self._initializing = True
+        try:
+            def execute_if_has_bool(key, func):
+                if key in [k for t, k, v in param.GetContents()]:
+                    func(param.GetBool(key))
 
-        # Center anchor radio buttons in grid cells (create_profiles2.ui)
-        form2 = self.form[1]
-        grid_anchor = form2.group_anchor.layout()
-        for ax in range(3):
-            for ay in range(3):
-                btn = getattr(form2, f"rb_anchor_{ax}_{ay}")
-                grid_anchor.setAlignment(btn, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
+            # Center anchor radio buttons in grid cells (create_profiles2.ui)
+            form2 = self.form[1]
+            grid_anchor = form2.group_anchor.layout()
+            for ax in range(3):
+                for ay in range(3):
+                    btn = getattr(form2, f"rb_anchor_{ax}_{ay}")
+                    grid_anchor.setAlignment(btn, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
 
-        self.form_proxy.label_image.setPixmap(QtGui.QPixmap(os.path.join(PROFILEIMAGES_PATH, "Warehouse.png")))
+            self.form_proxy.label_image.setPixmap(QtGui.QPixmap(os.path.join(PROFILEIMAGES_PATH, "Warehouse.png")))
 
-        # sig/slot
-        self.form_proxy.combo_material.currentIndexChanged.connect(self.on_material_changed)
-        self.form_proxy.combo_family.currentIndexChanged.connect(self.on_family_changed)
-        self.form_proxy.combo_size.currentIndexChanged.connect(self.on_size_changed)
+            # sig/slot
+            self.form_proxy.combo_material.currentIndexChanged.connect(self.on_material_changed)
+            self.form_proxy.combo_family.currentIndexChanged.connect(self.on_family_changed)
+            self.form_proxy.combo_size.currentIndexChanged.connect(self.on_size_changed)
 
-        self.form_proxy.combo_material.addItems([k for k in self.profiles])
+            self.form_proxy.combo_material.addItems([k for k in self.profiles])
 
-        for deg in ("0", "90", "180", "270"):
-            self.form_proxy.combo_rotation.addItem(deg)
-        self.form_proxy.combo_rotation.setCurrentIndex(0)
+            for deg in ("0", "90", "180", "270"):
+                self.form_proxy.combo_rotation.addItem(deg)
+            self.form_proxy.combo_rotation.setCurrentIndex(0)
 
-        param = App.ParamGet("User parameter:BaseApp/Preferences/Frameforge")
-        if not param.IsEmpty():
-            default_material_index = self.form_proxy.combo_material.findText(
-                param.GetString("Default Profile Material")
-            )
-            if default_material_index > -1:
-                self.form_proxy.combo_material.setCurrentIndex(default_material_index)
+            param = App.ParamGet("User parameter:BaseApp/Preferences/Frameforge")
+            if not param.IsEmpty():
+                default_material_index = self.form_proxy.combo_material.findText(
+                    param.GetString("Default Profile Material")
+                )
+                if default_material_index > -1:
+                    self.form_proxy.combo_material.setCurrentIndex(default_material_index)
 
-                default_family_index = self.form_proxy.combo_family.findText(param.GetString("Default Profile Family"))
-                if default_family_index > -1:
-                    self.form_proxy.combo_family.setCurrentIndex(default_family_index)
+                    default_family_index = self.form_proxy.combo_family.findText(param.GetString("Default Profile Family"))
+                    if default_family_index > -1:
+                        self.form_proxy.combo_family.setCurrentIndex(default_family_index)
 
-                    default_size_index = self.form_proxy.combo_size.findText(param.GetString("Default Profile Size"))
-                    if default_size_index > -1:
-                        self.form_proxy.combo_size.setCurrentIndex(default_size_index)
+                        default_size_index = self.form_proxy.combo_size.findText(param.GetString("Default Profile Size"))
+                        if default_size_index > -1:
+                            self.form_proxy.combo_size.setCurrentIndex(default_size_index)
 
-            execute_if_has_bool("Default Sketch in Name", self.form_proxy.cb_sketch_in_name.setChecked)
-            execute_if_has_bool("Default Family in Name", self.form_proxy.cb_family_in_name.setChecked)
-            execute_if_has_bool("Default Size in Name", self.form_proxy.cb_size_in_name.setChecked)
-            execute_if_has_bool("Default Prefix Profile in Name", self.form_proxy.cb_prefix_profile_in_name.setChecked)
-            execute_if_has_bool("Default Make Fillet", self.form_proxy.cb_make_fillet.setChecked)
-            execute_if_has_bool("Default Mirror Horizontally", self.form_proxy.cb_mirror_h.setChecked)
-            execute_if_has_bool("Default Mirror Vertically", self.form_proxy.cb_mirror_v.setChecked)
-            execute_if_has_bool("Default Pre Extend", self.form_proxy.cb_pre_extend.setChecked)
-            keys = [k for t, k, v in param.GetContents()]
-            if "Default AnchorX" in keys:
-                ax = max(0, min(2, param.GetInt("Default AnchorX", 1)))
-                ay = max(0, min(2, param.GetInt("Default AnchorY", 1)))
-                self.set_anchor(ax, ay)
-            elif "Default Width Centered" in keys or "Default Height Centered" in keys:
-                ax = 1 if param.GetBool("Default Width Centered", False) else 0
-                ay = 1 if param.GetBool("Default Height Centered", False) else 0
-                self.set_anchor(ax, ay)
-            if "Default RotationAngle" in keys:
-                try:
-                    val = float(param.GetString("Default RotationAngle", "0"))
-                    self.form_proxy.combo_rotation.setCurrentText(str(int(val) if val == int(val) else val))
-                except (TypeError, ValueError):
-                    self.form_proxy.combo_rotation.setCurrentText("0")
-            execute_if_has_bool("Default Centered Bevel", self.form_proxy.cb_combined_bevel.setChecked)
+                execute_if_has_bool("Default Sketch in Name", self.form_proxy.cb_sketch_in_name.setChecked)
+                execute_if_has_bool("Default Family in Name", self.form_proxy.cb_family_in_name.setChecked)
+                execute_if_has_bool("Default Size in Name", self.form_proxy.cb_size_in_name.setChecked)
+                execute_if_has_bool("Default Prefix Profile in Name", self.form_proxy.cb_prefix_profile_in_name.setChecked)
+                execute_if_has_bool("Default Make Fillet", self.form_proxy.cb_make_fillet.setChecked)
+                execute_if_has_bool("Default Mirror Horizontally", self.form_proxy.cb_mirror_h.setChecked)
+                execute_if_has_bool("Default Mirror Vertically", self.form_proxy.cb_mirror_v.setChecked)
+                execute_if_has_bool("Default Pre Extend", self.form_proxy.cb_pre_extend.setChecked)
+                keys = [k for t, k, v in param.GetContents()]
+                if "Default AnchorX" in keys:
+                    ax = max(0, min(2, param.GetInt("Default AnchorX", 1)))
+                    ay = max(0, min(2, param.GetInt("Default AnchorY", 1)))
+                    self.set_anchor(ax, ay)
+                elif "Default Width Centered" in keys or "Default Height Centered" in keys:
+                    ax = 1 if param.GetBool("Default Width Centered", False) else 0
+                    ay = 1 if param.GetBool("Default Height Centered", False) else 0
+                    self.set_anchor(ax, ay)
+                if "Default RotationAngle" in keys:
+                    try:
+                        val = float(param.GetString("Default RotationAngle", "0"))
+                        self.form_proxy.combo_rotation.setCurrentText(str(int(val) if val == int(val) else val))
+                    except (TypeError, ValueError):
+                        self.form_proxy.combo_rotation.setCurrentText("0")
+                execute_if_has_bool("Default Centered Bevel", self.form_proxy.cb_combined_bevel.setChecked)
 
-        self.form_proxy.cb_make_fillet.stateChanged.connect(self.on_cb_make_fillet_changed)
+            self.form_proxy.cb_make_fillet.stateChanged.connect(self.on_cb_make_fillet_changed)
 
-        self.form_proxy.cb_mirror_h.stateChanged.connect(self.proceed)
-        self.form_proxy.cb_mirror_v.stateChanged.connect(self.proceed)
-        self.form_proxy.cb_pre_extend.stateChanged.connect(self.proceed)
-        self.form_proxy.combo_rotation.currentIndexChanged.connect(self.proceed)
-        for ax in range(3):
-            for ay in range(3):
-                getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}").clicked.connect(self.proceed)
+            self.form_proxy.cb_mirror_h.stateChanged.connect(self.proceed)
+            self.form_proxy.cb_mirror_v.stateChanged.connect(self.proceed)
+            self.form_proxy.cb_pre_extend.stateChanged.connect(self.proceed)
+            self.form_proxy.combo_rotation.currentIndexChanged.connect(self.proceed)
+            for ax in range(3):
+                for ay in range(3):
+                    getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}").clicked.connect(self.proceed)
 
-        self.form_proxy.sb_width.valueChanged.connect(self.proceed)
-        self.form_proxy.sb_height.valueChanged.connect(self.proceed)
-        self.form_proxy.sb_main_thickness.valueChanged.connect(self.proceed)
-        self.form_proxy.sb_flange_thickness.valueChanged.connect(self.proceed)
-        self.form_proxy.sb_radius1.valueChanged.connect(self.proceed)
-        self.form_proxy.sb_radius2.valueChanged.connect(self.proceed)
-        if hasattr(self.form_proxy, "sb_lip_length"):
-            self.form_proxy.sb_lip_length.valueChanged.connect(self.proceed)
-        self.form_proxy.sb_length.valueChanged.connect(self.proceed)
+            self.form_proxy.sb_width.valueChanged.connect(self.proceed)
+            self.form_proxy.sb_height.valueChanged.connect(self.proceed)
+            self.form_proxy.sb_main_thickness.valueChanged.connect(self.proceed)
+            self.form_proxy.sb_flange_thickness.valueChanged.connect(self.proceed)
+            self.form_proxy.sb_radius1.valueChanged.connect(self.proceed)
+            self.form_proxy.sb_radius2.valueChanged.connect(self.proceed)
+            if hasattr(self.form_proxy, "sb_lip_length"):
+                self.form_proxy.sb_lip_length.valueChanged.connect(self.proceed)
+            self.form_proxy.sb_length.valueChanged.connect(self.proceed)
 
-        self.form_proxy.cb_sketch_in_name.stateChanged.connect(self.proceed)
-        self.form_proxy.cb_family_in_name.stateChanged.connect(self.proceed)
-        self.form_proxy.cb_size_in_name.stateChanged.connect(self.proceed)
-        self.form_proxy.cb_prefix_profile_in_name.stateChanged.connect(self.proceed)
+            self.form_proxy.cb_sketch_in_name.stateChanged.connect(self.proceed)
+            self.form_proxy.cb_family_in_name.stateChanged.connect(self.proceed)
+            self.form_proxy.cb_size_in_name.stateChanged.connect(self.proceed)
+            self.form_proxy.cb_prefix_profile_in_name.stateChanged.connect(self.proceed)
+        finally:
+            self._initializing = False
 
     def _update_family_controls(self, canonical_family):
         is_c = (canonical_family == "C")
@@ -254,9 +258,11 @@ class BaseProfileTaskPanel(ABC):
         self.form_proxy.label_norm.setText(norm_val)
         self.form_proxy.label_unit.setText(unit_val)
 
+        self.form_proxy.combo_size.blockSignals(True)
         self.form_proxy.combo_size.clear()
         sizes = fam_dict.get("sizes", {})
         self.form_proxy.combo_size.addItems([s for s in sizes])
+        self.form_proxy.combo_size.blockSignals(False)
 
         self.form_proxy.combo_size.setCurrentIndex(0)
         self.on_size_changed(None)
@@ -411,14 +417,22 @@ class BaseProfileTaskPanel(ABC):
             object_name = size_data.get("object_name", "Section")
             asset_id = size_data.get("asset_id", "")
             if folder_root and asset_path:
-                target_doc = getattr(profile, "Document", None) or App.ActiveDocument
+                target_doc = getattr(profile, "Document", None) or getattr(self, "_target_doc", None) or App.ActiveDocument
+                pre_sketch_names = {
+                    o.Name for o in getattr(target_doc, "Objects", [])
+                    if hasattr(o, "isDerivedFrom") and o.isDerivedFrom("Sketcher::SketchObject")
+                }
                 local_sk = get_or_import_section_sketch(
                     library_root=folder_root,
                     asset_path=asset_path,
                     object_name=object_name,
                     target_doc=target_doc,
                     asset_id=asset_id,
+                    profile_code=size_name,
                 )
+                if local_sk is not None and local_sk.Name not in pre_sketch_names:
+                    if hasattr(self, "_session_imported_sketches"):
+                        self._session_imported_sketches.add((target_doc.Name, local_sk.Name))
                 if local_sk is not None:
                     profile.CustomProfile = local_sk
         elif hasattr(profile, "CustomProfile") and profile.CustomProfile is not None:
@@ -465,9 +479,14 @@ class BaseProfileTaskPanel(ABC):
 
 class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def __init__(self):
+        self._session_imported_sketches = set()
+        self._target_doc = None
         super().__init__()
 
     def open(self):
+        self._session_imported_sketches = set()
+        self._target_doc = getattr(App, "ActiveDocument", None)
+
         App.ActiveDocument.openTransaction("Add Profile")
 
         self.initialize_ui()
@@ -477,6 +496,9 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
     def reject(self):
         self.clean()
+
+        if hasattr(self, "_session_imported_sketches"):
+            self._session_imported_sketches.clear()
 
         App.ActiveDocument.abortTransaction()
 
@@ -513,6 +535,9 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             self.proceed()
             self.clean()
 
+            if hasattr(self, "_session_imported_sketches"):
+                self._session_imported_sketches.clear()
+
             for o in self._objects.values():
                 if getattr(o, "ViewObject", None) is not None:
                     o.ViewObject.Transparency = 0
@@ -539,7 +564,67 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             Gui.Selection.removeObserver(self)
             Gui.Selection.removeSelectionGate()
 
+    def _clean_unreferenced_session_sources(self):
+        if not hasattr(self, "_session_imported_sketches") or not self._session_imported_sketches:
+            return
+
+        active_referenced_names = set()
+        for prof in self._objects.values():
+            if prof is None:
+                continue
+            cp = getattr(prof, "CustomProfile", None)
+            if cp is not None and hasattr(cp, "Name"):
+                active_referenced_names.add(cp.Name)
+
+        to_remove = []
+        for doc_name, sk_name in list(self._session_imported_sketches):
+            doc = App.getDocument(doc_name) if hasattr(App, "getDocument") else None
+            if doc is None and doc_name in App.listDocuments():
+                doc = App.listDocuments()[doc_name]
+            if doc is None:
+                to_remove.append((doc_name, sk_name))
+                continue
+
+            sk_obj = doc.getObject(sk_name)
+            if sk_obj is None:
+                to_remove.append((doc_name, sk_name))
+                continue
+
+            if sk_name in active_referenced_names:
+                continue
+
+            in_list = getattr(sk_obj, "InList", []) or []
+            active_in_list = []
+            for ref in in_list:
+                try:
+                    if ref is None or not hasattr(ref, "Name"):
+                        continue
+                    ref_doc = getattr(ref, "Document", None) or doc
+                    if ref_doc is None or not hasattr(ref_doc, "getObject"):
+                        continue
+                    if hasattr(ref_doc, "Name") and hasattr(App, "listDocuments"):
+                        if ref_doc.Name not in App.listDocuments():
+                            continue
+                    if ref_doc.getObject(ref.Name) is not None:
+                        active_in_list.append(ref)
+                except Exception:
+                    pass
+            if active_in_list:
+                continue
+
+            try:
+                doc.removeObject(sk_name)
+            except Exception:
+                pass
+            to_remove.append((doc_name, sk_name))
+
+        for item in to_remove:
+            self._session_imported_sketches.discard(item)
+
     def proceed(self):
+        if getattr(self, "_initializing", False):
+            return
+
         seen_profiles = []
 
         selection_list = Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else []
@@ -593,11 +678,14 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 o.recompute()
 
             else:
+                doc = getattr(o, "Document", None) or getattr(self, "_target_doc", None) or App.ActiveDocument
                 try:
-                    App.ActiveDocument.removeObject(o.Name)
+                    doc.removeObject(o.Name)
                 except Exception:
                     pass
                 del self._objects[k]
+
+        self._clean_unreferenced_session_sources()
 
     def has_name_prefix(self, internal_name, target_str):
         pattern = r"\d+$"
@@ -619,8 +707,9 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 # Create the new profile first BEFORE removing the old one!
                 # If creating the new profile fails, the old preview object is preserved.
                 new_o = self.make_profile(sketch, edge, name)
+                doc = getattr(o, "Document", None) or getattr(self, "_target_doc", None) or App.ActiveDocument
                 try:
-                    App.ActiveDocument.removeObject(o.Name)
+                    doc.removeObject(o.Name)
                 except Exception:
                     pass
                 self._objects[key] = new_o
@@ -651,18 +740,28 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             object_name = size_data.get("object_name", "Section")
             asset_id = size_data.get("asset_id", "")
             if folder_root and asset_path:
+                target_doc = getattr(sketch, "Document", None) or getattr(self, "_target_doc", None) or App.ActiveDocument
+                pre_sketch_names = {
+                    obj.Name for obj in getattr(target_doc, "Objects", [])
+                    if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject")
+                }
                 custom_profile_sketch = get_or_import_section_sketch(
                     library_root=folder_root,
                     asset_path=asset_path,
                     object_name=object_name,
-                    target_doc=App.ActiveDocument,
+                    target_doc=target_doc,
                     asset_id=asset_id,
+                    profile_code=size_name,
                 )
+                if custom_profile_sketch is not None and custom_profile_sketch.Name not in pre_sketch_names:
+                    if hasattr(self, "_session_imported_sketches"):
+                        self._session_imported_sketches.add((target_doc.Name, custom_profile_sketch.Name))
 
         # Create an object in current document
         obj = None
         try:
-            obj = App.ActiveDocument.addObject("Part::FeaturePython", name)
+            target_doc = getattr(sketch, "Document", None) or getattr(self, "_target_doc", None) or App.ActiveDocument
+            obj = target_doc.addObject("Part::FeaturePython", name)
             obj.addExtension("Part::AttachExtensionPython")
 
             if getattr(obj, "ViewObject", None) is not None:
