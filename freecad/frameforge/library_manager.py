@@ -3,6 +3,7 @@ import json
 import math
 import os
 import re
+import shutil
 import tempfile
 
 # Standard densities in g/cm3 (equivalent to kg/dm3)
@@ -1088,13 +1089,269 @@ class LibraryManager:
         target_material=None,
         target_density=None,
         recalculate_weights=False,
+        target_folder_path=None,
     ):
         """
-        Clones an existing library (stock or user) into a new user library.
+        Clones an existing library (stock, user, or folder) into a new user or folder library.
         If overwrite is False, raises FileExistsError if target already exists.
         If target_material is provided, assigns it to the clone.
         If recalculate_weights is True, recalculates theoretical weights with target_density.
+        If source is a folder library, target_folder_path is required and assets are copied.
         """
+        source_folder = self._get_registered_folder(source_name)
+
+        if source_folder is not None:
+            # Source is a registered folder library
+            if not target_folder_path:
+                raise ValueError("Folder library duplication requires an explicit target_folder_path.")
+
+            canon_src = os.path.realpath(os.path.abspath(source_folder))
+            canon_dest = os.path.realpath(os.path.abspath(target_folder_path))
+
+            if canon_src == canon_dest:
+                raise ValueError("Source and target folder library paths cannot be identical.")
+
+            src_with_sep = canon_src if canon_src.endswith(os.sep) else canon_src + os.sep
+            dest_with_sep = canon_dest if canon_dest.endswith(os.sep) else canon_dest + os.sep
+            if canon_dest.startswith(src_with_sep) or canon_src.startswith(dest_with_sep):
+                raise ValueError("Nested source and target directories are not allowed.")
+
+            dest_preexisted = False
+            if os.path.exists(canon_dest):
+                if not os.path.isdir(canon_dest):
+                    raise FileExistsError(f"Target path '{target_folder_path}' is a file.")
+                if os.listdir(canon_dest):
+                    raise FileExistsError(f"Target directory '{target_folder_path}' is not empty.")
+                dest_preexisted = True
+
+            # Collision checks before writes
+            self._check_name_collision(target_name)
+            if self._get_registered_folder(canon_dest):
+                raise FileExistsError(f"Target folder path '{target_folder_path}' is already registered.")
+
+            src_manifest_path = os.path.join(canon_src, "library.json")
+            if not os.path.isfile(src_manifest_path):
+                raise FileNotFoundError(f"Source folder library manifest '{src_manifest_path}' not found.")
+
+            try:
+                with open(src_manifest_path, "r", encoding="utf-8") as f:
+                    source_data = json.load(f)
+            except Exception as err:
+                raise ValueError(f"Cannot read source manifest '{src_manifest_path}': {err}")
+
+            cloned_data = copy.deepcopy(source_data)
+
+            # Determine target material and density
+            if target_material is None:
+                source_mat, source_dens = self.get_library_material_info(source_name)
+                target_material = source_mat
+                target_density = source_dens if target_density is None else float(target_density)
+            else:
+                if target_density is None:
+                    target_density = STANDARD_DENSITIES.get(target_material, 7.85)
+                else:
+                    target_density = float(target_density)
+
+            if "_metadata" not in cloned_data:
+                cloned_data["_metadata"] = {}
+            cloned_data["_metadata"]["name"] = target_name
+            cloned_data["_metadata"]["cloned_from"] = source_name
+            cloned_data["_metadata"]["material"] = target_material
+            cloned_data["_metadata"]["density"] = float(target_density)
+            cloned_data["_metadata"]["is_folder"] = True
+
+            # Validate all declared assets across all families BEFORE writing
+            from freecad.frameforge.section_library import (
+                recalculate_custom_profile_weight,
+                resolve_and_validate_asset_path,
+            )
+
+            declared_assets = {}  # rel_path -> src_canonical_file_path
+            for fam_name, fam_data in cloned_data.items():
+                if fam_name.startswith("_") or not isinstance(fam_data, dict):
+                    continue
+                sizes = fam_data.get("sizes", {})
+                if not isinstance(sizes, dict):
+                    continue
+                for size_key, size_props in sizes.items():
+                    if not isinstance(size_props, dict):
+                        continue
+                    asset_rel = size_props.get("asset_path")
+                    if asset_rel:
+                        canon_asset = resolve_and_validate_asset_path(canon_src, asset_rel)
+                        if not os.path.isfile(canon_asset):
+                            raise FileNotFoundError(
+                                f"Referenced asset '{asset_rel}' does not exist on disk in '{canon_src}'."
+                            )
+                        declared_assets[asset_rel] = canon_asset
+
+            # Staged creation and owned rollback tracking
+            created_dest_root = False
+            created_files = []
+            created_dirs = []
+
+            if not dest_preexisted:
+                os.makedirs(canon_dest, exist_ok=True)
+                created_dest_root = True
+
+            def rollback():
+                for fpath in reversed(created_files):
+                    try:
+                        if os.path.isfile(fpath) or os.path.islink(fpath):
+                            os.remove(fpath)
+                    except OSError:
+                        pass
+                for dpath in sorted(set(created_dirs), key=lambda p: len(os.path.abspath(p)), reverse=True):
+                    try:
+                        if os.path.isdir(dpath) and not os.listdir(dpath):
+                            os.rmdir(dpath)
+                    except OSError:
+                        pass
+                if created_dest_root:
+                    try:
+                        if os.path.isdir(canon_dest) and not os.listdir(canon_dest):
+                            os.rmdir(canon_dest)
+                    except OSError:
+                        pass
+
+            canon_dest_sections = os.path.realpath(os.path.join(canon_dest, "sections"))
+            try:
+                # Copy declared assets exclusively (materializing internal symlinks as regular files)
+                copied_targets = set()
+                for rel_path, src_canonical_path in declared_assets.items():
+                    target_asset_path = os.path.join(canon_dest, os.path.normpath(rel_path))
+                    target_asset_real = os.path.realpath(target_asset_path)
+                    try:
+                        common_target = os.path.commonpath([canon_dest_sections, target_asset_real])
+                    except ValueError:
+                        common_target = None
+                    if common_target != canon_dest_sections:
+                        raise ValueError(
+                            f"Target asset path '{target_asset_path}' escapes destination sections directory."
+                        )
+
+                    if target_asset_path in copied_targets:
+                        continue
+                    target_dir = os.path.dirname(target_asset_path)
+                    if not os.path.exists(target_dir):
+                        os.makedirs(target_dir, exist_ok=True)
+                        cur = target_dir
+                        while cur != canon_dest and cur not in created_dirs:
+                            created_dirs.append(cur)
+                            cur = os.path.dirname(cur)
+
+                    created_files.append(target_asset_path)
+                    copied_targets.add(target_asset_path)
+                    shutil.copyfile(src_canonical_path, target_asset_path)
+
+                # Weight recalculation if requested
+                if recalculate_weights:
+                    unrecalculated = []
+                    for fam_name, fam_data in cloned_data.items():
+                        if fam_name.startswith("_") or not isinstance(fam_data, dict):
+                            continue
+                        sizes = fam_data.get("sizes", {})
+                        if not isinstance(sizes, dict):
+                            continue
+                        canonical = get_canonical_family(fam_name, fam_data)
+
+                        if canonical == "Custom Profile":
+                            for size_key, size_props in sizes.items():
+                                if not isinstance(size_props, dict):
+                                    continue
+                                asset_rel = size_props.get("asset_path")
+                                if not asset_rel:
+                                    continue
+                                dest_asset_path = os.path.join(canon_dest, os.path.normpath(asset_rel))
+                                obj_name = size_props.get("object_name")
+                                try:
+                                    new_weight = recalculate_custom_profile_weight(
+                                        dest_asset_path, obj_name, target_density
+                                    )
+                                    size_props["Weight"] = f"{new_weight:.2f}"
+                                except Exception as err:
+                                    unrecalculated.append(f"{fam_name}/{size_key}")
+                        else:
+                            for size_key, size_props in sizes.items():
+                                if not isinstance(size_props, dict):
+                                    continue
+                                try:
+                                    h = float(size_props.get("Height", 0))
+                                    w = float(size_props.get("Width", 0))
+                                    t = float(size_props.get("Thickness", 0))
+                                    tf = (
+                                        float(size_props.get("Flange Thickness", 0))
+                                        if "Flange Thickness" in size_props
+                                        else None
+                                    )
+                                    if canonical == "C":
+                                        lip = (
+                                            float(size_props.get("Lip Length", 0))
+                                            if "Lip Length" in size_props
+                                            else None
+                                        )
+                                        r1 = (
+                                            float(size_props.get("Radius1", 0))
+                                            if "Radius1" in size_props
+                                            else None
+                                        )
+                                        make_fillet = bool(fam_data.get("fillet", False))
+                                        new_weight = calculate_linear_weight(
+                                            family=canonical,
+                                            width=w,
+                                            height=h,
+                                            thickness=t,
+                                            density_g_cm3=target_density,
+                                            flange_thickness=tf,
+                                            lip_length=lip,
+                                            radius=r1,
+                                            make_fillet=make_fillet,
+                                        )
+                                    else:
+                                        new_weight = calculate_linear_weight(
+                                            family=canonical,
+                                            width=w,
+                                            height=h,
+                                            thickness=t,
+                                            density_g_cm3=target_density,
+                                            flange_thickness=tf,
+                                        )
+                                    size_props["Weight"] = str(new_weight)
+                                except Exception as err:
+                                    unrecalculated.append(f"{fam_name}/{size_key}")
+
+                    if unrecalculated:
+                        raise ValueError(
+                            f"Cannot recalculate weights for: {', '.join(unrecalculated[:3])}. Duplicate without weight recalculation to preserve nominal weights."
+                        )
+
+                # Write manifest atomically in destination folder
+                manifest_path = os.path.join(canon_dest, "library.json")
+                temp_fd, temp_path = tempfile.mkstemp(
+                    prefix=".library_", suffix=".tmp", dir=canon_dest
+                )
+                try:
+                    with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
+                        json.dump(cloned_data, f, indent=2)
+                    os.replace(temp_path, manifest_path)
+                    created_files.append(manifest_path)
+                except Exception:
+                    try:
+                        os.remove(temp_path)
+                    except OSError:
+                        pass
+                    raise
+
+                # Register in local registry
+                self.register_folder_library(canon_dest)
+                return manifest_path
+            except Exception:
+                rollback()
+                raise
+
+        # Legacy stock or user library duplication
+        if target_folder_path is not None:
+            raise ValueError("target_folder_path is only supported for folder library duplication.")
         source_data = self.get_library(source_name)
         # Deep copy via serialization
         cloned_data = json.loads(json.dumps(source_data))
@@ -1179,6 +1436,34 @@ class LibraryManager:
                 )
 
         return self.save_user_library(target_name, cloned_data, overwrite=overwrite)
+
+    def duplicate_folder_library(
+        self,
+        source_name_or_path,
+        target_folder_path,
+        target_name=None,
+        overwrite=False,
+        target_material=None,
+        target_density=None,
+        recalculate_weights=False,
+    ):
+        """Duplicates an existing folder library into a new target folder."""
+        source_folder = self._get_registered_folder(source_name_or_path)
+        if not source_folder:
+            raise FileNotFoundError(f"Folder library '{source_name_or_path}' not found in registry.")
+
+        if not target_name:
+            target_name = os.path.basename(os.path.normpath(target_folder_path))
+
+        return self.duplicate_library(
+            source_folder,
+            target_name,
+            overwrite=overwrite,
+            target_material=target_material,
+            target_density=target_density,
+            recalculate_weights=recalculate_weights,
+            target_folder_path=target_folder_path,
+        )
 
     def get_all_profiles(self):
         """

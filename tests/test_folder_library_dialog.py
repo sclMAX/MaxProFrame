@@ -176,14 +176,14 @@ class TestFolderLibraryDialog(unittest.TestCase):
             translate("frameforge", "Unregister Folder Library"),
         )
 
-        # Temporary T6 duplicate guard
-        self.assertFalse(dialog.btn_dup_lib.isEnabled())
-        self.assertIn("not yet supported", dialog.btn_dup_lib.toolTip().lower())
+        # T6 duplicate button enabled for folder libraries
+        self.assertTrue(dialog.btn_dup_lib.isEnabled())
+        self.assertEqual(dialog.btn_dup_lib.toolTip(), translate("frameforge", "Duplicate Library"))
 
-        # Direct duplicate callback guard rejects execution
-        with patch.object(QtWidgets.QMessageBox, "information") as mock_info:
+        # When clicked with directory picker canceled, retains current library without throwing
+        with patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=""):
             dialog.btn_dup_lib.click()
-            # If clicked directly, it must not create any library or throw
+            # If clicked with canceled picker, it must retain current selection without throwing
             names = [dialog.list_libraries.item(i).data(QtCore.Qt.UserRole)["name"]
                      for i in range(dialog.list_libraries.count())]
             self.assertEqual(names.count("Timber Lib"), 1)

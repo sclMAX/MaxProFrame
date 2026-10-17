@@ -124,6 +124,99 @@ def compute_sketch_dimensions_and_weight(sketch, density_g_cm3=7.85):
     return height, width, weight, area
 
 
+def recalculate_custom_profile_weight(asset_full_path, object_name, target_density):
+    """Computes linear weight (kg/m) for a Custom Profile asset from its actual native face area
+    and target density, using an owned temporary document to avoid mutating user-owned documents.
+    """
+    if not os.path.isfile(asset_full_path):
+        raise ValueError(f"Asset file '{asset_full_path}' does not exist.")
+
+    density = float(target_density)
+    if not math.isfinite(density) or density <= 0:
+        raise ValueError(f"Target density must be a positive finite number, got {target_density}")
+
+    # Create owned private temp copy to inspect without mutating or colliding with user docs
+    temp_dir = tempfile.mkdtemp(prefix="ff_recalc_inspect_")
+    try:
+        temp_file = os.path.join(temp_dir, "inspect.FCStd")
+        shutil.copyfile(asset_full_path, temp_file)
+
+        active_doc = getattr(App, "ActiveDocument", None)
+        active_doc_name = active_doc.Name if active_doc else None
+        saved_selection = []
+        try:
+            import FreeCADGui as Gui_mod
+            if hasattr(Gui_mod, "Selection"):
+                for sel in Gui_mod.Selection.getSelectionEx():
+                    dname = getattr(sel, "DocumentName", None)
+                    if not dname and hasattr(sel, "Object") and hasattr(sel.Object, "Document"):
+                        dname = sel.Object.Document.Name
+                    oname = getattr(sel, "ObjectName", None) or (sel.Object.Name if hasattr(sel, "Object") else None)
+                    sub_names = list(getattr(sel, "SubElementNames", []))
+                    if dname and oname:
+                        saved_selection.append((dname, oname, sub_names))
+        except Exception:
+            saved_selection = []
+
+        doc = None
+        try:
+            doc = App.openDocument(temp_file)
+            if not doc:
+                raise ValueError(f"Failed to open asset document '{asset_full_path}'.")
+
+            if not object_name:
+                raise ValueError(f"Section sketch object_name is required for asset '{asset_full_path}'.")
+            sketch = doc.getObject(object_name)
+            if sketch is None or not (
+                getattr(sketch, "TypeId", "") == "Sketcher::SketchObject"
+                or (hasattr(sketch, "isDerivedFrom") and sketch.isDerivedFrom("Sketcher::SketchObject"))
+            ):
+                raise ValueError(f"Section sketch '{object_name}' not found in asset '{asset_full_path}'.")
+
+            face = build_custom_section_face(sketch)
+            if not face.isValid() or face.Area <= 0:
+                raise ValueError(f"Section face in asset '{asset_full_path}' is invalid or empty.")
+
+            face_area = float(face.Area)
+            calc_weight = (face_area * density) * 0.001
+            return round(calc_weight, 4)
+        finally:
+            if doc is not None:
+                doc_name = doc.Name
+                try:
+                    App.closeDocument(doc_name)
+                except Exception:
+                    pass
+            if active_doc_name and active_doc_name in App.listDocuments():
+                try:
+                    App.setActiveDocument(active_doc_name)
+                except Exception:
+                    pass
+            if saved_selection:
+                try:
+                    import FreeCADGui as Gui_mod
+                    if hasattr(Gui_mod, "Selection"):
+                        Gui_mod.Selection.clearSelection()
+                        for dname, oname, sub_names in saved_selection:
+                            if dname in App.listDocuments():
+                                if sub_names:
+                                    for sub in sub_names:
+                                        Gui_mod.Selection.addSelection(dname, oname, sub)
+                                else:
+                                    Gui_mod.Selection.addSelection(dname, oname)
+                except Exception:
+                    pass
+    except Exception as err:
+        if isinstance(err, ValueError):
+            raise
+        raise ValueError(f"Failed to recalculate weight for asset '{asset_full_path}': {err}")
+    finally:
+        try:
+            shutil.rmtree(temp_dir)
+        except OSError:
+            pass
+
+
 def purge_unreferenced_assets(library_root, staged_asset_paths, catalog_data):
     """S9 Deferred Asset Deletion: purges unreferenced asset files on disk.
 

@@ -92,7 +92,7 @@ Portable folder libraries allow users to store FrameForge profile catalogs and s
 | **Catalog Tagging & Banners** | Distinct `[Folder]` prefix in the library list with directory path tooltips; prominent banner showing library name, directory path, material info, and editable status. |
 | **Contextual Unregister** | When a folder library is selected, the Delete button adapts to **Unregister Folder Library**, prompting with explicit confirmation that disk files will be preserved. Never deletes directory contents from the GUI. Guarded by unsaved edits prompt before confirmation. |
 | **Unsaved Edits Guard & Cancellation Semantics** | Switching libraries or triggering create/register/unregister with unsaved changes prompts with Save / Discard / Cancel. Choosing **Discard** grants permission to proceed without saving, but does not immediately clear dirty state: if any subsequent step is canceled (picker cancel, dialog reject, unregister decline) or fails (backend write error, collision, refresh failure), the user remains on the current library with all unsaved edits and dirty state strictly preserved. Selecting another library loads catalog data before mutating active metadata, preventing split selection/write-target state on load failures. Refresh errors preserve diagnostic error status without overwriting with false success messages. |
-| **Folder Duplication (T6 Pending)** | Duplicating folder libraries is intentionally disabled with an explanatory tooltip until complete asset duplication is implemented in T6, preventing accidental flattening of folder assets into legacy JSON. |
+| **Folder Duplication & Portability** | Duplicating a folder library requires an explicit empty destination directory (`target_folder_path`), never flattening assets into legacy user JSON. Declared assets across all families are copied exclusively (ignoring unrelated notes or caches). Internal relative symlinks/aliases materialize as standalone regular files, ensuring portability upon source removal. Weight recalculation computes Custom Profile weights from the actual native face area of the disk asset and target density without modifying user documents or selections. Full rollback on failure cleans newly created artifacts while retaining pre-existing empty destination folders. (T6 verification pending). |
 
 ## API Reference
 
@@ -116,6 +116,17 @@ Removes the specified folder library from the local workstation registry.
 ### `save_folder_library(folder_path_or_name, data, overwrite=True, material=None, density=None)`
 Atomically saves catalog updates to `<root>/library.json` preserving material immutability and metadata integrity. Also routed automatically through `save_user_library(name, data, ...)`.
 
+### `duplicate_library(source_name, target_name, overwrite=False, target_material=None, target_density=None, recalculate_weights=False, target_folder_path=None)`
+Clones an existing library into a new user or folder library.
+- For folder libraries, requires `target_folder_path` pointing to an empty directory.
+- Copies all declared section assets, materializing internal relative symlinks into portable standalone files.
+- If `recalculate_weights=True`, recalculates parametric weights via standard formulas and Custom Profile weights from actual disk asset native face geometry and target density.
+- Rolls back destination artifacts cleanly on failure, preserving pre-existing empty folders and the local registry.
+- Returns the canonical manifest path (`<target_folder_path>/library.json`).
+
+### `duplicate_folder_library(source_name_or_path, target_folder_path, target_name=None, ...)`
+Convenience wrapper around `duplicate_library` specifically for folder libraries.
+
 ## Checklist
 
 - [ ] Folder library contains only portable relative content in `<root>/library.json`.
@@ -127,7 +138,7 @@ Atomically saves catalog updates to `<root>/library.json` preserving material im
 - [ ] Profile Library Manager provides explicit New Folder and Register Folder header actions.
 - [ ] Folder entries are clearly identified with `[Folder]` tag, banner path info, and contextual unregister.
 - [ ] Unsaved changes are guarded by Save/Discard/Cancel semantics across all library actions.
-- [ ] Folder duplication is disabled with informative diagnostic pending T6 asset duplication.
+- [ ] Folder duplication creates complete self-contained asset copies with native weight recalculation and rollback safety (verification pending).
 
 ## Next steps
 
@@ -135,4 +146,4 @@ Atomically saves catalog updates to `<root>/library.json` preserving material im
 - Profile Library Manager UI integration for folder selection, registration, and CRUD flows (T3 — complete).
 - Geometry-specific section capture, edit, rename, and delete manager flow (T4 — complete).
 - Instantiate library sections as document-local sources for profile generation (T5 — complete).
-- Complete folder library asset duplication and relocation verification (T6).
+- Complete folder library asset duplication and relocation verification (T6 — implementation complete, verification pending).

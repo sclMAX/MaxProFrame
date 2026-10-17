@@ -687,11 +687,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         if is_folder:
             self.btn_del_lib.setToolTip(translate("frameforge", "Unregister Folder Library"))
-            # Temporary T6 duplicate guard
-            self.btn_dup_lib.setEnabled(False)
-            self.btn_dup_lib.setToolTip(
-                translate("frameforge", "Folder library duplication is not yet supported")
-            )
+            self.btn_dup_lib.setEnabled(True)
+            self.btn_dup_lib.setToolTip(translate("frameforge", "Duplicate Library"))
         else:
             self.btn_del_lib.setToolTip(translate("frameforge", "Delete Library"))
             self.btn_dup_lib.setEnabled(True)
@@ -1377,55 +1374,98 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         if not self.current_lib_meta:
             return
 
-        if self.current_lib_meta.get("is_folder"):
-            QtWidgets.QMessageBox.information(
-                self,
-                translate("frameforge", "Information"),
-                translate("frameforge", "Folder library duplication is not yet supported."),
-            )
-            return
-
         if not self._prompt_dirty_save():
             return
 
         source_name = self.current_lib_meta["name"]
         source_mat, _ = self.manager.get_library_material_info(source_name)
-        default_name = translate("frameforge", "%s Custom") % source_name
+        is_folder = bool(self.current_lib_meta.get("is_folder"))
 
-        dlg = NewLibraryDialog(
-            self,
-            title="Duplicate Library",
-            default_name=default_name,
-            default_material=source_mat,
-            is_duplicate=True,
-        )
-        if dlg.exec_() != QtWidgets.QDialog.Accepted:
-            return
-
-        new_name, target_mat, target_dens, recalc = dlg.get_values()
-        if not new_name:
-            return
-
-        try:
-            self.manager.duplicate_library(
-                source_name,
-                new_name,
-                overwrite=False,
-                target_material=target_mat,
-                target_density=target_dens,
-                recalculate_weights=recalc,
+        if is_folder:
+            target_folder = QtWidgets.QFileDialog.getExistingDirectory(
+                self, translate("frameforge", "Select Empty Folder for Duplicated Library")
             )
-        except (FileExistsError, ValueError) as err:
-            QtWidgets.QMessageBox.warning(
+            if not target_folder:
+                return
+
+            default_name = os.path.basename(os.path.normpath(target_folder))
+            if not default_name:
+                default_name = translate("frameforge", "%s Custom") % source_name
+
+            dlg = NewLibraryDialog(
                 self,
-                translate("frameforge", "Error"),
-                str(err),
+                title="Duplicate Library",
+                default_name=default_name,
+                default_material=source_mat,
+                is_duplicate=True,
+                is_folder=True,
             )
-            return
+            if dlg.exec_() != QtWidgets.QDialog.Accepted:
+                return
 
-        if not self.refresh_libraries(select_name=new_name):
-            return
-        self._set_status(translate("frameforge", "Library duplicated as '%s'.") % new_name)
+            new_name, target_mat, target_dens, recalc = dlg.get_values()
+            if not new_name:
+                return
+
+            try:
+                self.manager.duplicate_library(
+                    source_name,
+                    new_name,
+                    overwrite=False,
+                    target_material=target_mat,
+                    target_density=target_dens,
+                    recalculate_weights=recalc,
+                    target_folder_path=target_folder,
+                )
+            except (FileExistsError, ValueError, OSError) as err:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    translate("frameforge", "Error"),
+                    str(err),
+                )
+                return
+
+            if not self.refresh_libraries(select_name=new_name):
+                return
+            self._set_status(translate("frameforge", "Library duplicated as '%s'.") % new_name)
+        else:
+            default_name = translate("frameforge", "%s Custom") % source_name
+
+            dlg = NewLibraryDialog(
+                self,
+                title="Duplicate Library",
+                default_name=default_name,
+                default_material=source_mat,
+                is_duplicate=True,
+                is_folder=False,
+            )
+            if dlg.exec_() != QtWidgets.QDialog.Accepted:
+                return
+
+            new_name, target_mat, target_dens, recalc = dlg.get_values()
+            if not new_name:
+                return
+
+            try:
+                self.manager.duplicate_library(
+                    source_name,
+                    new_name,
+                    overwrite=False,
+                    target_material=target_mat,
+                    target_density=target_dens,
+                    recalculate_weights=recalc,
+                )
+            except (FileExistsError, ValueError, OSError) as err:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    translate("frameforge", "Error"),
+                    str(err),
+                )
+                return
+
+            if not self.refresh_libraries(select_name=new_name):
+                return
+            self._set_status(translate("frameforge", "Library duplicated as '%s'.") % new_name)
 
     def _on_delete_library(self):
         if not self.current_lib_meta or not self.current_lib_meta.get("is_user", False):

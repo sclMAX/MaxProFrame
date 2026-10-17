@@ -77,6 +77,9 @@ Validates that `asset_path` is relative, resides under `sections/`, does not esc
 ### `compute_sketch_dimensions_and_weight(sketch, density_g_cm3=7.85)`
 Computes `(Height, Width, Weight, Area)` directly from native face geometry and material density.
 
+### `recalculate_custom_profile_weight(asset_full_path, object_name, target_density)`
+Computes theoretical linear weight (kg/m) for a Custom Profile asset by inspecting the actual native face area of its disk asset and multiplying by target density, using an owned private temporary document to protect user-owned documents and selections.
+
 ### `purge_unreferenced_assets(library_root, staged_asset_paths, catalog_data)`
 Safely purges staged asset files on disk only if no catalog entry references them, preserving shared assets and confined roots.
 
@@ -91,9 +94,11 @@ Safely purges staged asset files on disk only if no catalog entry references the
 - [ ] Saved `.FCStd` section assets can be reopened and edited in complete isolation.
 - [ ] Canonical path confinement prevents symlink escapes outside the library root.
 - [ ] Deferred asset deletion (S9) purges unreferenced assets only after successful catalog save.
+- [ ] Section assets duplicate portably into new folder libraries with native weight recalculation and relocation independence (verification pending).
 
 ## Next steps
 
 - Folder library selection and registration UI workflows in the Library Manager (T3 — complete).
 - Section capture, edit, rename, and delete actions in the Library Manager (T4 — complete).
-- Instantiation of library sections as document-local profile sources (T5).
+- Instantiation of library sections as document-local profile sources (T5 — complete).
+- Complete folder library asset duplication and relocation verification (T6 — implementation complete, verification pending).
