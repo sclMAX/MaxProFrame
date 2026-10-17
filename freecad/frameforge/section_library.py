@@ -315,3 +315,161 @@ class SectionEditSession:
                 except OSError:
                     pass
             self.staged_asset_path = None
+
+
+def get_or_import_section_sketch(library_root, asset_path, object_name, target_doc, asset_id=""):
+    """Returns an autonomous document-local SketchObject in target_doc for the specified asset.
+
+    1. Validates canonical path confinement using resolve_and_validate_asset_path.
+    2. Scans target_doc for an existing SketchObject matching composite provenance:
+       (canonical_library_root, asset_id, object_name). If found, returns existing sketch.
+    3. If not present:
+       - Checks App.listDocuments() to detect if the asset file is already open (user-owned).
+       - If open, reuses the existing document without closing or mutating it.
+       - If not open, opens the asset document in FreeCAD and marks it as importer-opened.
+       - Extracts the EXACT object_name (must be a SketchObject).
+       - Uses capture_section_sketch to create an autonomous copy in target_doc.
+       - Tags the imported sketch with composite provenance properties.
+       - Closes the asset document only if opened by this importer.
+       - Restores the active document to target_doc.
+    """
+    if not library_root:
+        raise ValueError("Library root is required.")
+    if not asset_path:
+        raise ValueError("Asset path is required.")
+    if not object_name:
+        raise ValueError("Object name is required.")
+
+    canonical_root = os.path.realpath(os.path.abspath(library_root))
+    full_asset_path = resolve_and_validate_asset_path(canonical_root, asset_path)
+    if not os.path.isfile(full_asset_path):
+        raise FileNotFoundError(f"Asset file '{full_asset_path}' does not exist.")
+
+    if target_doc is None:
+        target_doc = App.ActiveDocument
+    if target_doc is None:
+        raise ValueError("Target project document is missing.")
+
+    norm_asset_path = os.path.normpath(asset_path).replace("\\", "/")
+    target_aid = str(asset_id) if asset_id is not None else ""
+
+    # Check for existing document-local sketch matching composite provenance:
+    # canonical root AND selected asset path AND exact object name AND asset ID (where present)
+    for obj in target_doc.Objects:
+        if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject"):
+            p_prov = getattr(obj, "FF_Provenance", None)
+            p_aid = getattr(obj, "FF_AssetId", None)
+            p_oname = getattr(obj, "FF_ObjectName", None)
+            p_apath = getattr(obj, "FF_AssetPath", None)
+            if (
+                p_prov == canonical_root
+                and p_apath == norm_asset_path
+                and p_oname == str(object_name)
+                and (not target_aid or p_aid == target_aid)
+            ):
+                return obj
+
+    # Snapshot active document and GUI selection before any document operations
+    active_before = App.ActiveDocument
+    saved_selection = []
+    try:
+        import FreeCADGui as Gui_mod
+        if hasattr(Gui_mod, "Selection"):
+            for sel in Gui_mod.Selection.getSelectionEx():
+                dname = getattr(sel, "DocumentName", None)
+                if not dname and hasattr(sel, "Object") and hasattr(sel.Object, "Document"):
+                    dname = sel.Object.Document.Name
+                oname = getattr(sel, "ObjectName", None) or (sel.Object.Name if hasattr(sel, "Object") else None)
+                sub_names = list(getattr(sel, "SubElementNames", []))
+                if dname and oname:
+                    saved_selection.append((dname, oname, sub_names))
+    except Exception:
+        saved_selection = []
+
+    asset_doc = None
+    opened_by_importer = False
+
+    for dname, doc in list(App.listDocuments().items()):
+        fname = getattr(doc, "FileName", "")
+        if fname:
+            try:
+                if os.path.realpath(fname) == full_asset_path:
+                    asset_doc = doc
+                    break
+            except Exception:
+                pass
+
+    if asset_doc is None:
+        asset_doc = App.openDocument(full_asset_path)
+        opened_by_importer = True
+
+    try:
+        source_sketch = asset_doc.getObject(object_name)
+        if source_sketch is None or not (
+            hasattr(source_sketch, "isDerivedFrom") and source_sketch.isDerivedFrom("Sketcher::SketchObject")
+        ):
+            raise ValueError(
+                f"Object '{object_name}' not found or is not a SketchObject in asset '{asset_path}'."
+            )
+
+        captured_sketch = capture_section_sketch(
+            source_sketch,
+            target_doc=target_doc,
+            name=object_name,
+        )
+
+        # Tag captured sketch with composite provenance identity
+        if not hasattr(captured_sketch, "FF_Provenance"):
+            captured_sketch.addProperty(
+                "App::PropertyString", "FF_Provenance", "FrameForge", "Source library root"
+            )
+        captured_sketch.FF_Provenance = canonical_root
+
+        if not hasattr(captured_sketch, "FF_AssetId"):
+            captured_sketch.addProperty(
+                "App::PropertyString", "FF_AssetId", "FrameForge", "Source asset ID"
+            )
+        captured_sketch.FF_AssetId = target_aid
+
+        if not hasattr(captured_sketch, "FF_ObjectName"):
+            captured_sketch.addProperty(
+                "App::PropertyString", "FF_ObjectName", "FrameForge", "Source sketch object name"
+            )
+        captured_sketch.FF_ObjectName = str(object_name)
+
+        if not hasattr(captured_sketch, "FF_AssetPath"):
+            captured_sketch.addProperty(
+                "App::PropertyString", "FF_AssetPath", "FrameForge", "Source relative asset path"
+            )
+        captured_sketch.FF_AssetPath = norm_asset_path
+
+        target_doc.recompute()
+        return captured_sketch
+
+    finally:
+        if opened_by_importer and asset_doc is not None:
+            doc_name_to_close = asset_doc.Name
+            try:
+                App.closeDocument(doc_name_to_close)
+            except Exception:
+                pass
+        if active_before is not None and active_before.Name in App.listDocuments():
+            try:
+                App.setActiveDocument(active_before.Name)
+            except Exception:
+                pass
+        # Restore GUI selection on active project document
+        if saved_selection:
+            try:
+                import FreeCADGui as Gui_mod
+                if hasattr(Gui_mod, "Selection"):
+                    Gui_mod.Selection.clearSelection()
+                    for dname, oname, sub_names in saved_selection:
+                        if dname in App.listDocuments():
+                            if sub_names:
+                                for sub in sub_names:
+                                    Gui_mod.Selection.addSelection(dname, oname, sub)
+                            else:
+                                Gui_mod.Selection.addSelection(dname, oname)
+            except Exception:
+                pass

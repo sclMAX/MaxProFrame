@@ -397,6 +397,13 @@ class LibraryManager:
                         continue
         return None
 
+    def get_folder_library_path(self, name_or_path):
+        """Finds registered canonical folder path matching display name or path.
+
+        Returns None if not registered as a folder library.
+        """
+        return self._get_registered_folder(name_or_path)
+
     def _check_name_collision(self, name, current_canonical_root=None):
         """
         Checks whether name collides with existing stock, user, or registered folder libraries.

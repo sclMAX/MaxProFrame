@@ -10,7 +10,8 @@ from PySide import QtCore, QtGui
 
 from freecad.frameforge.ff_tools import ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, FormProxy, move_profile_to_parent_if_supported, translate
 from freecad.frameforge.library_manager import LibraryManager, get_canonical_family
-from freecad.frameforge.profile import Profile, ViewProviderProfile
+from freecad.frameforge.profile import Profile, ViewProviderCustomProfile, ViewProviderProfile
+from freecad.frameforge.section_library import get_or_import_section_sketch
 
 
 def load_ui_file(path):
@@ -238,16 +239,24 @@ class BaseProfileTaskPanel(ABC):
         canonical = get_canonical_family(family, family_data)
         self._update_family_controls(canonical)
 
-        self.form_proxy.cb_make_fillet.setChecked(self.profiles[material][family]["fillet"])
-        self.form_proxy.cb_make_fillet.setEnabled(self.profiles[material][family]["fillet"])
+        is_custom = (canonical == "Custom Profile")
+
+        fillet_val = False if is_custom else bool(self.profiles.get(material, {}).get(family, {}).get("fillet", False))
+        self.form_proxy.cb_make_fillet.setChecked(fillet_val)
+        self.form_proxy.cb_make_fillet.setEnabled(False if is_custom else fillet_val)
 
         self.update_image()
 
-        self.form_proxy.label_norm.setText(self.profiles[material][family]["norm"])
-        self.form_proxy.label_unit.setText(self.profiles[material][family]["unit"])
+        fam_dict = self.profiles.get(material, {}).get(family, {})
+        norm_val = fam_dict.get("norm", "Custom" if is_custom else "")
+        unit_val = fam_dict.get("unit", "Metric Units" if is_custom else "")
+
+        self.form_proxy.label_norm.setText(norm_val)
+        self.form_proxy.label_unit.setText(unit_val)
 
         self.form_proxy.combo_size.clear()
-        self.form_proxy.combo_size.addItems([s for s in self.profiles[material][family]["sizes"]])
+        sizes = fam_dict.get("sizes", {})
+        self.form_proxy.combo_size.addItems([s for s in sizes])
 
         self.form_proxy.combo_size.setCurrentIndex(0)
         self.on_size_changed(None)
@@ -258,7 +267,9 @@ class BaseProfileTaskPanel(ABC):
         size = str(self.form_proxy.combo_size.currentText())
 
         if size != "":
-            profile = self.profiles[material][family]["sizes"][size]
+            family_dict = self.profiles.get(material, {}).get(family, {})
+            canonical = get_canonical_family(family, family_data=family_dict)
+            profile = family_dict.get("sizes", {}).get(size, {})
 
             SETTING_MAP = {
                 "Height": self.form_proxy.sb_height,
@@ -292,17 +303,32 @@ class BaseProfileTaskPanel(ABC):
             self.form_proxy.sb_weight.setEnabled(False)
             self.form_proxy.sb_weight.setValue(0.0)
 
-            for s in profile:
-                if s == "Size":
-                    continue
+            if canonical == "Custom Profile":
+                GEOMETRY_METADATA = {"asset_path", "object_name", "asset_id", "Area", "Size"}
+                for s in profile:
+                    if s in GEOMETRY_METADATA:
+                        continue
+                    if s in SETTING_MAP:
+                        sb = SETTING_MAP[s]
+                        try:
+                            sb.setValue(float(profile[s]))
+                        except (ValueError, TypeError):
+                            pass
+                        sb.setEnabled(False)
+                    else:
+                        raise ValueError("Setting Unkown")
+            else:
+                for s in profile:
+                    if s == "Size":
+                        continue
 
-                if s not in SETTING_MAP:
-                    raise ValueError("Setting Unkown")
+                    if s not in SETTING_MAP:
+                        raise ValueError("Setting Unkown")
 
-                sb = SETTING_MAP[s]
-                sb.setEnabled(True)
+                    sb = SETTING_MAP[s]
+                    sb.setEnabled(True)
 
-                sb.setValue(float(profile[s]))
+                    sb.setValue(float(profile[s]))
 
             self.enable_signals(True)
             self.proceed()
@@ -373,6 +399,31 @@ class BaseProfileTaskPanel(ABC):
             "init_rotation": self.get_rotation(),
             "catalog_family": selected_family,
         }
+        if canonical_family == "Custom Profile":
+            folder_root = self.library_manager._get_registered_folder(material_name)
+            size_name = self.form_proxy.combo_size.currentText()
+            size_data = (
+                family_data.get("sizes", {}).get(size_name, {})
+                if isinstance(family_data, dict)
+                else {}
+            )
+            asset_path = size_data.get("asset_path")
+            object_name = size_data.get("object_name", "Section")
+            asset_id = size_data.get("asset_id", "")
+            if folder_root and asset_path:
+                target_doc = getattr(profile, "Document", None) or App.ActiveDocument
+                local_sk = get_or_import_section_sketch(
+                    library_root=folder_root,
+                    asset_path=asset_path,
+                    object_name=object_name,
+                    target_doc=target_doc,
+                    asset_id=asset_id,
+                )
+                if local_sk is not None:
+                    profile.CustomProfile = local_sk
+        elif hasattr(profile, "CustomProfile") and profile.CustomProfile is not None:
+            profile.CustomProfile = None
+
         if canonical_family == "C" and hasattr(self.form_proxy, "sb_lip_length"):
             kwargs["init_lip_length"] = self.form_proxy.sb_lip_length.value()
 
@@ -542,8 +593,11 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 o.recompute()
 
             else:
-                App.ActiveDocument.removeObject(o.Name)
-                del o
+                try:
+                    App.ActiveDocument.removeObject(o.Name)
+                except Exception:
+                    pass
+                del self._objects[k]
 
     def has_name_prefix(self, internal_name, target_str):
         pattern = r"\d+$"
@@ -562,10 +616,14 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 self.update_profile(o)
 
             else:
-                # handle renames
-                App.ActiveDocument.removeObject(o.Name)
-                o = self.make_profile(sketch, edge, name)
-                self._objects[key] = o
+                # Create the new profile first BEFORE removing the old one!
+                # If creating the new profile fails, the old preview object is preserved.
+                new_o = self.make_profile(sketch, edge, name)
+                try:
+                    App.ActiveDocument.removeObject(o.Name)
+                except Exception:
+                    pass
+                self._objects[key] = new_o
 
         else:
             o = self.make_profile(sketch, edge, name)
@@ -574,81 +632,118 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         return key
 
     def make_profile(self, sketch, edge, name):
-        # Create an object in current document
-        obj = App.ActiveDocument.addObject("Part::FeaturePython", name)
-        obj.addExtension("Part::AttachExtensionPython")
-
-        if getattr(obj, "ViewObject", None) is not None:
-            obj.ViewObject.Transparency = 80
-            obj.ViewObject.ShapeColor = (0.0, 0.8, 0.0)
-
-        # move it to the sketch's parent if possible
-        if sketch is not None and len(sketch.Parents) > 0:
-            sk_parent = sketch.Parents[-1][0]
-            move_profile_to_parent_if_supported(obj, sk_parent)
-
-        if sketch is not None and edge is not None:
-            # Tuple assignment for edge
-            feature = sketch
-            link_sub = (feature, (edge))
-            obj.MapMode = "NormalToEdge"
-
-            try:
-                obj.AttachmentSupport = (feature, edge)
-            except AttributeError:  # for Freecad <= 0.21 support
-                obj.Support = (feature, edge)
-
-        else:
-            link_sub = None
-
-        init_offset = 0.0
-        if self.form_proxy.cb_pre_extend.isChecked():
-            init_offset = max(self.form_proxy.sb_width.value(), self.form_proxy.sb_height.value())
-
-        obj.MapPathParameter = 1
-
         material_name = self.form_proxy.combo_material.currentText()
         selected_family = self.form_proxy.combo_family.currentText()
         family_data = self.profiles.get(material_name, {}).get(selected_family) if hasattr(self, "profiles") and self.profiles else None
         canonical_family = get_canonical_family(selected_family, family_data)
 
-        kwargs = {
-            "init_mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
-            "init_mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
-            "init_rotation": self.get_rotation(),
-            "init_offset_a": init_offset,
-            "init_offset_b": init_offset,
-            "catalog_family": selected_family,
-        }
-        if canonical_family == "C" and hasattr(self.form_proxy, "sb_lip_length"):
-            kwargs["init_lip_length"] = self.form_proxy.sb_lip_length.value()
+        # Validate and resolve/import custom section sketch BEFORE creating profile object
+        custom_profile_sketch = None
+        if canonical_family == "Custom Profile":
+            size_name = self.form_proxy.combo_size.currentText()
+            size_data = (
+                family_data.get("sizes", {}).get(size_name, {})
+                if isinstance(family_data, dict)
+                else {}
+            )
+            folder_root = self.library_manager._get_registered_folder(material_name)
+            asset_path = size_data.get("asset_path")
+            object_name = size_data.get("object_name", "Section")
+            asset_id = size_data.get("asset_id", "")
+            if folder_root and asset_path:
+                custom_profile_sketch = get_or_import_section_sketch(
+                    library_root=folder_root,
+                    asset_path=asset_path,
+                    object_name=object_name,
+                    target_doc=App.ActiveDocument,
+                    asset_id=asset_id,
+                )
 
-        Profile(
-            obj,
-            self.form_proxy.sb_width.value(),
-            self.form_proxy.sb_height.value(),
-            self.form_proxy.sb_main_thickness.value(),
-            self.form_proxy.sb_flange_thickness.value(),
-            self.form_proxy.sb_radius1.value(),
-            self.form_proxy.sb_radius2.value(),
-            self.form_proxy.sb_length.value(),
-            self.form_proxy.sb_weight.value(),
-            self.form_proxy.sb_unitprice.value(),
-            self.form_proxy.cb_make_fillet.isChecked(),  # and self.form_proxy.family.currentText() not in ["Flat Sections", "Square", "Round Bar"],
-            *self.get_anchor(),
-            material_name,
-            canonical_family,
-            self.form_proxy.combo_size.currentText(),
-            self.form_proxy.cb_combined_bevel.isChecked(),
-            link_sub,
-            **kwargs,
-        )
+        # Create an object in current document
+        obj = None
+        try:
+            obj = App.ActiveDocument.addObject("Part::FeaturePython", name)
+            obj.addExtension("Part::AttachExtensionPython")
 
-        # Create a ViewObject in current GUI
-        if getattr(obj, "ViewObject", None) is not None:
-            ViewProviderProfile(obj.ViewObject)
+            if getattr(obj, "ViewObject", None) is not None:
+                obj.ViewObject.Transparency = 80
+                obj.ViewObject.ShapeColor = (0.0, 0.8, 0.0)
 
-        return obj
+            # move it to the sketch's parent if possible
+            if sketch is not None and len(sketch.Parents) > 0:
+                sk_parent = sketch.Parents[-1][0]
+                move_profile_to_parent_if_supported(obj, sk_parent)
+
+            if sketch is not None and edge is not None:
+                # Tuple assignment for edge
+                feature = sketch
+                link_sub = (feature, (edge))
+                obj.MapMode = "NormalToEdge"
+
+                try:
+                    obj.AttachmentSupport = (feature, edge)
+                except AttributeError:  # for Freecad <= 0.21 support
+                    obj.Support = (feature, edge)
+
+            else:
+                link_sub = None
+
+            init_offset = 0.0
+            if self.form_proxy.cb_pre_extend.isChecked():
+                init_offset = max(self.form_proxy.sb_width.value(), self.form_proxy.sb_height.value())
+
+            obj.MapPathParameter = 1
+
+            kwargs = {
+                "init_mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
+                "init_mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
+                "init_rotation": self.get_rotation(),
+                "init_offset_a": init_offset,
+                "init_offset_b": init_offset,
+                "catalog_family": selected_family,
+            }
+            if canonical_family == "Custom Profile" and custom_profile_sketch is not None:
+                kwargs["custom_profile"] = custom_profile_sketch
+            if canonical_family == "C" and hasattr(self.form_proxy, "sb_lip_length"):
+                kwargs["init_lip_length"] = self.form_proxy.sb_lip_length.value()
+
+            Profile(
+                obj,
+                self.form_proxy.sb_width.value(),
+                self.form_proxy.sb_height.value(),
+                self.form_proxy.sb_main_thickness.value(),
+                self.form_proxy.sb_flange_thickness.value(),
+                self.form_proxy.sb_radius1.value(),
+                self.form_proxy.sb_radius2.value(),
+                self.form_proxy.sb_length.value(),
+                self.form_proxy.sb_weight.value(),
+                self.form_proxy.sb_unitprice.value(),
+                self.form_proxy.cb_make_fillet.isChecked(),  # and self.form_proxy.family.currentText() not in ["Flat Sections", "Square", "Round Bar"],
+                *self.get_anchor(),
+                material_name,
+                canonical_family,
+                self.form_proxy.combo_size.currentText(),
+                self.form_proxy.cb_combined_bevel.isChecked(),
+                link_sub,
+                **kwargs,
+            )
+
+            # Create a ViewObject in current GUI
+            if getattr(obj, "ViewObject", None) is not None:
+                if canonical_family == "Custom Profile":
+                    ViewProviderCustomProfile(obj.ViewObject)
+                else:
+                    ViewProviderProfile(obj.ViewObject)
+
+            return obj
+
+        except Exception:
+            if obj is not None and hasattr(obj, "Name"):
+                try:
+                    App.ActiveDocument.removeObject(obj.Name)
+                except Exception:
+                    pass
+            raise
 
     def addSelection(self, doc, obj, sub, other):
         self.update_selection()

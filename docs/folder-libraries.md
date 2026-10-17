@@ -28,7 +28,15 @@ Portable folder libraries allow users to store FrameForge profile catalogs and s
    - Click **Edit Section** to open an autonomous working copy in FreeCAD, bound to the stable row identity via persistent model indexing. Edit constraints in Sketcher, then click **Apply Section Edit** to recompute dimensions and stage asset updates. Renaming the code preserves target binding; removing the row cleanly invalidates the session without sibling fallback. The original published asset file is never exposed to direct edits before Save.
    - Deleting a size row stages removal in the catalog. Per S9, corresponding asset files on disk are removed only upon clicking **Save Changes**, and only if no other size shares the asset. Discarding or canceling preserves all saved assets and catalog entries.
 
-5. **Unregister safely without removing files**:
+5. **Instantiate Custom Profiles in Create Profiles Tool**:
+   - In the standard **Create Profile** tool (`CreateProfileTaskPanel`), folder libraries appear in the material selector. Selecting `Custom Profile` family exposes the captured geometry sizes.
+   - Metadata (`asset_path`, `object_name`, `asset_id`, `Area`) is safely filtered; bounding dimensions (Height, Width) and weight are displayed read-only to prevent drift; inapplicable dimensional and fillet controls are disabled.
+   - When generating profiles along selected path edges, FrameForge imports the exact `object_name` sketch into the active project document as an autonomous native SketchObject.
+   - New profile instances from the same unchanged section reuse the existing document-local sketch source, ensuring consistent BOM quantity grouping and PID numbering.
+   - Project documents carry the native sketch and can be saved, reopened, and recomputed completely standalone without requiring the original folder library to remain registered or present on disk.
+   - Library section edits emit new asset UUIDs and never mutate existing project sketches.
+
+6. **Unregister safely without removing files**:
    - Select the folder library and click **Unregister Folder Library** (the contextual delete button).
    - If unsaved changes exist, choose whether to save, discard, or cancel before proceeding.
    - Confirm unregistration in the dialog prompt.
@@ -126,5 +134,5 @@ Atomically saves catalog updates to `<root>/library.json` preserving material im
 - Autonomous section sketch capture and serialization into relative `sections/` assets (T2 — complete).
 - Profile Library Manager UI integration for folder selection, registration, and CRUD flows (T3 — complete).
 - Geometry-specific section capture, edit, rename, and delete manager flow (T4 — complete).
-- Instantiate library sections as document-local sources for profile generation (T5).
+- Instantiate library sections as document-local sources for profile generation (T5 — complete).
 - Complete folder library asset duplication and relocation verification (T6).
