@@ -59,12 +59,24 @@ class NewLibraryDialog(QtWidgets.QDialog):
         default_name="",
         default_material="Steel",
         is_duplicate=False,
+        is_folder=False,
     ):
         super().__init__(parent)
         self.setWindowTitle(translate("frameforge", title))
         self.resize(380, 160)
 
         layout = QtWidgets.QVBoxLayout(self)
+
+        if is_folder:
+            lbl_info = QtWidgets.QLabel(
+                translate(
+                    "frameforge",
+                    "Folder libraries require an empty folder on disk. Existing legacy data is not automatically moved.",
+                )
+            )
+            lbl_info.setWordWrap(True)
+            lbl_info.setStyleSheet("color: #78909c; padding-bottom: 4px;")
+            layout.addWidget(lbl_info)
 
         # Name row
         layout.addWidget(QtWidgets.QLabel(translate("frameforge", "Library Name:")))
@@ -331,9 +343,25 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         lib_header = QtWidgets.QHBoxLayout()
         lib_header.addWidget(QtWidgets.QLabel(translate("frameforge", "<b>Available Libraries:</b>")), 1)
         self.btn_new_lib = self._compact_button("list-add.svg", "New Library", self._on_new_library)
+        self.btn_new_folder_lib = self._compact_button(
+            QtWidgets.QStyle.SP_FileDialogNewFolder,
+            "New Folder Library",
+            self._on_new_folder_library,
+        )
+        self.btn_register_folder_lib = self._compact_button(
+            QtWidgets.QStyle.SP_DialogOpenButton,
+            "Register Folder Library",
+            self._on_register_folder_library,
+        )
         self.btn_dup_lib = self._compact_button("duplicate.svg", "Duplicate Library", self._on_duplicate_library)
         self.btn_del_lib = self._compact_button("list-remove.svg", "Delete Library", self._on_delete_library)
-        for button in (self.btn_new_lib, self.btn_dup_lib, self.btn_del_lib):
+        for button in (
+            self.btn_new_lib,
+            self.btn_new_folder_lib,
+            self.btn_register_folder_lib,
+            self.btn_dup_lib,
+            self.btn_del_lib,
+        ):
             lib_header.addWidget(button)
         lib_layout.addLayout(lib_header)
         self.list_libraries = QtWidgets.QListWidget()
@@ -453,100 +481,202 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         bottom_layout.addWidget(self.btn_close)
         main_layout.addLayout(bottom_layout)
 
-    def _compact_button(self, icon_name, tooltip, callback):
+    def _compact_button(self, icon, tooltip, callback):
         button = QtWidgets.QToolButton()
-        button.setIcon(QtGui.QIcon(os.path.join(ICONPATH, icon_name)))
+        if isinstance(icon, QtGui.QIcon):
+            button.setIcon(icon)
+        elif isinstance(icon, QtWidgets.QStyle.StandardPixmap):
+            button.setIcon(self.style().standardIcon(icon))
+        else:
+            button.setIcon(QtGui.QIcon(os.path.join(ICONPATH, icon)))
         button.setToolTip(translate("frameforge", tooltip))
         button.setFixedSize(26, 26)
         button.clicked.connect(callback)
         return button
 
     def refresh_libraries(self, select_name=None):
-        self.list_libraries.blockSignals(True)
-        self.list_libraries.clear()
+        try:
+            libs = self.manager.list_libraries()
+        except Exception as err:
+            QtWidgets.QMessageBox.critical(
+                self,
+                translate("frameforge", "Error"),
+                translate("frameforge", "Failed to load libraries: %s") % str(err),
+            )
+            self._set_status(
+                translate("frameforge", "Error loading libraries: %s") % str(err), is_error=True
+            )
+            return False
 
-        libs = self.manager.list_libraries()
+        self._refresh_load_error = None
+        self._in_refresh = True
         target_item = None
+        fallback_item = None
+        item_to_select = None
+        try:
+            self.list_libraries.blockSignals(True)
+            self.list_libraries.clear()
 
-        for lib in libs:
-            tag = translate("frameforge", "[User] ") if lib["is_user"] else translate("frameforge", "[System] ")
-            item = QtWidgets.QListWidgetItem(f"{tag}{lib['name']}")
-            item.setData(QtCore.Qt.UserRole, lib)
-            self.list_libraries.addItem(item)
-            if select_name and lib["name"].lower() == select_name.lower():
-                target_item = item
+            current_name = self.current_lib_meta.get("name") if self.current_lib_meta else None
 
-        self.list_libraries.blockSignals(False)
+            for lib in libs:
+                if lib.get("is_folder"):
+                    tag = translate("frameforge", "[Folder] ")
+                elif lib.get("is_user"):
+                    tag = translate("frameforge", "[User] ")
+                else:
+                    tag = translate("frameforge", "[System] ")
+                item = QtWidgets.QListWidgetItem(f"{tag}{lib['name']}")
+                item.setData(QtCore.Qt.UserRole, lib)
+                if lib.get("folder_path"):
+                    item.setToolTip(lib["folder_path"])
+                self.list_libraries.addItem(item)
+                if select_name and lib["name"].lower() == select_name.lower():
+                    target_item = item
+                if current_name and lib["name"].lower() == current_name.lower():
+                    fallback_item = item
 
-        if target_item:
-            self.list_libraries.setCurrentItem(target_item)
-        elif self.list_libraries.count() > 0:
-            self.list_libraries.setCurrentRow(0)
+            self.list_libraries.blockSignals(False)
+
+            item_to_select = target_item
+            if not item_to_select and self.list_libraries.count() > 0:
+                item_to_select = fallback_item or self.list_libraries.item(0)
+
+            if item_to_select:
+                self.list_libraries.setCurrentItem(item_to_select)
+        finally:
+            self._in_refresh = False
+
+        if getattr(self, "_refresh_load_error", None):
+            if fallback_item and fallback_item != item_to_select:
+                self.list_libraries.blockSignals(True)
+                self.list_libraries.setCurrentItem(fallback_item)
+                self.list_libraries.blockSignals(False)
+            return False
+
+        return True
+
+    def _prompt_dirty_save(self):
+        """
+        Handles unsaved changes before switching, creating, registering, or unregistering.
+        Returns True if action can proceed, False if aborted/canceled or save failed.
+        Note: Choosing Discard grants permission to proceed with the action without saving,
+        but does not clear self.is_dirty immediately; dirty state is preserved if the action
+        subsequently cancels or fails.
+        """
+        if not self.is_dirty:
+            return True
+
+        try:
+            self._commit_current_family_edits()
+        except ValueError as e:
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Warning"), str(e))
+
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            translate("frameforge", "Unsaved Changes"),
+            translate(
+                "frameforge",
+                "You have unsaved changes. Do you want to save them before switching libraries?",
+            ),
+            QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Discard | QtWidgets.QMessageBox.Cancel,
+            QtWidgets.QMessageBox.Save,
+        )
+        if reply == QtWidgets.QMessageBox.Save:
+            self._on_save_library()
+            return not self.is_dirty
+        elif reply == QtWidgets.QMessageBox.Discard:
+            return True
+        else:
+            return False
 
     def _on_library_selection_changed(self, current, previous):
         if not current:
             return
 
-        if self.is_dirty and previous:
-            try:
-                self._commit_current_family_edits()
-            except ValueError as e:
-                QtWidgets.QMessageBox.warning(self, translate("frameforge", "Warning"), str(e))
-
-            reply = QtWidgets.QMessageBox.question(
-                self,
-                translate("frameforge", "Unsaved Changes"),
-                translate(
-                    "frameforge",
-                    "You have unsaved changes. Do you want to save them before switching libraries?",
-                ),
-                QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Discard | QtWidgets.QMessageBox.Cancel,
-                QtWidgets.QMessageBox.Save,
-            )
-            if reply == QtWidgets.QMessageBox.Save:
-                self._on_save_library()
-                if self.is_dirty:
-                    self.list_libraries.blockSignals(True)
-                    self.list_libraries.setCurrentItem(previous)
-                    self.list_libraries.blockSignals(False)
-                    return
-            elif reply == QtWidgets.QMessageBox.Cancel:
+        if not getattr(self, "_in_refresh", False) and self.is_dirty and previous:
+            if not self._prompt_dirty_save():
                 self.list_libraries.blockSignals(True)
                 self.list_libraries.setCurrentItem(previous)
                 self.list_libraries.blockSignals(False)
                 return
 
         lib_meta = current.data(QtCore.Qt.UserRole)
-        # Reset current family so previous library's family doesn't commit into new library
-        self.current_family = None
-        self.current_lib_meta = lib_meta
-
-        try:
-            self.current_lib_data = self.manager.get_library(lib_meta["name"])
-        except Exception as e:
-            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(e))
+        if not lib_meta:
             return
 
-        is_user = lib_meta["is_user"]
+        try:
+            new_data = self.manager.get_library(lib_meta["name"])
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(e))
+            self._set_status(
+                translate("frameforge", "Error loading library '%s': %s") % (lib_meta["name"], str(e)),
+                is_error=True,
+            )
+            if getattr(self, "_in_refresh", False):
+                self._refresh_load_error = e
+            if previous:
+                self.list_libraries.blockSignals(True)
+                self.list_libraries.setCurrentItem(previous)
+                self.list_libraries.blockSignals(False)
+            return
+
+        # Commit state only after get_library succeeds
+        self.current_family = None
+        self.current_lib_meta = lib_meta
+        self.current_lib_data = new_data
+
+        is_user = lib_meta.get("is_user", False)
+        is_folder = lib_meta.get("is_folder", False)
+        folder_path = lib_meta.get("folder_path")
+
         self.btn_del_lib.setEnabled(is_user)
         self.btn_save.setEnabled(is_user)
         self.btn_add_family.setEnabled(is_user)
 
-        self._update_banner(is_user, lib_meta["name"])
+        if is_folder:
+            self.btn_del_lib.setToolTip(translate("frameforge", "Unregister Folder Library"))
+            # Temporary T6 duplicate guard
+            self.btn_dup_lib.setEnabled(False)
+            self.btn_dup_lib.setToolTip(
+                translate("frameforge", "Folder library duplication is not yet supported")
+            )
+        else:
+            self.btn_del_lib.setToolTip(translate("frameforge", "Delete Library"))
+            self.btn_dup_lib.setEnabled(True)
+            self.btn_dup_lib.setToolTip(translate("frameforge", "Duplicate Library"))
+
+        self._update_banner(is_user, lib_meta["name"], is_folder=is_folder, folder_path=folder_path)
 
         self._populate_families()
         self.is_dirty = False
         self._set_status("")
 
-    def _update_banner(self, is_user, name):
+    def _update_banner(self, is_user, name, is_folder=False, folder_path=None):
         dark = is_dark_theme(self)
         mat, dens = self.manager.get_library_material_info(name)
         mat_display = f"{translate('frameforge', mat)} ({dens} g/cm³)"
-        if is_user:
+        if is_folder:
+            folder_info = f" | {folder_path}" if folder_path else ""
+            self.lbl_lib_banner.setText(
+                translate("frameforge", "Folder Library: %s%s | Material: %s (Editable)")
+                % (name, folder_info, mat_display)
+            )
+            self.lbl_lib_banner.setToolTip(folder_path or "")
+            if dark:
+                self.lbl_lib_banner.setStyleSheet(
+                    "background-color: #1a333a; color: #80deea; border: 1px solid #00838f; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
+                )
+            else:
+                self.lbl_lib_banner.setStyleSheet(
+                    "background-color: #e0f7fa; color: #006064; border: 1px solid #80deea; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
+                )
+        elif is_user:
             self.lbl_lib_banner.setText(
                 translate("frameforge", "User Library: %s | Material: %s (Editable)")
                 % (name, mat_display)
             )
+            self.lbl_lib_banner.setToolTip("")
             if dark:
                 self.lbl_lib_banner.setStyleSheet(
                     "background-color: #1b3824; color: #81c784; border: 1px solid #2e7d32; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
@@ -563,6 +693,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 )
                 % (name, mat_display)
             )
+            self.lbl_lib_banner.setToolTip("")
             if dark:
                 self.lbl_lib_banner.setStyleSheet(
                     "background-color: #2b3036; color: #cfd8dc; border: 1px solid #455a64; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
@@ -995,6 +1126,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 self._recalculate_row_weight(item.row())
 
     def _on_new_library(self):
+        if not self._prompt_dirty_save():
+            return
+
         dlg = NewLibraryDialog(self, title="New Library", default_material="Steel")
         if dlg.exec_() != QtWidgets.QDialog.Accepted:
             return
@@ -1049,11 +1183,125 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             )
             return
 
-        self.refresh_libraries(select_name=name)
+        if not self.refresh_libraries(select_name=name):
+            return
         self._set_status(translate("frameforge", "Library '%s' created successfully.") % name)
+
+    def _on_new_folder_library(self):
+        if not self._prompt_dirty_save():
+            return
+
+        folder_path = QtWidgets.QFileDialog.getExistingDirectory(
+            self, translate("frameforge", "Select Empty Folder for Library")
+        )
+        if not folder_path:
+            return
+
+        default_name = os.path.basename(os.path.normpath(folder_path))
+        dlg = NewLibraryDialog(
+            self,
+            title="New Folder Library",
+            default_name=default_name,
+            default_material="Steel",
+            is_folder=True,
+        )
+        if dlg.exec_() != QtWidgets.QDialog.Accepted:
+            return
+
+        name, mat, dens, _ = dlg.get_values()
+        if not name:
+            return
+
+        initial_weight = "1.037"
+        try:
+            initial_weight = str(
+                calculate_linear_weight(
+                    family="Square Hollow",
+                    width=50,
+                    height=50,
+                    thickness=2,
+                    density_g_cm3=dens,
+                )
+            )
+        except Exception:
+            pass
+
+        default_data = {
+            "_metadata": {"name": name, "material": mat, "density": dens},
+            "Square Hollow": {
+                "norm": "Custom",
+                "unit": "Metric Units",
+                "fillet": False,
+                "sizes": {
+                    "50x50x2": {
+                        "Height": "50",
+                        "Width": "50",
+                        "Thickness": "2",
+                        "Flange Thickness": "0",
+                        "Radius1": "0",
+                        "Radius2": "0",
+                        "Weight": initial_weight,
+                    }
+                },
+            },
+        }
+
+        try:
+            self.manager.create_folder_library(
+                folder_path, name, material=mat, density=dens, data=default_data
+            )
+        except (FileExistsError, ValueError, OSError) as err:
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Error"),
+                str(err),
+            )
+            return
+
+        if not self.refresh_libraries(select_name=name):
+            return
+        self._set_status(translate("frameforge", "Folder library '%s' created successfully.") % name)
+
+    def _on_register_folder_library(self):
+        if not self._prompt_dirty_save():
+            return
+
+        folder_path = QtWidgets.QFileDialog.getExistingDirectory(
+            self, translate("frameforge", "Select Existing Folder Library Directory")
+        )
+        if not folder_path:
+            return
+
+        try:
+            meta = self.manager.register_folder_library(folder_path)
+        except Exception as err:
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Error"),
+                str(err),
+            )
+            return
+
+        reg_name = meta.get("name") if isinstance(meta, dict) else None
+        if not self.refresh_libraries(select_name=reg_name):
+            return
+        self._set_status(
+            translate("frameforge", "Folder library '%s' registered successfully.") % reg_name
+        )
 
     def _on_duplicate_library(self):
         if not self.current_lib_meta:
+            return
+
+        if self.current_lib_meta.get("is_folder"):
+            QtWidgets.QMessageBox.information(
+                self,
+                translate("frameforge", "Information"),
+                translate("frameforge", "Folder library duplication is not yet supported."),
+            )
+            return
+
+        if not self._prompt_dirty_save():
             return
 
         source_name = self.current_lib_meta["name"]
@@ -1091,24 +1339,63 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             )
             return
 
-        self.refresh_libraries(select_name=new_name)
+        if not self.refresh_libraries(select_name=new_name):
+            return
         self._set_status(translate("frameforge", "Library duplicated as '%s'.") % new_name)
 
     def _on_delete_library(self):
-        if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
+        if not self.current_lib_meta or not self.current_lib_meta.get("is_user", False):
             return
 
+        if not self._prompt_dirty_save():
+            return
+
+        is_folder = self.current_lib_meta.get("is_folder", False)
         name = self.current_lib_meta["name"]
-        reply = QtWidgets.QMessageBox.question(
-            self,
-            translate("frameforge", "Confirm deletion"),
-            translate("frameforge", "Are you sure you want to delete library '%s'?") % name,
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
-        )
-        if reply == QtWidgets.QMessageBox.Yes:
-            self.manager.delete_user_library(name)
-            self.refresh_libraries()
-            self._set_status(translate("frameforge", "Library '%s' deleted.") % name)
+
+        if is_folder:
+            folder_path = self.current_lib_meta.get("folder_path")
+            reply = QtWidgets.QMessageBox.question(
+                self,
+                translate("frameforge", "Confirm Unregister"),
+                translate(
+                    "frameforge",
+                    "Unregister folder library '%s'?\n\nAll files and sketches on disk will be kept intact.",
+                )
+                % name,
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            )
+            if reply != QtWidgets.QMessageBox.Yes:
+                return
+
+            try:
+                self.manager.unregister_folder_library(folder_path or name)
+            except Exception as e:
+                QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(e))
+                return
+
+            self.is_dirty = False
+            if not self.refresh_libraries():
+                return
+            self._set_status(translate("frameforge", "Folder library '%s' unregistered.") % name)
+        else:
+            reply = QtWidgets.QMessageBox.question(
+                self,
+                translate("frameforge", "Confirm deletion"),
+                translate("frameforge", "Are you sure you want to delete library '%s'?") % name,
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            )
+            if reply == QtWidgets.QMessageBox.Yes:
+                try:
+                    self.manager.delete_user_library(name)
+                except Exception as e:
+                    QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(e))
+                    return
+
+                self.is_dirty = False
+                if not self.refresh_libraries():
+                    return
+                self._set_status(translate("frameforge", "Library '%s' deleted.") % name)
 
     def _on_add_family(self):
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
@@ -1361,9 +1648,20 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
 
         lib_name = self.current_lib_meta["name"]
-        self.manager.save_user_library(lib_name, self.current_lib_data, overwrite=True)
-        self.is_dirty = False
-        self._set_status(translate("frameforge", "Library '%s' saved successfully.") % lib_name)
+        try:
+            if self.current_lib_meta.get("is_folder") and self.current_lib_meta.get("folder_path"):
+                self.manager.save_folder_library(
+                    self.current_lib_meta["folder_path"],
+                    self.current_lib_data,
+                    overwrite=True,
+                )
+            else:
+                self.manager.save_user_library(lib_name, self.current_lib_data, overwrite=True)
+            self.is_dirty = False
+            self._set_status(translate("frameforge", "Library '%s' saved successfully.") % lib_name)
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(e))
+            self._set_status(translate("frameforge", "Error saving library: %s") % str(e), is_error=True)
 
 
 class ManageProfileLibrariesCommand:

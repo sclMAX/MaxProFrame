@@ -4,6 +4,32 @@ Portable folder libraries allow users to store FrameForge profile catalogs and s
 
 ## Quick path
 
+### Profile Library Manager GUI
+
+1. **Create a new folder library**:
+   - Click the **New Folder Library** compact header button in the Profile Library Manager.
+   - Select an empty directory on disk via the folder picker.
+   - Enter the library display name and select the material/density in the dialog.
+   - FrameForge creates `<root>/library.json` and registers it in the local workstation registry.
+
+2. **Register an existing bundle on another computer**:
+   - Click **Register Folder Library** in the header.
+   - Select the root folder containing `library.json`.
+   - The catalog is validated and registered in place without modifying or copying files.
+
+3. **Edit and save folder catalog data**:
+   - Select the `[Folder]` entry in the library list (banner shows folder path and material).
+   - Add/edit dimensions and families, then click **Save Changes**. Changes are atomically written to `<root>/library.json`.
+
+4. **Unregister safely without removing files**:
+   - Select the folder library and click **Unregister Folder Library** (the contextual delete button).
+   - If unsaved changes exist, choose whether to save, discard, or cancel before proceeding.
+   - Confirm unregistration in the dialog prompt.
+   - The local workstation registration is removed immediately, while all directory files, manifests, and sketches on disk remain completely untouched.
+   - If unregistration is canceled or fails, unsaved edits and dirty state remain safely preserved on the active library.
+
+### Python API
+
 1. **Create a new folder library**:
    ```python
    from freecad.frameforge.library_manager import LibraryManager
@@ -47,6 +73,11 @@ Portable folder libraries allow users to store FrameForge profile catalogs and s
 | **Fail-Closed Registry** | Registry read errors (invalid JSON, decode errors, schema corruption, permission denial) fail closed immediately, preserving on-disk registry bytes and registered paths instead of silently resetting to empty. |
 | **Material Immutability & Validation** | Enforces that existing catalog material cannot be mutated on save, preserving downstream profile calculations. Preflight validation rejects invalid catalog shapes, non-string materials, and non-positive or non-finite densities before any writes occur. |
 | **Collision Protection** | Rejects creating, registering, or renaming folder libraries to display names that collide with bundled stock, legacy user, or other registered folder libraries. |
+| **GUI Header Actions** | Two compact 26x26 actions (**New Folder Library** and **Register Folder Library**) alongside existing legacy New, Duplicate, and Delete buttons. Fully localizable via existing translations. |
+| **Catalog Tagging & Banners** | Distinct `[Folder]` prefix in the library list with directory path tooltips; prominent banner showing library name, directory path, material info, and editable status. |
+| **Contextual Unregister** | When a folder library is selected, the Delete button adapts to **Unregister Folder Library**, prompting with explicit confirmation that disk files will be preserved. Never deletes directory contents from the GUI. Guarded by unsaved edits prompt before confirmation. |
+| **Unsaved Edits Guard & Cancellation Semantics** | Switching libraries or triggering create/register/unregister with unsaved changes prompts with Save / Discard / Cancel. Choosing **Discard** grants permission to proceed without saving, but does not immediately clear dirty state: if any subsequent step is canceled (picker cancel, dialog reject, unregister decline) or fails (backend write error, collision, refresh failure), the user remains on the current library with all unsaved edits and dirty state strictly preserved. Selecting another library loads catalog data before mutating active metadata, preventing split selection/write-target state on load failures. Refresh errors preserve diagnostic error status without overwriting with false success messages. |
+| **Folder Duplication (T6 Pending)** | Duplicating folder libraries is intentionally disabled with an explanatory tooltip until complete asset duplication is implemented in T6, preventing accidental flattening of folder assets into legacy JSON. |
 
 ## API Reference
 
@@ -78,8 +109,15 @@ Atomically saves catalog updates to `<root>/library.json` preserving material im
 - [ ] Unregistering removes local workstation registration only, preserving all assets.
 - [ ] Root confinement guards prevent symlink escape outside the library folder root.
 - [ ] Legacy stock and user libraries maintain existing metadata and behavior without modification.
+- [ ] Profile Library Manager provides explicit New Folder and Register Folder header actions.
+- [ ] Folder entries are clearly identified with `[Folder]` tag, banner path info, and contextual unregister.
+- [ ] Unsaved changes are guarded by Save/Discard/Cancel semantics across all library actions.
+- [ ] Folder duplication is disabled with informative diagnostic pending T6 asset duplication.
 
 ## Next steps
 
-- Autonomous section sketch capture and serialization into relative `sections/` assets (T2).
-- Manager UI integration for folder selection, registration, and CRUD flows (T3).
+- Autonomous section sketch capture and serialization into relative `sections/` assets (T2 — complete).
+- Profile Library Manager UI integration for folder selection, registration, and CRUD flows (T3 — in progress; correcting D1-D4 preservation and cancellation semantics).
+- Geometry-specific section capture, edit, rename, and delete manager flow (T4).
+- Instantiate library sections as document-local sources for profile generation (T5).
+- Complete folder library asset duplication and relocation verification (T6).
