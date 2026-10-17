@@ -71,6 +71,15 @@ Captures `source` and serializes it as an isolated `.FCStd` asset inside `<libra
 - Generates a safe, unpredictable asset filename and writes through exclusive temporary files before atomic publication.
 - Returns relative metadata dictionary: `{"asset_path": "sections/<filename>", "object_name": actual_sketch_name, "asset_id": "<id>"}` where `object_name` reflects the native sanitized `Sketch.Name` and user display input is preserved in `Sketch.Label`.
 
+### `resolve_and_validate_asset_path(library_root, asset_path)`
+Validates that `asset_path` is relative, resides under `sections/`, does not escape `library_root` via traversal (`..`) or symlinks, and ensures the `sections/` directory itself is confined within `library_root`.
+
+### `compute_sketch_dimensions_and_weight(sketch, density_g_cm3=7.85)`
+Computes `(Height, Width, Weight, Area)` directly from native face geometry and material density.
+
+### `purge_unreferenced_assets(library_root, staged_asset_paths, catalog_data)`
+Safely purges staged asset files on disk only if no catalog entry references them, preserving shared assets and confined roots.
+
 ## Checklist
 
 - [ ] Captured section sketches are pure native FreeCAD objects without `OutList` or `ExternalGeometry` links.
@@ -81,9 +90,10 @@ Captures `source` and serializes it as an isolated `.FCStd` asset inside `<libra
 - [ ] Source files and objects remain unchanged with identical SHA-256 hashes.
 - [ ] Saved `.FCStd` section assets can be reopened and edited in complete isolation.
 - [ ] Canonical path confinement prevents symlink escapes outside the library root.
+- [ ] Deferred asset deletion (S9) purges unreferenced assets only after successful catalog save.
 
 ## Next steps
 
-- Folder library selection and registration UI workflows in the Library Manager (T3).
-- Section capture, edit, rename, and delete actions in the Library Manager (T4).
+- Folder library selection and registration UI workflows in the Library Manager (T3 — complete).
+- Section capture, edit, rename, and delete actions in the Library Manager (T4 — complete).
 - Instantiation of library sections as document-local profile sources (T5).

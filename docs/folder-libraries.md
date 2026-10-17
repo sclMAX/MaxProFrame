@@ -21,7 +21,14 @@ Portable folder libraries allow users to store FrameForge profile catalogs and s
    - Select the `[Folder]` entry in the library list (banner shows folder path and material).
    - Add/edit dimensions and families, then click **Save Changes**. Changes are atomically written to `<root>/library.json`.
 
-4. **Unregister safely without removing files**:
+4. **Custom Profile Section Management (Capture, Edit, Deferred Deletion)**:
+   - When a folder library is selected, click **Capture Section** to capture an explicitly selected FreeCAD sketch into an autonomous `.FCStd` asset under `sections/`. If the `Custom Profile` family does not exist yet, FrameForge auto-creates it.
+   - Dimensions (Height, Width) and theoretical weight are computed directly from native face geometry and material density, and their table cells are locked against accidental divergence.
+   - Renaming a catalog code preserves the underlying stable asset filename and all custom metadata.
+   - Click **Edit Section** to open an autonomous working copy in FreeCAD, bound to the stable row identity via persistent model indexing. Edit constraints in Sketcher, then click **Apply Section Edit** to recompute dimensions and stage asset updates. Renaming the code preserves target binding; removing the row cleanly invalidates the session without sibling fallback. The original published asset file is never exposed to direct edits before Save.
+   - Deleting a size row stages removal in the catalog. Per S9, corresponding asset files on disk are removed only upon clicking **Save Changes**, and only if no other size shares the asset. Discarding or canceling preserves all saved assets and catalog entries.
+
+5. **Unregister safely without removing files**:
    - Select the folder library and click **Unregister Folder Library** (the contextual delete button).
    - If unsaved changes exist, choose whether to save, discard, or cancel before proceeding.
    - Confirm unregistration in the dialog prompt.
@@ -117,7 +124,7 @@ Atomically saves catalog updates to `<root>/library.json` preserving material im
 ## Next steps
 
 - Autonomous section sketch capture and serialization into relative `sections/` assets (T2 — complete).
-- Profile Library Manager UI integration for folder selection, registration, and CRUD flows (T3 — in progress; correcting D1-D4 preservation and cancellation semantics).
-- Geometry-specific section capture, edit, rename, and delete manager flow (T4).
+- Profile Library Manager UI integration for folder selection, registration, and CRUD flows (T3 — complete).
+- Geometry-specific section capture, edit, rename, and delete manager flow (T4 — complete).
 - Instantiate library sections as document-local sources for profile generation (T5).
 - Complete folder library asset duplication and relocation verification (T6).

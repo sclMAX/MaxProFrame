@@ -19,6 +19,30 @@ from freecad.frameforge.library_manager import (
 )
 
 try:
+    from freecad.frameforge.custom_section_geometry import build_custom_section_face
+except ImportError:
+    build_custom_section_face = None
+
+try:
+    from freecad.frameforge.section_capture import capture_section_sketch, save_section_asset
+except ImportError:
+    capture_section_sketch = None
+    save_section_asset = None
+
+try:
+    from freecad.frameforge.section_library import (
+        SectionEditSession,
+        compute_sketch_dimensions_and_weight,
+        purge_unreferenced_assets,
+        resolve_and_validate_asset_path,
+    )
+except ImportError:
+    SectionEditSession = None
+    compute_sketch_dimensions_and_weight = None
+    purge_unreferenced_assets = None
+    resolve_and_validate_asset_path = None
+
+try:
     from freecad.frameforge.library_manager import FILLET_FAMILIES, get_canonical_family
 except ImportError:
     FILLET_FAMILIES = frozenset([
@@ -306,6 +330,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.current_lib_data = {}
         self.current_family = None
         self.is_dirty = False
+        self._staged_deleted_assets = set()
+        self._staged_new_assets = set()
+        self._active_edit_session = None
 
         self.setWindowTitle(translate("frameforge", "FrameForge - Profile Library Manager"))
         self.resize(920, 580)
@@ -431,8 +458,22 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         self.btn_add_size = self._compact_button("list-add.svg", "Add Size", self._on_add_size)
         self.btn_del_size = self._compact_button("list-remove.svg", "Remove Size", self._on_delete_size)
+        self.btn_capture_section = self._compact_button(
+            "custom_profile.svg", "Capture Section", self._on_capture_section
+        )
+        self.btn_edit_section = self._compact_button(
+            "duplicate.svg", "Edit Section", self._on_edit_section
+        )
+        self.btn_apply_edit = self._compact_button(
+            "recompute.svg", "Apply Section Edit", self.apply_section_edit
+        )
+        self.btn_apply_edit.setEnabled(False)
+
         meta_row.addWidget(self.btn_add_size)
         meta_row.addWidget(self.btn_del_size)
+        meta_row.addWidget(self.btn_capture_section)
+        meta_row.addWidget(self.btn_edit_section)
+        meta_row.addWidget(self.btn_apply_edit)
 
         header_details_layout.addLayout(meta_row)
         header_layout.addLayout(header_details_layout, 1)
@@ -445,6 +486,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.table_sizes.setHorizontalHeaderLabels([translate("frameforge", col[1]) for col in self.TABLE_COLUMNS])
         self.table_sizes.horizontalHeader().setStretchLastSection(True)
         self.table_sizes.itemChanged.connect(self._on_table_item_changed)
+        self.table_sizes.itemSelectionChanged.connect(self._update_section_buttons)
         right_layout.addWidget(self.table_sizes, 1)
 
         splitter.addWidget(right_widget)
@@ -622,6 +664,15 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
 
         # Commit state only after get_library succeeds
+        self._cleanup_uncommitted_staged_new_assets()
+
+        if self._active_edit_session is not None:
+            self._active_edit_session.close(discard_uncommitted=True)
+            self._active_edit_session = None
+
+        self._staged_deleted_assets.clear()
+        self._staged_new_assets.clear()
+
         self.current_family = None
         self.current_lib_meta = lib_meta
         self.current_lib_data = new_data
@@ -649,6 +700,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self._update_banner(is_user, lib_meta["name"], is_folder=is_folder, folder_path=folder_path)
 
         self._populate_families()
+        self._update_section_buttons()
         self.is_dirty = False
         self._set_status("")
 
@@ -809,12 +861,16 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         fam_data = self.current_lib_data.get(family_name, {}) if has_family else {}
         is_explicit = bool(isinstance(fam_data, dict) and "canonical_family" in fam_data)
+        canonical = get_canonical_family(family_name, fam_data) if has_family else ""
+        is_custom_geom = (canonical == "Custom Profile")
 
         self.btn_del_family.setEnabled(is_user and has_family)
-        self.btn_add_size.setEnabled(is_user and has_family)
+        self.btn_add_size.setEnabled(is_user and has_family and not is_custom_geom)
         self.btn_del_size.setEnabled(is_user and has_family)
         self.le_norm.setEnabled(is_user and has_family)
-        self.cb_fillet.setEnabled(is_user and has_family and not is_explicit)
+        self.cb_fillet.setEnabled(is_user and has_family and not is_explicit and not is_custom_geom)
+
+        self._update_section_buttons()
 
         if not has_family:
             self.table_sizes.setRowCount(0)
@@ -929,6 +985,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                        "T-Slot 2-Slots Opp", "T-Slot 1-Slot"):
             fields[family] = {"Height", "Width"}
 
+        fields["Custom Profile"] = {"Height", "Width"}
+
         fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
         canonical = get_canonical_family(self.current_family, fam_data)
 
@@ -937,6 +995,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         visible.update(("Size", "Weight"))
         if canonical != "C":
             visible.discard("Lip Length")
+        if canonical == "Custom Profile":
+            visible.intersection_update({"Size", "Height", "Width", "Weight"})
         if not self.cb_fillet.isChecked():
             visible.difference_update(("Radius1", "Radius2"))
         for index, (key, label) in enumerate(self.TABLE_COLUMNS):
@@ -968,16 +1028,27 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.table_sizes.setRowCount(0)
 
         is_editable = bool(self.current_lib_meta and self.current_lib_meta["is_user"])
+        fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
+        canonical = get_canonical_family(self.current_family, fam_data)
+        is_geometry_family = (canonical == "Custom Profile")
 
         for size_key, size_props in sizes_dict.items():
             row = self.table_sizes.rowCount()
             self.table_sizes.insertRow(row)
+
+            is_geom_row = is_geometry_family or (isinstance(size_props, dict) and "asset_path" in size_props)
 
             for col_idx, (prop_key, _) in enumerate(self.TABLE_COLUMNS):
                 val = size_key if prop_key == "Size" else str(size_props.get(prop_key, "0"))
                 item = QtWidgets.QTableWidgetItem(val)
                 if not is_editable:
                     item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
+                elif is_geom_row and prop_key != "Size":
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
+
+                if col_idx == 0:
+                    item.setData(QtCore.Qt.UserRole, copy.deepcopy(size_props))
+
                 self.table_sizes.setItem(row, col_idx, item)
 
         self._update_size_columns()
@@ -1012,15 +1083,26 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 duplicates.append(size_name)
             seen_codes.add(size_name)
 
-            size_entry = {}
+            # Retrieve original metadata stored in UserRole:
+            orig_props = size_item.data(QtCore.Qt.UserRole)
+            if isinstance(orig_props, dict):
+                size_entry = copy.deepcopy(orig_props)
+            else:
+                size_entry = {}
+
+            # Update from table columns
             for col_idx, (prop_key, _) in enumerate(self.TABLE_COLUMNS):
                 if prop_key == "Size":
                     continue
                 if prop_key == "Lip Length" and canonical != "C":
                     continue
                 item = self.table_sizes.item(row, col_idx)
-                size_entry[prop_key] = item.text().strip() if item else "0"
+                if item:
+                    size_entry[prop_key] = item.text().strip()
+                elif prop_key not in size_entry:
+                    size_entry[prop_key] = "0"
 
+            size_item.setData(QtCore.Qt.UserRole, copy.deepcopy(size_entry))
             sizes[size_name] = size_entry
 
         if duplicates:
@@ -1071,6 +1153,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
             fam_data = self.current_lib_data.get(self.current_family, {})
             canonical = get_canonical_family(self.current_family, fam_data)
+            if canonical == "Custom Profile":
+                return
 
             if canonical == "C":
                 r1_item = self.table_sizes.item(row, 5)
@@ -1556,9 +1640,36 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
 
         row = self.table_sizes.currentRow()
-        if row >= 0:
-            self.table_sizes.removeRow(row)
-            self._mark_dirty()
+        if row < 0:
+            return
+
+        size_item = self.table_sizes.item(row, 0)
+        if not size_item:
+            return
+
+        props = size_item.data(QtCore.Qt.UserRole)
+        is_folder = bool(self.current_lib_meta.get("is_folder") and self.current_lib_meta.get("folder_path"))
+        folder_path = self.current_lib_meta.get("folder_path")
+
+        if isinstance(props, dict) and "asset_path" in props:
+            ap = props["asset_path"]
+            if is_folder and folder_path:
+                try:
+                    from freecad.frameforge.section_library import resolve_and_validate_asset_path
+                    resolve_and_validate_asset_path(folder_path, ap)
+                except Exception as err:
+                    QtWidgets.QMessageBox.warning(
+                        self,
+                        translate("frameforge", "Error"),
+                        translate("frameforge", "Cannot delete size with invalid asset path: %s") % str(err),
+                    )
+                    self._set_status(str(err), is_error=True)
+                    return
+            self._staged_deleted_assets.add(ap)
+
+        self.table_sizes.removeRow(row)
+        self._mark_dirty()
+        self._update_section_buttons()
 
     def _on_calc_weight(self):
         """Calculates theoretical linear weight for selected row or all rows."""
@@ -1648,13 +1759,53 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
 
         lib_name = self.current_lib_meta["name"]
+        is_folder = bool(self.current_lib_meta.get("is_folder") and self.current_lib_meta.get("folder_path"))
+        folder_path = self.current_lib_meta.get("folder_path")
+
         try:
-            if self.current_lib_meta.get("is_folder") and self.current_lib_meta.get("folder_path"):
+            if is_folder:
+                from freecad.frameforge.section_library import resolve_and_validate_asset_path, purge_unreferenced_assets
+
+                # Pre-validate all staged deletions before writing manifest
+                for ap in self._staged_deleted_assets:
+                    try:
+                        resolve_and_validate_asset_path(folder_path, ap)
+                    except Exception as err:
+                        QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(err))
+                        self._set_status(str(err), is_error=True)
+                        return
+
+                # Pre-validate all remaining asset paths before writing manifest
+                for fam_k, fam_v in self.current_lib_data.items():
+                    if fam_k.startswith("_") or not isinstance(fam_v, dict):
+                        continue
+                    sizes = fam_v.get("sizes", {})
+                    if isinstance(sizes, dict):
+                        for s_k, s_v in sizes.items():
+                            if isinstance(s_v, dict):
+                                ap = s_v.get("asset_path")
+                                if ap and isinstance(ap, str):
+                                    try:
+                                        resolve_and_validate_asset_path(folder_path, ap)
+                                    except Exception as err:
+                                        QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(err))
+                                        self._set_status(str(err), is_error=True)
+                                        return
+
                 self.manager.save_folder_library(
-                    self.current_lib_meta["folder_path"],
+                    folder_path,
                     self.current_lib_data,
                     overwrite=True,
                 )
+                if self._staged_deleted_assets:
+                    purge_unreferenced_assets(
+                        folder_path,
+                        self._staged_deleted_assets,
+                        self.current_lib_data,
+                    )
+                    self._staged_deleted_assets.clear()
+
+                self._staged_new_assets.clear()
             else:
                 self.manager.save_user_library(lib_name, self.current_lib_data, overwrite=True)
             self.is_dirty = False
@@ -1662,6 +1813,400 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         except Exception as e:
             QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(e))
             self._set_status(translate("frameforge", "Error saving library: %s") % str(e), is_error=True)
+
+    def _update_section_buttons(self):
+        is_user = bool(self.current_lib_meta and self.current_lib_meta.get("is_user"))
+        is_folder = bool(self.current_lib_meta and self.current_lib_meta.get("is_folder"))
+        fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
+        canonical = get_canonical_family(self.current_family, fam_data) if self.current_family else ""
+        is_custom_geom = (canonical == "Custom Profile")
+        has_row = (self.table_sizes.currentRow() >= 0)
+
+        if hasattr(self, "btn_add_size"):
+            self.btn_add_size.setEnabled(is_user and bool(self.current_family) and not is_custom_geom)
+        if hasattr(self, "btn_capture_section"):
+            self.btn_capture_section.setEnabled(is_user and is_folder)
+        if hasattr(self, "btn_edit_section"):
+            self.btn_edit_section.setEnabled(is_user and is_folder and is_custom_geom and has_row)
+        if hasattr(self, "btn_apply_edit"):
+            self.btn_apply_edit.setEnabled(bool(self._active_edit_session and is_user and is_folder and is_custom_geom))
+
+    def _on_capture_section(self):
+        if not self.current_lib_meta or not self.current_lib_meta.get("is_user"):
+            return
+        if not self.current_lib_meta.get("is_folder") or not self.current_lib_meta.get("folder_path"):
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Warning"),
+                translate("frameforge", "Custom section capture is only available for folder libraries."),
+            )
+            return
+
+        folder_path = self.current_lib_meta["folder_path"]
+
+        # Ensure Custom Profile family exists and is active
+        if "Custom Profile" not in self.current_lib_data:
+            self.current_lib_data["Custom Profile"] = {
+                "norm": "Custom",
+                "fillet": False,
+                "canonical_family": "Custom Profile",
+                "sizes": {},
+            }
+            self._populate_families(select_family="Custom Profile")
+            self._mark_dirty()
+        elif self.current_family != "Custom Profile":
+            idx = self.combo_family.findText("Custom Profile")
+            if idx >= 0:
+                self.combo_family.setCurrentIndex(idx)
+
+        # Explicit sketch selection via Gui.Selection
+        selected_objs = []
+        if hasattr(Gui, "Selection"):
+            selected_objs = [
+                obj for obj in Gui.Selection.getSelection()
+                if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject")
+            ]
+
+        chosen_sketch = None
+        if len(selected_objs) == 1:
+            chosen_sketch = selected_objs[0]
+        else:
+            # 0 or multiple sketches: collect all candidate sketches across open documents
+            candidate_options = []
+            sketch_map = {}
+            for doc in App.listDocuments().values():
+                for obj in doc.Objects:
+                    if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject"):
+                        display_name = f"{doc.Name}#{obj.Name}"
+                        candidate_options.append(display_name)
+                        sketch_map[display_name] = obj
+
+            if not candidate_options:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    translate("frameforge", "Warning"),
+                    translate("frameforge", "No sketches found in open FreeCAD documents."),
+                )
+                return
+
+            chosen_item, ok = QtWidgets.QInputDialog.getItem(
+                self,
+                translate("frameforge", "Select Section Sketch"),
+                translate("frameforge", "Choose sketch to capture:"),
+                candidate_options,
+                0,
+                False,
+            )
+            if not ok or not chosen_item:
+                return
+            chosen_sketch = sketch_map.get(chosen_item)
+
+        if chosen_sketch is None:
+            return
+
+        # Validate geometry via build_custom_section_face
+        from freecad.frameforge.custom_section_geometry import build_custom_section_face
+        from freecad.frameforge.section_library import compute_sketch_dimensions_and_weight
+        try:
+            face = build_custom_section_face(chosen_sketch)
+            if not face.isValid():
+                raise ValueError("Constructed section face is invalid.")
+        except Exception as err:
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Invalid Section Geometry"),
+                translate("frameforge", "The selected sketch cannot be used as a custom section: %s") % str(err),
+            )
+            return
+
+        # Density for weight calculation
+        lib_name = self.current_lib_meta.get("name", "")
+        _, density = self.manager.get_library_material_info(lib_name)
+
+        try:
+            height, width, weight, area = compute_sketch_dimensions_and_weight(chosen_sketch, density)
+        except Exception as err:
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Error"),
+                translate("frameforge", "Failed to compute section dimensions: %s") % str(err),
+            )
+            return
+
+        # Save autonomous asset into folder library
+        from freecad.frameforge.section_capture import save_section_asset
+        try:
+            asset_meta = save_section_asset(
+                folder_path,
+                chosen_sketch,
+                name=chosen_sketch.Label or "Section",
+            )
+        except Exception as err:
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Error"),
+                translate("frameforge", "Failed to save section asset: %s") % str(err),
+            )
+            return
+
+        asset_path = asset_meta["asset_path"]
+        self._staged_new_assets.add(asset_path)
+
+        # Determine unique code name
+        base_code = chosen_sketch.Label.strip() if chosen_sketch.Label else f"Custom_{width:.0f}x{height:.0f}"
+        if not base_code:
+            base_code = f"Custom_{width:.0f}x{height:.0f}"
+        existing_codes = set()
+        for r in range(self.table_sizes.rowCount()):
+            it = self.table_sizes.item(r, 0)
+            if it and it.text().strip():
+                existing_codes.add(it.text().strip())
+
+        candidate_code = base_code
+        counter = 1
+        while candidate_code in existing_codes:
+            candidate_code = f"{base_code}_{counter}"
+            counter += 1
+
+        size_entry = {
+            "Height": f"{height:.1f}",
+            "Width": f"{width:.1f}",
+            "Thickness": "0.0",
+            "Flange Thickness": "0.0",
+            "Radius1": "0.0",
+            "Radius2": "0.0",
+            "Weight": f"{weight:.2f}",
+            "Lip Length": "0.0",
+            "asset_path": asset_path,
+            "object_name": asset_meta["object_name"],
+            "asset_id": asset_meta["asset_id"],
+        }
+
+        # Insert row into table
+        row = self.table_sizes.rowCount()
+        self.table_sizes.insertRow(row)
+
+        for col, (prop_key, _) in enumerate(self.TABLE_COLUMNS):
+            val = candidate_code if prop_key == "Size" else size_entry.get(prop_key, "0")
+            item = QtWidgets.QTableWidgetItem(str(val))
+            if prop_key != "Size":
+                item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
+            if col == 0:
+                item.setData(QtCore.Qt.UserRole, copy.deepcopy(size_entry))
+            self.table_sizes.setItem(row, col, item)
+
+        self.table_sizes.selectRow(row)
+        self._mark_dirty()
+        self._update_section_buttons()
+        self._set_status(translate("frameforge", "Captured section '%s' successfully.") % candidate_code)
+
+    def _on_edit_section(self):
+        if not self.current_lib_meta or not self.current_lib_meta.get("is_user"):
+            return
+        if not self.current_lib_meta.get("is_folder") or not self.current_lib_meta.get("folder_path"):
+            return
+
+        row = self.table_sizes.currentRow()
+        if row < 0:
+            QtWidgets.QMessageBox.information(
+                self,
+                translate("frameforge", "Information"),
+                translate("frameforge", "Select a section row to edit."),
+            )
+            return
+
+        size_item = self.table_sizes.item(row, 0)
+        if not size_item:
+            return
+
+        size_props = size_item.data(QtCore.Qt.UserRole)
+        if not isinstance(size_props, dict) or "asset_path" not in size_props:
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Warning"),
+                translate("frameforge", "Selected row does not have a linked section geometry asset."),
+            )
+            return
+
+        folder_path = self.current_lib_meta["folder_path"]
+        asset_path = size_props["asset_path"]
+
+        from freecad.frameforge.section_library import SectionEditSession, resolve_and_validate_asset_path
+        try:
+            resolve_and_validate_asset_path(folder_path, asset_path)
+        except Exception as err:
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Security Warning"),
+                translate("frameforge", "Invalid asset path: %s") % str(err),
+            )
+            return
+
+        # Close any previous active session
+        if self._active_edit_session is not None:
+            self._active_edit_session.close(discard_uncommitted=True)
+            self._active_edit_session = None
+
+        # Bind stable original row identity BEFORE session opens via QPersistentModelIndex
+        p_index = QtCore.QPersistentModelIndex(self.table_sizes.model().index(row, 0))
+
+        session = SectionEditSession(
+            library_root=folder_path,
+            asset_path=asset_path,
+            size_code=size_item.text().strip(),
+            family=self.current_family,
+            library_name=self.current_lib_meta.get("name", ""),
+            asset_id=size_props.get("asset_id", ""),
+            persistent_index=p_index,
+        )
+        try:
+            session.open()
+        except Exception as err:
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Error"),
+                translate("frameforge", "Failed to open section for editing: %s") % str(err),
+            )
+            return
+
+        self._active_edit_session = session
+        self.btn_apply_edit.setEnabled(True)
+        # Ensure dialog does not block interaction with FreeCAD Sketcher
+        self.setModal(False)
+        self._set_status(
+            translate("frameforge", "Section opened in FreeCAD. Edit sketch, then click 'Apply Section Edit'."),
+            is_warning=True,
+        )
+
+    def apply_section_edit(self):
+        """Applies edits made to the working sketch in FreeCAD back to the library table."""
+        if self._active_edit_session is None:
+            QtWidgets.QMessageBox.information(
+                self,
+                translate("frameforge", "Information"),
+                translate("frameforge", "No active section edit session. Click 'Edit Section' first."),
+            )
+            return
+
+        session = self._active_edit_session
+
+        # Verify library context still matches
+        current_folder = self.current_lib_meta.get("folder_path") if self.current_lib_meta else None
+        if not current_folder or os.path.realpath(current_folder) != os.path.realpath(session.library_root):
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Warning"),
+                translate("frameforge", "Active edit session belongs to a different library."),
+            )
+            return
+
+        if self.current_family != session.family:
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Warning"),
+                translate("frameforge", "Active edit session belongs to a different family."),
+            )
+            return
+
+        # Validate stable original row identity via persistent_index (Blocker E2)
+        p_idx = getattr(session, "persistent_index", None)
+        if p_idx is None or not p_idx.isValid():
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Warning"),
+                translate("frameforge", "Target section row was removed or is invalid."),
+            )
+            session.close(discard_uncommitted=True)
+            self._active_edit_session = None
+            self.btn_apply_edit.setEnabled(False)
+            return
+
+        target_row = p_idx.row()
+        if target_row < 0 or target_row >= self.table_sizes.rowCount():
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Warning"),
+                translate("frameforge", "Target section row index is out of bounds."),
+            )
+            session.close(discard_uncommitted=True)
+            self._active_edit_session = None
+            self.btn_apply_edit.setEnabled(False)
+            return
+
+        lib_name = self.current_lib_meta.get("name", "") if self.current_lib_meta else session.library_name
+        _, density = self.manager.get_library_material_info(lib_name)
+
+        try:
+            result = session.apply(density_g_cm3=density)
+        except Exception as err:
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Error"),
+                translate("frameforge", "Failed to apply section edit: %s") % str(err),
+            )
+            return
+
+        size_item = self.table_sizes.item(target_row, 0)
+        props = size_item.data(QtCore.Qt.UserRole) if size_item else {}
+        if not isinstance(props, dict):
+            props = {}
+
+        # Old asset staged for deferred removal on Save
+        old_asset = props.get("asset_path")
+        if old_asset and old_asset != result["asset_path"]:
+            self._staged_deleted_assets.add(old_asset)
+
+        props["asset_path"] = result["asset_path"]
+        props["object_name"] = result["object_name"]
+        props["asset_id"] = result["asset_id"]
+        props["Height"] = result["Height"]
+        props["Width"] = result["Width"]
+        props["Weight"] = result["Weight"]
+
+        self._staged_new_assets.add(result["asset_path"])
+
+        # Update table items
+        self.table_sizes.blockSignals(True)
+        if size_item:
+            size_item.setData(QtCore.Qt.UserRole, copy.deepcopy(props))
+        # Height (col 1), Width (col 2), Weight (col 7)
+        self.table_sizes.setItem(target_row, 1, QtWidgets.QTableWidgetItem(result["Height"]))
+        self.table_sizes.setItem(target_row, 2, QtWidgets.QTableWidgetItem(result["Width"]))
+        self.table_sizes.setItem(target_row, 7, QtWidgets.QTableWidgetItem(result["Weight"]))
+        for col_idx in (1, 2, 7):
+            it = self.table_sizes.item(target_row, col_idx)
+            if it:
+                it.setFlags(it.flags() & ~QtCore.Qt.ItemIsEditable)
+        self.table_sizes.blockSignals(False)
+
+        self._mark_dirty()
+        self._set_status(translate("frameforge", "Section edits applied. Save library to publish changes."))
+
+    def _cleanup_uncommitted_staged_new_assets(self):
+        """Cleans up owned newly created/staged assets that were never committed to disk."""
+        if not self.current_lib_meta or not self.current_lib_meta.get("folder_path"):
+            self._staged_new_assets.clear()
+            return
+        folder_path = self.current_lib_meta["folder_path"]
+        from freecad.frameforge.section_library import resolve_and_validate_asset_path
+        for rel_path in list(self._staged_new_assets):
+            try:
+                full_path = resolve_and_validate_asset_path(folder_path, rel_path)
+                if os.path.isfile(full_path):
+                    os.remove(full_path)
+            except Exception:
+                pass
+        self._staged_new_assets.clear()
+
+    def closeEvent(self, event):
+        if getattr(self, "_active_edit_session", None) is not None:
+            try:
+                self._active_edit_session.close(discard_uncommitted=True)
+            except Exception:
+                pass
+            self._active_edit_session = None
+        self._cleanup_uncommitted_staged_new_assets()
+        super().closeEvent(event)
 
 
 class ManageProfileLibrariesCommand:
