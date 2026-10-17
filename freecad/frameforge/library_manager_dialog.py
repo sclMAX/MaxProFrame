@@ -2111,8 +2111,6 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         self._active_edit_session = session
         self.btn_apply_edit.setEnabled(True)
-        # Ensure dialog does not block interaction with FreeCAD Sketcher
-        self.setModal(False)
         self._set_status(
             translate("frameforge", "Section opened in FreeCAD. Edit sketch, then click 'Apply Section Edit'."),
             is_warning=True,
@@ -2238,7 +2236,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 pass
         self._staged_new_assets.clear()
 
-    def closeEvent(self, event):
+    def _cleanup_edit_session_and_staged_assets(self):
         if getattr(self, "_active_edit_session", None) is not None:
             try:
                 self._active_edit_session.close(discard_uncommitted=True)
@@ -2246,7 +2244,24 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 pass
             self._active_edit_session = None
         self._cleanup_uncommitted_staged_new_assets()
+
+    def done(self, result):
+        self._cleanup_edit_session_and_staged_assets()
+        super().done(result)
+
+    def closeEvent(self, event):
+        self._cleanup_edit_session_and_staged_assets()
         super().closeEvent(event)
+
+
+def _is_live_manager(dialog):
+    """Safely checks if a dialog wrapper and underlying C++ QObject are alive and visible."""
+    if dialog is None:
+        return False
+    try:
+        return bool(dialog.isVisible())
+    except (RuntimeError, AttributeError, ReferenceError):
+        return False
 
 
 class ManageProfileLibrariesCommand:
@@ -2260,8 +2275,40 @@ class ManageProfileLibrariesCommand:
         }
 
     def Activated(self):
-        dialog = ProfileLibraryManagerDialog(parent=Gui.getMainWindow())
-        dialog.exec_()
+        mw = Gui.getMainWindow() if (Gui is not None and hasattr(Gui, "getMainWindow")) else None
+
+        existing = getattr(mw, "_frameforge_library_manager", None) if mw is not None else None
+        if _is_live_manager(existing):
+            try:
+                existing.show()
+                existing.raise_()
+                existing.activateWindow()
+                return
+            except (RuntimeError, AttributeError):
+                pass
+
+        if mw is not None:
+            mw._frameforge_library_manager = None
+
+        dialog = ProfileLibraryManagerDialog(parent=mw)
+        dialog.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
+
+        def _retire(*_):
+            if mw is not None and getattr(mw, "_frameforge_library_manager", None) is dialog:
+                mw._frameforge_library_manager = None
+
+        dialog.finished.connect(_retire)
+        dialog.destroyed.connect(_retire)
+
+        if mw is not None:
+            mw._frameforge_library_manager = dialog
+
+        dialog.show()
+        try:
+            dialog.raise_()
+            dialog.activateWindow()
+        except (RuntimeError, AttributeError):
+            pass
 
     def IsActive(self):
         return True
