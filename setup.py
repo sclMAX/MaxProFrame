@@ -12,7 +12,7 @@ setup(
     packages=["freecad", "freecad.maxproframe", "freecad.frameforge"],
     maintainer="Vivien HENRY",
     maintainer_email="vivien.henry@inductivebrain.fr",
-    url="https://github.com/lukh/frameforge",
+    url="https://github.com/sclMAX/MaxProFrame",
     description="MaxProFrame is dedicated to creating Frames, Profiles and Beams, and applying operations (miter cuts, trim cuts, custom sketch profiles, portable libraries) in FreeCAD.",
     include_package_data=True,
 )
