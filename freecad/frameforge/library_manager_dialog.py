@@ -1,4 +1,5 @@
 import copy
+import math
 import os
 
 try:
@@ -488,6 +489,14 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.table_sizes.itemChanged.connect(self._on_table_item_changed)
         self.table_sizes.itemSelectionChanged.connect(self._update_section_buttons)
         right_layout.addWidget(self.table_sizes, 1)
+
+        # Custom Profile Cards view
+        from freecad.frameforge.custom_profile_cards import CustomProfileCardsView
+        self.cards_view = CustomProfileCardsView(dialog=self)
+        self.cards_view.setObjectName("custom_profile_cards")
+        right_layout.addWidget(self.cards_view, 1)
+        self.cards_view.hide()
+        self.table_sizes.itemSelectionChanged.connect(self.cards_view.on_table_selection_changed)
 
         splitter.addWidget(right_widget)
         splitter.setSizes([320, 640])
@@ -1055,6 +1064,16 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             w = max(self.table_sizes.columnWidth(col), 85)
             self.table_sizes.setColumnWidth(col, w)
 
+        if canonical == "Custom Profile":
+            self.table_sizes.hide()
+            if hasattr(self, "cards_view") and self.cards_view is not None:
+                self.cards_view.load_from_table(self.table_sizes, self)
+                self.cards_view.show()
+        else:
+            if hasattr(self, "cards_view") and self.cards_view is not None:
+                self.cards_view.hide()
+            self.table_sizes.show()
+
     def _commit_current_family_edits(self):
         """Commits table and metadata edits from widgets into current_lib_data for current_family."""
         if not self.current_family or self.current_family not in self.current_lib_data:
@@ -1064,6 +1083,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
         canonical = get_canonical_family(self.current_family, fam_data)
+
+        if canonical == "Custom Profile" and hasattr(self, "cards_view") and self.cards_view is not None:
+            self.cards_view.sync_to_table()
 
         sizes = {}
         seen_codes = set()
@@ -1110,6 +1132,22 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 )
                 % (", ".join(duplicates))
             )
+
+        if canonical == "Custom Profile":
+            for name, entry in sizes.items():
+                w_str = str(entry.get("Weight", "")).strip()
+                try:
+                    w_val = float(w_str)
+                    if not math.isfinite(w_val) or w_val <= 0.0:
+                        raise ValueError(f"Weight must be a positive finite number, got '{w_str}'.")
+                except Exception:
+                    raise ValueError(
+                        translate(
+                            "frameforge",
+                            "Invalid weight '%s' for custom profile '%s'. Weight must be a positive finite number.",
+                        )
+                        % (w_str, name)
+                    )
 
         self.current_lib_data[self.current_family]["norm"] = self.le_norm.text().strip()
         self.current_lib_data[self.current_family]["fillet"] = self.cb_fillet.isChecked()
@@ -1205,6 +1243,11 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             canonical = get_canonical_family(self.current_family, fam_data)
             if canonical == "C":
                 self._recalculate_row_weight(item.row())
+
+        fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
+        canonical = get_canonical_family(self.current_family, fam_data) if self.current_family else ""
+        if canonical == "Custom Profile" and hasattr(self, "cards_view") and self.cards_view is not None:
+            self.cards_view.on_table_item_changed(item)
 
     def _on_new_library(self):
         if not self._prompt_dirty_save():
@@ -1708,6 +1751,10 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             self._staged_deleted_assets.add(ap)
 
         self.table_sizes.removeRow(row)
+        fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
+        canonical = get_canonical_family(self.current_family, fam_data)
+        if canonical == "Custom Profile" and hasattr(self, "cards_view") and self.cards_view is not None:
+            self.cards_view.load_from_table(self.table_sizes, self)
         self._mark_dirty()
         self._update_section_buttons()
 
@@ -2036,6 +2083,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             self.table_sizes.setItem(row, col, item)
 
         self.table_sizes.selectRow(row)
+        if hasattr(self, "cards_view") and self.cards_view is not None:
+            self.cards_view.load_from_table(self.table_sizes, self)
+            self.cards_view.select_card(row)
         self._mark_dirty()
         self._update_section_buttons()
         self._set_status(translate("frameforge", "Captured section '%s' successfully.") % candidate_code)
@@ -2217,6 +2267,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 it.setFlags(it.flags() & ~QtCore.Qt.ItemIsEditable)
         self.table_sizes.blockSignals(False)
 
+        if hasattr(self, "cards_view") and self.cards_view is not None:
+            self.cards_view.refresh_card(target_row)
+
         self._mark_dirty()
         self._set_status(translate("frameforge", "Section edits applied. Save library to publish changes."))
 
@@ -2243,6 +2296,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             except Exception:
                 pass
             self._active_edit_session = None
+        if hasattr(self, "cards_view") and self.cards_view is not None:
+            if hasattr(self.cards_view, "_thumbnail_cache"):
+                self.cards_view._thumbnail_cache.clear()
         self._cleanup_uncommitted_staged_new_assets()
 
     def done(self, result):
