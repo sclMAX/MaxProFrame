@@ -10,8 +10,8 @@ from unittest.mock import patch
 import FreeCAD as App
 import FreeCADGui as Gui
 import test_custom_profile_selected_import as fixture
-from freecad.frameforge import create_profiles_tool as candidate
-from freecad.frameforge.section_library import get_or_import_section_sketch
+from freecad.maxproframe import create_profiles_tool as candidate
+from freecad.maxproframe.section_library import get_or_import_section_sketch
 
 
 def sources(doc):

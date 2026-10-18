@@ -3,8 +3,8 @@ import unittest
 import FreeCAD as App
 import Part
 
-from freecad.frameforge.profile import Profile
-from freecad.frameforge.trimmed_profile import TrimmedProfile
+from freecad.maxproframe.profile import Profile
+from freecad.maxproframe.trimmed_profile import TrimmedProfile
 
 
 class TestTrimmedProfilePID(unittest.TestCase):

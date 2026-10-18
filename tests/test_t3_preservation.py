@@ -6,9 +6,9 @@ import unittest
 from contextlib import ExitStack
 from unittest.mock import patch
 
-from freecad.frameforge.ff_tools import translate
-from freecad.frameforge.library_manager import LibraryManager
-from freecad.frameforge.library_manager_dialog import (
+from freecad.maxproframe.ff_tools import translate
+from freecad.maxproframe.library_manager import LibraryManager
+from freecad.maxproframe.library_manager_dialog import (
     NewLibraryDialog, ProfileLibraryManagerDialog, QtCore, QtWidgets,
 )
 

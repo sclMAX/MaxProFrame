@@ -6,7 +6,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from freecad.frameforge.library_manager import (
+from freecad.maxproframe.library_manager import (
     LibraryManager,
     calculate_linear_weight,
     get_known_families,
@@ -366,7 +366,7 @@ class TestFolderLibraries(unittest.TestCase):
             stream.write('{"corrupted": true')
             raise IOError("Simulated disk error")
 
-        with patch("freecad.frameforge.library_manager.json.dump", side_effect=fail_write):
+        with patch("freecad.maxproframe.library_manager.json.dump", side_effect=fail_write):
             with self.assertRaisesRegex(IOError, "^Simulated disk error$"):
                 self.manager.save_user_library("Atomic Folder", {"Pipe": {"sizes": {}}})
 

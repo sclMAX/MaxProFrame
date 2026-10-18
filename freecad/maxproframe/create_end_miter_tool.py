@@ -1,0 +1,81 @@
+import glob
+import json
+import os
+
+import FreeCAD as App
+import FreeCADGui as Gui
+import Part
+from PySide import QtCore, QtGui
+
+from freecad.maxproframe.ff_tools import add_command, ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, translate
+from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrimmedProfile
+
+
+class CreateEndMiterCommand:
+    def GetResources(self):
+        return {
+            "Pixmap": os.path.join(ICONPATH, "corner-end-miter.svg"),
+            "MenuText": translate("MetalWB", "Create Miter Ends"),
+            "Accel": "M, C",
+            "ToolTip": translate(
+                "MetalWB",
+                "<html><head/><body><p><b>Create Miter Ends</b> \
+                    <br><br> \
+                    Select two profiles. \
+                    </p></body></html>",
+            ),
+        }
+
+    def IsActive(self):
+        if App.ActiveDocument:
+            sel = Gui.Selection.getSelectionEx()
+            if len(sel) == 2:
+                active = False
+                for s in sel:
+                    o = s.Object
+                    if len(s.SubElementNames) != 1:
+                        return False
+
+                    if hasattr(o, "Target"):
+                        active = True
+                    elif hasattr(o, "TrimmedBody"):
+                        active = True
+                    else:
+                        return False
+                return active
+        return False
+
+    def Activated(self):
+        # create a TrimmedProfile object
+        sel = Gui.Selection.getSelectionEx()
+        App.ActiveDocument.openTransaction("Make End Miter Profile")
+
+        if len(sel) == 2:
+            self.make_end_miter_profile(sel[0].Object, [(sel[1].Object, sel[1].SubElementNames)])
+            self.make_end_miter_profile(sel[1].Object, [(sel[0].Object, sel[0].SubElementNames)])
+
+        App.ActiveDocument.commitTransaction()
+        App.ActiveDocument.recompute()
+
+    def make_end_miter_profile(self, trimmedBody=None, trimmingBoundary=None):
+        doc = App.ActiveDocument
+
+        name = "TrimmedProfile" if trimmedBody is None else f"{trimmedBody.Name}_Mt"
+        trimmed_profile = doc.addObject("Part::FeaturePython", name)
+
+        if trimmedBody is not None and len(trimmedBody.Parents) > 0:
+            trimmedBody.Parents[-1][0].addObject(trimmed_profile)
+
+        TrimmedProfile(trimmed_profile)
+
+        ViewProviderTrimmedProfile(trimmed_profile.ViewObject)
+        trimmed_profile.TrimmedBody = trimmedBody
+        trimmed_profile.TrimmingBoundary = trimmingBoundary
+
+        trimmed_profile.TrimmedProfileType = "End Miter"
+
+        # doc.recompute()
+        return trimmed_profile
+
+
+add_command("MaxProFrame_EndMiter", CreateEndMiterCommand())

@@ -8,19 +8,19 @@ from pathlib import Path
 import FreeCAD as App
 import Part
 
-from freecad.frameforge.library_manager import (
+from freecad.maxproframe.library_manager import (
     FILLET_FAMILIES,
     get_canonical_family,
     calculate_linear_weight,
     LibraryManager,
 )
-from freecad.frameforge.ff_tools import PROFILEIMAGES_PATH
+from freecad.maxproframe.ff_tools import PROFILEIMAGES_PATH
 from PySide import QtGui, QtWidgets
-from freecad.frameforge.profile import Profile
-from freecad.frameforge.create_bom import traverse_assembly, group_profiles
-from freecad.frameforge.trimmed_profile import TrimmedProfile
-from freecad.frameforge.extruded_cutout import ExtrudedCutout
-from freecad.frameforge.edit_profile_tool import EditProfileTaskPanel
+from freecad.maxproframe.profile import Profile
+from freecad.maxproframe.create_bom import traverse_assembly, group_profiles
+from freecad.maxproframe.trimmed_profile import TrimmedProfile
+from freecad.maxproframe.extruded_cutout import ExtrudedCutout
+from freecad.maxproframe.edit_profile_tool import EditProfileTaskPanel
 
 
 class TestCatalogFamilyProfiles(unittest.TestCase):

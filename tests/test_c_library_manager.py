@@ -4,7 +4,7 @@ import shutil
 import tempfile
 import unittest
 
-from freecad.frameforge.library_manager import (
+from freecad.maxproframe.library_manager import (
     FILLET_FAMILIES,
     KNOWN_FAMILIES,
     LibraryManager,

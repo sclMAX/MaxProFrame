@@ -35,10 +35,10 @@ import FreeCADGui as Gui
 import Part
 import Sketcher
 
-from freecad.frameforge.custom_section_geometry import build_custom_section_face
-from freecad.frameforge.ff_tools import translate
-from freecad.frameforge.library_manager import LibraryManager
-from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+from freecad.maxproframe.custom_section_geometry import build_custom_section_face
+from freecad.maxproframe.ff_tools import translate
+from freecad.maxproframe.library_manager import LibraryManager
+from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
 
 class TestCustomProfileCards(unittest.TestCase):

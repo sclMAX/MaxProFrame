@@ -9,11 +9,11 @@ import FreeCADGui as Gui
 import Part
 import Sketcher
 
-from freecad.frameforge.create_profiles_tool import CreateProfileTaskPanel
+from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
 
 # Console FreeCAD lacks command registration, which is unrelated to creation.
 with patch.object(Gui, "addCommand", create=True):
-    from freecad.frameforge import create_custom_profiles_tool as custom_module
+    from freecad.maxproframe import create_custom_profiles_tool as custom_module
 
 
 class TestProfileParentGuard(unittest.TestCase):

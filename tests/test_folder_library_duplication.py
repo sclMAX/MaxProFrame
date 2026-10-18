@@ -38,19 +38,19 @@ import FreeCADGui as Gui
 import Part
 import Sketcher
 
-from freecad.frameforge.custom_section_geometry import build_custom_section_face
-from freecad.frameforge.ff_tools import translate
-from freecad.frameforge.library_manager import (
+from freecad.maxproframe.custom_section_geometry import build_custom_section_face
+from freecad.maxproframe.ff_tools import translate
+from freecad.maxproframe.library_manager import (
     LibraryManager,
     STANDARD_DENSITIES,
     calculate_linear_weight,
 )
-from freecad.frameforge.library_manager_dialog import (
+from freecad.maxproframe.library_manager_dialog import (
     NewLibraryDialog,
     ProfileLibraryManagerDialog,
 )
-from freecad.frameforge.section_capture import capture_section_sketch
-from freecad.frameforge.section_library import compute_sketch_dimensions_and_weight
+from freecad.maxproframe.section_capture import capture_section_sketch
+from freecad.maxproframe.section_library import compute_sketch_dimensions_and_weight
 
 
 def _file_hash(path):
@@ -693,8 +693,8 @@ class TestFolderLibraryDuplication(unittest.TestCase):
             os.makedirs(dest_folder, exist_ok=True)
 
             with patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=dest_folder), \
-                 patch("freecad.frameforge.library_manager_dialog.NewLibraryDialog.exec_", return_value=QtWidgets.QDialog.Accepted), \
-                 patch("freecad.frameforge.library_manager_dialog.NewLibraryDialog.get_values", return_value=("UIDupFolderLib", "Aluminium", 2.70, False)):
+                 patch("freecad.maxproframe.library_manager_dialog.NewLibraryDialog.exec_", return_value=QtWidgets.QDialog.Accepted), \
+                 patch("freecad.maxproframe.library_manager_dialog.NewLibraryDialog.get_values", return_value=("UIDupFolderLib", "Aluminium", 2.70, False)):
                 dialog.btn_dup_lib.click()
 
             # Dialog selects new library and updates banner
@@ -741,7 +741,7 @@ class TestFolderLibraryDuplication(unittest.TestCase):
             os.makedirs(dest_folder, exist_ok=True)
             with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Discard), \
                  patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=dest_folder), \
-                 patch("freecad.frameforge.library_manager_dialog.NewLibraryDialog.exec_", return_value=QtWidgets.QDialog.Rejected):
+                 patch("freecad.maxproframe.library_manager_dialog.NewLibraryDialog.exec_", return_value=QtWidgets.QDialog.Rejected):
                 dialog._on_duplicate_library()
             self.assertEqual(dialog.table_sizes.item(0, 0).text(), "DirtyHeight_999")
             self.assertEqual(dialog.current_lib_meta["name"], "SourceFolderLib")

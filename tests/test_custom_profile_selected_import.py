@@ -27,10 +27,10 @@ import FreeCADGui as Gui
 import Part
 import Sketcher
 
-from freecad.frameforge.create_profiles_tool import CreateProfileTaskPanel
-from freecad.frameforge.library_manager import LibraryManager
-from freecad.frameforge.section_capture import save_section_asset
-from freecad.frameforge.section_library import (
+from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
+from freecad.maxproframe.library_manager import LibraryManager
+from freecad.maxproframe.section_capture import save_section_asset
+from freecad.maxproframe.section_library import (
     compute_sketch_dimensions_and_weight,
 )
 
@@ -149,7 +149,7 @@ class TestCustomProfileSelectedImport(unittest.TestCase):
 
         # Patch LibraryManager in create_profiles_tool to return isolated test manager
         self.mgr_patch = patch(
-            "freecad.frameforge.create_profiles_tool.LibraryManager",
+            "freecad.maxproframe.create_profiles_tool.LibraryManager",
             return_value=self.manager,
         )
         self.mgr_patch.start()

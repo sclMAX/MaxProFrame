@@ -5,7 +5,7 @@ import shutil
 import tempfile
 import unittest
 
-from freecad.frameforge.library_manager import LibraryManager
+from freecad.maxproframe.library_manager import LibraryManager
 
 
 class TestLibraryManagerDialog(unittest.TestCase):
@@ -24,7 +24,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
             shutil.rmtree(self.test_user_dir)
 
     def test_dynamic_family_columns_and_hidden_value_preservation(self):
-        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog, QtWidgets
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog, QtWidgets
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
         families = {
             "Round Bar": {0, 1, 7}, "Pipe": {0, 1, 3, 7},
@@ -67,7 +67,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
         self.assertFalse(dialog.table_sizes.isColumnHidden(5))
         self.assertEqual(dialog.table_sizes.item(0, 5).text(), "4")
         dialog.combo_family.setCurrentText("Pipe")
-        from freecad.frameforge.ff_tools import translate
+        from freecad.maxproframe.ff_tools import translate
         self.assertEqual(dialog.table_sizes.horizontalHeaderItem(1).text(),
                          translate("frameforge", "Diameter [mm]"))
         dialog.combo_family.setCurrentText("Square")
@@ -75,10 +75,10 @@ class TestLibraryManagerDialog(unittest.TestCase):
                          translate("frameforge", "Height [mm]"))
 
     def test_master_detail_families_list_and_icons(self):
-        from freecad.frameforge.library_manager_dialog import (
+        from freecad.maxproframe.library_manager_dialog import (
             ProfileLibraryManagerDialog, QtCore, QtGui, QtWidgets,
         )
-        from freecad.frameforge.ff_tools import PROFILEIMAGES_PATH, translate
+        from freecad.maxproframe.ff_tools import PROFILEIMAGES_PATH, translate
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
         data = {"_metadata": {"name": "MasterDetail"}}
         for key, code, fillet in [("Square Hollow", "S1", True), ("Pipe", "P1", False),
@@ -142,7 +142,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
     def test_family_toolbar_crud_and_edit_preservation(self):
         from unittest.mock import patch
-        from freecad.frameforge.library_manager_dialog import (
+        from freecad.maxproframe.library_manager_dialog import (
             ProfileLibraryManagerDialog, QtCore, QtWidgets,
         )
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
@@ -156,7 +156,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
         dialog.refresh_libraries(select_name="FamilyToolbar")
         dialog.le_norm.setText("Edited")
         dialog.table_sizes.item(0, 1).setText("99")
-        with patch("freecad.frameforge.library_manager_dialog.AddFamilyDialog") as mock_dlg_cls:
+        with patch("freecad.maxproframe.library_manager_dialog.AddFamilyDialog") as mock_dlg_cls:
             mock_dlg = mock_dlg_cls.return_value
             mock_dlg.exec_.return_value = QtWidgets.QDialog.Accepted
             mock_dlg.get_values.return_value = ("Pipe", False)
@@ -199,7 +199,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
 
-        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
 
@@ -270,7 +270,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
                 from PySide2 import QtWidgets
 
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
-        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
         test_data = {
             "_metadata": {"name": "MultiFamily"},
@@ -311,7 +311,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
     def test_family_switch_with_duplicate_code_validation_failure_preserves_edits(self):
         from unittest.mock import patch
         from PySide import QtWidgets, QtCore
-        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
         self.manager.save_user_library("DupCheckLib", {
@@ -343,7 +343,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
     def test_library_switch_dirty_guard_save_and_cancel(self):
         from unittest.mock import patch
         from PySide import QtWidgets, QtCore
-        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
         self.manager.save_user_library("LibOne", {
@@ -384,7 +384,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
         self.assertEqual(saved_one["FamOne"]["sizes"]["S1"]["Height"], "88")
 
     def test_auto_calculate_linear_weight_on_dimension_edits_and_manual_override(self):
-        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog, QtWidgets
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog, QtWidgets
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
 
         alu_data = {
@@ -408,7 +408,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
         dialog.refresh_libraries(select_name="AutoAlu")
 
         # Verify banner displays material and density
-        from freecad.frameforge.ff_tools import translate
+        from freecad.maxproframe.ff_tools import translate
         self.assertIn(translate("frameforge", "Aluminium"), dialog.lbl_lib_banner.text())
         self.assertIn("2.7", dialog.lbl_lib_banner.text())
 
@@ -438,8 +438,8 @@ class TestLibraryManagerDialog(unittest.TestCase):
                 from PySide2 import QtWidgets
 
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
-        from freecad.frameforge.library_manager import STANDARD_DENSITIES, calculate_linear_weight
-        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+        from freecad.maxproframe.library_manager import STANDARD_DENSITIES, calculate_linear_weight
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
         test_data = {
             "_metadata": {"name": "WoodTest"},
@@ -476,7 +476,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
                 from PySide2 import QtWidgets
 
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
-        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
         test_data = {
             "_metadata": {"name": "UniqueSizesLib"},
@@ -517,7 +517,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
         self.assertEqual(reloaded["Square"]["sizes"][code2]["Height"], "70")
 
     def test_delete_only_family_disables_size_actions_and_guards_orphan_sizes(self):
-        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog, QtWidgets
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog, QtWidgets
 
         _app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
         test_data = {
@@ -551,7 +551,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
         self.assertNotIn("SoloFamily", reloaded)
 
     def test_warning_uses_english_source(self):
-        from freecad.frameforge import library_manager_dialog
+        from freecad.maxproframe import library_manager_dialog
 
         with open(library_manager_dialog.__file__, encoding="utf-8") as source_file:
             tree = ast.parse(source_file.read())
@@ -563,7 +563,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
         self.assertIn("Warning", strings)
 
     def test_spanish_locale_translation_survives(self):
-        from freecad.frameforge.library_manager_dialog import (
+        from freecad.maxproframe.library_manager_dialog import (
             ProfileLibraryManagerDialog, QtCore, QtWidgets,
         )
 
@@ -616,8 +616,8 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
     def test_translations_and_indumatics_removal(self):
         from PySide import QtCore, QtWidgets
-        from freecad.frameforge.ff_tools import TRANSLATIONSPATH
-        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+        from freecad.maxproframe.ff_tools import TRANSLATIONSPATH
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
 

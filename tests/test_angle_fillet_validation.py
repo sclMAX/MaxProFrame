@@ -3,7 +3,7 @@ import Part
 import math
 import unittest
 
-from freecad.frameforge.profile import Profile
+from freecad.maxproframe.profile import Profile
 
 
 class TestAngleFilletValidation(unittest.TestCase):

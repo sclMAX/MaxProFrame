@@ -5,7 +5,7 @@ import unittest
 import FreeCAD as App
 import Part
 
-from freecad.frameforge.profile import Profile
+from freecad.maxproframe.profile import Profile
 
 
 class TestCProfiles(unittest.TestCase):

@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from freecad.frameforge.populate_ids import IdGenerator, populate_ids
+from freecad.maxproframe.populate_ids import IdGenerator, populate_ids
 
 
 class TestPopulateIDsCount(unittest.TestCase):

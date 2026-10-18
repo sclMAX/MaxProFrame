@@ -38,14 +38,14 @@ import FreeCADGui as Gui
 import Part
 import Sketcher
 
-from freecad.frameforge.custom_section_geometry import build_custom_section_face
-from freecad.frameforge.ff_tools import translate
-from freecad.frameforge.library_manager import (
+from freecad.maxproframe.custom_section_geometry import build_custom_section_face
+from freecad.maxproframe.ff_tools import translate
+from freecad.maxproframe.library_manager import (
     LibraryManager,
     STANDARD_DENSITIES,
 )
-from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
-from freecad.frameforge.section_capture import capture_section_sketch, save_section_asset
+from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
+from freecad.maxproframe.section_capture import capture_section_sketch, save_section_asset
 
 
 class TestFolderSectionManagement(unittest.TestCase):
@@ -849,7 +849,7 @@ class TestFolderSectionManagement(unittest.TestCase):
                 self.assertEqual(f.read(), sentinel_bytes, "Outside sentinel bytes were modified!")
 
         # Direct confinement validation helper check
-        from freecad.frameforge.section_library import resolve_and_validate_asset_path
+        from freecad.maxproframe.section_library import resolve_and_validate_asset_path
         for bad_path in malicious_paths:
             with self.assertRaises(ValueError):
                 resolve_and_validate_asset_path(self.folder_lib_path, bad_path)
@@ -887,7 +887,7 @@ class TestFolderSectionManagement(unittest.TestCase):
         self._select_family("Custom Profile")
 
         # Injected failure during capture after workspace creation
-        with patch("freecad.frameforge.library_manager_dialog.save_section_asset", side_effect=RuntimeError("Simulated capture crash")):
+        with patch("freecad.maxproframe.library_manager_dialog.save_section_asset", side_effect=RuntimeError("Simulated capture crash")):
             self.dialog.btn_capture_section.click()
 
         # Verify unrelated sentinel and existing asset are completely untouched

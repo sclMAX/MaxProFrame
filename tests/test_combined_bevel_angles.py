@@ -3,8 +3,8 @@ import unittest
 import FreeCAD as App
 import Part
 
-from freecad.frameforge._utils import get_readable_cutting_angles
-from freecad.frameforge.profile import Profile
+from freecad.maxproframe._utils import get_readable_cutting_angles
+from freecad.maxproframe.profile import Profile
 
 
 class TestCuttingAngleFormatting(unittest.TestCase):

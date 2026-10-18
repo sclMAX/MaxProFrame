@@ -2,8 +2,8 @@ import os, math, tempfile, unittest, hashlib
 from unittest.mock import patch
 import FreeCAD as App
 import Part, Sketcher
-import freecad.frameforge.section_capture as cap
-from freecad.frameforge.custom_section_geometry import build_custom_section_face as face
+import freecad.maxproframe.section_capture as cap
+from freecad.maxproframe.custom_section_geometry import build_custom_section_face as face
 
 def print(*args,**kw): os.write(1,(' '.join(map(str,args))+'\n').encode())
 def rect(doc):

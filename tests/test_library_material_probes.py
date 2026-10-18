@@ -4,7 +4,7 @@ import os
 import tempfile
 import unittest
 
-from freecad.frameforge.library_manager import LibraryManager, STANDARD_DENSITIES
+from freecad.maxproframe.library_manager import LibraryManager, STANDARD_DENSITIES
 
 
 class MaterialProbes(unittest.TestCase):
@@ -12,7 +12,7 @@ class MaterialProbes(unittest.TestCase):
     def setUpClass(cls):
         os.environ["QT_QPA_PLATFORM"] = "offscreen"
         os.environ["FREECAD_QT_QPA_PLATFORM"] = "offscreen"
-        from freecad.frameforge.library_manager_dialog import QtWidgets
+        from freecad.maxproframe.library_manager_dialog import QtWidgets
         cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["probes"])
 
     def setUp(self):
@@ -34,17 +34,17 @@ class MaterialProbes(unittest.TestCase):
             return hashlib.sha256(stream.read()).hexdigest()
 
     def dialog(self, name="Source"):
-        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(dialog.close)
         dialog.refresh_libraries(select_name=name)
         return dialog
 
     def test_s1_s2_s3_s5_ui_and_persistence(self):
-        from freecad.frameforge.library_manager_dialog import (
+        from freecad.maxproframe.library_manager_dialog import (
             NewLibraryDialog, QtCore, QtWidgets,
         )
-        from freecad.frameforge.ff_tools import translate
+        from freecad.maxproframe.ff_tools import translate
         self.create()
         dialog = self.dialog()
         self.assertIn(translate("frameforge", "Aluminium"), dialog.lbl_lib_banner.text())

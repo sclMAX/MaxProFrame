@@ -3,9 +3,9 @@ import unittest
 import FreeCAD as App
 import Part
 
-from freecad.frameforge.profile import Profile
-from freecad.frameforge.trimmed_profile import TrimmedProfile
-from freecad.frameforge.version import __version__ as ff_version
+from freecad.maxproframe.profile import Profile
+from freecad.maxproframe.trimmed_profile import TrimmedProfile
+from freecad.maxproframe.version import __version__ as ff_version
 
 
 class CountingPlaneProxy:

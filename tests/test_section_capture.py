@@ -8,8 +8,8 @@ import FreeCAD as App
 import Part
 import Sketcher
 
-from freecad.frameforge.custom_section_geometry import build_custom_section_face
-from freecad.frameforge.section_capture import capture_section_sketch, save_section_asset
+from freecad.maxproframe.custom_section_geometry import build_custom_section_face
+from freecad.maxproframe.section_capture import capture_section_sketch, save_section_asset
 
 
 class TestSectionCapture(unittest.TestCase):

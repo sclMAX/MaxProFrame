@@ -23,8 +23,8 @@ try:
 except ImportError:
     App = Gui = Part = Sketcher = None
 
-from freecad.frameforge.library_manager import LibraryManager
-from freecad.frameforge.library_manager_dialog import (
+from freecad.maxproframe.library_manager import LibraryManager
+from freecad.maxproframe.library_manager_dialog import (
     ManageProfileLibrariesCommand,
     ProfileLibraryManagerDialog,
 )
@@ -106,7 +106,7 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
 
         # Patch LibraryManager constructor in library_manager_dialog to return isolated manager
         self.mgr_patcher = patch(
-            "freecad.frameforge.library_manager_dialog.LibraryManager",
+            "freecad.maxproframe.library_manager_dialog.LibraryManager",
             return_value=self.manager,
         )
         self.mgr_patcher.start()

@@ -3,7 +3,7 @@ import unittest
 
 import FreeCAD as App
 
-from freecad.frameforge.profile import Profile
+from freecad.maxproframe.profile import Profile
 
 
 class TestDegenerateFilletEdges(unittest.TestCase):

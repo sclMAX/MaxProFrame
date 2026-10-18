@@ -4,7 +4,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import Part
 
-from freecad.frameforge.profile import Profile, ViewProviderProfile
+from freecad.maxproframe.profile import Profile, ViewProviderProfile
 
 
 class TestProfileHelperVertices(unittest.TestCase):

@@ -9,11 +9,11 @@ try:
 except ImportError:
     from PySide2 import QtCore, QtGui, QtWidgets
 
-from freecad.frameforge.ff_tools import PROFILEIMAGES_PATH, TRANSLATIONSPATH, translate
-from freecad.frameforge.library_manager import KNOWN_FAMILIES, LibraryManager
+from freecad.maxproframe.ff_tools import PROFILEIMAGES_PATH, TRANSLATIONSPATH, translate
+from freecad.maxproframe.library_manager import KNOWN_FAMILIES, LibraryManager
 
 try:
-    from freecad.frameforge.library_manager import FILLET_FAMILIES, get_canonical_family
+    from freecad.maxproframe.library_manager import FILLET_FAMILIES, get_canonical_family
 except ImportError:
     FILLET_FAMILIES = frozenset([
         "Square Hollow",
@@ -58,7 +58,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
 
     def test_add_family_offers_all_stock_metal_families(self):
         """Every stock Metal family is selectable, without losing existing choices."""
-        from freecad.frameforge.library_manager_dialog import AddFamilyDialog
+        from freecad.maxproframe.library_manager_dialog import AddFamilyDialog
 
         dialog = AddFamilyDialog()
         self.addCleanup(dialog.close)
@@ -94,7 +94,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
 
     def test_s3_add_family_dialog_translated_names_and_icons(self):
         """S3: AddFamilyDialog displays translated family names and valid icons for all known families."""
-        from freecad.frameforge.library_manager_dialog import AddFamilyDialog
+        from freecad.maxproframe.library_manager_dialog import AddFamilyDialog
 
         dialog = AddFamilyDialog()
         self.addCleanup(dialog.close)
@@ -129,7 +129,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
 
     def test_s3_add_family_dialog_toggle_enabled_only_for_fillet_families(self):
         """S3: With Fillet choice is enabled only for families in FILLET_FAMILIES."""
-        from freecad.frameforge.library_manager_dialog import AddFamilyDialog
+        from freecad.maxproframe.library_manager_dialog import AddFamilyDialog
 
         dialog = AddFamilyDialog()
         self.addCleanup(dialog.close)
@@ -151,7 +151,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
 
     def test_s3_add_family_dialog_preview_follows_toggle(self):
         """S3: Family preview image follows the fillet toggle."""
-        from freecad.frameforge.library_manager_dialog import AddFamilyDialog
+        from freecad.maxproframe.library_manager_dialog import AddFamilyDialog
 
         dialog = AddFamilyDialog()
         self.addCleanup(dialog.close)
@@ -174,7 +174,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
 
     def test_s3_add_family_dialog_cancel_no_changes(self):
         """S3: Canceling AddFamilyDialog leaves library data and dirty state unchanged."""
-        from freecad.frameforge.library_manager_dialog import (
+        from freecad.maxproframe.library_manager_dialog import (
             AddFamilyDialog,
             ProfileLibraryManagerDialog,
         )
@@ -197,7 +197,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
 
     def test_s3_add_family_duplicate_rejection_with_warning(self):
         """S3: Reject duplicate canonical+fillet with explicit warning and no dirty/data changes."""
-        from freecad.frameforge.library_manager_dialog import (
+        from freecad.maxproframe.library_manager_dialog import (
             AddFamilyDialog,
             ProfileLibraryManagerDialog,
         )
@@ -245,7 +245,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
 
     def test_s1_both_variants_coexist_with_same_size_code(self):
         """S1: Plain and filleted variants coexist in the same library with independent size tables."""
-        from freecad.frameforge.library_manager_dialog import (
+        from freecad.maxproframe.library_manager_dialog import (
             AddFamilyDialog,
             ProfileLibraryManagerDialog,
         )
@@ -309,7 +309,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
 
     def test_s2_occupied_legacy_base_key_assigns_no_fillet_suffix(self):
         """S2: For occupied legacy base key holding filleted variant, use ' (No Fillet)' for new plain entry."""
-        from freecad.frameforge.library_manager_dialog import (
+        from freecad.maxproframe.library_manager_dialog import (
             AddFamilyDialog,
             ProfileLibraryManagerDialog,
         )
@@ -345,7 +345,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
 
     def test_s2_visible_variant_names_and_raw_dictionary_keys(self):
         """S2: Visible variant names derived from canonical type+boolean; raw keys kept in UserRole/combo."""
-        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
         self.manager.save_user_library("DisplayNamesLib", {
             "_metadata": {"name": "DisplayNamesLib"},
@@ -404,7 +404,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
 
     def test_s4_variant_dynamic_columns_and_canonical_weight_calculation(self):
         """S4: Dynamic columns and auto-weight calculations resolve canonical type from metadata."""
-        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
         self.manager.save_user_library("VariantCalcLib", {
             "_metadata": {"name": "VariantCalcLib", "material": "Steel", "density": 7.85},
@@ -471,7 +471,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
 
     def test_s4_explicit_variant_checkbox_informational_disabled(self):
         """S4: Family-level checkbox is disabled (informational) for explicit variants, editable for legacy."""
-        from freecad.frameforge.library_manager_dialog import ProfileLibraryManagerDialog
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
         self.manager.save_user_library("InfoCheckboxLib", {
             "_metadata": {"name": "InfoCheckboxLib"},
@@ -506,7 +506,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
         """B1: Destination-key collision with legacy entry lacking canonical_family rejects with warning without overwriting sizes."""
         import copy
         import hashlib
-        from freecad.frameforge.library_manager_dialog import (
+        from freecad.maxproframe.library_manager_dialog import (
             AddFamilyDialog,
             ProfileLibraryManagerDialog,
         )

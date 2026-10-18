@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from freecad.frameforge.library_manager import (
+from freecad.maxproframe.library_manager import (
     LibraryManager,
     STANDARD_DENSITIES,
 )

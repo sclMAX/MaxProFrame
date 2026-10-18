@@ -5,9 +5,9 @@ import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtWidgets
 
-from freecad.frameforge.create_profiles_tool import BaseProfileTaskPanel
-from freecad.frameforge.edit_profile_tool import EditProfileTaskPanel
-from freecad.frameforge.profile import Profile, ViewProviderProfile
+from freecad.maxproframe.create_profiles_tool import BaseProfileTaskPanel
+from freecad.maxproframe.edit_profile_tool import EditProfileTaskPanel
+from freecad.maxproframe.profile import Profile, ViewProviderProfile
 
 
 class TestProfileEditState(unittest.TestCase):

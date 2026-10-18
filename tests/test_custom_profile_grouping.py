@@ -6,10 +6,10 @@ import FreeCAD as App
 import Part
 import Sketcher
 
-from freecad.frameforge.create_bom import group_profiles, traverse_assembly
-from freecad.frameforge.create_custom_profiles_tool import CreateCustomProfileTaskPanel
-from freecad.frameforge.populate_ids import populate_ids
-from freecad.frameforge.profile import Profile
+from freecad.maxproframe.create_bom import group_profiles, traverse_assembly
+from freecad.maxproframe.create_custom_profiles_tool import CreateCustomProfileTaskPanel
+from freecad.maxproframe.populate_ids import populate_ids
+from freecad.maxproframe.profile import Profile
 
 
 class TestCustomProfileGrouping(unittest.TestCase):

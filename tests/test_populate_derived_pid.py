@@ -1,7 +1,7 @@
 import unittest
 
-from freecad.frameforge.create_bom import traverse_assembly
-from freecad.frameforge.populate_ids import populate_ids
+from freecad.maxproframe.create_bom import traverse_assembly
+from freecad.maxproframe.populate_ids import populate_ids
 
 import test_extruded_cutout_pid as cutout_fixture
 import test_trimmed_profile_pid as trimmed_fixture

@@ -11,9 +11,9 @@ try:
 except ImportError:
     from PySide2 import QtCore, QtGui, QtWidgets
 
-from freecad.frameforge.ff_tools import translate
-from freecad.frameforge.library_manager import LibraryManager, STANDARD_DENSITIES
-from freecad.frameforge.library_manager_dialog import (
+from freecad.maxproframe.ff_tools import translate
+from freecad.maxproframe.library_manager import LibraryManager, STANDARD_DENSITIES
+from freecad.maxproframe.library_manager_dialog import (
     NewLibraryDialog,
     ProfileLibraryManagerDialog,
 )

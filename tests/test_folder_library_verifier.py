@@ -4,7 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from freecad.frameforge.library_manager import LibraryManager
+from freecad.maxproframe.library_manager import LibraryManager
 
 class FolderLibrarySafety(unittest.TestCase):
     def setUp(self):

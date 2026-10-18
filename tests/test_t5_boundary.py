@@ -9,7 +9,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import Part
 import test_portable_library_profile_instantiation as helper
-from freecad.frameforge import create_profiles_tool as chooser
+from freecad.maxproframe import create_profiles_tool as chooser
 
 TOPOLOGY_CONTROL = {}
 

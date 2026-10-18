@@ -3,7 +3,7 @@ import unittest
 
 from PySide import QtGui
 
-from freecad.frameforge.ff_tools import PROFILEIMAGES_PATH
+from freecad.maxproframe.ff_tools import PROFILEIMAGES_PATH
 
 
 class TestCPngDimensions(unittest.TestCase):

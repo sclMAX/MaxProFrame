@@ -6,15 +6,15 @@ import unittest
 import FreeCAD as App
 from PySide import QtCore, QtWidgets
 
-from freecad.frameforge.create_profiles_tool import CreateProfileTaskPanel
-from freecad.frameforge.edit_profile_tool import EditProfileTaskPanel
-from freecad.frameforge.ff_tools import PROFILEIMAGES_PATH, TRANSLATIONSPATH, translate
-from freecad.frameforge.library_manager import LibraryManager
-from freecad.frameforge.library_manager_dialog import (
+from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
+from freecad.maxproframe.edit_profile_tool import EditProfileTaskPanel
+from freecad.maxproframe.ff_tools import PROFILEIMAGES_PATH, TRANSLATIONSPATH, translate
+from freecad.maxproframe.library_manager import LibraryManager
+from freecad.maxproframe.library_manager_dialog import (
     AddFamilyDialog,
     ProfileLibraryManagerDialog,
 )
-from freecad.frameforge.profile import Profile
+from freecad.maxproframe.profile import Profile
 
 
 class TestCProfileUI(unittest.TestCase):
@@ -353,7 +353,7 @@ class TestCProfileUI(unittest.TestCase):
 
     def test_preserve_non_c_families_unchanged(self):
         """Preserve: Square Hollow and Channels retain unchanged controls and Make Fillet behavior."""
-        from freecad.frameforge.library_manager import FILLET_FAMILIES
+        from freecad.maxproframe.library_manager import FILLET_FAMILIES
         # Channels must not be in FILLET_FAMILIES
         self.assertNotIn("Channels", FILLET_FAMILIES)
 

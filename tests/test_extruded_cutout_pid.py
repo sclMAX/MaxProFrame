@@ -3,8 +3,8 @@ import unittest
 import FreeCAD as App
 import Part
 
-from freecad.frameforge.extruded_cutout import ExtrudedCutout
-from freecad.frameforge.profile import Profile
+from freecad.maxproframe.extruded_cutout import ExtrudedCutout
+from freecad.maxproframe.profile import Profile
 
 
 class TestExtrudedCutoutPID(unittest.TestCase):

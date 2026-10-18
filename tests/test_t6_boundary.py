@@ -10,8 +10,8 @@ from unittest.mock import patch
 import FreeCAD as App
 import FreeCADGui as Gui
 import test_folder_library_duplication as fixture
-from freecad.frameforge import library_manager_dialog as ui
-from freecad.frameforge.create_profiles_tool import CreateProfileTaskPanel
+from freecad.maxproframe import library_manager_dialog as ui
+from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
 
 
 def tree(root):
@@ -124,7 +124,7 @@ class Boundary(fixture.TestFolderLibraryDuplication):
                 elif mode == "registry":
                     stack.enter_context(patch.object(self.manager, "register_folder_library", side_effect=OSError("INJECTED_REGISTRY")))
                 else:
-                    stack.enter_context(patch("freecad.frameforge.section_library.recalculate_custom_profile_weight", side_effect=ValueError("INJECTED_RECALC")))
+                    stack.enter_context(patch("freecad.maxproframe.section_library.recalculate_custom_profile_weight", side_effect=ValueError("INJECTED_RECALC")))
                 with self.assertRaises((OSError, ValueError)):
                     self.manager.duplicate_library("SourceFolderLib", "Rollback", target_folder_path=dest, recalculate_weights=(mode == "recalc"))
                 self.assertEqual(self.saved(), before)
@@ -178,7 +178,7 @@ class Boundary(fixture.TestFolderLibraryDuplication):
         App.setActiveDocument(doc.Name)
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
-        with patch("freecad.frameforge.create_profiles_tool.LibraryManager", return_value=self.manager):
+        with patch("freecad.maxproframe.create_profiles_tool.LibraryManager", return_value=self.manager):
             panel = CreateProfileTaskPanel()
             panel.open()
             panel.form_proxy.combo_material.setCurrentText(library)

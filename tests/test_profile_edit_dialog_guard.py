@@ -4,8 +4,8 @@ from unittest.mock import Mock, patch
 
 import FreeCAD as App
 
-from freecad.frameforge import profile as profile_module
-from freecad.frameforge.profile import ViewProviderCustomProfile, ViewProviderProfile
+from freecad.maxproframe import profile as profile_module
+from freecad.maxproframe.profile import ViewProviderCustomProfile, ViewProviderProfile
 
 
 NOTICE = "FrameForge: close the active task dialog before editing a profile.\n"
@@ -23,7 +23,7 @@ class TestProfileEditDialogGuard(unittest.TestCase):
         self.panel_factory = Mock()
         self.gui_patch = patch.object(profile_module, "Gui", SimpleNamespace(Control=self.control))
         self.panel_patch = patch(
-            "freecad.frameforge.edit_profile_tool.EditProfileTaskPanel", self.panel_factory
+            "freecad.maxproframe.edit_profile_tool.EditProfileTaskPanel", self.panel_factory
         )
         self.gui_patch.start()
         self.panel_patch.start()

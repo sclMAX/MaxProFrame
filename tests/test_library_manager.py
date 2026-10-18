@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from freecad.frameforge.library_manager import (
+from freecad.maxproframe.library_manager import (
     LibraryManager,
     calculate_linear_weight,
     get_known_families,
@@ -99,7 +99,7 @@ class TestLibraryManager(unittest.TestCase):
             stream.write('{"partial":')
             raise IOError("Simulated disk full")
 
-        with patch("freecad.frameforge.library_manager.json.dump", side_effect=fail_write):
+        with patch("freecad.maxproframe.library_manager.json.dump", side_effect=fail_write):
             with self.assertRaisesRegex(IOError, "^Simulated disk full$"):
                 self.manager.save_user_library("AtomicTestLib", {"Square": {"sizes": {}}})
 
@@ -297,7 +297,7 @@ class TestLibraryManager(unittest.TestCase):
         self.assertNotIn("new", loaded["Square"]["sizes"])
 
     def test_wood_density_calculations(self):
-        from freecad.frameforge.library_manager import STANDARD_DENSITIES
+        from freecad.maxproframe.library_manager import STANDARD_DENSITIES
 
         # Beam 100x100 mm: Area = 10000 mm2 = 100 cm3 per 1000mm length
         weight_soft = calculate_linear_weight("Square", 100.0, 100.0, 0, STANDARD_DENSITIES["Wood (Soft)"])

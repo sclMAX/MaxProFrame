@@ -22,9 +22,9 @@ import Part
 import Sketcher
 
 import test_portable_library_profile_instantiation as helper
-from freecad.frameforge.create_bom import group_profiles
-from freecad.frameforge.create_profiles_tool import CreateProfileTaskPanel
-from freecad.frameforge.section_library import get_or_import_section_sketch
+from freecad.maxproframe.create_bom import group_profiles
+from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
+from freecad.maxproframe.section_library import get_or_import_section_sketch
 
 
 def _file_hash(path):

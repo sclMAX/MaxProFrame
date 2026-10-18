@@ -7,8 +7,8 @@ import FreeCAD as App
 import Part
 import Sketcher
 
-from freecad.frameforge.create_custom_profiles_tool import CreateCustomProfileTaskPanel
-from freecad.frameforge.profile import Profile
+from freecad.maxproframe.create_custom_profiles_tool import CreateCustomProfileTaskPanel
+from freecad.maxproframe.profile import Profile
 
 
 class TestCustomProfileSections(unittest.TestCase):
