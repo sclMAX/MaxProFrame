@@ -318,7 +318,7 @@ class CustomProfileCard(QtWidgets.QFrame):
         self.thumbnail_label.setObjectName("card_thumbnail")
         self.thumbnail_label.setAlignment(QtCore.Qt.AlignCenter)
         self.thumbnail_label.setFixedHeight(100)
-        self.thumbnail_label.setStyleSheet("background-color: #f7f9fa; border-radius: 4px;")
+        self.thumbnail_label.setStyleSheet("background-color: palette(base); border-radius: 4px;")
         layout.addWidget(self.thumbnail_label)
 
         # Code row
@@ -342,7 +342,7 @@ class CustomProfileCard(QtWidgets.QFrame):
         self.weight_edit.setObjectName("card_weight")
         self.weight_edit.setToolTip(translate("frameforge", "Linear Weight (kg/m)"))
         lbl_unit = QtWidgets.QLabel("kg/m")
-        lbl_unit.setStyleSheet("color: #666666; font-size: 10px;")
+        lbl_unit.setStyleSheet("font-size: 10px;")
         weight_layout.addWidget(lbl_weight)
         weight_layout.addWidget(self.weight_edit, 1)
         weight_layout.addWidget(lbl_unit)
@@ -369,6 +369,12 @@ class CustomProfileCard(QtWidgets.QFrame):
 
         self._update_style()
         self._initializing = False
+        QtWidgets.QApplication.instance().paletteChanged.connect(self._on_palette_changed)
+
+    def _on_palette_changed(self, palette):
+        # Read the application palette, not a palette already modified by card QSS.
+        self._update_style()
+        self.set_editable(not self.code_edit.isReadOnly())
 
     def eventFilter(self, obj, event):
         if event.type() in (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.FocusIn):
@@ -387,34 +393,36 @@ class CustomProfileCard(QtWidgets.QFrame):
         self._update_style()
 
     def _update_style(self):
-        if self._selected:
-            self.setStyleSheet(
-                "QFrame#custom_card { "
-                "border: 2px solid #1976d2; "
-                "background-color: #f0f7ff; "
-                "border-radius: 6px; "
-                "}"
-            )
-        else:
-            self.setStyleSheet(
-                "QFrame#custom_card { "
-                "border: 1px solid #d0d0d0; "
-                "background-color: #ffffff; "
-                "border-radius: 6px; "
-                "}"
-            )
+        palette = QtWidgets.QApplication.palette()
+        background = QtGui.QPalette.Highlight if self._selected else QtGui.QPalette.Window
+        foreground = QtGui.QPalette.HighlightedText if self._selected else QtGui.QPalette.WindowText
+        border = QtGui.QPalette.Highlight if self._selected else QtGui.QPalette.Mid
+        border_width = 2 if self._selected else 1
+        self.setStyleSheet(
+            "QFrame#custom_card { "
+            f"border: {border_width}px solid {palette.color(border).name()}; "
+            f"background-color: {palette.color(background).name()}; "
+            "border-radius: 6px; }"
+            "QFrame#custom_card QLabel { "
+            f"color: {palette.color(foreground).name()}; }}"
+        )
+        self.thumbnail_label.setStyleSheet(
+            f"background-color: {palette.color(QtGui.QPalette.Base).name()}; border-radius: 4px;"
+        )
 
     def set_editable(self, editable):
         self.code_edit.setReadOnly(not editable)
         self.weight_edit.setReadOnly(not editable)
-        if not editable:
-            ro_style = "background-color: #f5f5f5; color: #555555; border: 1px solid #e0e0e0; border-radius: 3px; padding: 2px 4px;"
-            self.code_edit.setStyleSheet(ro_style)
-            self.weight_edit.setStyleSheet(ro_style)
-        else:
-            norm_style = "background-color: #ffffff; color: #000000; border: 1px solid #cccccc; border-radius: 3px; padding: 2px 4px;"
-            self.code_edit.setStyleSheet(norm_style)
-            self.weight_edit.setStyleSheet(norm_style)
+        palette = QtWidgets.QApplication.palette()
+        background = QtGui.QPalette.Base if editable else QtGui.QPalette.AlternateBase
+        style = (
+            f"background-color: {palette.color(background).name()}; "
+            f"color: {palette.color(QtGui.QPalette.Text).name()}; "
+            f"border: 1px solid {palette.color(QtGui.QPalette.Mid).name()}; "
+            "border-radius: 3px; padding: 2px 4px;"
+        )
+        self.code_edit.setStyleSheet(style)
+        self.weight_edit.setStyleSheet(style)
 
     def update_thumbnail(self, pixmap):
         if pixmap is not None:
