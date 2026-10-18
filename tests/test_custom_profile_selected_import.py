@@ -28,6 +28,7 @@ import Part
 import Sketcher
 
 from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
+from freecad.maxproframe.ff_tools import get_param_group
 from freecad.maxproframe.library_manager import LibraryManager
 from freecad.maxproframe.section_capture import save_section_asset
 from freecad.maxproframe.section_library import (
@@ -36,6 +37,34 @@ from freecad.maxproframe.section_library import (
 
 
 class TestCustomProfileSelectedImport(unittest.TestCase):
+    @staticmethod
+    def _snapshot_param_group(group):
+        raw = group.GetContents() or []
+        return [(t, k, v) for t, k, v in raw]
+
+    @staticmethod
+    def _restore_param_group(group, saved_contents):
+        current_contents = group.GetContents() or []
+        keys_to_clear = {k for _, k, _ in current_contents} | {k for _, k, _ in saved_contents}
+        for k in keys_to_clear:
+            group.RemString(k)
+            group.RemBool(k)
+            group.RemInt(k)
+            group.RemFloat(k)
+            if hasattr(group, "RemUnsigned"):
+                group.RemUnsigned(k)
+        for t, k, v in saved_contents:
+            if t == "String":
+                group.SetString(k, str(v))
+            elif t == "Bool":
+                group.SetBool(k, bool(v))
+            elif t == "Integer":
+                group.SetInt(k, int(v))
+            elif t == "Float":
+                group.SetFloat(k, float(v))
+            elif t == "Unsigned" and hasattr(group, "SetUnsigned"):
+                group.SetUnsigned(k, int(v))
+
     @classmethod
     def setUpClass(cls):
         os.environ["FREECAD_QT_QPA_PLATFORM"] = "offscreen"
@@ -142,10 +171,13 @@ class TestCustomProfileSelectedImport(unittest.TestCase):
             if hasattr(QtGui, "QMessageBox") and QtGui.QMessageBox is not QtWidgets.QMessageBox:
                 self.messages.enter_context(patch.object(QtGui.QMessageBox, method_name, _record_static))
 
-        # Snapshot Frameforge preferences safely
-        self.param_group = App.ParamGet("User parameter:BaseApp/Preferences/Frameforge")
-        raw_contents = self.param_group.GetContents() or []
-        self.saved_pref_contents = [(t, k, v) for t, k, v in raw_contents]
+        # Snapshot canonical (MaxProFrame) and legacy (Frameforge) preferences safely
+        self.canonical_param_group = get_param_group(writable=True)
+        self.legacy_param_group = App.ParamGet("User parameter:BaseApp/Preferences/Frameforge")
+        self.param_group = self.canonical_param_group
+        self.saved_canonical_pref_contents = self._snapshot_param_group(self.canonical_param_group)
+        self.saved_legacy_pref_contents = self._snapshot_param_group(self.legacy_param_group)
+        self.saved_pref_contents = self.saved_canonical_pref_contents
 
         # Patch LibraryManager in create_profiles_tool to return isolated test manager
         self.mgr_patch = patch(
@@ -209,25 +241,14 @@ class TestCustomProfileSelectedImport(unittest.TestCase):
                     pass
         self.doc_names.clear()
 
-        # 5. Restore Frameforge preferences if any were modified
+        # 5. Restore MaxProFrame (canonical) and Frameforge (legacy) preferences if any were modified
+        if hasattr(self, "canonical_param_group") and hasattr(self, "saved_canonical_pref_contents"):
+            self._restore_param_group(self.canonical_param_group, self.saved_canonical_pref_contents)
+        if hasattr(self, "legacy_param_group") and hasattr(self, "saved_legacy_pref_contents"):
+            self._restore_param_group(self.legacy_param_group, self.saved_legacy_pref_contents)
         if hasattr(self, "param_group") and hasattr(self, "saved_pref_contents"):
-            current_contents = self.param_group.GetContents() or []
-            current_keys = {k for _, k, _ in current_contents}
-            saved_keys = {k for _, k, _ in self.saved_pref_contents}
-            for k in current_keys - saved_keys:
-                self.param_group.RemString(k)
-                self.param_group.RemBool(k)
-                self.param_group.RemInt(k)
-                self.param_group.RemFloat(k)
-            for t, k, v in self.saved_pref_contents:
-                if t == "String":
-                    self.param_group.SetString(k, str(v))
-                elif t == "Bool":
-                    self.param_group.SetBool(k, bool(v))
-                elif t == "Integer":
-                    self.param_group.SetInt(k, int(v))
-                elif t == "Float":
-                    self.param_group.SetFloat(k, float(v))
+            if self.param_group is not getattr(self, "canonical_param_group", None) and self.param_group is not getattr(self, "legacy_param_group", None):
+                self._restore_param_group(self.param_group, self.saved_pref_contents)
 
         # 6. Close message patches
         if hasattr(self, "messages"):

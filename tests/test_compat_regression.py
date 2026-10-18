@@ -2,9 +2,8 @@
 Regression tests for MaxProFrame backward-compatibility bridge and preferences proxy.
 """
 import importlib
-import sys
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class TestModuleIdentityCompatibility(unittest.TestCase):
@@ -64,14 +63,14 @@ class TestPreferencesProxyRegression(unittest.TestCase):
 
         mock_freecad = MagicMock()
         mock_freecad.ParamGet.side_effect = lambda path: MockParamGroup(path)
-        self.orig_freecad = sys.modules.get("FreeCAD")
-        sys.modules["FreeCAD"] = mock_freecad
+        from freecad.maxproframe import ff_tools
+
+        # Patch the module's actual dependency even when native GUI tests imported it first.
+        self.freecad_patch = patch.object(ff_tools, "FreeCAD", mock_freecad)
+        self.freecad_patch.start()
 
     def tearDown(self):
-        if self.orig_freecad is not None:
-            sys.modules["FreeCAD"] = self.orig_freecad
-        else:
-            sys.modules.pop("FreeCAD", None)
+        self.freecad_patch.stop()
 
     def test_per_key_preference_fallback_and_isolation(self):
         from freecad.maxproframe.ff_tools import get_param_group

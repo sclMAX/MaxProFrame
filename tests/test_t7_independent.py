@@ -11,6 +11,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import test_custom_profile_selected_import as fixture
 from freecad.maxproframe import create_profiles_tool as candidate
+from freecad.maxproframe.ff_tools import get_param_group
 from freecad.maxproframe.section_library import get_or_import_section_sketch
 
 
@@ -28,9 +29,10 @@ def snapshot(sketch):
 
 class IndependentT7(fixture.TestCustomProfileSelectedImport):
     def defaults(self, code):
-        self.param_group.SetString("Default Profile Material", "CustomFolderLib")
-        self.param_group.SetString("Default Profile Family", "Custom Profile")
-        self.param_group.SetString("Default Profile Size", code)
+        writer = get_param_group(writable=True)
+        writer.SetString("Default Profile Material", "CustomFolderLib")
+        writer.SetString("Default Profile Family", "Custom Profile")
+        writer.SetString("Default Profile Size", code)
 
     def opened(self, doc, path):
         App.setActiveDocument(doc.Name)

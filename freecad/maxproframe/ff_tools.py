@@ -26,8 +26,10 @@ class _PreferencesProxy:
 
     def GetString(self, name, default=""):
         if hasattr(self._canonical, "GetString"):
-            val = self._canonical.GetString(name, "\x00_NOT_SET_\x00")
-            if val != "\x00_NOT_SET_\x00":
+            # Native GetString rejects NULs. Two distinct defaults distinguish
+            # a missing key from an explicitly stored empty string without collisions.
+            val = self._canonical.GetString(name, "")
+            if val != "" or self._canonical.GetString(name, "_NOT_SET_") == "":
                 return val
         if hasattr(self._legacy, "GetString"):
             return self._legacy.GetString(name, default)
