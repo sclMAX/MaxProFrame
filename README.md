@@ -1,125 +1,126 @@
-# FrameForge
+# MaxProFrame
 
-Frameforge is a FreeCAD workbench that aids in designing beams and frames, with cut, mitter joins and so on.
+**MaxProFrame** is an advanced FreeCAD workbench for parametric framing, structural design, weldments, and profile modeling.
 
-Features:
+It enables engineers, makers, and fabricators to create structural frames, beams, and weldments (metal, aluminum extrusions, wood, and user-defined custom sections) mapped onto sketches or 3D edges, with automated joinery (miter cuts, coped joints, trim/extend), cutouts, and accurate Bill of Materials (BOM) generation.
 
-- Create Beams (metal, wood) from a sketch or Edges
-- Trim, offset, cut, mitter cut
-- Cutout (make holes) from a sketch
-- Export a BOM with cut angles, lenght, material
+---
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/L3L41KKMJR)
+## Key Features
 
-## Prerequisite
+- **Comprehensive Standard Profile Catalogs**:
+  - Structural I/H Beams: **HEA, HEB, HEM, IPE, IPN**.
+  - Channels: Standard **Channels**, tapered **UPN**, parallel-flange **UPE**, and lipped **C-channels** (with exterior and interior radius derivation).
+  - Tubes & Solids: **Square Hollow**, **Rectangular Hollow**, round **Pipe**, **Round Bar**, **Square Bar**, and **Flat Sections**.
+  - Aluminum Extrusions & Timber: **T-Slot**, **V-Slot**, and architectural wood profiles.
+- **Portable & Autonomous Custom Profile Libraries**:
+  - Capture any 2D sketch into standalone, self-contained folder libraries.
+  - Portable across machines and shared folders (e.g., cloud drives, team shares) without external document dependencies.
+  - Automated calculation of native face area, bound box dimensions ($H \times W$), and linear weight ($\text{kg/m}$) based on configurable material densities.
+- **Visual Profile Library Manager**:
+  - Live technical diagrams with axonometric 3D extrusion views and dimensioned 2D cross sections.
+  - Add family variants (plain and filleted) with independent dimension tables.
+- **Parametric Joinery & Operations**:
+  - Miter cuts, coped joints, and trim/extend against multiple boundary faces.
+  - Extruded cutouts with parametric sketch mapping.
+- **BOM, Cut Lists & Ballooning**:
+  - Generate cutting lists with true cutting angles, stock lengths, and kerf optimization.
+  - Automatically populate and reset unique Part IDs (PIDs) and attach visual balloons for TechDraw integration.
+- **100% Backward Compatibility**:
+  - Seamlessly opens older FreeCAD project files (`.FCStd`) created with legacy *FrameForge* without `unhandled FeaturePython` or missing module errors.
+  - Supports dual command registration (`MaxProFrame_*` and `FrameForge_*`) to protect user macros and toolbars.
+  - Transparent per-key preferences migration.
 
-- FreeCAD ≥ v0.21.x
+---
+
+## Prerequisites
+
+- **FreeCAD** ≥ v0.21.x (FreeCAD 0.21, 1.0, and newer)
+
+---
 
 ## Installation
 
-Frameforge workbench can be installed via the [Addon Manager](https://wiki.freecad.org/Std_AddonMgr)
+### Manual Installation (Git)
 
-WARNING: When migrating from 0.1.x to 0.2.x, be careful to back-up your projects ! 
-Internal data structures were modified, should be able to migrate, but in case...
+1. Locate your FreeCAD user modules directory:
+   - **Linux**: `~/.local/share/FreeCAD/Mod/` (or `~/.FreeCAD/Mod/`)
+   - **macOS**: `~/Library/Application Support/FreeCAD/Mod/`
+   - **Windows**: `%APPDATA%\FreeCAD\Mod\`
+2. Clone this repository into your `Mod` folder:
+   ```bash
+   git clone https://github.com/sclMAX/MaxProFrame.git
+   ```
+3. Restart FreeCAD. **MaxProFrame** will appear in the workbench dropdown selector.
+
+---
 
 ## Quick Start
 
-### Create the skeleton
+### 1. Create the Skeleton
 
-Beams are mapped onto Edges or ParametricLine (from a Sketch for instance)
+Beams and profiles are mapped onto Edges or parametric lines:
 
-For a start, we are going to create a simple frame.
-
-1. In a new file, switch to the Frameforge workbench.
-2. Create a [sketch](https://wiki.freecad.org/Sketcher_NewSketch)  
-3. A dialog will open asking you to 'Select orientation'. Choose the XY for instance.
-3. Draw a simple square in the sketch... this will be our skeleton
+1. Switch to the **MaxProFrame** workbench.
+2. Create a new sketch on the XY plane using the Sketcher tool.
+3. Draw a rectangle or a wireframe structure; this serves as the skeleton.
+4. Close sketch edit mode.
 
 ![Create Skeleton](docs/images/02-create-frame-skeleton.png)
 
-5. Close the Sketch edit mode.
+### 2. Add Profiles
 
-### Profile library table
-
-The Profile Library Manager displays only the dimension columns used by the selected family. Circular profiles show **Diameter** instead of Height. Radius columns appear only when **With Fillet** is enabled and the family uses them. Hidden cell values remain stored when editing and saving; switching families does not discard them. Unknown/custom families retain the full set of columns (with radii hidden when Fillet is off).
-
-### Add family variants
-
-In the Profile Library Manager, **Add Family** opens a list with translated names and section icons. Custom libraries can select every family in the bundled **Metal** catalog, including **HEA, HEB, HEM, IPE, IPN, UPE and UPN**, alongside the existing channel, slot and custom profile options. Select a geometry and, where supported, enable **With Fillet** before adding it. Plain and filleted variants can coexist in one library with independent size tables. Duplicate variants are rejected without overwriting existing entries.
-
-New entries store their canonical geometry separately from the catalog key. Their family-level Fillet setting is read-only; choose the variant when adding the family. Legacy catalogs retain their existing keys and behavior. If a legacy filleted entry already occupies the plain base name, its new plain counterpart uses a **(No Fillet)** suffix.
-
-### Catalog identity and geometry
-
-**Channels** generates a straight C-section, open toward positive X before mirroring or rotation. Height and Width are the outer dimensions; Thickness controls the web and Flange Thickness controls both parallel flanges. This plain section is distinct from UPE and tapered UPN profiles.
-
-**C** profiles generate a lipped C-channel open toward positive X, with uniform Thickness `e`, outside Height `H`, outside Width `B`, and inward Lip Length `L` (flange-to-tip outer extent). Both plain and filleted variants are supported. In filleted C profiles, the specified radius is the exterior radius `R`, with the interior radius automatically derived as `R - e` across four concentric 90° corner pairs. Theoretical cross-section area is `e * (H + 2*B + 2*L - 4*e)` for plain C sections, and filleted variants subtract `(4 - pi) * (R^2 - (R - e)^2)`.
-
-The C catalog editor displays Height, Width, Lip Length, Thickness, and Weight in that order; filleted C adds Exterior Radius before Weight. Spanish labels use **Labio** and **Radio exterior** in both the catalog editor and creation/edit panels.
-
-Profiles retain `Family` as their geometric type and store the selected entry in `CatalogFamily`. The BOM uses that catalog identity to distinguish variants, including trimmed/cutout profiles. Older profiles without it fall back to `Family`. The creation-time **Make Fillets** option still controls the individual profile's modeled detail; it does not rename the catalog entry.
-
-### Fillets meeting at section boundaries
-
-Filleted equal/unequal leg angles and square/rectangular hollow profiles support radii that leave zero-length straight segments between arcs. Segments whose endpoints are within `1e-7 mm` are omitted while preserving the arcs and hollow inner boundary. Ordinary fillets retain their existing geometry; this does not change zero-length beam previews.
-
-### Edit a profile
-
-Close the current task dialog before double-clicking a profile to edit it. If another task dialog is active, FrameForge leaves it open, does not open the profile editor, and prints `FrameForge: close the active task dialog before editing a profile.` in the Report view. Close the active dialog and retry.
-
-### Profiles attached to a sketch in a Body
-
-Standard and custom profiles follow the sketch's parent when it accepts them. A PartDesign Body cannot contain these profile objects: FrameForge keeps the new profile at document root, preserves its sketch-edge attachment, and prints `FrameForge: parent <label> (<type>) does not accept Part::FeaturePython, keeping at document root` in the Report view. The sketch stays in its original container. Newly created profiles use a global-scope `Target` link, allowing a profile at document root to reference an edge of a sketch inside a Body without an out-of-scope warning. The association continues to update when the sketch changes and survives saving/reopening. Existing profiles are not migrated automatically; recreate them to obtain the corrected link.
-
-### Create the frame
-
-1. Launch the FrameForge Profile tool
-
-![profile](docs/images/10-profiles.png)
-
-2. It opens a FrameForge dialog (with options)
-
-![profile](docs/images/10-profiles-task.png)
-![profile](docs/images/10-profiles-task-2.png)
-
-3. Select a profile from the lists (Material / Family / Size).  
-*Note*: Size can be adjusted just below the family, the tool has a lot of predefined profiles. Same for parameters.
-
-![profiles choice](docs/images/11-profiles-family.png)
-
-4. In the 3D View, select edges to apply the profile creation:
-
-![Edge Selection](docs/images/13-edge-selection.png)
-
-5. Press OK in the Create Profile Task.  
-**Result**: now there are four profiles!
+1. Click on the **Create Profiles** tool in the MaxProFrame toolbar.
+2. Select your **Material**, geometric **Family**, and standard **Size**.
+3. In the 3D View, select the skeleton edges where you want to place the profiles.
+4. Click **OK**.
 
 ![Profiles](docs/images/14-profiles-done.png)
 
-![Zoom in profile](docs/images/14-zoom-on-profiles.png)
+### 3. Apply Miters and Trims
 
-**Voila!** You have your first frame! For more information, follow the [tutorial](docs/tutorial.md)
+- Use **End Miter** to create 45° corner joins between intersecting profiles.
+- Use **Trim Profiles** to cut a profile flush against the face of another beam.
+- Use **Extruded Cutout** to cut notches, holes, or clearances from an attached sketch.
 
-## Maintainer
+### 4. Generate the BOM & Cut List
 
-Vivien HENRY
-vivien.henry@inductivebrain.fr
+1. Launch **Create BOM**.
+2. Select the parent frame or profiles.
+3. Choose whether to group identical items by Material/Size/Family and set stock length and blade kerf.
+4. Export the resulting cut list and bill of materials into a FreeCAD spreadsheet.
 
+---
 
-## Credits
+## Custom Profile Libraries
 
-This workbench is based on [MetalWB](https://framagit.org/Veloma/freecad_metal_workbench)
+MaxProFrame supports storing custom profile sections directly in user-managed folder libraries:
+
+1. Open the **Profile Library Manager** from the toolbar.
+2. Create or register a **Folder Library** pointing to a directory on your machine or shared drive.
+3. Draw your custom cross section in a Sketcher sketch.
+4. Click **Capture Section** to store an autonomous copy into your library with automatic dimensions and weight calculation.
+5. Reuse that custom profile across any project without needing the original sketch document.
+
+For more details on custom libraries and architecture, see [docs/folder-libraries.md](docs/folder-libraries.md).
+
+---
+
+## Maintainer & Authors
+
+- **Maintained by**: [sclMAX](https://github.com/sclMAX)
+- **Repository**: [https://github.com/sclMAX/MaxProFrame](https://github.com/sclMAX/MaxProFrame)
+
+### Credits & Heritage
+
+**MaxProFrame** is an independent evolution built upon the foundation of **FrameForge** (originally authored by Vivien Henry) and **MetalWB**.
 
 Special thanks to:
+- Vivien Henry ([inductivebrain](https://github.com/lukh/frameforge))
+- Vincent B, Quentin Plisson, rockn, Jonathan Wiedemann, and the FreeCAD community contributors.
 
-- Vincent B
-- Quentin Plisson
-- rockn
-- Jonathan Wiedemann
+---
 
-And others people that I don't know but they should be in this [thread](https://forum.freecad.org/viewtopic.php?style=5&t=72389)
+## License
 
-
-## LICENSE
-
-FrameForge is licensed under the [GPLv3](LICENSE)
+MaxProFrame is licensed under the [GNU Lesser General Public License v3.0 (LGPL-3.0)](LICENSE).
