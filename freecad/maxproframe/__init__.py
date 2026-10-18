@@ -4,8 +4,23 @@ MaxProFrame workbench package for FreeCAD.
 import importlib
 import sys
 from importlib.abc import MetaPathFinder
+from importlib.machinery import ModuleSpec
 
 from freecad.maxproframe.version import __version__
+
+
+class _AliasLoader:
+    def __init__(self, target_mod):
+        self.target_mod = target_mod
+        self.orig_name = target_mod.__name__
+        self.orig_spec = getattr(target_mod, "__spec__", None)
+
+    def create_module(self, spec):
+        return self.target_mod
+
+    def exec_module(self, module):
+        module.__name__ = self.orig_name
+        module.__spec__ = self.orig_spec
 
 
 class FrameForgeRedirectFinder(MetaPathFinder):
@@ -17,17 +32,11 @@ class FrameForgeRedirectFinder(MetaPathFinder):
     def find_spec(self, fullname, path, target=None):
         if fullname == "freecad.frameforge" or fullname.startswith("freecad.frameforge."):
             target_name = "freecad.maxproframe" + fullname[len("freecad.frameforge"):]
-            target_mod = importlib.import_module(target_name)
-            sys.modules[fullname] = target_mod
-            if "." in fullname:
-                parent_name, child_name = fullname.rsplit(".", 1)
-                parent_mod = sys.modules.get(parent_name)
-                if parent_mod is not None:
-                    try:
-                        setattr(parent_mod, child_name, target_mod)
-                    except Exception:
-                        pass
-            return target_mod.__spec__
+            if target_name in sys.modules:
+                target_mod = sys.modules[target_name]
+            else:
+                target_mod = importlib.import_module(target_name)
+            return ModuleSpec(fullname, _AliasLoader(target_mod))
         return None
 
 
