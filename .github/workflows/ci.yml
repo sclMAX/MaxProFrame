@@ -3,34 +3,119 @@ name: CI
 on:
   pull_request:
     branches:
-      - '**'
+      - main
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: 'Base Git reference for change comparison'
+        required: false
+        default: 'HEAD^'
+
+permissions:
+  contents: read
 
 jobs:
-  lint:
-    name: Lint & Format Check
-    runs-on: ubuntu-latest
+  format:
+    name: Code Formatting (Black & isort)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: '3.11'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install black isort
+      - name: Plan changed files
+        env:
+          INPUT_BASE_REF: ${{ github.event.inputs.base_ref }}
+        run: |
+          python3 ci/changed_files.py > "${{ runner.temp }}/changes.json"
 
-    - name: Check code formatting with Black
-      run: |
-        black --check .
+      - name: Install pinned formatting tools
+        run: |
+          python -m pip install -r ci/requirements-format.txt
 
-    - name: Check import sorting with isort
-      run: |
-        isort --check-only .
+      - name: Check code formatting
+        run: |
+          python3 ci/check_format.py --changes "${{ runner.temp }}/changes.json" --reports "${{ runner.temp }}/format-reports"
+
+      - name: Upload format failure reports
+        if: failure()
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb99ba8afd # v4.6.1
+        with:
+          name: format-failure-reports
+          path: ${{ runner.temp }}/format-reports
+          retention-days: 7
+
+  test:
+    name: Native FreeCAD 1.1.4 Test Suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: '3.11'
+
+      - name: Plan changed files
+        id: planner
+        env:
+          INPUT_BASE_REF: ${{ github.event.inputs.base_ref }}
+        run: |
+          python3 ci/changed_files.py > "${{ runner.temp }}/changes.json"
+
+      - name: Run host CI policy regression tests
+        run: |
+          python3 -m unittest discover -s ci/tests -p 'test_*.py' -v
+
+      - name: Install minimal headless dependencies
+        if: steps.planner.outputs.run_tests == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libopengl0 libxkbcommon-x11-0 libxcb-cursor0
+
+      - name: Download and verify FreeCAD 1.1.4 AppImage
+        if: steps.planner.outputs.run_tests == 'true'
+        run: |
+          curl -fL -o "${{ runner.temp }}/FreeCAD.AppImage" \
+            https://github.com/FreeCAD/FreeCAD/releases/download/1.1.4/FreeCAD_1.1.4-Linux-x86_64-py311.AppImage
+          echo "f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434  ${{ runner.temp }}/FreeCAD.AppImage" | sha256sum -c -
+
+      - name: Extract AppImage
+        if: steps.planner.outputs.run_tests == 'true'
+        run: |
+          chmod +x "${{ runner.temp }}/FreeCAD.AppImage"
+          cd "${{ runner.temp }}" && ./FreeCAD.AppImage --appimage-extract
+
+      - name: Run native FreeCAD tests
+        if: steps.planner.outputs.run_tests == 'true'
+        run: |
+          python3 ci/run_tests.py \
+            --freecad-bin "${{ runner.temp }}/squashfs-root/AppRun" \
+            --reports "${{ runner.temp }}/test-reports" \
+            --timeout 180
+
+      - name: Upload test failure reports
+        if: failure()
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb99ba8afd # v4.6.1
+        with:
+          name: test-failure-reports
+          path: ${{ runner.temp }}/test-reports
+          retention-days: 7
