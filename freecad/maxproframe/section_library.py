@@ -146,6 +146,7 @@ def recalculate_custom_profile_weight(asset_full_path, object_name, target_densi
         saved_selection = []
         try:
             import FreeCADGui as Gui_mod
+
             if hasattr(Gui_mod, "Selection"):
                 for sel in Gui_mod.Selection.getSelectionEx():
                     dname = getattr(sel, "DocumentName", None)
@@ -195,6 +196,7 @@ def recalculate_custom_profile_weight(asset_full_path, object_name, target_densi
             if saved_selection:
                 try:
                     import FreeCADGui as Gui_mod
+
                     if hasattr(Gui_mod, "Selection"):
                         Gui_mod.Selection.clearSelection()
                         for dname, oname, sub_names in saved_selection:
@@ -294,7 +296,16 @@ class SectionEditSession:
     Ensures the published asset file is never exposed to direct modification.
     """
 
-    def __init__(self, library_root, asset_path, size_code="", family="Custom Profile", library_name="", asset_id="", persistent_index=None):
+    def __init__(
+        self,
+        library_root,
+        asset_path,
+        size_code="",
+        family="Custom Profile",
+        library_name="",
+        asset_id="",
+        persistent_index=None,
+    ):
         self.library_root = os.path.realpath(os.path.abspath(library_root))
         self.asset_path = asset_path
         self.size_code = size_code
@@ -319,7 +330,8 @@ class SectionEditSession:
         source_doc_name = source_doc.Name
         try:
             sketches = [
-                obj for obj in source_doc.Objects
+                obj
+                for obj in source_doc.Objects
                 if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject")
             ]
             if not sketches:
@@ -359,7 +371,8 @@ class SectionEditSession:
         working_sketch = working_doc.getObject(self.working_sketch_name)
         if working_sketch is None:
             sketches = [
-                obj for obj in working_doc.Objects
+                obj
+                for obj in working_doc.Objects
                 if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject")
             ]
             if not sketches:
@@ -469,6 +482,7 @@ def get_or_import_section_sketch(library_root, asset_path, object_name, target_d
     saved_selection = []
     try:
         import FreeCADGui as Gui_mod
+
         if hasattr(Gui_mod, "Selection"):
             for sel in Gui_mod.Selection.getSelectionEx():
                 dname = getattr(sel, "DocumentName", None)
@@ -499,13 +513,18 @@ def get_or_import_section_sketch(library_root, asset_path, object_name, target_d
         opened_by_importer = True
 
     try:
+        if opened_by_importer:
+            # Read-only auxiliaries must not join the caller's undo transaction:
+            # closing a linked document would commit the project transaction too.
+            asset_doc.UndoMode = 0
+        # Opening an asset changes the active document, including hidden assets.
+        # Keep project edits on the active target rather than linking the source.
+        App.setActiveDocument(target_doc.Name)
         source_sketch = asset_doc.getObject(object_name)
         if source_sketch is None or not (
             hasattr(source_sketch, "isDerivedFrom") and source_sketch.isDerivedFrom("Sketcher::SketchObject")
         ):
-            raise ValueError(
-                f"Object '{object_name}' not found or is not a SketchObject in asset '{asset_path}'."
-            )
+            raise ValueError(f"Object '{object_name}' not found or is not a SketchObject in asset '{asset_path}'.")
 
         captured_sketch = capture_section_sketch(
             source_sketch,
@@ -515,15 +534,11 @@ def get_or_import_section_sketch(library_root, asset_path, object_name, target_d
 
         # Tag captured sketch with composite provenance identity
         if not hasattr(captured_sketch, "FF_Provenance"):
-            captured_sketch.addProperty(
-                "App::PropertyString", "FF_Provenance", "FrameForge", "Source library root"
-            )
+            captured_sketch.addProperty("App::PropertyString", "FF_Provenance", "FrameForge", "Source library root")
         captured_sketch.FF_Provenance = canonical_root
 
         if not hasattr(captured_sketch, "FF_AssetId"):
-            captured_sketch.addProperty(
-                "App::PropertyString", "FF_AssetId", "FrameForge", "Source asset ID"
-            )
+            captured_sketch.addProperty("App::PropertyString", "FF_AssetId", "FrameForge", "Source asset ID")
         captured_sketch.FF_AssetId = target_aid
 
         if not hasattr(captured_sketch, "FF_ObjectName"):
@@ -575,6 +590,7 @@ def get_or_import_section_sketch(library_root, asset_path, object_name, target_d
         if saved_selection:
             try:
                 import FreeCADGui as Gui_mod
+
                 if hasattr(Gui_mod, "Selection"):
                     Gui_mod.Selection.clearSelection()
                     for dname, oname, sub_names in saved_selection:
