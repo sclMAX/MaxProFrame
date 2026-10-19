@@ -126,7 +126,9 @@ class Profile:
             "CatalogFamily",
             "Profile",
             "Catalog family variant name",
-        ).CatalogFamily = catalog_family if catalog_family is not None else fam
+        ).CatalogFamily = (
+            catalog_family if catalog_family is not None else fam
+        )
 
         obj.addProperty("App::PropertyLink", "CustomProfile", "Profile", "Target profile").CustomProfile = None
 
@@ -160,9 +162,9 @@ class Profile:
         ).MakeFillet = init_mf
 
         if fam == "C":
-            obj.addProperty(
-                "App::PropertyFloat", "LipLength", "Profile", "Lip length for C profiles"
-            ).LipLength = float(init_lip_length)
+            obj.addProperty("App::PropertyFloat", "LipLength", "Profile", "Lip length for C profiles").LipLength = (
+                float(init_lip_length)
+            )
 
         if not bevels_combined:
             obj.addProperty(
@@ -343,9 +345,9 @@ class Profile:
 
         if fam == "C":
             if not hasattr(obj, "LipLength"):
-                obj.addProperty(
-                    "App::PropertyFloat", "LipLength", "Profile", "Lip length for C profiles"
-                ).LipLength = 0.0
+                obj.addProperty("App::PropertyFloat", "LipLength", "Profile", "Lip length for C profiles").LipLength = (
+                    0.0
+                )
             if init_lip_length is not None:
                 obj.LipLength = float(init_lip_length)
 
@@ -666,6 +668,7 @@ class Profile:
                 if not hasattr(obj, "RadiusSmall") or obj.RadiusSmall != derived_r:
                     obj.RadiusSmall = derived_r
             from freecad.maxproframe.c_profile import build_c_face
+
             p = build_c_face(
                 width=W,
                 height=H,
@@ -1182,6 +1185,10 @@ class Profile:
 
             obj.Shape = ProfileFull
 
+        elif obj.Family == "Custom Profile":
+            # The validated section already includes holes and the mirrors applied above.
+            obj.Shape = p
+
         else:
             # Anchor already applied when building wire1; mirror only
             if mirror_h:
@@ -1226,9 +1233,7 @@ class Profile:
             raise ValueError(f"RadiusSmall must be greater than zero for filleted angle profiles, got {r}")
 
         if r - TW > EDGE_EPSILON:
-            raise ValueError(
-                f"RadiusSmall ({r}) cannot exceed Thickness ({TW}) for filleted angle profiles"
-            )
+            raise ValueError(f"RadiusSmall ({r}) cannot exceed Thickness ({TW}) for filleted angle profiles")
 
         min_dim = min(W, H)
         available = min_dim - TW
