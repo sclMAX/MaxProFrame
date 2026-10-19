@@ -675,3 +675,39 @@ class TestRunTestsPolicy(unittest.TestCase):
         self.assertEqual(summary.get("tests"), 2, "Discovery must find both test modules, ignoring FF_PATTERN")
         self.assertEqual(summary.get("failures"), 1, "Must record 1 failure from test_fail.py")
         self.assertIs(summary.get("successful"), False, "Summary must report successful: false")
+
+
+class TestWorkflowStaticPolicy(unittest.TestCase):
+    """Static checks for .github/workflows/ci.yml (S1, S4, S5, S6, S7)."""
+
+    def setUp(self):
+        self.assertTrue(WORKFLOW_PATH.is_file(), f"Workflow missing: {WORKFLOW_PATH}")
+        self.content = WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    def test_workflow_defines_required_triggers(self):
+        self.assertIn("pull_request:", self.content)
+        self.assertIn("push:", self.content)
+        self.assertIn("workflow_dispatch:", self.content, "S5 requires manual workflow_dispatch trigger")
+        self.assertIn("main", self.content)
+
+    def test_workflow_has_separate_independent_jobs(self):
+        self.assertIn("jobs:", self.content)
+        has_format_job = any(k in self.content for k in ["lint:", "format:", "check-format:"])
+        has_test_job = any(k in self.content for k in ["test:", "tests:", "native-tests:"])
+        self.assertTrue(
+            has_format_job and has_test_job,
+            "S4 requires independent jobs for formatting and native tests",
+        )
+
+    def test_workflow_pins_permissions_and_freecad_baseline(self):
+        self.assertIn("permissions:", self.content, "S6 requires explicit pinned permissions block")
+        self.assertIn("contents: read", self.content, "S6 requires minimal read-only permissions")
+        self.assertIn("1.1.4", self.content, "S1 requires pinned FreeCAD 1.1.4 baseline version")
+        self.assertNotIn("pip install --upgrade pip", self.content, "CI must not introduce an unpinned pip upgrade")
+
+    def test_workflow_saves_report_artifacts_for_7_days_on_failure(self):
+        self.assertIn("upload-artifact", self.content, "S7 requires artifact upload on failure")
+        self.assertTrue(
+            "retention-days: 7" in self.content or "retention-days: '7'" in self.content,
+            "S7 requires 7 days artifact retention",
+        )
