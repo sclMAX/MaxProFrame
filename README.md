@@ -72,8 +72,9 @@ Beams and profiles are mapped onto Edges or parametric lines:
 
 1. Click on the **Create Profiles** tool in the MaxProFrame toolbar.
 2. Select your **Material**, geometric **Family**, and standard **Size**.
-3. In the 3D View, select the skeleton edges where you want to place the profiles.
-4. Click **OK**.
+3. In the 3D View, select the skeleton edges where you want to place the profiles (or define a **Length**).
+4. Click **Apply** to validate settings and generate the 3D preview without closing the panel. Modifying inputs or selection shows **Unapplied changes**.
+5. Click **OK** (Accept) to confirm and commit the profiles (current values are applied even without a prior Apply), or **Cancel** to discard all previews generated during the session.
 
 ![Profiles](docs/images/14-profiles-done.png)
 

@@ -1,0 +1,52 @@
+# Explicit Apply for Create Profile
+Make profile preview an explicit user action. Branch: `feat/explicit-profile-apply`; base: `84de6a3`.
+Delivery: ask-on-risk; forecast ~350 authored diff lines excluding generated QM files; one coherent behavior commit. Tests: native FreeCAD 1.1.4 suite plus isolated GUI checks on 1.1.4 and 26.3rc2.
+
+## Specs
+
+- **S1 — Explicit preview.** User request: "y si implementamos un boton aplicar en el panel, asi no hacemos previsualizaciones hasta que el usuario elige el perfil, pone el largo etc. y aprieta aplicar, que opinas? pros contras?" Authorization: "ok vamos con eso". Opening Create Profile and changing inputs/selection must not create or update preview geometry. Apply validates the current settings and creates/updates preview without closing the panel or duplicating profiles.
+- **S2 — Accepted interaction.** The user accepted this proposed table: "Abrir el panel | Solo cargar opciones; no crear geometría."; "Cambiar campos o selección | Marcar **‘Cambios sin aplicar’**."; "**Aplicar** | Validar y crear/actualizar la previsualización, sin cerrar ni duplicar perfiles."; "**Aceptar** | Aplicar los valores actuales y confirmar, aunque no hayas pulsado Aplicar antes."; "**Cancelar** | Deshacer todo lo generado durante esa sesión del panel." Keep pending/applied state visible and translated. Accept must use current values even after an earlier Apply; Cancel must restore pre-session document objects, including removal of session-imported custom-section sketches. Do not add an automatic-preview preference.
+- **S3 — Reported RC example and regression boundary.** "Probe FreeCad -> Nuevo ->MaxProFrame->Crear Perfil. (con la libreria /home/max/Documentos/LIbreria de Prueba) cargada. \n- En 1.1.4 y anda bien.\n- EN 26.3rc2 se cierra freecad". Verify Create Profile opening and explicit Apply/Accept/Cancel on both versions with isolated copies of that library. Do not modify the original library or normal application profiles. Preserve existing Edit Profile live-update behavior when changing shared base-panel signal routing. Update the UI/help documentation and Spanish catalogs for the changed interaction.
+
+## Tasks
+
+- **T1 [S1-S3] delegated (resumed documented context-backstop handoff), done; commit: pending.** Add test-first explicit Apply behavior, UI, translations, docs and narrowly necessary existing-test adaptations; run focused RED/GREEN, formatter checks and the stable full suite; retain all observed failures. Risk: item 3 (shared base-panel hooks also used by Edit Profile).
+- **T2 [S1-S3] delegated verification + parent spot-check + human manual validation, done; commit: pending.** Independently verify specs, existing Edit behavior and native GUI flows on both versions, with copied library and isolated profiles. Check rejected Apply, repeated Apply, Accept without prior Apply, changed values after Apply, Cancel, and normal dialog/document shutdown. Record proof and limits, not only test presence.
+- **T3 [S1-S3] inline, in_progress; commit: pending.** Review the bounded diff, assess the candidate, follow native reviewDue/consent routing, commit only this work unit on its feature branch, and record evidence. Do not push or create a PR.
+
+## Log
+
+### L1 — Original request (verbatim)
+y si implementamos un boton aplicar en el panel, asi no hacemos previsualizaciones hasta que el usuario elige el perfil, pone el largo etc. y aprieta aplicar, que opinas? pros contras?
+
+### L2 — Accepted proposal and authorization
+Assistant proposed the five-action table quoted in S2 and recommended explicit Apply without an automatic-preview option. User: "ok vamos con eso".
+
+### L3 — Existing diagnosis and scope
+Original isolated RC probe exits -11 (SIGSEGV), current Python frame `Gui.Control.showDialog(panel)`, after `panel.open` invokes preview creation. Stable control exits 0. Hidden auxiliary document does not avoid crash. No-preview RC succeeds; import-only succeeds; deferred original preview after dialog presentation succeeds with valid CP1 face. These probes bypass normal shutdown and do not prove the native root cause. Evidence: `.freecad-test/crash-investigation/`. The diagnostic v2 pair timed out because its module copy omitted package.xml; the explicitly authorized v3 pair corrected isolation and each succeeded once. No diagnostic artifacts belong in the feature commit.
+
+### L4 — Implementation boundaries
+Preserve unrelated uncommitted launcher changes: `.gitignore`, `docs/local-freecad-testing.md`, `tests/test_freecad_test_launcher.py`, `tools/**`. Original library `/home/max/Documentos/LIbreria de Prueba` is read/copy only. Native stable extraction: `.git/ci-policy-runtime/squashfs-root/AppRun`; native RC extraction: `.git/pr122-accept-changed-probe/tmp/appimage_extracted_43105af5b36508091bdc4e8350f4ac7d/AppRun`. Existing pinned formatters: `.git/format-tools-homebrew-venv/bin/python`. Previous code and tests are at base `84de6a3`; do not claim that shared Edit behavior is unaffected without checking it.
+
+### L5 — Writer unavailable
+Task `mvfpuk6a-7-oa9d` failed with `assistant returned no final report`. Parent readback found no feature source changes, no new `tests/test_create_profile_apply.py`, and no RED/GREEN or native-suite evidence. T1 is blocked on an available implementation executor; T2/T3 remain pending. No automatic retry or implementation claim. Next decision: resume this documented feature in a fresh session with an available executor.
+
+### L6 — Authorized resume
+User: "Retomá odd/tasks/explicit-profile-apply.md en la rama feat/explicit-profile-apply. Implementá el botón Aplicar según lo acordado. Todavía no hay\n │ cambios de implementación; preservá los lanzadores y la biblioteca original."
+Fresh session confirmed the requested branch and no implementation diff; existing launcher changes remain untouched. Resume T1 with the available bounded writer, preserving the documented route; T2/T3 retain their original scope.
+
+### L7 — T1 partial delivery and bounded correction
+Worker `mvfq1gpj-1-z3nz` implemented UI/state/deferred preview and preserved Edit routing. Focused RED: 10 tests, 5 failures/5 errors; GREEN: 11 tests pass. Formatter and Edit differential checks passed. Full native suite: exit 1, 355 tests, 1 failure and 2 errors in `test_t7_independent.py`, which still expects automatic preview on open/combo changes. Parent confirmed those old assertions in the fixture. One correction adds that exact test file to allowed surfaces, inserts explicit Apply at preview observation boundaries, and preserves ownership/source/reopen checks. T1 remains in_progress, not complete. Assessment required escalation item 3; native assessment is currently unassessable due to undeclared untracked scope, not a review approval. Authored review workload exceeds the initial ~350-line forecast (new test alone 381 lines); preserve test readability and report final cohesive size rather than compressing to fit.
+
+### L8 — T1 correction verified; T2 begins
+Correction `mvfqyx6c-2-os5t` preserved historical invariants and added Apply at preview observation boundaries. Combined focused tests: 13 passed. Full native FreeCAD 1.1.4 suite: exit 0, 355 tests, zero failures/errors/skips; parent read `.git/explicit-profile-apply-evidence/summary.json` and checked fixture diff plus `git diff --check` (exit 0). Black/isort writer checks passed. T1 implementation/testing outcome done, T2 native GUI/independent verification remains open; writer's Risk: none is not accepted because shared Edit routing remains item 3. Candidate is ~731 authored diff lines excluding binaries and task document, larger than forecast; one cohesive behavior after honest slicing analysis. No commit before workload disposition and applicable verification/review.
+
+### L9 — Native GUI proof unavailable; no retries
+Independent verifier reported one bounded native pair: stable and RC each timed out after 70 seconds, driver termination -9. Stable scheduled callback was not observed. RC opened the real panel without geometry, then a Spanish QTranslator assertion observed `No preview`; this remains unclassified harness-versus-candidate, not a confirmed product defect. Cleanup probe wrongly treated `Gui.Control.activeDialog()` boolean as a panel, so normal shutdown is unproven. Remaining Apply/Accept/Cancel/save/reopen flows on both versions are unverified. Original/copied library SHA-256 reported unchanged, no workspace mutation. Evidence scratch: `/tmp/mpf-explicit-verify-bdFdyu`. Parent instructed verifier to finalize logs without further probes or retries. T2 is blocked on the human's disposition of missing proof; T3 remains pending behind T2 and workload disposition. No commit/push or completion claim.
+
+### L10 — Final independent verdict
+Verifier `mvfrcgyy-3-6zyz` finalized BLOCKED for S1/S2/S3, with no confirmed product blocker. Stable timeout 70.040s and RC timeout 70.095s, both driver SIGKILL (-9), not proven application crashes. RC version reported 26.3.0 / 20261008 / faa2c25b187f46623145d09c86142d2bb9c89019. Offscreen OpenGL-context warnings and the probe's translation/cleanup errors prevent lifecycle conclusions. No baseline runtime comparison or additional suite run. Original and copied library hashes unchanged; workspace unchanged; diff check passed. Scratch retained at `/tmp/mpf-explicit-verify-bdFdyu` (driver/probe and per-version command/result/steps/stdout/stderr). Probe is not validated regression coverage. Parent already requested the human's choice: manual GUI validation or explicitly authorized bounded verifier investigation; no automatic retries. Review workload ~731 authored lines also remains unresolved before commit.
+
+### L11 — Manual validation and delivery authorization
+User: "ya hice la prueba manual y funciona en las 2 versiones, que investigacions Falta?"
+Human manual validation in both versions resolves the missing practical GUI evidence; automated GUI limitations remain recorded, not reclassified as passes. Parent recommended one coherent ~731-line unit including tests/translations. User: "ok commit y push". This authorizes the coherent feature commit and push to origin/feat/explicit-profile-apply, excluding unrelated launchers/library changes. T2 done on combined native stable suite, independent readback and human manual validation; T3 in progress. No additional investigation of the failed verification harness is needed.

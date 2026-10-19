@@ -10,6 +10,7 @@ from unittest.mock import patch
 import FreeCAD as App
 import FreeCADGui as Gui
 import test_custom_profile_selected_import as fixture
+
 from freecad.maxproframe import create_profiles_tool as candidate
 from freecad.maxproframe.ff_tools import get_param_group
 from freecad.maxproframe.section_library import get_or_import_section_sketch
@@ -21,10 +22,17 @@ def sources(doc):
 
 def snapshot(sketch):
     bb = sketch.Shape.BoundBox
-    return (sketch.Label, sketch.ViewObject.ShowInTree,
-            sketch.ViewObject.Visibility, sketch.GeometryCount,
-            sketch.ConstraintCount, sketch.Shape.Length,
-            bb.XLength, bb.YLength, bb.ZLength)
+    return (
+        sketch.Label,
+        sketch.ViewObject.ShowInTree,
+        sketch.ViewObject.Visibility,
+        sketch.GeometryCount,
+        sketch.ConstraintCount,
+        sketch.Shape.Length,
+        bb.XLength,
+        bb.YLength,
+        bb.ZLength,
+    )
 
 
 class IndependentT7(fixture.TestCustomProfileSelectedImport):
@@ -53,8 +61,8 @@ class IndependentT7(fixture.TestCustomProfileSelectedImport):
                 path = self._create_line_path(doc)
                 entry = self.manager.get_library("CustomFolderLib")["Custom Profile"]["sizes"]["CP-903"]
                 existing = get_or_import_section_sketch(
-                    self.folder_lib_path, entry["asset_path"], entry["object_name"],
-                    doc, entry["asset_id"])
+                    self.folder_lib_path, entry["asset_path"], entry["object_name"], doc, entry["asset_id"]
+                )
                 existing.Label = "My owned source " + mode
                 existing.ViewObject.ShowInTree = True
                 existing.ViewObject.Visibility = True
@@ -62,7 +70,14 @@ class IndependentT7(fixture.TestCustomProfileSelectedImport):
                 owned_before = snapshot(existing)
                 self.defaults("CP-901")
                 panel = self.opened(doc, path)
+                self.assertEqual(len(self._get_profiles(doc)), 0, "No profile before first Apply")
+                self.assertEqual({o.Name for o in sources(doc)}, {existing_name}, "No import before first Apply")
                 self._select_profile(panel, "CustomFolderLib", "Custom Profile", "CP-901")
+                self.assertEqual(len(self._get_profiles(doc)), 0, "No profile on combo selection before Apply")
+                self.assertEqual(
+                    {o.Name for o in sources(doc)}, {existing_name}, "No import on combo selection before Apply"
+                )
+                self.assertTrue(panel.apply())
                 a = self._get_profiles(doc)[0].CustomProfile
                 a_name = a.Name
                 a_before = snapshot(a)
@@ -79,17 +94,17 @@ class IndependentT7(fixture.TestCustomProfileSelectedImport):
                     other.saveAs(os.path.join(self.test_root, "ownership-foreign-owner.FCStd"))
                     owner.setLink(a)
                     other.recompute()
-                    self.assertEqual(owner.getLinkedObject(), a,
-                                     "Cross-document Link prerequisite unsupported")
-                self.assertIn(owner, a.InList,
-                              "Native dependency prerequisite missing from public InList")
+                    self.assertEqual(owner.getLinkedObject(), a, "Cross-document Link prerequisite unsupported")
+                self.assertIn(owner, a.InList, "Native dependency prerequisite missing from public InList")
                 owner_doc, owner_name = owner.Document.Name, owner.Name
                 App.setActiveDocument(doc.Name)
                 self._select_profile(panel, "CustomFolderLib", "Custom Profile", "CP-902")
+                self.assertTrue(panel.apply())
                 b_name = self._get_profiles(doc)[0].CustomProfile.Name
                 self.assertIsNotNone(doc.getObject(a_name), "Live referenced session source deleted on A->B")
                 self.assertEqual(snapshot(doc.getObject(a_name)), a_before)
                 self._select_profile(panel, "CustomFolderLib", "Custom Profile", "CP-903")
+                self.assertTrue(panel.apply())
                 self.assertIsNone(doc.getObject(b_name), "Unreferenced NEW source B leaked")
                 self.assertEqual(self._get_profiles(doc)[0].CustomProfile, doc.getObject(existing_name))
                 self.assertTrue(panel.accept())
@@ -125,6 +140,10 @@ class IndependentT7(fixture.TestCustomProfileSelectedImport):
         try:
             panel = self.opened(doc, path)
             self.assertEqual(panel.form_proxy.combo_size.currentText(), "CP-902")
+            self.assertEqual(len(created), 0, "No import before first Apply")
+            self.assertEqual(len(sources(doc)), 0, "No source sketch before first Apply")
+            self.assertEqual(len(self._get_profiles(doc)), 0, "No profile before first Apply")
+            self.assertTrue(panel.apply())
             self.assertEqual(len(created), 1, "Transient first/unselected source imported during default restore")
             self.assertEqual(len(sources(doc)), 1)
             prof = self._get_profiles(doc)[0]
@@ -149,6 +168,8 @@ class IndependentT7(fixture.TestCustomProfileSelectedImport):
             source.Label = "User renamed selected source"
             before = snapshot(source)
             second = self.opened(doc, path)
+            self.assertEqual(len(created), 1, "No import before second Apply")
+            self.assertTrue(second.apply())
             self.assertEqual(len(created), 1, "Repeat asset use imported another source")
             self.assertEqual(len(sources(doc)), 1)
             self.assertTrue(second.accept())
@@ -177,7 +198,7 @@ class IndependentT7(fixture.TestCustomProfileSelectedImport):
 
 
 def load_tests(loader, tests, pattern):
-    return unittest.TestSuite(IndependentT7(name) for name in (
-        "test_ownership_and_live_dependencies",
-        "test_nonfirst_default_presentation_reuse_reopen"))
-
+    return unittest.TestSuite(
+        IndependentT7(name)
+        for name in ("test_ownership_and_live_dependencies", "test_nonfirst_default_presentation_reuse_reopen")
+    )

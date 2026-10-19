@@ -63,6 +63,13 @@ class TestLibraryTranslationCatalogs(unittest.TestCase):
             "Close": "Cerrar",
             "Height [mm]": "Alto [mm]",
             "Weight [kg/m]": "Peso [kg/m]",
+            "Apply": "Aplicar",
+            "Preview": "Previsualización",
+            "No preview": "Sin previsualización",
+            "Unapplied changes": "Cambios sin aplicar",
+            "Applied": "Cambios aplicados",
+            "Apply changes and update preview": "Aplicar cambios y actualizar previsualización",
+            "Select Edges or set Length to create a profile": "Seleccione aristas o defina la longitud para crear un perfil",
         }.items():
             self.assertEqual(canonical[("frameforge", source)], expected)
 
