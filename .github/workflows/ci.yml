@@ -58,9 +58,21 @@ jobs:
           retention-days: 7
 
   test:
-    name: Native FreeCAD 1.1.4 Test Suite
+    name: Native FreeCAD (${{ matrix.target }})
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: stable
+            label: FreeCAD 1.1.4
+            url: https://github.com/FreeCAD/FreeCAD/releases/download/1.1.4/FreeCAD_1.1.4-Linux-x86_64-py311.AppImage
+            sha256: f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434
+          - target: rc
+            label: FreeCAD 26.3rc2
+            url: https://github.com/FreeCAD/FreeCAD/releases/download/26.3rc2/FreeCAD_26.3rc2-Linux-x86_64.AppImage
+            sha256: 2cf4212d5a348574e786da7d5a8faeeb3e83dd4245c23898dede92ce82ce4908
 
     steps:
       - name: Checkout code
@@ -91,12 +103,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libegl1 libopengl0 libxkbcommon-x11-0 libxcb-cursor0
 
-      - name: Download and verify FreeCAD 1.1.4 AppImage
+      - name: Download and verify FreeCAD AppImage
         if: steps.planner.outputs.run_tests == 'true'
         run: |
           curl -fL -o "${{ runner.temp }}/FreeCAD.AppImage" \
-            https://github.com/FreeCAD/FreeCAD/releases/download/1.1.4/FreeCAD_1.1.4-Linux-x86_64-py311.AppImage
-          echo "f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434  ${{ runner.temp }}/FreeCAD.AppImage" | sha256sum -c -
+            "${{ matrix.url }}"
+          echo "${{ matrix.sha256 }}  ${{ runner.temp }}/FreeCAD.AppImage" | sha256sum -c -
 
       - name: Extract AppImage
         if: steps.planner.outputs.run_tests == 'true'
@@ -110,12 +122,13 @@ jobs:
           python3 ci/run_tests.py \
             --freecad-bin "${{ runner.temp }}/squashfs-root/AppRun" \
             --reports "${{ runner.temp }}/test-reports" \
-            --timeout 180
+            --timeout 180 \
+            --target "${{ matrix.target }}"
 
       - name: Upload test failure reports
         if: failure()
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
-          name: test-failure-reports
+          name: test-failure-reports-${{ matrix.target }}
           path: ${{ runner.temp }}/test-reports
           retention-days: 7
