@@ -74,9 +74,24 @@ To resolve both issues without patching vendor AppImages:
 6. Process-group timeouts are enforced (exit code 124 on timeout), and `ci/run-tests.FCMacro` emits structured diagnostic checkpoints (`macro-entry`, `validated-version`, `discovery-start`, `completed-summary`) to `startup.log`.
 7. Test outcomes require fresh, strictly validated `summary.json` containing positive test counts, zero failures/errors, and consistent non-negative counts. Previous execution artifacts are cleared before launch to avoid stale false-green results.
 
+## GitHub Actions runner infrastructure and Node 24
+
+GitHub Actions JavaScript actions execute on the runner's internal Node.js runtime. GitHub Actions has updated official actions to Node 24 and flags workflows invoking Node 20 actions with runner deprecation warnings.
+
+| Action | Pinned Ref / Full SHA | Declared Action Runtime |
+|--------|-----------------------|-------------------------|
+| `actions/checkout` | `3d3c42e5aac5ba805825da76410c181273ba90b1` (`v7.0.1`) | Node 24 |
+| `actions/setup-python` | `5fda3b95a4ea91299a34e894583c3862153e4b97` (`v7.0.0`) | Node 24 |
+| `actions/upload-artifact` | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` (`v7.0.2`) | Node 24 |
+
+### Infrastructure boundary vs project dependencies
+- **Action infrastructure only:** Node 24 is strictly an execution requirement of GitHub's hosted runner infrastructure. MaxProFrame does **not** depend on Node.js, npm, or JavaScript. MaxProFrame remains a FreeCAD workbench; its native CI suites run offscreen under Python 3.11 / Python 3.13. Contributors and users do not need Node.js installed locally.
+- **Runner requirements:** Node 24 actions require GitHub Actions runner `>= 2.327.1`. GitHub-hosted `ubuntu-24.04` runners satisfy this requirement.
+- **Full commit SHAs:** All action references in `.github/workflows/ci.yml` are pinned to immutable 40-character commit SHAs with semantic version comments. Floating or moving major tags (`@v4`, `@v5`, `@v7`) are strictly avoided.
+
 ## Current scope and validation status
 
-- **Host validation:** CI policy tests (`ci/tests/test_policy.py`) verify planner logic, formatting wrappers, runner process isolation, AppRun binary resolution, `--target` parameter routing, and summary validation contracts. Host tests are fully green.
+- **Host validation:** CI policy tests (`ci/tests/test_policy.py`) verify planner logic, formatting wrappers, runner process isolation, AppRun binary resolution, `--target` parameter routing, summary validation contracts, and exact pinned action SHAs. Host tests are fully green.
 - **Native execution:** CI pins the following official Linux x86_64 AppImage SHA-256 checksums; local native suites used the already-extracted runtimes:
   - Stable: FreeCAD 1.1.4 py311 (`f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434`).
   - RC: FreeCAD 26.3rc2 (`2cf4212d5a348574e786da7d5a8faeeb3e83dd4245c23898dede92ce82ce4908`).
@@ -85,4 +100,4 @@ To resolve both issues without patching vendor AppImages:
   - RC (initial run): **354/355 passed** (exit code 1, 1 failure, 0 errors, 0 skips). `test_named_forward_formula_and_metadata` failed its source BREP snapshot comparison after the test itself changed and restored a sketch datum; the diff included a numerical epsilon (`-8.8817841970012523e-16` versus `0.0`) due to registration-time evaluation in `addCleanup` mixing native OCC recompute precision with capture immutability.
   - RC (corrected boundary run): **355/355 passed** offscreen (exit code 0, 0 failures, 0 errors, 0 skips). Causal observation boundaries in `tests/test_t2_independent.py` were corrected to assert exact full source snapshot equality immediately after capture and compare against a fresh post-control baseline after editing the captured copy, without adding tolerances, skips, or application changes. Both native suites are now fully green on their pinned extracted runtimes.
 - **Review status:** Independent bounded verification of this stable/RC CI change passed: target-validation probes, six baseline/candidate default-runner comparisons, fixture AST checks and native evidence readback found no candidate-caused blockers. Native review assessment could not resolve the current untracked scope; no native review approval is claimed.
-- **Hosted execution:** Matrix jobs test both `stable` and `rc` targets independently (`fail-fast: false`). No claim of hosted GitHub Actions execution is made prior to live pull request verification.
+- **Hosted execution:** Matrix jobs test both `stable` and `rc` targets independently (`fail-fast: false`). Historical evidence: prior hosted CI run `39333298411` on `main` at `7b63d90` passed 355/355 on both targets and 37 host tests under prior actions. For this new Node 24 candidate, hosted execution cannot run locally without publishing/dispatch authorization; no hosted CI claim is made for this candidate.

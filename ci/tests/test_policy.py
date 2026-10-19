@@ -14,6 +14,7 @@ Pins specifications S1-S8 from odd/tasks/ci-policy.md:
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -853,6 +854,42 @@ class TestWorkflowStaticPolicy(unittest.TestCase):
             "Failure reports must use target-specific unique artifact names",
         )
 
+    def test_workflow_pins_official_node24_actions_with_full_shas(self):
+        """Workflow must pin official Node 24 actions (checkout v7.0.1, setup-python v7.0.0, upload-artifact v7.0.2) using full SHAs."""
+        expected_actions = {
+            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1": 2,
+            "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0": 2,
+            "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2": 2,
+        }
+        for action_ref, count in expected_actions.items():
+            actual_count = self.content.count(action_ref)
+            self.assertEqual(
+                actual_count,
+                count,
+                f"Expected exactly {count} occurrences of '{action_ref}', found {actual_count}",
+            )
+
+        # Assert no legacy Node 20 action SHAs or versions remain
+        legacy_pins = [
+            "11bd71901bbe5b1630ceea73d27597364c9af683",  # checkout v4.2.2
+            "42375524e23c412d93fb67b49958b491fce71c38",  # setup-python v5.4.0
+            "4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1",  # upload-artifact v4.6.1
+            "v4.2.2",
+            "v5.4.0",
+            "v4.6.1",
+        ]
+        for legacy in legacy_pins:
+            self.assertNotIn(legacy, self.content, f"Legacy Node 20 reference '{legacy}' must not appear in workflow")
+
+        # Verify all uses: references in workflow use a 40-character hex SHA
+        uses_lines = [line.strip() for line in self.content.splitlines() if line.strip().startswith("uses:")]
+        self.assertEqual(len(uses_lines), 6, f"Expected exactly 6 uses steps, found {len(uses_lines)}")
+        sha_pattern = re.compile(r"^uses:\s+actions/[a-zA-Z0-9_-]+@([0-9a-f]{40})\s+#\s+v[0-9.]+$")
+        for line in uses_lines:
+            self.assertRegex(
+                line, sha_pattern, f"Step '{line}' must match 'uses: actions/<name>@<40-char-sha> # v<semver>'"
+            )
+
 
 class TestPackageMetadataPolicy(unittest.TestCase):
     """Metadata checks for package.xml (S1, S3)."""
@@ -880,3 +917,16 @@ class TestDocumentationPolicy(unittest.TestCase):
         self.assertIn("26.3rc2", content)
         self.assertIn("26.3.0", content)
         self.assertIn("--target", content)
+
+    def test_ci_docs_document_node24_actions_infrastructure(self):
+        """CI docs must document Node 24 as action infrastructure, runner requirements, and disclaim hosted execution."""
+        ci_doc = REPO_ROOT / "docs" / "ci.md"
+        content = ci_doc.read_text(encoding="utf-8")
+        self.assertIn("Node 24", content)
+        self.assertIn("2.327.1", content)
+        self.assertIn("ubuntu-24.04", content)
+        self.assertIn("3d3c42e5aac5ba805825da76410c181273ba90b1", content)
+        self.assertIn("5fda3b95a4ea91299a34e894583c3862153e4b97", content)
+        self.assertIn("cf430e030ddbb5b0abf93d22962f4752f3646cd9", content)
+        self.assertIn("Action infrastructure only", content)
+        self.assertIn("no hosted CI claim is made", content)
