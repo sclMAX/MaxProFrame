@@ -182,6 +182,7 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
 
     def _new_doc(self, name_prefix="TestDoc"):
         doc = App.newDocument(name_prefix)
+        doc.UndoMode = 1
         self.doc_names.append(doc.Name)
         return doc
 
@@ -203,7 +204,9 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         doc.recompute()
         return s
 
-    def _create_hollow_rect_sketch(self, doc, name="HollowSection", outer_w=40.0, outer_h=40.0, inner_w=20.0, inner_h=20.0):
+    def _create_hollow_rect_sketch(
+        self, doc, name="HollowSection", outer_w=40.0, outer_h=40.0, inner_w=20.0, inner_h=20.0
+    ):
         s = doc.addObject("Sketcher::SketchObject", name)
         # Outer wire
         opts = [(0, 0), (outer_w, 0), (outer_w, outer_h), (0, outer_h)]
@@ -352,11 +355,17 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         self.assertAlmostEqual(panel.form_proxy.sb_weight.value(), expected_weight, places=2)
 
         # Bounds are read-only (disabled for direct editing)
-        self.assertFalse(panel.form_proxy.sb_width.isEnabled(), "sb_width must be disabled/read-only for custom sections.")
-        self.assertFalse(panel.form_proxy.sb_height.isEnabled(), "sb_height must be disabled/read-only for custom sections.")
+        self.assertFalse(
+            panel.form_proxy.sb_width.isEnabled(), "sb_width must be disabled/read-only for custom sections."
+        )
+        self.assertFalse(
+            panel.form_proxy.sb_height.isEnabled(), "sb_height must be disabled/read-only for custom sections."
+        )
 
         # Inapplicable dimensional and fillet controls are disabled
-        self.assertFalse(panel.form_proxy.sb_main_thickness.isEnabled(), "Thickness must be disabled for custom sections.")
+        self.assertFalse(
+            panel.form_proxy.sb_main_thickness.isEnabled(), "Thickness must be disabled for custom sections."
+        )
         self.assertFalse(panel.form_proxy.sb_flange_thickness.isEnabled(), "Flange Thickness must be disabled.")
         self.assertFalse(panel.form_proxy.sb_radius1.isEnabled(), "Radius1 must be disabled.")
         self.assertFalse(panel.form_proxy.sb_radius2.isEnabled(), "Radius2 must be disabled.")
@@ -380,7 +389,9 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         # Build asset doc containing two sketches: a dummy first sketch and the target hollow sketch
         asset_build_doc = self._new_doc("AssetBuildDoc")
         _ = self._create_rect_sketch(asset_build_doc, "DummyFirstSketch", width=10.0, height=10.0)
-        _ = self._create_hollow_rect_sketch(asset_build_doc, "TargetHollowSection", outer_w=40.0, outer_h=40.0, inner_w=20.0, inner_h=20.0)
+        _ = self._create_hollow_rect_sketch(
+            asset_build_doc, "TargetHollowSection", outer_w=40.0, outer_h=40.0, inner_w=20.0, inner_h=20.0
+        )
         asset_build_doc.recompute()
         bdoc_name = asset_build_doc.Name
         asset_build_doc.saveAs(raw_asset_path)
@@ -422,7 +433,9 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         project_doc.recompute()
 
         # Verify profile created
-        profiles = [o for o in project_doc.Objects if getattr(o, "Type", None) == "Profile" or hasattr(o, "CustomProfile")]
+        profiles = [
+            o for o in project_doc.Objects if getattr(o, "Type", None) == "Profile" or hasattr(o, "CustomProfile")
+        ]
         self.assertEqual(len(profiles), 1, "Exactly one Profile object should be created.")
         prof = profiles[0]
 
@@ -433,7 +446,9 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         # Assert imported sketch is autonomous, solves cleanly, and has zero external links
         local_sketch = prof.CustomProfile
         self.assertIsNotNone(local_sketch, "prof.CustomProfile must link to imported sketch.")
-        self.assertEqual(local_sketch.Document.Name, project_doc.Name, "Imported sketch must reside in project document.")
+        self.assertEqual(
+            local_sketch.Document.Name, project_doc.Name, "Imported sketch must reside in project document."
+        )
         self.assertEqual(local_sketch.solve(), 0, "Imported sketch must solve cleanly.")
         self.assertEqual(len(local_sketch.ExternalGeometry), 0, "Imported sketch must have 0 external links.")
 
@@ -518,7 +533,9 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
 
         project_doc.recompute()
 
-        all_profs = [o for o in project_doc.Objects if getattr(o, "Type", None) == "Profile" or hasattr(o, "CustomProfile")]
+        all_profs = [
+            o for o in project_doc.Objects if getattr(o, "Type", None) == "Profile" or hasattr(o, "CustomProfile")
+        ]
         self.assertEqual(len(all_profs), 3, "Three profiles should be created.")
 
         prof1, prof2, prof3 = all_profs[0], all_profs[1], all_profs[2]
@@ -543,7 +560,9 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         )
 
         # Count total sketches in project document: 3 paths + 1 shared sketch LibA + 1 sketch LibB = 5 sketches
-        sketches_in_doc = [o for o in project_doc.Objects if hasattr(o, "isDerivedFrom") and o.isDerivedFrom("Sketcher::SketchObject")]
+        sketches_in_doc = [
+            o for o in project_doc.Objects if hasattr(o, "isDerivedFrom") and o.isDerivedFrom("Sketcher::SketchObject")
+        ]
         self.assertEqual(len(sketches_in_doc), 5, "Shared section sketch must be reused, not duplicated.")
 
         # BOM Grouping assertion
@@ -558,7 +577,19 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         self.assertEqual(liba_group[0]["quantity"], 2, "Grouped row must have quantity 2.")
 
         # PID Grouping assertion
-        populate_ids([prof1, prof2, prof3], [], [prof1, prof2, prof3], [], "all_numbers", False, True, True, False, "start_at", start_number="1")
+        populate_ids(
+            [prof1, prof2, prof3],
+            [],
+            [prof1, prof2, prof3],
+            [],
+            "all_numbers",
+            False,
+            True,
+            True,
+            False,
+            "start_at",
+            start_number="1",
+        )
         pid1 = getattr(prof1, "PID", "")
         pid2 = getattr(prof2, "PID", "")
         pid3 = getattr(prof3, "PID", "")
@@ -627,7 +658,9 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         reopened_doc.recompute()
 
         # Assert profile and local sketch remain valid without library runtime dependency
-        profs = [o for o in reopened_doc.Objects if getattr(o, "Type", None) == "Profile" or hasattr(o, "CustomProfile")]
+        profs = [
+            o for o in reopened_doc.Objects if getattr(o, "Type", None) == "Profile" or hasattr(o, "CustomProfile")
+        ]
         self.assertEqual(len(profs), 1, "Reopened project must contain the Profile.")
         prof = profs[0]
 
@@ -680,7 +713,9 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         panel1.accept()
         project_doc.recompute()
 
-        prof1 = [o for o in project_doc.Objects if getattr(o, "Type", None) == "Profile" or hasattr(o, "CustomProfile")][0]
+        prof1 = [
+            o for o in project_doc.Objects if getattr(o, "Type", None) == "Profile" or hasattr(o, "CustomProfile")
+        ][0]
         initial_vol1 = prof1.Shape.Volume
         initial_w1 = prof1.CustomProfile.Shape.BoundBox.XLength
         initial_h1 = prof1.CustomProfile.Shape.BoundBox.YLength
@@ -755,7 +790,9 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         panel2.accept()
         project_doc.recompute()
 
-        all_profs = [o for o in project_doc.Objects if getattr(o, "Type", None) == "Profile" or hasattr(o, "CustomProfile")]
+        all_profs = [
+            o for o in project_doc.Objects if getattr(o, "Type", None) == "Profile" or hasattr(o, "CustomProfile")
+        ]
         self.assertEqual(len(all_profs), 2)
         prof2 = [p for p in all_profs if p.Name != prof1.Name][0]
 
@@ -818,7 +855,9 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         panel.accept()
         project_doc.recompute()
 
-        prof = [o for o in project_doc.Objects if getattr(o, "Type", None) == "Profile" or hasattr(o, "CustomProfile")][0]
+        prof = [o for o in project_doc.Objects if getattr(o, "Type", None) == "Profile" or hasattr(o, "CustomProfile")][
+            0
+        ]
 
         # Verify profile moved into container
         self.assertTrue(
@@ -836,9 +875,22 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         part_container.addObject(obj_direct)
         Profile(
             obj_direct,
-            80.0, 40.0, 0.0, 0.0, 0.0, 0.0, 200.0, 25.12, 0.0, False,
-            2, 2,  # Anchor Right, Top
-            "Steel", "Custom Profile", "Asymm_80x40", False,
+            80.0,
+            40.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            200.0,
+            25.12,
+            0.0,
+            False,
+            2,
+            2,  # Anchor Right, Top
+            "Steel",
+            "Custom Profile",
+            "Asymm_80x40",
+            False,
             (path_sk_direct, ("Edge1")),
             custom_profile=prof.CustomProfile,
             init_mirror_h=True,
@@ -858,6 +910,78 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         self.assertAlmostEqual(prof.Shape.BoundBox.XLength, obj_direct.Shape.BoundBox.XLength, places=2)
         self.assertAlmostEqual(prof.Shape.BoundBox.YLength, obj_direct.Shape.BoundBox.YLength, places=2)
         self.assertAlmostEqual(prof.Shape.BoundBox.ZLength, obj_direct.Shape.BoundBox.ZLength, places=2)
+
+    def test_importer_preserves_caller_transaction_and_owned_source_cleanup(self):
+        """Closing an imported asset must not commit the caller's pending edits."""
+        source_doc = self._new_doc("TransactionSource")
+        source = self._create_rect_sketch(source_doc, "TransactionSection", width=60.0, height=30.0)
+        rel_path, object_name, asset_id = self._publish_section_to_library(
+            self.folder_lib_path, "Transaction_60x30", source, "TransactionSection", "transaction_section"
+        )
+        source_name = source_doc.Name
+        App.closeDocument(source_name)
+        self.doc_names.remove(source_name)
+        asset_path = os.path.join(self.folder_lib_path, rel_path)
+        with open(asset_path, "rb") as stream:
+            original_asset = stream.read()
+
+        project = self._new_doc("TransactionProject")
+        App.setActiveDocument(project.Name)
+        box = project.addObject("Part::Box", "ExistingBox")
+        box.Length = 125.0
+        project.recompute()
+        original_label = box.Label
+        baseline_names = {obj.Name for obj in project.Objects}
+        baseline_docs = set(App.listDocuments())
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(project.Name, box.Name, "Edge1")
+
+        def selection():
+            return [(s.DocumentName, s.ObjectName, tuple(s.SubElementNames)) for s in Gui.Selection.getSelectionEx()]
+
+        original_selection = selection()
+        for edit_before_import in (True, False):
+            with self.subTest(edit_before_import=edit_before_import):
+                project.openTransaction("Caller-owned edit and import")
+                if edit_before_import:
+                    box.Label = "Pending caller edit"
+                imported = get_or_import_section_sketch(
+                    self.folder_lib_path,
+                    rel_path,
+                    object_name,
+                    target_doc=project,
+                    asset_id=asset_id,
+                    profile_code="Transaction_60x30",
+                )
+                imported_name = imported.Name
+                self.assertEqual(imported.Document.Name, project.Name)
+                self.assertEqual(imported.FF_AssetId, asset_id)
+                self.assertEqual(imported.FF_ObjectName, object_name)
+                self.assertEqual(imported.Label, "Transaction_60x30")
+                self.assertFalse(imported.ViewObject.ShowInTree)
+                self.assertFalse(imported.ViewObject.Visibility)
+                if not edit_before_import:
+                    box.Label = "Pending caller edit"
+                self.assertEqual(box.Label, "Pending caller edit")
+                self.assertEqual(set(App.listDocuments()), baseline_docs, "Importer-owned asset must be closed.")
+                self.assertEqual(App.ActiveDocument.Name, project.Name)
+                self.assertEqual(selection(), original_selection)
+                reused = get_or_import_section_sketch(
+                    self.folder_lib_path, rel_path, object_name, target_doc=project, asset_id=asset_id
+                )
+                self.assertIs(reused, imported)
+                self.assertEqual(set(App.listDocuments()), baseline_docs)
+                self.assertEqual(selection(), original_selection)
+
+                project.abortTransaction()
+                self.assertEqual({obj.Name for obj in project.Objects}, baseline_names)
+                self.assertIsNone(project.getObject(imported_name))
+                self.assertEqual(project.getObject("ExistingBox").Label, original_label)
+                self.assertAlmostEqual(project.getObject("ExistingBox").Length.Value, 125.0)
+                self.assertEqual(App.ActiveDocument.Name, project.Name)
+                self.assertEqual(selection(), original_selection)
+                with open(asset_path, "rb") as stream:
+                    self.assertEqual(stream.read(), original_asset, "Import must not write the library asset.")
 
     # --- Case 7: Reject transaction rollback ---
 
@@ -903,10 +1027,14 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         panel.proceed()
 
         # During preview, assert preview profile and imported local sketch actually exist
-        preview_profs = [o for o in project_doc.Objects if getattr(o, "Type", None) == "Profile" or hasattr(o, "CustomProfile")]
+        preview_profs = [
+            o for o in project_doc.Objects if getattr(o, "Type", None) == "Profile" or hasattr(o, "CustomProfile")
+        ]
         self.assertEqual(len(preview_profs), 1, "Preview profile must exist before reject.")
         preview_prof = preview_profs[0]
-        self.assertIsNotNone(preview_prof.CustomProfile, "Preview profile CustomProfile source sketch must exist before reject.")
+        self.assertIsNotNone(
+            preview_prof.CustomProfile, "Preview profile CustomProfile source sketch must exist before reject."
+        )
         self.assertEqual(preview_prof.CustomProfile.Document.Name, project_doc.Name)
         preview_sketch_name = preview_prof.CustomProfile.Name
         preview_prof_name = preview_prof.Name
@@ -952,6 +1080,7 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         user_opened_doc = App.openDocument(full_asset_path)
         user_doc_name = user_opened_doc.Name
         self.doc_names.append(user_doc_name)
+        user_undo_state = (user_opened_doc.UndoMode, user_opened_doc.UndoCount, user_opened_doc.RedoCount)
 
         project_doc = self._new_doc("ProjectOwnerDoc")
         App.setActiveDocument(project_doc.Name)
@@ -985,6 +1114,9 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
             "Already-open asset document must remain open after profile creation.",
         )
         self.assertEqual(App.ActiveDocument.Name, project_doc.Name, "Active document must be restored to project.")
+        self.assertEqual(
+            (user_opened_doc.UndoMode, user_opened_doc.UndoCount, user_opened_doc.RedoCount), user_undo_state
+        )
 
         # Asset file on disk was not mutated
         with open(full_asset_path, "rb") as f:
