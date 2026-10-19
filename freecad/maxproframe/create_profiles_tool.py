@@ -8,7 +8,17 @@ import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtGui
 
-from freecad.maxproframe.ff_tools import get_param_group, add_command, ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, FormProxy, move_profile_to_parent_if_supported, translate
+from freecad.maxproframe.ff_tools import (
+    ICONPATH,
+    PROFILEIMAGES_PATH,
+    PROFILESPATH,
+    UIPATH,
+    FormProxy,
+    add_command,
+    get_param_group,
+    move_profile_to_parent_if_supported,
+    translate,
+)
 from freecad.maxproframe.library_manager import LibraryManager, get_canonical_family
 from freecad.maxproframe.profile import Profile, ViewProviderCustomProfile, ViewProviderProfile
 from freecad.maxproframe.section_library import get_or_import_section_sketch
@@ -74,6 +84,7 @@ class BaseProfileTaskPanel(ABC):
     def initialize_ui(self):
         self._initializing = True
         try:
+
             def execute_if_has_bool(key, func):
                 if key in [k for t, k, v in param.GetContents()]:
                     func(param.GetBool(key))
@@ -107,18 +118,24 @@ class BaseProfileTaskPanel(ABC):
                 if default_material_index > -1:
                     self.form_proxy.combo_material.setCurrentIndex(default_material_index)
 
-                    default_family_index = self.form_proxy.combo_family.findText(param.GetString("Default Profile Family"))
+                    default_family_index = self.form_proxy.combo_family.findText(
+                        param.GetString("Default Profile Family")
+                    )
                     if default_family_index > -1:
                         self.form_proxy.combo_family.setCurrentIndex(default_family_index)
 
-                        default_size_index = self.form_proxy.combo_size.findText(param.GetString("Default Profile Size"))
+                        default_size_index = self.form_proxy.combo_size.findText(
+                            param.GetString("Default Profile Size")
+                        )
                         if default_size_index > -1:
                             self.form_proxy.combo_size.setCurrentIndex(default_size_index)
 
                 execute_if_has_bool("Default Sketch in Name", self.form_proxy.cb_sketch_in_name.setChecked)
                 execute_if_has_bool("Default Family in Name", self.form_proxy.cb_family_in_name.setChecked)
                 execute_if_has_bool("Default Size in Name", self.form_proxy.cb_size_in_name.setChecked)
-                execute_if_has_bool("Default Prefix Profile in Name", self.form_proxy.cb_prefix_profile_in_name.setChecked)
+                execute_if_has_bool(
+                    "Default Prefix Profile in Name", self.form_proxy.cb_prefix_profile_in_name.setChecked
+                )
                 execute_if_has_bool("Default Make Fillet", self.form_proxy.cb_make_fillet.setChecked)
                 execute_if_has_bool("Default Mirror Horizontally", self.form_proxy.cb_mirror_h.setChecked)
                 execute_if_has_bool("Default Mirror Vertically", self.form_proxy.cb_mirror_v.setChecked)
@@ -142,33 +159,36 @@ class BaseProfileTaskPanel(ABC):
 
             self.form_proxy.cb_make_fillet.stateChanged.connect(self.on_cb_make_fillet_changed)
 
-            self.form_proxy.cb_mirror_h.stateChanged.connect(self.proceed)
-            self.form_proxy.cb_mirror_v.stateChanged.connect(self.proceed)
-            self.form_proxy.cb_pre_extend.stateChanged.connect(self.proceed)
-            self.form_proxy.combo_rotation.currentIndexChanged.connect(self.proceed)
+            self.form_proxy.cb_mirror_h.stateChanged.connect(self.on_input_changed)
+            self.form_proxy.cb_mirror_v.stateChanged.connect(self.on_input_changed)
+            self.form_proxy.cb_pre_extend.stateChanged.connect(self.on_input_changed)
+            self.form_proxy.combo_rotation.currentIndexChanged.connect(self.on_input_changed)
             for ax in range(3):
                 for ay in range(3):
-                    getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}").clicked.connect(self.proceed)
+                    getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}").clicked.connect(self.on_input_changed)
 
-            self.form_proxy.sb_width.valueChanged.connect(self.proceed)
-            self.form_proxy.sb_height.valueChanged.connect(self.proceed)
-            self.form_proxy.sb_main_thickness.valueChanged.connect(self.proceed)
-            self.form_proxy.sb_flange_thickness.valueChanged.connect(self.proceed)
-            self.form_proxy.sb_radius1.valueChanged.connect(self.proceed)
-            self.form_proxy.sb_radius2.valueChanged.connect(self.proceed)
+            self.form_proxy.sb_width.valueChanged.connect(self.on_input_changed)
+            self.form_proxy.sb_height.valueChanged.connect(self.on_input_changed)
+            self.form_proxy.sb_main_thickness.valueChanged.connect(self.on_input_changed)
+            self.form_proxy.sb_flange_thickness.valueChanged.connect(self.on_input_changed)
+            self.form_proxy.sb_radius1.valueChanged.connect(self.on_input_changed)
+            self.form_proxy.sb_radius2.valueChanged.connect(self.on_input_changed)
             if hasattr(self.form_proxy, "sb_lip_length"):
-                self.form_proxy.sb_lip_length.valueChanged.connect(self.proceed)
-            self.form_proxy.sb_length.valueChanged.connect(self.proceed)
+                self.form_proxy.sb_lip_length.valueChanged.connect(self.on_input_changed)
+            self.form_proxy.sb_length.valueChanged.connect(self.on_input_changed)
 
-            self.form_proxy.cb_sketch_in_name.stateChanged.connect(self.proceed)
-            self.form_proxy.cb_family_in_name.stateChanged.connect(self.proceed)
-            self.form_proxy.cb_size_in_name.stateChanged.connect(self.proceed)
-            self.form_proxy.cb_prefix_profile_in_name.stateChanged.connect(self.proceed)
+            self.form_proxy.cb_sketch_in_name.stateChanged.connect(self.on_input_changed)
+            self.form_proxy.cb_family_in_name.stateChanged.connect(self.on_input_changed)
+            self.form_proxy.cb_size_in_name.stateChanged.connect(self.on_input_changed)
+            self.form_proxy.cb_prefix_profile_in_name.stateChanged.connect(self.on_input_changed)
         finally:
             self._initializing = False
 
+    def on_input_changed(self):
+        self.proceed()
+
     def _update_family_controls(self, canonical_family):
-        is_c = (canonical_family == "C")
+        is_c = canonical_family == "C"
         if hasattr(self.form_proxy, "sb_lip_length"):
             self.form_proxy.sb_lip_length.setVisible(is_c)
         if hasattr(self.form_proxy, "label_lip_length"):
@@ -236,14 +256,12 @@ class BaseProfileTaskPanel(ABC):
         family = str(self.form_proxy.combo_family.currentText())
 
         family_data = (
-            self.profiles.get(material, {}).get(family)
-            if hasattr(self, "profiles") and self.profiles
-            else None
+            self.profiles.get(material, {}).get(family) if hasattr(self, "profiles") and self.profiles else None
         )
         canonical = get_canonical_family(family, family_data)
         self._update_family_controls(canonical)
 
-        is_custom = (canonical == "Custom Profile")
+        is_custom = canonical == "Custom Profile"
 
         fillet_val = False if is_custom else bool(self.profiles.get(material, {}).get(family, {}).get("fillet", False))
         self.form_proxy.cb_make_fillet.setChecked(fillet_val)
@@ -337,20 +355,18 @@ class BaseProfileTaskPanel(ABC):
                     sb.setValue(float(profile[s]))
 
             self.enable_signals(True)
-            self.proceed()
+            self.on_input_changed()
 
     def on_cb_make_fillet_changed(self, state):
         self.update_image()
-        self.proceed()
+        self.on_input_changed()
 
     def update_image(self):
         material = str(self.form_proxy.combo_material.currentText())
         family_key = str(self.form_proxy.combo_family.currentText())
 
         family_data = (
-            self.profiles.get(material, {}).get(family_key)
-            if hasattr(self, "profiles") and self.profiles
-            else None
+            self.profiles.get(material, {}).get(family_key) if hasattr(self, "profiles") and self.profiles else None
         )
         if family_data is not None:
             canonical_family = get_canonical_family(family_key, family_data)
@@ -408,18 +424,17 @@ class BaseProfileTaskPanel(ABC):
         if canonical_family == "Custom Profile":
             folder_root = self.library_manager._get_registered_folder(material_name)
             size_name = self.form_proxy.combo_size.currentText()
-            size_data = (
-                family_data.get("sizes", {}).get(size_name, {})
-                if isinstance(family_data, dict)
-                else {}
-            )
+            size_data = family_data.get("sizes", {}).get(size_name, {}) if isinstance(family_data, dict) else {}
             asset_path = size_data.get("asset_path")
             object_name = size_data.get("object_name", "Section")
             asset_id = size_data.get("asset_id", "")
             if folder_root and asset_path:
-                target_doc = getattr(profile, "Document", None) or getattr(self, "_target_doc", None) or App.ActiveDocument
+                target_doc = (
+                    getattr(profile, "Document", None) or getattr(self, "_target_doc", None) or App.ActiveDocument
+                )
                 pre_sketch_names = {
-                    o.Name for o in getattr(target_doc, "Objects", [])
+                    o.Name
+                    for o in getattr(target_doc, "Objects", [])
                     if hasattr(o, "isDerivedFrom") and o.isDerivedFrom("Sketcher::SketchObject")
                 }
                 local_sk = get_or_import_section_sketch(
@@ -481,7 +496,50 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def __init__(self):
         self._session_imported_sketches = set()
         self._target_doc = None
+        self._has_pending_changes = False
         super().__init__()
+
+    @property
+    def btn_apply(self):
+        if "btn_apply" in self.form_proxy.members:
+            return self.form_proxy.btn_apply
+        return None
+
+    @property
+    def label_apply_status(self):
+        if "label_apply_status" in self.form_proxy.members:
+            return self.form_proxy.label_apply_status
+        return None
+
+    def initialize_ui(self):
+        super().initialize_ui()
+        if "btn_apply" in self.form_proxy.members:
+            self.form_proxy.btn_apply.setText(translate("frameforge", "Apply"))
+            self.form_proxy.btn_apply.setToolTip(translate("frameforge", "Apply changes and update preview"))
+            self.form_proxy.btn_apply.clicked.connect(self.apply)
+        if "groupBox_apply" in self.form_proxy.members:
+            self.form_proxy.groupBox_apply.setTitle(translate("frameforge", "Preview"))
+        self._set_initial_state()
+
+    def _set_initial_state(self):
+        self._has_pending_changes = False
+        if "label_apply_status" in self.form_proxy.members:
+            self.form_proxy.label_apply_status.setText(translate("frameforge", "No preview"))
+
+    def _set_pending_state(self):
+        self._has_pending_changes = True
+        if "label_apply_status" in self.form_proxy.members:
+            self.form_proxy.label_apply_status.setText(translate("frameforge", "Unapplied changes"))
+
+    def _set_applied_state(self):
+        self._has_pending_changes = False
+        if "label_apply_status" in self.form_proxy.members:
+            self.form_proxy.label_apply_status.setText(translate("frameforge", "Applied"))
+
+    def on_input_changed(self):
+        if getattr(self, "_initializing", False):
+            return
+        self._set_pending_state()
 
     def open(self):
         self._session_imported_sketches = set()
@@ -492,17 +550,45 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self.initialize_ui()
 
         self.update_selection()
-        self.proceed()
+        self._set_initial_state()
 
     def reject(self):
         self.clean()
 
-        if hasattr(self, "_session_imported_sketches"):
-            self._session_imported_sketches.clear()
-
         App.ActiveDocument.abortTransaction()
 
+        if hasattr(self, "_session_imported_sketches"):
+            for doc_name, sk_name in list(self._session_imported_sketches):
+                doc = App.getDocument(doc_name) if hasattr(App, "getDocument") else None
+                if doc is not None and hasattr(doc, "getObject") and doc.getObject(sk_name) is not None:
+                    try:
+                        doc.removeObject(sk_name)
+                    except Exception:
+                        pass
+            self._session_imported_sketches.clear()
+
+        self._objects.clear()
+
         return True
+
+    def apply(self):
+        has_sel = len(Gui.Selection.getSelectionEx()) if hasattr(Gui, "Selection") else 0
+        if has_sel or self.form_proxy.sb_length.value() > 0:
+            self.proceed()
+            self._set_applied_state()
+            return True
+        else:
+            App.Console.PrintMessage(translate("frameforge", "Select Edges or set Length to create a profile\n"))
+
+            diag = QtGui.QMessageBox(
+                QtGui.QMessageBox.Warning,
+                "Create Profile",
+                translate("frameforge", "Select Edges or set Length to create a profile"),
+            )
+            diag.setWindowModality(QtCore.Qt.ApplicationModal)
+            diag.exec_()
+
+            return False
 
     def accept(self):
         has_sel = len(Gui.Selection.getSelectionEx()) if hasattr(Gui, "Selection") else 0
@@ -549,10 +635,14 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             return True
 
         else:
-            App.Console.PrintMessage(translate("frameforge", "Not Accepting CreateProfile\nSelect Edges or set Length"))
+            App.Console.PrintMessage(
+                translate("frameforge", "Not Accepting CreateProfile\nSelect Edges or set Length\n")
+            )
 
             diag = QtGui.QMessageBox(
-                QtGui.QMessageBox.Warning, "Create Profile", "Select Edges or set Length to create a profile"
+                QtGui.QMessageBox.Warning,
+                "Create Profile",
+                translate("frameforge", "Select Edges or set Length to create a profile"),
             )
             diag.setWindowModality(QtCore.Qt.ApplicationModal)
             diag.exec_()
@@ -667,7 +757,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                     k = self.create_or_update_profile(sketch_sel.Object, edge, p_name)
                     seen_profiles.append(k)
 
-        else:
+        elif self.form_proxy.sb_length.value() > 0:
             k = self.create_or_update_profile(None, None, p_name)
             seen_profiles.append(k)
 
@@ -723,26 +813,29 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def make_profile(self, sketch, edge, name):
         material_name = self.form_proxy.combo_material.currentText()
         selected_family = self.form_proxy.combo_family.currentText()
-        family_data = self.profiles.get(material_name, {}).get(selected_family) if hasattr(self, "profiles") and self.profiles else None
+        family_data = (
+            self.profiles.get(material_name, {}).get(selected_family)
+            if hasattr(self, "profiles") and self.profiles
+            else None
+        )
         canonical_family = get_canonical_family(selected_family, family_data)
 
         # Validate and resolve/import custom section sketch BEFORE creating profile object
         custom_profile_sketch = None
         if canonical_family == "Custom Profile":
             size_name = self.form_proxy.combo_size.currentText()
-            size_data = (
-                family_data.get("sizes", {}).get(size_name, {})
-                if isinstance(family_data, dict)
-                else {}
-            )
+            size_data = family_data.get("sizes", {}).get(size_name, {}) if isinstance(family_data, dict) else {}
             folder_root = self.library_manager._get_registered_folder(material_name)
             asset_path = size_data.get("asset_path")
             object_name = size_data.get("object_name", "Section")
             asset_id = size_data.get("asset_id", "")
             if folder_root and asset_path:
-                target_doc = getattr(sketch, "Document", None) or getattr(self, "_target_doc", None) or App.ActiveDocument
+                target_doc = (
+                    getattr(sketch, "Document", None) or getattr(self, "_target_doc", None) or App.ActiveDocument
+                )
                 pre_sketch_names = {
-                    obj.Name for obj in getattr(target_doc, "Objects", [])
+                    obj.Name
+                    for obj in getattr(target_doc, "Objects", [])
                     if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject")
                 }
                 custom_profile_sketch = get_or_import_section_sketch(
@@ -846,9 +939,13 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
     def addSelection(self, doc, obj, sub, other):
         self.update_selection()
+        if not getattr(self, "_initializing", False):
+            self.on_input_changed()
 
     def clearSelection(self, other):
         self.update_selection()
+        if not getattr(self, "_initializing", False):
+            self.on_input_changed()
 
     def update_selection(self):
         selection_list = Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else []

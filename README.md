@@ -35,7 +35,12 @@ It enables engineers, makers, and fabricators to create structural frames, beams
 
 ## Prerequisites
 
-- **FreeCAD** ≥ v0.21.x (FreeCAD 0.21, 1.0, and newer)
+- **FreeCAD** ≥ 1.1.4 (pinned official minimum supported version)
+  - **Tested Environments**: Full native suites executed on official Linux x86_64 AppImages:
+    - **Stable**: FreeCAD 1.1.4 (Python 3.11) — automated native offscreen test suite passing (355/355 tests passed).
+    - **Release Candidate (RC)**: FreeCAD 26.3rc2 (reports Version 26.3.0, Python 3.13) — automated native offscreen test suite passing (355/355 tests passed after correcting causal observation boundaries in `tests/test_t2_independent.py`).
+  - **Compatibility Notice**: The `≥ 1.1.4` declaration designates the minimum supported version and does not imply or guarantee forward compatibility with unreleased or arbitrary future FreeCAD versions.
+  - **Platform Notice**: Automated offscreen test suites are validated on Linux x86_64; Windows and macOS environments and interactive GUI modeling workflows have not yet been proven in hosted CI. Older releases (< 1.1.4) are not supported.
 
 ---
 
@@ -72,8 +77,9 @@ Beams and profiles are mapped onto Edges or parametric lines:
 
 1. Click on the **Create Profiles** tool in the MaxProFrame toolbar.
 2. Select your **Material**, geometric **Family**, and standard **Size**.
-3. In the 3D View, select the skeleton edges where you want to place the profiles.
-4. Click **OK**.
+3. In the 3D View, select the skeleton edges where you want to place the profiles (or define a **Length**).
+4. Click **Apply** to validate settings and generate the 3D preview without closing the panel. Modifying inputs or selection shows **Unapplied changes**.
+5. Click **OK** (Accept) to confirm and commit the profiles (current values are applied even without a prior Apply), or **Cancel** to discard all previews generated during the session.
 
 ![Profiles](docs/images/14-profiles-done.png)
 

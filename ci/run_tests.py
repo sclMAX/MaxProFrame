@@ -45,6 +45,12 @@ def main() -> None:
         default=180.0,
         help="Process group timeout in seconds (default: 180)",
     )
+    parser.add_argument(
+        "--target",
+        choices=["stable", "rc"],
+        default="stable",
+        help="Target FreeCAD runtime to validate and test: 'stable' (FreeCAD 1.1.4 / Python 3.11, default) or 'rc' (FreeCAD 26.3rc2 / Python 3.13)",
+    )
     args = parser.parse_args()
 
     freecad_bin = pathlib.Path(args.freecad_bin).resolve()
@@ -115,6 +121,7 @@ def main() -> None:
         env["FREECAD_QT_QPA_PLATFORM"] = "offscreen"
         env["FF_ROOT"] = str(repo_root)
         env["FF_REPORTS"] = str(reports_dir)
+        env["FF_TARGET"] = args.target
 
         # Reproduce official AppRun environment bootstrap when launched via AppRun without executing AppRun script
         if is_apprun_layout and appimage_dist_root:

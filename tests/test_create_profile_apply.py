@@ -1,0 +1,381 @@
+import os
+import shutil
+import tempfile
+import unittest
+from contextlib import ExitStack
+from unittest.mock import patch
+
+import FreeCAD as App
+import FreeCADGui as Gui
+import Part
+import Sketcher
+from PySide import QtCore, QtGui, QtWidgets
+
+from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
+from freecad.maxproframe.edit_profile_tool import EditProfileTaskPanel
+from freecad.maxproframe.ff_tools import translate
+from freecad.maxproframe.library_manager import LibraryManager
+from freecad.maxproframe.profile import Profile, ViewProviderProfile
+from freecad.maxproframe.section_library import capture_section_sketch
+
+
+class TestCreateProfileApply(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        os.environ["FREECAD_QT_QPA_PLATFORM"] = "offscreen"
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"
+        cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
+
+    def setUp(self):
+        self.test_user_dir = tempfile.mkdtemp(prefix="ff_test_apply_user_")
+        self.manager = LibraryManager(user_dir=self.test_user_dir)
+        self.doc_count = 0
+        self.created_docs = []
+        self.panels = []
+        self.msg_stack = ExitStack()
+        self.msg_stack.enter_context(
+            patch.object(QtWidgets.QMessageBox, "exec_", return_value=QtWidgets.QMessageBox.Ok)
+        )
+        if hasattr(QtGui, "QMessageBox") and QtGui.QMessageBox is not QtWidgets.QMessageBox:
+            self.msg_stack.enter_context(patch.object(QtGui.QMessageBox, "exec_", return_value=QtGui.QMessageBox.Ok))
+        self.addCleanup(self.msg_stack.close)
+
+    def tearDown(self):
+        for panel in self.panels:
+            try:
+                panel.clean()
+            except Exception:
+                pass
+            for f in getattr(panel, "form", []):
+                try:
+                    f.close()
+                except Exception:
+                    pass
+        for doc_name in self.created_docs:
+            try:
+                App.closeDocument(doc_name)
+            except Exception:
+                pass
+        if os.path.exists(self.test_user_dir):
+            shutil.rmtree(self.test_user_dir)
+
+    def _new_doc(self, prefix="TestDoc"):
+        self.doc_count += 1
+        name = f"{prefix}_{self.doc_count}_{id(self)}"
+        doc = App.newDocument(name)
+        self.created_docs.append(name)
+        return doc
+
+    def _create_line_path(self, doc, name="Path", length=100.0):
+        p = doc.addObject("Sketcher::SketchObject", name)
+        p.addGeometry(Part.LineSegment(App.Vector(0, 0, 0), App.Vector(length, 0, 0)), False)
+        p.addConstraint(Sketcher.Constraint("Distance", 0, float(length)))
+        p.solve()
+        doc.recompute()
+        return p
+
+    def _create_test_profile(self, doc, name="ExistingProfile"):
+        obj = doc.addObject("Part::FeaturePython", name)
+        obj.addExtension("Part::AttachExtensionPython")
+        Profile(
+            obj,
+            init_w=40.0,
+            init_h=40.0,
+            init_mt=2.0,
+            init_ft=0.0,
+            init_r1=0.0,
+            init_r2=0.0,
+            init_len=500.0,
+            init_wg=2.0,
+            init_unit_price=10.0,
+            init_mf=False,
+            init_anchor_x=1,
+            init_anchor_y=1,
+            material="Metal",
+            fam="Square Hollow",
+            size_name="40x40x2",
+            bevels_combined=False,
+            catalog_family="Square Hollow",
+        )
+        if getattr(obj, "ViewObject", None) is not None:
+            ViewProviderProfile(obj.ViewObject)
+        doc.recompute()
+        return obj
+
+    def _get_profiles(self, doc):
+        return [
+            o
+            for o in doc.Objects
+            if getattr(getattr(o, "Proxy", None), "Type", None) == "Profile" or hasattr(o, "CustomProfile")
+        ]
+
+    # --- S1: Explicit preview ---
+
+    def test_s1_open_panel_does_not_create_preview_geometry(self):
+        """S1: Opening Create Profile panel must only load options and not create preview geometry."""
+        doc = self._new_doc("DocOpen")
+        App.setActiveDocument(doc.Name)
+        baseline_objects = set(doc.Objects)
+
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+
+        # No geometry should have been created in the document
+        current_objects = set(doc.Objects)
+        self.assertEqual(current_objects, baseline_objects, "Opening panel must not create document objects.")
+
+    def test_s1_changing_inputs_does_not_create_preview_geometry(self):
+        """S1: Changing input fields (combos, spinboxes, checkboxes) must not create preview geometry."""
+        doc = self._new_doc("DocInputs")
+        App.setActiveDocument(doc.Name)
+        baseline_count = len(doc.Objects)
+
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+
+        # Change length, material, family, size
+        panel.form_proxy.sb_length.setValue(250.0)
+        panel.form_proxy.sb_width.setValue(60.0)
+        panel.form_proxy.sb_height.setValue(60.0)
+        panel.form_proxy.combo_rotation.setCurrentIndex(1)
+
+        self.assertEqual(len(doc.Objects), baseline_count, "Changing fields must not create preview geometry.")
+
+    def test_s1_changing_selection_does_not_create_preview_geometry(self):
+        """S1: Changing selection in 3D view must not create preview geometry."""
+        doc = self._new_doc("DocSelection")
+        App.setActiveDocument(doc.Name)
+        path = self._create_line_path(doc, "Path1", length=150.0)
+        baseline_objects = set(doc.Objects)
+
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+
+        # Select edge
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
+        panel.addSelection(doc.Name, path, "Edge1", None)
+
+        self.assertEqual(set(doc.Objects), baseline_objects, "Changing selection must not create preview geometry.")
+
+    def test_s1_apply_validates_and_creates_preview_without_closing_or_duplicating(self):
+        """S1: Apply validates settings and creates/updates preview without closing panel or duplicating profiles."""
+        doc = self._new_doc("DocApply")
+        App.setActiveDocument(doc.Name)
+        path = self._create_line_path(doc, "Path2", length=200.0)
+
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
+        panel.update_selection()
+
+        self.assertTrue(hasattr(panel, "apply"), "Panel must provide an apply() method.")
+        applied = panel.apply()
+        self.assertTrue(applied, "Apply must return True on valid settings.")
+
+        profiles = self._get_profiles(doc)
+        self.assertEqual(len(profiles), 1, "Apply must create exactly one preview profile.")
+        prof_name = profiles[0].Name
+
+        # Second Apply: must update existing profile without duplicating
+        applied_again = panel.apply()
+        self.assertTrue(applied_again, "Repeated Apply must succeed.")
+        profiles_after = self._get_profiles(doc)
+        self.assertEqual(profiles_after[0].Name, prof_name, "Repeated Apply must update the same profile object.")
+
+    # --- S2: Accepted interaction table ---
+
+    def test_s2_initial_and_pending_state_display(self):
+        """S2: Visible state marks initial 'No preview', 'Unapplied changes' on edit, and 'Applied' after Apply."""
+        doc = self._new_doc("DocState")
+        App.setActiveDocument(doc.Name)
+        path = self._create_line_path(doc, "PathState", length=100.0)
+
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+
+        self.assertIn("label_apply_status", panel.form_proxy.members, "Form must have label_apply_status.")
+        # Initial state on open
+        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "No preview"))
+
+        # Select edge: marks unapplied changes
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
+        panel.addSelection(doc.Name, path, "Edge1", None)
+        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Unapplied changes"))
+
+        # Apply: marks applied
+        panel.apply()
+        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Applied"))
+
+        # Modify a field: marks unapplied changes again
+        panel.form_proxy.sb_width.setValue(80.0)
+        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Unapplied changes"))
+
+    def test_s2_accept_applies_current_values_without_prior_apply(self):
+        """S2: Accept applies current form values and confirms even if Apply was never clicked."""
+        doc = self._new_doc("DocAcceptNoApply")
+        App.setActiveDocument(doc.Name)
+        path = self._create_line_path(doc, "PathAccept", length=300.0)
+
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
+        panel.update_selection()
+
+        # Call accept without calling apply
+        accepted = panel.accept()
+        self.assertTrue(accepted, "Accept must return True.")
+        doc.recompute()
+
+        profiles = self._get_profiles(doc)
+        self.assertEqual(len(profiles), 1, "Accept must create profile even without prior Apply.")
+        self.assertTrue(profiles[0].Shape.isValid())
+
+    def test_s2_accept_applies_current_values_after_prior_apply(self):
+        """S2: Accept uses modified values if fields are changed after an earlier Apply."""
+        doc = self._new_doc("DocAcceptAfterApply")
+        App.setActiveDocument(doc.Name)
+        path = self._create_line_path(doc, "PathAfter", length=200.0)
+
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
+        panel.update_selection()
+
+        # Apply with initial values
+        panel.apply()
+        profiles = self._get_profiles(doc)
+        self.assertEqual(len(profiles), 1)
+        prof = profiles[0]
+        initial_w = prof.ProfileWidth
+
+        # Change width without hitting Apply again
+        new_w = initial_w + 20.0
+        panel.form_proxy.sb_width.setValue(new_w)
+
+        # Accept
+        panel.accept()
+        doc.recompute()
+
+        self.assertEqual(prof.ProfileWidth, new_w, "Accept must commit latest modified values.")
+
+    def test_s2_cancel_restores_pre_session_document_objects(self):
+        """S2: Cancel (reject) rolls back preview profiles and restores document state."""
+        doc = self._new_doc("DocCancel")
+        App.setActiveDocument(doc.Name)
+        path = self._create_line_path(doc, "PathCancel", length=150.0)
+        baseline_names = set(o.Name for o in doc.Objects)
+
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
+        panel.update_selection()
+        panel.apply()
+
+        # Preview profile exists
+        self.assertEqual(len(self._get_profiles(doc)), 1)
+
+        # Reject/Cancel
+        rejected = panel.reject()
+        self.assertTrue(rejected)
+
+        final_names = set(o.Name for o in doc.Objects)
+        self.assertEqual(final_names, baseline_names, "Reject must restore exact pre-session objects.")
+
+    def test_s2_rejected_apply_on_zero_length_and_no_selection(self):
+        """S2: Apply with zero length and no selection must be rejected (returns False, no preview created)."""
+        doc = self._new_doc("DocRejectApply")
+        App.setActiveDocument(doc.Name)
+        baseline_objects = set(doc.Objects)
+
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+
+        Gui.Selection.clearSelection()
+        panel.update_selection()
+        panel.form_proxy.sb_length.setValue(0.0)
+
+        # Apply with no selection and 0 length
+        applied = panel.apply()
+        self.assertFalse(applied, "Apply must return False when neither edges nor length are set.")
+        self.assertEqual(set(doc.Objects), baseline_objects, "Rejected apply must not create preview geometry.")
+
+    def test_s2_spanish_translation_of_apply_and_status(self):
+        """S2, S3: Spanish catalog faithfully translates Apply button and pending/applied states."""
+        from freecad.maxproframe.ff_tools import TRANSLATIONSPATH
+
+        translator = QtCore.QTranslator()
+        qm_path = os.path.join(TRANSLATIONSPATH, "frameforge_es.qm")
+        self.assertTrue(translator.load(qm_path), f"Failed to load {qm_path}")
+        self.app.installTranslator(translator)
+        self.addCleanup(self.app.removeTranslator, translator)
+
+        doc = self._new_doc("DocSpanish")
+        App.setActiveDocument(doc.Name)
+        path = self._create_line_path(doc, "PathEs", length=100.0)
+
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+
+        # Check button text and initial status
+        self.assertEqual(panel.form_proxy.btn_apply.text(), "Aplicar")
+        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Sin previsualización")
+
+        # Edit input -> pending state
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
+        panel.addSelection(doc.Name, path, "Edge1", None)
+        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Cambios sin aplicar")
+
+        # Apply -> applied state
+        panel.apply()
+        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Cambios aplicados")
+
+    # --- S3: Edit Profile preservation ---
+
+    def test_s3_edit_profile_panel_preserves_live_update_behavior(self):
+        """S3: EditProfileTaskPanel preserves live preview updates on field changes and hides Apply button."""
+        doc = self._new_doc("DocEditPreserve")
+        App.setActiveDocument(doc.Name)
+        prof = self._create_test_profile(doc, "ProfileToEdit")
+        initial_w = prof.ProfileWidth
+
+        edit_panel = EditProfileTaskPanel(prof)
+        self.panels.append(edit_panel)
+        edit_panel.open()
+
+        # In edit panel, groupBox_apply / btn_apply must be hidden if present
+        if "btn_apply" in edit_panel.form_proxy.members:
+            self.assertFalse(
+                edit_panel.form_proxy.btn_apply.isVisible(), "Apply button must not be visible in Edit panel."
+            )
+
+        # Changing width in edit panel must update profile live (without clicking any Apply)
+        edit_panel.form_proxy.sb_width.setValue(initial_w + 30.0)
+        self.assertEqual(prof.ProfileWidth, initial_w + 30.0, "EditProfileTaskPanel must update profile live.")
+
+        edit_panel.accept()
+        self.assertEqual(prof.ProfileWidth, initial_w + 30.0)
+
+
+if __name__ == "__main__":
+    unittest.main()

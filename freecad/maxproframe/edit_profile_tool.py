@@ -25,6 +25,12 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
         super().initialize_ui()
 
         self.form_proxy.groupBox_5.setEnabled(False)
+        if "groupBox_apply" in self.form_proxy.members:
+            self.form_proxy.groupBox_apply.setVisible(False)
+        elif "btn_apply" in self.form_proxy.members:
+            self.form_proxy.btn_apply.setVisible(False)
+            if "label_apply_status" in self.form_proxy.members:
+                self.form_proxy.label_apply_status.setVisible(False)
 
         self.enable_signals(False)
 

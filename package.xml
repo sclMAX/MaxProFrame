@@ -20,7 +20,7 @@
   <url type="readme">https://github.com/sclMAX/MaxProFrame/blob/main/README.md</url>
   <icon>freecad/maxproframe/resources/icons/metalwb.svg</icon>
 
-  <freecadmin>0.21.0</freecadmin>
+  <freecadmin>1.1.4</freecadmin>
 
   <content>
     <workbench>

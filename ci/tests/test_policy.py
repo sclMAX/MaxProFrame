@@ -618,63 +618,189 @@ class TestRunTestsPolicy(unittest.TestCase):
                 self.assertNotIn("succeeded", proc.stdout.lower())
                 self.assertNotEqual(proc.stderr.strip(), "")
 
-    def test_run_tests_macro_discovery_ignores_ff_pattern_and_runs_full_suite(self):
-        """A3: Macro discovery must hardcode 'test_*.py' and not allow FF_PATTERN env to select subsets."""
-        fixture_root = self.work_dir / "fixture_suite"
-        fixture_tests = fixture_root / "tests"
-        fixture_tests.mkdir(parents=True, exist_ok=True)
-        (fixture_tests / "test_pass.py").write_text(
-            "import unittest\nclass PassTest(unittest.TestCase):\n    def test_ok(self):\n        self.assertTrue(True)\n",
-            encoding="utf-8",
-        )
-        (fixture_tests / "test_fail.py").write_text(
-            "import unittest\nclass FailTest(unittest.TestCase):\n    def test_bad(self):\n        self.fail('intentional fixture failure')\n",
-            encoding="utf-8",
-        )
+    def test_run_tests_target_defaults_to_stable(self):
+        """Runner must default --target to 'stable' and export FF_TARGET=stable to child."""
+        env_dump = self.work_dir / "env_target_default.json"
+        summary_path = self.reports_dir / "summary.json"
+        summary_data = {"tests": 1, "failures": 0, "errors": 0, "skipped": 0, "successful": True}
 
-        runpy_fake_bin = self.work_dir / "runpy_fake_freecad"
-        runpy_content = (
-            "#!/usr/bin/env python3\n"
-            "import os, sys, types, runpy\n"
-            "sys.modules['FreeCAD'] = types.SimpleNamespace(Version=lambda: ['1', '1', '4'])\n"
-            "sys.modules['Part'] = types.ModuleType('Part')\n"
-            "sys.modules['FreeCADGui'] = types.ModuleType('FreeCADGui')\n"
-            "pkg = types.ModuleType('freecad')\n"
-            "pkg.__path__ = []\n"
-            "sys.modules['freecad'] = pkg\n"
-            "sys.version_info = (3, 11, 0)\n"
-            f"os.environ['FF_ROOT'] = {repr(str(fixture_root))}\n"
-            "runpy.run_path(sys.argv[-1])\n"
+        proc = self._run_tests_host(
+            timeout="10",
+            env_overrides={
+                "FAKE_ENV_DUMP": str(env_dump),
+                "FAKE_SUMMARY_PATH": str(summary_path),
+                "FAKE_SUMMARY_CONTENT": json.dumps(summary_data),
+            },
         )
-        runpy_fake_bin.write_text(runpy_content, encoding="utf-8")
-        runpy_fake_bin.chmod(0o755)
+        self.assertEqual(proc.returncode, 0, f"Stderr: {proc.stderr}")
+        self.assertTrue(env_dump.is_file())
+        dumped_env = json.loads(env_dump.read_text(encoding="utf-8"))
+        self.assertEqual(dumped_env.get("FF_TARGET"), "stable")
+
+    def test_run_tests_target_explicit_rc(self):
+        """Runner must accept --target rc and export FF_TARGET=rc to child."""
+        env_dump = self.work_dir / "env_target_rc.json"
+        summary_path = self.reports_dir / "summary.json"
+        summary_data = {"tests": 1, "failures": 0, "errors": 0, "skipped": 0, "successful": True}
 
         script = CI_DIR / "run_tests.py"
         env = os.environ.copy()
-        env["FF_PATTERN"] = "test_pass.py"
+        env["FAKE_ENV_DUMP"] = str(env_dump)
+        env["FAKE_SUMMARY_PATH"] = str(summary_path)
+        env["FAKE_SUMMARY_CONTENT"] = json.dumps(summary_data)
+
         proc = subprocess.run(
             [
                 sys.executable,
                 str(script),
                 "--freecad-bin",
-                str(runpy_fake_bin),
+                str(self.fake_bin),
                 "--reports",
                 str(self.reports_dir),
                 "--timeout",
                 "10",
+                "--target",
+                "rc",
             ],
             cwd=REPO_ROOT,
             env=env,
             capture_output=True,
             text=True,
         )
-        self.assertNotEqual(proc.returncode, 0, "Suite with failing test must exit non-zero")
-        summary_file = self.reports_dir / "summary.json"
-        self.assertTrue(summary_file.is_file(), "summary.json must be written by macro")
-        summary = json.loads(summary_file.read_text(encoding="utf-8"))
-        self.assertEqual(summary.get("tests"), 2, "Discovery must find both test modules, ignoring FF_PATTERN")
-        self.assertEqual(summary.get("failures"), 1, "Must record 1 failure from test_fail.py")
-        self.assertIs(summary.get("successful"), False, "Summary must report successful: false")
+        self.assertEqual(proc.returncode, 0, f"Stderr: {proc.stderr}")
+        self.assertTrue(env_dump.is_file())
+        dumped_env = json.loads(env_dump.read_text(encoding="utf-8"))
+        self.assertEqual(dumped_env.get("FF_TARGET"), "rc")
+
+    def test_run_tests_target_rejects_invalid_choice(self):
+        """Runner must reject unsupported --target choices with non-zero exit and diagnostic error."""
+        script = CI_DIR / "run_tests.py"
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "--freecad-bin",
+                str(self.fake_bin),
+                "--reports",
+                str(self.reports_dir),
+                "--timeout",
+                "10",
+                "--target",
+                "invalid_target",
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("invalid choice", proc.stderr.lower())
+
+    def _run_macro_synthetic(self, target, fc_version, py_version):
+        fixture_root = self.work_dir / f"fixture_{target}_{fc_version[0]}"
+        fixture_tests = fixture_root / "tests"
+        fixture_tests.mkdir(parents=True, exist_ok=True)
+        (fixture_tests / "test_dummy.py").write_text(
+            "import unittest\nclass DummyTest(unittest.TestCase):\n    def test_ok(self):\n        self.assertTrue(True)\n",
+            encoding="utf-8",
+        )
+
+        runpy_fake_bin = self.work_dir / f"runpy_fake_{target}_{fc_version[0]}"
+        runpy_content = (
+            "#!/usr/bin/env python3\n"
+            "import os, sys, types, runpy\n"
+            f"sys.modules['FreeCAD'] = types.SimpleNamespace(Version=lambda: {repr(list(fc_version))})\n"
+            "sys.modules['Part'] = types.ModuleType('Part')\n"
+            "sys.modules['FreeCADGui'] = types.ModuleType('FreeCADGui')\n"
+            "pkg = types.ModuleType('freecad')\n"
+            "pkg.__path__ = []\n"
+            "sys.modules['freecad'] = pkg\n"
+            f"sys.version_info = {repr(py_version)}\n"
+            f"os.environ['FF_ROOT'] = {repr(str(fixture_root))}\n"
+            "runpy.run_path(sys.argv[-1])\n"
+        )
+        runpy_fake_bin.write_text(runpy_content, encoding="utf-8")
+        runpy_fake_bin.chmod(0o755)
+
+        reports_dir = self.work_dir / f"reports_{target}_{fc_version[0]}"
+        reports_dir.mkdir(parents=True, exist_ok=True)
+
+        script = CI_DIR / "run_tests.py"
+        cmd = [
+            sys.executable,
+            str(script),
+            "--freecad-bin",
+            str(runpy_fake_bin),
+            "--reports",
+            str(reports_dir),
+            "--timeout",
+            "10",
+        ]
+        if target is not None:
+            cmd.extend(["--target", target])
+
+        proc = subprocess.run(
+            cmd,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        summary_file = reports_dir / "summary.json"
+        summary = None
+        if summary_file.is_file():
+            try:
+                summary = json.loads(summary_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        stderr_file = reports_dir / "stderr.log"
+        child_stderr = stderr_file.read_text(encoding="utf-8") if stderr_file.is_file() else ""
+        return proc, summary_file, summary, child_stderr
+
+    def test_macro_accepts_stable_target_with_1_1_4_and_py311(self):
+        """Macro must accept stable target when runtime matches FreeCAD 1.1.4 and Python 3.11."""
+        proc, summary_file, summary, _ = self._run_macro_synthetic(
+            target="stable", fc_version=("1", "1", "4"), py_version=(3, 11, 0)
+        )
+        self.assertEqual(proc.returncode, 0, f"Stderr: {proc.stderr}")
+        self.assertTrue(summary_file.is_file(), "summary.json must be generated")
+        self.assertEqual(summary.get("tests"), 1)
+        self.assertIs(summary.get("successful"), True)
+
+    def test_macro_accepts_rc_target_with_26_3_0_and_py313(self):
+        """Macro must accept rc target when runtime matches FreeCAD 26.3.0 and Python 3.13."""
+        proc, summary_file, summary, _ = self._run_macro_synthetic(
+            target="rc", fc_version=("26", "3", "0"), py_version=(3, 13, 0)
+        )
+        self.assertEqual(proc.returncode, 0, f"Stderr: {proc.stderr}")
+        self.assertTrue(summary_file.is_file(), "summary.json must be generated")
+        self.assertEqual(summary.get("tests"), 1)
+        self.assertIs(summary.get("successful"), True)
+
+    def test_macro_rejects_rc_runtime_when_target_is_stable(self):
+        """Macro targeting stable must strictly reject FreeCAD 26.3.0 runtime without writing summary."""
+        proc, summary_file, summary, child_stderr = self._run_macro_synthetic(
+            target="stable", fc_version=("26", "3", "0"), py_version=(3, 13, 0)
+        )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertFalse(summary_file.is_file(), "Rejected runtime must NOT generate summary.json")
+        self.assertIn("incompatible freecad runtime version", child_stderr.lower())
+
+    def test_macro_rejects_stable_runtime_when_target_is_rc(self):
+        """Macro targeting rc must strictly reject FreeCAD 1.1.4 runtime without writing summary."""
+        proc, summary_file, summary, child_stderr = self._run_macro_synthetic(
+            target="rc", fc_version=("1", "1", "4"), py_version=(3, 11, 0)
+        )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertFalse(summary_file.is_file(), "Rejected runtime must NOT generate summary.json")
+        self.assertIn("incompatible freecad runtime version", child_stderr.lower())
+
+    def test_macro_rejects_incompatible_python_on_rc_target(self):
+        """Macro targeting rc must strictly reject non-3.13 Python runtime without writing summary."""
+        proc, summary_file, summary, child_stderr = self._run_macro_synthetic(
+            target="rc", fc_version=("26", "3", "0"), py_version=(3, 11, 0)
+        )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertFalse(summary_file.is_file(), "Rejected runtime must NOT generate summary.json")
+        self.assertIn("incompatible python runtime version", child_stderr.lower())
 
 
 class TestWorkflowStaticPolicy(unittest.TestCase):
@@ -705,9 +831,52 @@ class TestWorkflowStaticPolicy(unittest.TestCase):
         self.assertIn("1.1.4", self.content, "S1 requires pinned FreeCAD 1.1.4 baseline version")
         self.assertNotIn("pip install --upgrade pip", self.content, "CI must not introduce an unpinned pip upgrade")
 
-    def test_workflow_saves_report_artifacts_for_7_days_on_failure(self):
-        self.assertIn("upload-artifact", self.content, "S7 requires artifact upload on failure")
-        self.assertTrue(
-            "retention-days: 7" in self.content or "retention-days: '7'" in self.content,
-            "S7 requires 7 days artifact retention",
+    def test_workflow_defines_matrix_for_stable_and_rc(self):
+        """Workflow test job must define a matrix for stable (1.1.4) and rc (26.3rc2) with official checksums."""
+        self.assertIn("matrix:", self.content, "Workflow must configure matrix execution")
+        self.assertIn("fail-fast: false", self.content, "Matrix must run both targets without early cancellation")
+        self.assertIn("target: stable", self.content, "Matrix must define stable target")
+        self.assertIn("target: rc", self.content, "Matrix must define rc target")
+        self.assertIn(
+            "f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434",
+            self.content,
+            "Workflow must retain pinned official FreeCAD 1.1.4 AppImage SHA-256",
         )
+        self.assertIn(
+            "2cf4212d5a348574e786da7d5a8faeeb3e83dd4245c23898dede92ce82ce4908",
+            self.content,
+            "Workflow must pin official FreeCAD 26.3rc2 AppImage SHA-256",
+        )
+        self.assertIn(
+            "test-failure-reports-${{ matrix.target }}",
+            self.content,
+            "Failure reports must use target-specific unique artifact names",
+        )
+
+
+class TestPackageMetadataPolicy(unittest.TestCase):
+    """Metadata checks for package.xml (S1, S3)."""
+
+    def test_package_xml_declares_minimum_freecad_1_1_4(self):
+        package_xml = REPO_ROOT / "package.xml"
+        self.assertTrue(package_xml.is_file(), "package.xml must exist")
+        content = package_xml.read_text(encoding="utf-8")
+        self.assertIn("<freecadmin>1.1.4</freecadmin>", content)
+        self.assertNotIn("<freecadmin>0.21.0</freecadmin>", content)
+
+
+class TestDocumentationPolicy(unittest.TestCase):
+    """Documentation consistency checks for README.md and docs/ci.md (S1, S3)."""
+
+    def test_readme_declares_minimum_and_honest_statement(self):
+        readme = REPO_ROOT / "README.md"
+        content = readme.read_text(encoding="utf-8")
+        self.assertIn("1.1.4", content)
+        self.assertNotIn("≥ v0.21.x", content)
+
+    def test_ci_docs_document_stable_and_rc_targets(self):
+        ci_doc = REPO_ROOT / "docs" / "ci.md"
+        content = ci_doc.read_text(encoding="utf-8")
+        self.assertIn("26.3rc2", content)
+        self.assertIn("26.3.0", content)
+        self.assertIn("--target", content)

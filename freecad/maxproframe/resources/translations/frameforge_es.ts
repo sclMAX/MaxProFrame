@@ -631,5 +631,33 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
         <source>Apply Section Edit</source>
         <translation>Aplicar edición de sección</translation>
     </message>
+    <message>
+        <source>Apply</source>
+        <translation>Aplicar</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Previsualización</translation>
+    </message>
+    <message>
+        <source>No preview</source>
+        <translation>Sin previsualización</translation>
+    </message>
+    <message>
+        <source>Unapplied changes</source>
+        <translation>Cambios sin aplicar</translation>
+    </message>
+    <message>
+        <source>Applied</source>
+        <translation>Cambios aplicados</translation>
+    </message>
+    <message>
+        <source>Apply changes and update preview</source>
+        <translation>Aplicar cambios y actualizar previsualización</translation>
+    </message>
+    <message>
+        <source>Select Edges or set Length to create a profile</source>
+        <translation>Seleccione aristas o defina la longitud para crear un perfil</translation>
+    </message>
 </context>
 </TS>

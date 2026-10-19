@@ -30,23 +30,54 @@ try:
     import Part
 
     # 2. Strict runtime version validation
+    target = os.environ.get("FF_TARGET", "stable")
+    if target not in ("stable", "rc"):
+        msg = f"ERROR: Unsupported test target '{target}'. Expected 'stable' or 'rc'.\n"
+        log_startup(f"error-target: {target}")
+        sys.stderr.write(msg)
+        sys.stderr.flush()
+        os._exit(1)
+
     fc_version = FreeCAD.Version()
-    if len(fc_version) < 3 or (fc_version[0] != "1" or fc_version[1] != "1" or fc_version[2] != "4"):
-        msg = f"ERROR: Incompatible FreeCAD runtime version {fc_version}. Pinned baseline FreeCAD 1.1.4 is required.\n"
-        log_startup(f"error-version: {fc_version}")
-        sys.stderr.write(msg)
-        sys.stderr.flush()
-        os._exit(1)
-
     py_ver = sys.version_info[:2]
-    if py_ver != (3, 11):
-        msg = f"ERROR: Incompatible Python runtime version {sys.version}. Pinned baseline Python 3.11 is required.\n"
-        log_startup(f"error-python: {py_ver}")
+
+    if target == "stable":
+        expected_fc = ("1", "1", "4")
+        expected_py = (3, 11)
+        target_label = "Pinned baseline FreeCAD 1.1.4 (Python 3.11)"
+    elif target == "rc":
+        expected_fc = ("26", "3", "0")
+        expected_py = (3, 13)
+        target_label = "Pinned RC FreeCAD 26.3rc2 (Version 26.3.0, Python 3.13)"
+
+    if (
+        len(fc_version) < 3
+        or fc_version[0] != expected_fc[0]
+        or fc_version[1] != expected_fc[1]
+        or fc_version[2] != expected_fc[2]
+    ):
+        msg = (
+            f"ERROR: Incompatible FreeCAD runtime version {fc_version} for target '{target}'. "
+            f"{target_label} is required.\n"
+        )
+        log_startup(f"error-version: {fc_version} target: {target}")
         sys.stderr.write(msg)
         sys.stderr.flush()
         os._exit(1)
 
-    log_startup("validated-version: 1.1.4 python: 3.11")
+    if py_ver != expected_py:
+        msg = (
+            f"ERROR: Incompatible Python runtime version {sys.version} for target '{target}'. "
+            f"{target_label} is required.\n"
+        )
+        log_startup(f"error-python: {py_ver} target: {target}")
+        sys.stderr.write(msg)
+        sys.stderr.flush()
+        os._exit(1)
+
+    log_startup(
+        f"validated-version: {'.'.join(expected_fc)} python: {expected_py[0]}.{expected_py[1]} target: {target}"
+    )
 
     # 3. Bootstrap freecad namespace from repository checkout
     if root not in sys.path:
@@ -77,6 +108,7 @@ try:
             "errors": len(result.errors),
             "skipped": len(result.skipped),
             "successful": result.wasSuccessful(),
+            "target": target,
         }
         exit_code = 0 if result.wasSuccessful() else 1
         with open(summary_path, "w", encoding="utf-8") as out:
