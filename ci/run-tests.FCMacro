@@ -1,0 +1,99 @@
+# FreeCAD Macro: run-tests.FCMacro
+# Runs full test suite in official FreeCAD 1.1.4 Linux GUI offscreen runner.
+
+import json
+import os
+import sys
+import traceback
+import unittest
+
+root = os.environ.get("FF_ROOT", os.getcwd())
+reports_dir = os.environ.get("FF_REPORTS", os.path.join(root, "reports"))
+os.makedirs(reports_dir, exist_ok=True)
+startup_log_path = os.path.join(reports_dir, "startup.log")
+
+
+def log_startup(marker: str) -> None:
+    try:
+        with open(startup_log_path, "a", encoding="utf-8") as f:
+            f.write(f"[startup] {marker}\n")
+    except Exception:
+        pass
+
+
+try:
+    log_startup("macro-entry")
+
+    # 1. Import FreeCAD core modules before test suite imports
+    import FreeCAD
+    import FreeCADGui
+    import Part
+
+    # 2. Strict runtime version validation
+    fc_version = FreeCAD.Version()
+    if len(fc_version) < 3 or (fc_version[0] != "1" or fc_version[1] != "1" or fc_version[2] != "4"):
+        msg = f"ERROR: Incompatible FreeCAD runtime version {fc_version}. Pinned baseline FreeCAD 1.1.4 is required.\n"
+        log_startup(f"error-version: {fc_version}")
+        sys.stderr.write(msg)
+        sys.stderr.flush()
+        os._exit(1)
+
+    py_ver = sys.version_info[:2]
+    if py_ver != (3, 11):
+        msg = f"ERROR: Incompatible Python runtime version {sys.version}. Pinned baseline Python 3.11 is required.\n"
+        log_startup(f"error-python: {py_ver}")
+        sys.stderr.write(msg)
+        sys.stderr.flush()
+        os._exit(1)
+
+    log_startup("validated-version: 1.1.4 python: 3.11")
+
+    # 3. Bootstrap freecad namespace from repository checkout
+    if root not in sys.path:
+        sys.path.insert(0, root)
+
+    import freecad
+
+    freecad_pkg_path = os.path.join(root, "freecad")
+    if os.path.isdir(freecad_pkg_path) and freecad_pkg_path not in freecad.__path__:
+        freecad.__path__ = [freecad_pkg_path] + list(freecad.__path__)
+
+    # 4. Run test discovery and execution
+    log_path = os.path.join(reports_dir, "tests.log")
+    summary_path = os.path.join(reports_dir, "summary.json")
+
+    log_startup("discovery-start")
+
+    with open(log_path, "w", encoding="utf-8", buffering=1) as stream:
+        suite = unittest.defaultTestLoader.discover(
+            os.path.join(root, "tests"),
+            pattern="test_*.py",
+        )
+        runner = unittest.TextTestRunner(stream=stream, verbosity=2)
+        result = runner.run(suite)
+        summary = {
+            "tests": result.testsRun,
+            "failures": len(result.failures),
+            "errors": len(result.errors),
+            "skipped": len(result.skipped),
+            "successful": result.wasSuccessful(),
+        }
+        exit_code = 0 if result.wasSuccessful() else 1
+        with open(summary_path, "w", encoding="utf-8") as out:
+            json.dump(summary, out, indent=2)
+        log_startup(
+            f"completed-summary: tests={result.testsRun} failures={len(result.failures)} successful={result.wasSuccessful()}"
+        )
+        sys.stdout.write(json.dumps(summary) + "\n")
+        sys.stdout.flush()
+
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(exit_code)
+
+except BaseException as exc:
+    log_startup(f"unhandled-exception: {exc}")
+    traceback.print_exc()
+    sys.stderr.flush()
+    sys.stdout.flush()
+    os._exit(1)
