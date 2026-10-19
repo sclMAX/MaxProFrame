@@ -7,7 +7,8 @@ Create Custom Profile allows creating structural profiles from any valid single-
 1. **Draw section:** Create a Sketch with a closed outer boundary and any number of closed interior holes.
 2. **Select in tool:** Open Create Custom Profile (`Shift+C`), click **Select a Profile**, and pick the sketch (or an `App::Link` pointing to it).
 3. **Generate:** Select the path edge(s) or set a length, then accept. The resulting profile extrudes the section along the path.
-4. **Parametric updates:** Editing the source sketch (e.g. resizing holes or contours) automatically updates the profile on recompute.
+4. **Edit the profile:** Double-click the generated profile in the tree to open the profile editor, including for custom sections selected from a folder library. Accept commits profile changes; Cancel restores the previous state. Editing length keeps the section source and its holes intact.
+5. **Parametric updates:** Editing the source sketch (e.g. resizing holes or contours) automatically updates the profile on recompute.
 
 ## Supported and Rejected Topologies
 

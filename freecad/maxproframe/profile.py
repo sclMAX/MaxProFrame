@@ -1919,11 +1919,5 @@ class ViewProviderCustomProfile(ViewProviderProfile):
             "                "};
         	"""
 
-    def setEdit(self, vobj, mode):
-        return None
-
-    def unsetEdit(self, vobj, mode):
-        return None
-
     def edit(self):
         pass

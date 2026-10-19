@@ -1,13 +1,15 @@
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import FreeCAD as App
 import FreeCADGui as Gui
+import Part
 from PySide import QtWidgets
 
 from freecad.maxproframe.create_profiles_tool import BaseProfileTaskPanel
 from freecad.maxproframe.edit_profile_tool import EditProfileTaskPanel
-from freecad.maxproframe.profile import Profile, ViewProviderProfile
+from freecad.maxproframe.profile import Profile, ViewProviderCustomProfile, ViewProviderProfile
 
 
 class TestProfileEditState(unittest.TestCase):
@@ -48,6 +50,7 @@ class TestProfileEditState(unittest.TestCase):
 
         def isolated_catalog(panel):
             panel.profiles = {}
+            panel.library_manager = SimpleNamespace(_get_registered_folder=lambda material: None)
 
         catalog_patch = patch.object(BaseProfileTaskPanel, "load_data", isolated_catalog)
         catalog_patch.start()
@@ -59,16 +62,35 @@ class TestProfileEditState(unittest.TestCase):
 
     def snapshot(self):
         fields = (
-            "ProfileLength", "ProfileWidth", "ProfileHeight", "Thickness", "ThicknessFlange",
-            "RadiusLarge", "RadiusSmall", "LinearWeight", "ApproxWeight", "UnitPrice",
-            "Material", "Family", "CatalogFamily", "SizeName", "AnchorX", "AnchorY",
-            "MirrorH", "MirrorV", "RotationAngle", "MakeFillet",
+            "ProfileLength",
+            "ProfileWidth",
+            "ProfileHeight",
+            "Thickness",
+            "ThicknessFlange",
+            "RadiusLarge",
+            "RadiusSmall",
+            "LinearWeight",
+            "ApproxWeight",
+            "UnitPrice",
+            "Material",
+            "Family",
+            "CatalogFamily",
+            "SizeName",
+            "AnchorX",
+            "AnchorY",
+            "MirrorH",
+            "MirrorV",
+            "RotationAngle",
+            "MakeFillet",
         )
         return {
             "model": {field: getattr(self.obj, field) for field in fields},
             "color": tuple(self.obj.ViewObject.ShapeColor),
             "transparency": self.obj.ViewObject.Transparency,
             "volume": self.obj.Shape.Volume,
+            "custom_source": getattr(self.obj, "CustomProfile", None),
+            "source_shape": (self.obj.CustomProfile.Shape.exportBrepToString() if self.obj.CustomProfile else None),
+            "objects": tuple(obj.Name for obj in self.doc.Objects),
         }
 
     def assert_identity_and_shape(self):
@@ -76,6 +98,9 @@ class TestProfileEditState(unittest.TestCase):
             self.assertEqual(getattr(self.obj, field), self.original["model"][field])
         self.assertFalse(self.obj.Shape.isNull())
         self.assertTrue(self.obj.Shape.isValid())
+        self.assertEqual(self.snapshot()["custom_source"], self.original["custom_source"])
+        self.assertEqual(self.snapshot()["source_shape"], self.original["source_shape"])
+        self.assertEqual(self.snapshot()["objects"], self.original["objects"])
 
     def test_initialization_loads_linear_not_total_weight(self):
         self.panel.initialize_ui()
@@ -136,6 +161,43 @@ class TestProfileEditState(unittest.TestCase):
         self.assertIs(self.panel.reject(), True)
         self.assertEqual(self.snapshot(), self.original)
         self.assertEqual(self.doc.UndoCount, 0)
+
+
+class TestCustomProfileEditState(TestProfileEditState):
+    def setUp(self):
+        super().setUp()
+        source = self.doc.addObject("PartDesign::Feature", "CP1Section")
+        outer = Part.makePolygon(
+            [
+                App.Vector(0, 0, 0),
+                App.Vector(20, 0, 0),
+                App.Vector(20, 10, 0),
+                App.Vector(0, 10, 0),
+                App.Vector(0, 0, 0),
+            ]
+        )
+        inner = Part.makePolygon(
+            [
+                App.Vector(2, 2, 0),
+                App.Vector(6, 2, 0),
+                App.Vector(6, 5, 0),
+                App.Vector(2, 5, 0),
+                App.Vector(2, 2, 0),
+            ]
+        )
+        source.Shape = Part.makeFace([outer, inner], "Part::FaceMakerBullseye")
+        self.obj.Family = "Custom Profile"
+        self.obj.CatalogFamily = "Custom Profile"
+        self.obj.SizeName = "CP1"
+        self.obj.CustomProfile = source
+        ViewProviderCustomProfile(self.obj.ViewObject)
+        self.doc.recompute()
+        self.obj.ViewObject.ShapeColor = (0.1, 0.7, 0.2)
+        self.obj.ViewObject.Transparency = 23
+        self.doc.clearUndos()
+        self.original = self.snapshot()
+        self.assertTrue(self.obj.Shape.isValid())
+        self.assertAlmostEqual(self.obj.Shape.Volume, 188.0 * self.obj.ProfileLength)
 
 
 if __name__ == "__main__":

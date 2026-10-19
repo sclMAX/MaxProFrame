@@ -7,7 +7,6 @@ import FreeCAD as App
 from freecad.maxproframe import profile as profile_module
 from freecad.maxproframe.profile import ViewProviderCustomProfile, ViewProviderProfile
 
-
 NOTICE = "FrameForge: close the active task dialog before editing a profile.\n"
 
 
@@ -22,9 +21,7 @@ class TestProfileEditDialogGuard(unittest.TestCase):
         self.control.activeDialog.return_value = None
         self.panel_factory = Mock()
         self.gui_patch = patch.object(profile_module, "Gui", SimpleNamespace(Control=self.control))
-        self.panel_patch = patch(
-            "freecad.maxproframe.edit_profile_tool.EditProfileTaskPanel", self.panel_factory
-        )
+        self.panel_patch = patch("freecad.maxproframe.edit_profile_tool.EditProfileTaskPanel", self.panel_factory)
         self.gui_patch.start()
         self.panel_patch.start()
         self.addCleanup(self.gui_patch.stop)
@@ -67,11 +64,18 @@ class TestProfileEditDialogGuard(unittest.TestCase):
         self.panel_factory.assert_not_called()
         self.control.showDialog.assert_not_called()
 
-    def test_custom_profile_edit_remains_unsupported(self):
-        self.assertIsNone(self.provider(ViewProviderCustomProfile).setEdit(self.obj.ViewObject, 0))
-        self.control.activeDialog.assert_not_called()
-        self.panel_factory.assert_not_called()
-        self.control.showDialog.assert_not_called()
+    def test_unset_edit_closes_profile_panel(self):
+        self.assertIs(self.provider().unsetEdit(self.obj.ViewObject, 0), True)
+        self.control.closeDialog.assert_called_once_with()
+
+    def test_non_edit_unset_mode_remains_ignored(self):
+        self.assertIsNone(self.provider().unsetEdit(self.obj.ViewObject, 1))
+        self.control.closeDialog.assert_not_called()
+
+
+class TestCustomProfileEditDialogGuard(TestProfileEditDialogGuard):
+    def provider(self, cls=ViewProviderCustomProfile):
+        return super().provider(cls)
 
 
 if __name__ == "__main__":
