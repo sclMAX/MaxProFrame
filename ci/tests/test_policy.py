@@ -180,3 +180,108 @@ class TestChangedFilesPolicy(unittest.TestCase):
         self.assertNotEqual(proc.returncode, 0)
         self.assertNotEqual(proc.stderr.strip(), "")
         self.assertEqual(proc.stdout.strip(), "")
+
+
+class TestCheckFormatPolicy(unittest.TestCase):
+    """Tests for python3 ci/check_format.py (S2, S4, S8)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.work_dir = pathlib.Path(self.tmp.name)
+        self.reports_dir = self.work_dir / "reports"
+        self.reports_dir.mkdir()
+        self.fake_tools_dir = self.work_dir / "fake_tools"
+        self.fake_tools_dir.mkdir()
+
+        fake_script = (
+            "import os, sys\n"
+            "tool = sys.argv[0]\n"
+            "log = os.environ.get('FAKE_LOG_' + os.path.basename(tool).upper().replace('.PY', ''))\n"
+            "if log:\n"
+            "    with open(log, 'a', encoding='utf-8') as f:\n"
+            "        f.write(' '.join(sys.argv[1:]) + '\\n')\n"
+            "code = int(os.environ.get('FAKE_EXIT_' + os.path.basename(tool).upper().replace('.PY', ''), '0'))\n"
+            "sys.exit(code)\n"
+        )
+        (self.fake_tools_dir / "black.py").write_text(fake_script, encoding="utf-8")
+        (self.fake_tools_dir / "isort.py").write_text(fake_script, encoding="utf-8")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _run_check_format(self, changes_file, env_overrides=None):
+        script = CI_DIR / "check_format.py"
+        self.assertTrue(script.is_file(), f"Entrypoint missing: {script}")
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(self.fake_tools_dir) + (os.pathsep + env.get("PYTHONPATH", ""))
+        if env_overrides:
+            env.update(env_overrides)
+        return subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "--changes",
+                str(changes_file),
+                "--reports",
+                str(self.reports_dir),
+            ],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+    def test_format_runs_both_tools_with_exact_argv_and_produces_reports(self):
+        changes = self.work_dir / "changes.json"
+        changes.write_text(json.dumps({"python_files": ["foo.py", "bar/baz.py"]}), encoding="utf-8")
+        black_log = self.work_dir / "black.log"
+        isort_log = self.work_dir / "isort.log"
+
+        proc = self._run_check_format(
+            changes,
+            {
+                "FAKE_LOG_BLACK": str(black_log),
+                "FAKE_LOG_ISORT": str(isort_log),
+                "FAKE_EXIT_BLACK": "0",
+                "FAKE_EXIT_ISORT": "0",
+            },
+        )
+
+        self.assertEqual(proc.returncode, 0, f"Stderr: {proc.stderr}")
+        self.assertTrue(black_log.is_file())
+        self.assertTrue(isort_log.is_file())
+        self.assertIn("--check", black_log.read_text(encoding="utf-8"))
+        self.assertIn("foo.py", black_log.read_text(encoding="utf-8"))
+        self.assertIn("--check-only", isort_log.read_text(encoding="utf-8"))
+        self.assertIn("bar/baz.py", isort_log.read_text(encoding="utf-8"))
+        self.assertTrue(len(list(self.reports_dir.iterdir())) >= 2)
+
+    def test_black_failure_still_attempts_isort_and_returns_failure(self):
+        changes = self.work_dir / "changes.json"
+        changes.write_text(json.dumps({"python_files": ["a.py"]}), encoding="utf-8")
+        isort_log = self.work_dir / "isort.log"
+
+        proc = self._run_check_format(
+            changes,
+            {
+                "FAKE_LOG_ISORT": str(isort_log),
+                "FAKE_EXIT_BLACK": "1",
+                "FAKE_EXIT_ISORT": "0",
+            },
+        )
+
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertTrue(isort_log.is_file(), "isort must still be attempted when Black fails")
+
+    def test_no_python_files_clean_skips_without_running_tools(self):
+        changes = self.work_dir / "changes.json"
+        changes.write_text(json.dumps({"python_files": []}), encoding="utf-8")
+        black_log = self.work_dir / "black.log"
+
+        proc = self._run_check_format(changes, {"FAKE_LOG_BLACK": str(black_log)})
+        self.assertEqual(proc.returncode, 0, f"Stderr: {proc.stderr}")
+        self.assertFalse(black_log.is_file())
+
+    def test_missing_or_corrupt_changes_fails_non_zero(self):
+        proc = self._run_check_format(self.work_dir / "does_not_exist.json")
+        self.assertNotEqual(proc.returncode, 0)
