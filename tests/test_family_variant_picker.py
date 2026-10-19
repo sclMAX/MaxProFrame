@@ -15,19 +15,21 @@ from freecad.maxproframe.library_manager import KNOWN_FAMILIES, LibraryManager
 try:
     from freecad.maxproframe.library_manager import FILLET_FAMILIES, get_canonical_family
 except ImportError:
-    FILLET_FAMILIES = frozenset([
-        "Square Hollow",
-        "Rectangular Hollow",
-        "Equal Leg Angles",
-        "Unequal Leg Angles",
-        "HEA",
-        "HEB",
-        "HEM",
-        "IPE",
-        "IPN",
-        "UPE",
-        "UPN",
-    ])
+    FILLET_FAMILIES = frozenset(
+        [
+            "Square Hollow",
+            "Rectangular Hollow",
+            "Equal Leg Angles",
+            "Unequal Leg Angles",
+            "HEA",
+            "HEB",
+            "HEM",
+            "IPE",
+            "IPN",
+            "UPE",
+            "UPN",
+        ]
+    )
 
     def get_canonical_family(family_key, family_data=None):
         if family_data and isinstance(family_data, dict) and "canonical_family" in family_data:
@@ -62,22 +64,29 @@ class TestFamilyVariantPicker(unittest.TestCase):
 
         dialog = AddFamilyDialog()
         self.addCleanup(dialog.close)
-        stock_families = {
-            key for key in self.manager.get_library("Metal") if not key.startswith("_")
-        }
+        stock_families = {key for key in self.manager.get_library("Metal") if not key.startswith("_")}
         previous_choices = {
-            "Square Hollow", "Rectangular Hollow", "Pipe", "Equal Leg Angles",
-            "Unequal Leg Angles", "Channels", "Square", "Round Bar",
-            "Flat Sections", "T-Slot", "V-Slot", "Custom Profile",
+            "Square Hollow",
+            "Rectangular Hollow",
+            "Pipe",
+            "Equal Leg Angles",
+            "Unequal Leg Angles",
+            "Channels",
+            "Square",
+            "Round Bar",
+            "Flat Sections",
+            "T-Slot",
+            "V-Slot",
+            "Custom Profile",
         }
         offered = [
-            dialog.list_families.item(row).data(QtCore.Qt.UserRole)
-            for row in range(dialog.list_families.count())
+            dialog.list_families.item(row).data(QtCore.Qt.UserRole) for row in range(dialog.list_families.count())
         ]
         self.assertEqual(len(offered), len(set(offered)))
         self.assertTrue(previous_choices.issubset(offered))
-        self.assertTrue(stock_families.issubset(offered),
-                        f"Missing Metal families: {sorted(stock_families - set(offered))}")
+        self.assertTrue(
+            stock_families.issubset(offered), f"Missing Metal families: {sorted(stock_families - set(offered))}"
+        )
         for family in sorted(stock_families):
             with self.subTest(family=family):
                 dialog.select_family(family)
@@ -179,10 +188,13 @@ class TestFamilyVariantPicker(unittest.TestCase):
             ProfileLibraryManagerDialog,
         )
 
-        self.manager.save_user_library("CancelLib", {
-            "_metadata": {"name": "CancelLib"},
-            "Pipe": {"norm": "Standard", "fillet": False, "sizes": {}},
-        })
+        self.manager.save_user_library(
+            "CancelLib",
+            {
+                "_metadata": {"name": "CancelLib"},
+                "Pipe": {"norm": "Standard", "fillet": False, "sizes": {}},
+            },
+        )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(dialog.close)
@@ -203,20 +215,23 @@ class TestFamilyVariantPicker(unittest.TestCase):
         )
 
         # Prepopulate with a plain variant and a legacy filleted entry
-        self.manager.save_user_library("DupLib", {
-            "_metadata": {"name": "DupLib"},
-            "Square Hollow": {
-                "canonical_family": "Square Hollow",
-                "norm": "Custom",
-                "fillet": False,
-                "sizes": {},
+        self.manager.save_user_library(
+            "DupLib",
+            {
+                "_metadata": {"name": "DupLib"},
+                "Square Hollow": {
+                    "canonical_family": "Square Hollow",
+                    "norm": "Custom",
+                    "fillet": False,
+                    "sizes": {},
+                },
+                "Equal Leg Angles": {
+                    "norm": "Legacy Angles",
+                    "fillet": True,
+                    "sizes": {},
+                },
             },
-            "Equal Leg Angles": {
-                "norm": "Legacy Angles",
-                "fillet": True,
-                "sizes": {},
-            },
-        })
+        )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(dialog.close)
@@ -224,9 +239,11 @@ class TestFamilyVariantPicker(unittest.TestCase):
         initial_keys = set(dialog.current_lib_data.keys())
 
         # Attempt 1: Duplicate of plain Square Hollow
-        with patch.object(AddFamilyDialog, "exec_", return_value=QtWidgets.QDialog.Accepted), \
-             patch.object(AddFamilyDialog, "get_values", return_value=("Square Hollow", False)), \
-             patch.object(QtWidgets.QMessageBox, "warning") as mock_warn:
+        with (
+            patch.object(AddFamilyDialog, "exec_", return_value=QtWidgets.QDialog.Accepted),
+            patch.object(AddFamilyDialog, "get_values", return_value=("Square Hollow", False)),
+            patch.object(QtWidgets.QMessageBox, "warning") as mock_warn,
+        ):
             dialog.btn_add_family.click()
             mock_warn.assert_called_once()
 
@@ -234,9 +251,11 @@ class TestFamilyVariantPicker(unittest.TestCase):
         self.assertFalse(dialog.is_dirty)
 
         # Attempt 2: Duplicate of legacy filleted Equal Leg Angles
-        with patch.object(AddFamilyDialog, "exec_", return_value=QtWidgets.QDialog.Accepted), \
-             patch.object(AddFamilyDialog, "get_values", return_value=("Equal Leg Angles", True)), \
-             patch.object(QtWidgets.QMessageBox, "warning") as mock_warn:
+        with (
+            patch.object(AddFamilyDialog, "exec_", return_value=QtWidgets.QDialog.Accepted),
+            patch.object(AddFamilyDialog, "get_values", return_value=("Equal Leg Angles", True)),
+            patch.object(QtWidgets.QMessageBox, "warning") as mock_warn,
+        ):
             dialog.btn_add_family.click()
             mock_warn.assert_called_once()
 
@@ -250,17 +269,22 @@ class TestFamilyVariantPicker(unittest.TestCase):
             ProfileLibraryManagerDialog,
         )
 
-        self.manager.save_user_library("CoexistLib", {
-            "_metadata": {"name": "CoexistLib"},
-        })
+        self.manager.save_user_library(
+            "CoexistLib",
+            {
+                "_metadata": {"name": "CoexistLib"},
+            },
+        )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(dialog.close)
         dialog.refresh_libraries(select_name="CoexistLib")
 
         # Add plain Square Hollow
-        with patch.object(AddFamilyDialog, "exec_", return_value=QtWidgets.QDialog.Accepted), \
-             patch.object(AddFamilyDialog, "get_values", return_value=("Square Hollow", False)):
+        with (
+            patch.object(AddFamilyDialog, "exec_", return_value=QtWidgets.QDialog.Accepted),
+            patch.object(AddFamilyDialog, "get_values", return_value=("Square Hollow", False)),
+        ):
             dialog.btn_add_family.click()
 
         self.assertIn("Square Hollow", dialog.current_lib_data)
@@ -272,8 +296,10 @@ class TestFamilyVariantPicker(unittest.TestCase):
         dialog.table_sizes.item(0, 3).setText("2")
 
         # Add filleted Square Hollow
-        with patch.object(AddFamilyDialog, "exec_", return_value=QtWidgets.QDialog.Accepted), \
-             patch.object(AddFamilyDialog, "get_values", return_value=("Square Hollow", True)):
+        with (
+            patch.object(AddFamilyDialog, "exec_", return_value=QtWidgets.QDialog.Accepted),
+            patch.object(AddFamilyDialog, "get_values", return_value=("Square Hollow", True)),
+        ):
             dialog.btn_add_family.click()
 
         self.assertIn("Square Hollow (Fillet)", dialog.current_lib_data)
@@ -315,22 +341,27 @@ class TestFamilyVariantPicker(unittest.TestCase):
         )
 
         # Legacy catalog where base key "Square Hollow" holds filleted variant
-        self.manager.save_user_library("LegacyOccupiedLib", {
-            "_metadata": {"name": "LegacyOccupiedLib"},
-            "Square Hollow": {
-                "norm": "DIN 59410",
-                "fillet": True,
-                "sizes": {"60x60x3": {"Height": "60", "Width": "60", "Thickness": "3"}},
+        self.manager.save_user_library(
+            "LegacyOccupiedLib",
+            {
+                "_metadata": {"name": "LegacyOccupiedLib"},
+                "Square Hollow": {
+                    "norm": "DIN 59410",
+                    "fillet": True,
+                    "sizes": {"60x60x3": {"Height": "60", "Width": "60", "Thickness": "3"}},
+                },
             },
-        })
+        )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(dialog.close)
         dialog.refresh_libraries(select_name="LegacyOccupiedLib")
 
         # Add plain variant for Square Hollow
-        with patch.object(AddFamilyDialog, "exec_", return_value=QtWidgets.QDialog.Accepted), \
-             patch.object(AddFamilyDialog, "get_values", return_value=("Square Hollow", False)):
+        with (
+            patch.object(AddFamilyDialog, "exec_", return_value=QtWidgets.QDialog.Accepted),
+            patch.object(AddFamilyDialog, "get_values", return_value=("Square Hollow", False)),
+        ):
             dialog.btn_add_family.click()
 
         # Base key must remain unchanged for legacy entry
@@ -347,37 +378,38 @@ class TestFamilyVariantPicker(unittest.TestCase):
         """S2: Visible variant names derived from canonical type+boolean; raw keys kept in UserRole/combo."""
         from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
-        self.manager.save_user_library("DisplayNamesLib", {
-            "_metadata": {"name": "DisplayNamesLib"},
-            "Square Hollow (Fillet)": {
-                "canonical_family": "Square Hollow",
-                "fillet": True,
-                "norm": "Custom",
-                "sizes": {},
+        self.manager.save_user_library(
+            "DisplayNamesLib",
+            {
+                "_metadata": {"name": "DisplayNamesLib"},
+                "Square Hollow (Fillet)": {
+                    "canonical_family": "Square Hollow",
+                    "fillet": True,
+                    "norm": "Custom",
+                    "sizes": {},
+                },
+                "Square Hollow (No Fillet)": {
+                    "canonical_family": "Square Hollow",
+                    "fillet": False,
+                    "norm": "Custom",
+                    "sizes": {},
+                },
             },
-            "Square Hollow (No Fillet)": {
-                "canonical_family": "Square Hollow",
-                "fillet": False,
-                "norm": "Custom",
-                "sizes": {},
-            },
-        })
+        )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(dialog.close)
         dialog.refresh_libraries(select_name="DisplayNamesLib")
 
         # English check
-        raw_keys = [dialog.list_families.item(i).data(QtCore.Qt.UserRole)
-                    for i in range(dialog.list_families.count())]
+        raw_keys = [dialog.list_families.item(i).data(QtCore.Qt.UserRole) for i in range(dialog.list_families.count())]
         self.assertIn("Square Hollow (Fillet)", raw_keys)
         self.assertIn("Square Hollow (No Fillet)", raw_keys)
 
         # Display texts derived from canonical type + boolean
         expected_fillet = f"{translate('frameforge', 'Square Hollow')} ({translate('frameforge', 'Fillet')})"
         expected_no_fillet = f"{translate('frameforge', 'Square Hollow')} ({translate('frameforge', 'No Fillet')})"
-        display_texts = [dialog.list_families.item(i).text()
-                         for i in range(dialog.list_families.count())]
+        display_texts = [dialog.list_families.item(i).text() for i in range(dialog.list_families.count())]
         self.assertIn(expected_fillet, display_texts)
         self.assertIn(expected_no_fillet, display_texts)
 
@@ -395,10 +427,9 @@ class TestFamilyVariantPicker(unittest.TestCase):
                 es_dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
                 self.addCleanup(es_dialog.close)
                 es_dialog.refresh_libraries(select_name="DisplayNamesLib")
-                es_texts = [es_dialog.list_families.item(i).text()
-                            for i in range(es_dialog.list_families.count())]
-                self.assertIn("Tubo Cuadrado Hueco (Fillet)", es_texts)
-                self.assertIn("Tubo Cuadrado Hueco (Sin Fillet)", es_texts)
+                es_texts = [es_dialog.list_families.item(i).text() for i in range(es_dialog.list_families.count())]
+                self.assertIn("Tubo Cuadrado Hueco (Con redondeos)", es_texts)
+                self.assertIn("Tubo Cuadrado Hueco (Sin redondeos)", es_texts)
             finally:
                 self.app.removeTranslator(translator)
 
@@ -406,41 +437,44 @@ class TestFamilyVariantPicker(unittest.TestCase):
         """S4: Dynamic columns and auto-weight calculations resolve canonical type from metadata."""
         from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
-        self.manager.save_user_library("VariantCalcLib", {
-            "_metadata": {"name": "VariantCalcLib", "material": "Steel", "density": 7.85},
-            "Square Hollow (Fillet)": {
-                "canonical_family": "Square Hollow",
-                "fillet": True,
-                "norm": "Custom",
-                "sizes": {
-                    "50x50x2": {
-                        "Height": "50",
-                        "Width": "50",
-                        "Thickness": "2",
-                        "Flange Thickness": "0",
-                        "Radius1": "4",
-                        "Radius2": "2",
-                        "Weight": "0",
-                    }
+        self.manager.save_user_library(
+            "VariantCalcLib",
+            {
+                "_metadata": {"name": "VariantCalcLib", "material": "Steel", "density": 7.85},
+                "Square Hollow (Fillet)": {
+                    "canonical_family": "Square Hollow",
+                    "fillet": True,
+                    "norm": "Custom",
+                    "sizes": {
+                        "50x50x2": {
+                            "Height": "50",
+                            "Width": "50",
+                            "Thickness": "2",
+                            "Flange Thickness": "0",
+                            "Radius1": "4",
+                            "Radius2": "2",
+                            "Weight": "0",
+                        }
+                    },
+                },
+                "Square Hollow (No Fillet)": {
+                    "canonical_family": "Square Hollow",
+                    "fillet": False,
+                    "norm": "Custom",
+                    "sizes": {
+                        "50x50x2": {
+                            "Height": "50",
+                            "Width": "50",
+                            "Thickness": "2",
+                            "Flange Thickness": "0",
+                            "Radius1": "0",
+                            "Radius2": "0",
+                            "Weight": "0",
+                        }
+                    },
                 },
             },
-            "Square Hollow (No Fillet)": {
-                "canonical_family": "Square Hollow",
-                "fillet": False,
-                "norm": "Custom",
-                "sizes": {
-                    "50x50x2": {
-                        "Height": "50",
-                        "Width": "50",
-                        "Thickness": "2",
-                        "Flange Thickness": "0",
-                        "Radius1": "0",
-                        "Radius2": "0",
-                        "Weight": "0",
-                    }
-                },
-            },
-        })
+        )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(dialog.close)
@@ -473,20 +507,23 @@ class TestFamilyVariantPicker(unittest.TestCase):
         """S4: Family-level checkbox is disabled (informational) for explicit variants, editable for legacy."""
         from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
-        self.manager.save_user_library("InfoCheckboxLib", {
-            "_metadata": {"name": "InfoCheckboxLib"},
-            "Square Hollow (Fillet)": {
-                "canonical_family": "Square Hollow",
-                "fillet": True,
-                "norm": "Custom",
-                "sizes": {},
+        self.manager.save_user_library(
+            "InfoCheckboxLib",
+            {
+                "_metadata": {"name": "InfoCheckboxLib"},
+                "Square Hollow (Fillet)": {
+                    "canonical_family": "Square Hollow",
+                    "fillet": True,
+                    "norm": "Custom",
+                    "sizes": {},
+                },
+                "Legacy Family": {
+                    "norm": "Custom",
+                    "fillet": False,
+                    "sizes": {},
+                },
             },
-            "Legacy Family": {
-                "norm": "Custom",
-                "fillet": False,
-                "sizes": {},
-            },
-        })
+        )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(dialog.close)
@@ -506,6 +543,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
         """B1: Destination-key collision with legacy entry lacking canonical_family rejects with warning without overwriting sizes."""
         import copy
         import hashlib
+
         from freecad.maxproframe.library_manager_dialog import (
             AddFamilyDialog,
             ProfileLibraryManagerDialog,
@@ -548,9 +586,11 @@ class TestFamilyVariantPicker(unittest.TestCase):
         snapshot_dirty = dialog.is_dirty
         snapshot_selected = dialog.combo_family.currentText()
 
-        with patch.object(AddFamilyDialog, "exec_", return_value=QtWidgets.QDialog.Accepted), \
-             patch.object(AddFamilyDialog, "get_values", return_value=("Square Hollow", True)), \
-             patch.object(QtWidgets.QMessageBox, "warning") as mock_warn:
+        with (
+            patch.object(AddFamilyDialog, "exec_", return_value=QtWidgets.QDialog.Accepted),
+            patch.object(AddFamilyDialog, "get_values", return_value=("Square Hollow", True)),
+            patch.object(QtWidgets.QMessageBox, "warning") as mock_warn,
+        ):
             dialog.btn_add_family.click()
 
             mock_warn.assert_called_once()

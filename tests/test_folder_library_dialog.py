@@ -12,7 +12,7 @@ except ImportError:
     from PySide2 import QtCore, QtGui, QtWidgets
 
 from freecad.maxproframe.ff_tools import translate
-from freecad.maxproframe.library_manager import LibraryManager, STANDARD_DENSITIES
+from freecad.maxproframe.library_manager import STANDARD_DENSITIES, LibraryManager
 from freecad.maxproframe.library_manager_dialog import (
     NewLibraryDialog,
     ProfileLibraryManagerDialog,
@@ -96,9 +96,11 @@ class TestFolderLibraryDialog(unittest.TestCase):
         new_dir = os.path.join(self.test_root, "my_new_folder_lib")
         os.makedirs(new_dir, exist_ok=True)
 
-        with patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=new_dir), \
-             patch.object(NewLibraryDialog, "exec_", return_value=QtWidgets.QDialog.Accepted), \
-             patch.object(NewLibraryDialog, "get_values", return_value=("Alu Folder", "Aluminium", 2.7, False)):
+        with (
+            patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=new_dir),
+            patch.object(NewLibraryDialog, "exec_", return_value=QtWidgets.QDialog.Accepted),
+            patch.object(NewLibraryDialog, "get_values", return_value=("Alu Folder", "Aluminium", 2.7, False)),
+        ):
             dialog.btn_new_folder_lib.click()
 
         manifest_path = os.path.join(new_dir, "library.json")
@@ -136,8 +138,9 @@ class TestFolderLibraryDialog(unittest.TestCase):
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(dialog.close)
-        names = [dialog.list_libraries.item(i).data(QtCore.Qt.UserRole)["name"]
-                 for i in range(dialog.list_libraries.count())]
+        names = [
+            dialog.list_libraries.item(i).data(QtCore.Qt.UserRole)["name"] for i in range(dialog.list_libraries.count())
+        ]
         self.assertNotIn("Workshop Existing", names)
 
         with patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=existing_dir):
@@ -164,7 +167,11 @@ class TestFolderLibraryDialog(unittest.TestCase):
         self.addCleanup(dialog.close)
         dialog.refresh_libraries(select_name="Timber Lib")
 
-        self.assertIn(translate("frameforge", "Folder Library: Timber Lib"), dialog.lbl_lib_banner.text())
+        self.assertEqual(
+            dialog.lbl_lib_banner.text(),
+            translate("frameforge", "Folder Library: %s%s | Material: %s (Editable)")
+            % ("Timber Lib", f" | {folder_dir}", f"{translate('frameforge', 'Wood')} (0.7 g/cm³)"),
+        )
         self.assertIn(translate("frameforge", "Wood"), dialog.lbl_lib_banner.text())
         self.assertIn(folder_dir, dialog.lbl_lib_banner.text())
         self.assertEqual(dialog.lbl_lib_banner.toolTip(), folder_dir)
@@ -184,8 +191,10 @@ class TestFolderLibraryDialog(unittest.TestCase):
         with patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=""):
             dialog.btn_dup_lib.click()
             # If clicked with canceled picker, it must retain current selection without throwing
-            names = [dialog.list_libraries.item(i).data(QtCore.Qt.UserRole)["name"]
-                     for i in range(dialog.list_libraries.count())]
+            names = [
+                dialog.list_libraries.item(i).data(QtCore.Qt.UserRole)["name"]
+                for i in range(dialog.list_libraries.count())
+            ]
             self.assertEqual(names.count("Timber Lib"), 1)
 
     def test_r5_save_folder_library_manifest(self):
@@ -255,8 +264,10 @@ class TestFolderLibraryDialog(unittest.TestCase):
         self.addCleanup(dialog.close)
         dialog.refresh_libraries(select_name="Unregister Me")
 
-        with patch.object(self.manager, "delete_user_library") as mock_delete, \
-             patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Yes):
+        with (
+            patch.object(self.manager, "delete_user_library") as mock_delete,
+            patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Yes),
+        ):
             dialog.btn_del_lib.click()
             mock_delete.assert_not_called()
 
@@ -266,8 +277,9 @@ class TestFolderLibraryDialog(unittest.TestCase):
         self.assertEqual(open(canary_file).read(), "CANARY")
 
         # But library should be unregistered from manager and UI
-        names = [dialog.list_libraries.item(i).data(QtCore.Qt.UserRole)["name"]
-                 for i in range(dialog.list_libraries.count())]
+        names = [
+            dialog.list_libraries.item(i).data(QtCore.Qt.UserRole)["name"] for i in range(dialog.list_libraries.count())
+        ]
         self.assertNotIn("Unregister Me", names)
 
     def test_r7_cancel_create_register_unregister_leaves_filesystem_and_state_unchanged(self):
@@ -285,8 +297,10 @@ class TestFolderLibraryDialog(unittest.TestCase):
         # 2. Cancel New Folder Name Dialog
         target_dir = os.path.join(self.test_root, "unused_dir")
         os.makedirs(target_dir, exist_ok=True)
-        with patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=target_dir), \
-             patch.object(NewLibraryDialog, "exec_", return_value=QtWidgets.QDialog.Rejected):
+        with (
+            patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=target_dir),
+            patch.object(NewLibraryDialog, "exec_", return_value=QtWidgets.QDialog.Rejected),
+        ):
             dialog.btn_new_folder_lib.click()
         self.assertEqual(dialog.list_libraries.count(), initial_count)
         self.assertFalse(os.path.exists(os.path.join(target_dir, "library.json")))
@@ -299,10 +313,13 @@ class TestFolderLibraryDialog(unittest.TestCase):
     def test_r8_invalid_folder_or_collision_error_preserves_selection_and_dirty_edits(self):
         """R8: Creation or registration error shows warning and retains dirty edits."""
         # Create a user library and mark it dirty
-        self.manager.save_user_library("UserLib", {
-            "_metadata": {"name": "UserLib"},
-            "Square Hollow": {"norm": "Original", "fillet": False, "sizes": {"50x50x2": {"Height": "50"}}},
-        })
+        self.manager.save_user_library(
+            "UserLib",
+            {
+                "_metadata": {"name": "UserLib"},
+                "Square Hollow": {"norm": "Original", "fillet": False, "sizes": {"50x50x2": {"Height": "50"}}},
+            },
+        )
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(dialog.close)
         dialog.refresh_libraries(select_name="UserLib")
@@ -311,9 +328,13 @@ class TestFolderLibraryDialog(unittest.TestCase):
         self.assertTrue(dialog.is_dirty)
 
         # Attempt to register non-existent folder
-        with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Cancel), \
-             patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=os.path.join(self.test_root, "nonexistent")), \
-             patch.object(QtWidgets.QMessageBox, "warning") as mock_warn:
+        with (
+            patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Cancel),
+            patch.object(
+                QtWidgets.QFileDialog, "getExistingDirectory", return_value=os.path.join(self.test_root, "nonexistent")
+            ),
+            patch.object(QtWidgets.QMessageBox, "warning") as mock_warn,
+        ):
             dialog.btn_register_folder_lib.click()
 
         self.assertEqual(dialog.current_lib_meta["name"], "UserLib")
@@ -332,8 +353,10 @@ class TestFolderLibraryDialog(unittest.TestCase):
         with open(self.reg_path, "w") as f:
             f.write("{ invalid json corrupted ")
 
-        with patch.object(QtWidgets.QMessageBox, "critical") as mock_crit, \
-             patch.object(QtWidgets.QMessageBox, "warning") as mock_warn:
+        with (
+            patch.object(QtWidgets.QMessageBox, "critical") as mock_crit,
+            patch.object(QtWidgets.QMessageBox, "warning") as mock_warn,
+        ):
             success = dialog.refresh_libraries()
             self.assertFalse(success)
 

@@ -149,7 +149,7 @@
     </message>
     <message>
         <source>With Fillet</source>
-        <translation>Con redondeos (Fillet)</translation>
+        <translation>Con redondeos</translation>
     </message>
     <message>
         <source>Code</source>
@@ -413,11 +413,11 @@
     </message>
     <message>
         <source>Fillet</source>
-        <translation>Fillet</translation>
+        <translation>Con redondeos</translation>
     </message>
     <message>
         <source>No Fillet</source>
-        <translation>Sin Fillet</translation>
+        <translation>Sin redondeos</translation>
     </message>
     <message>
         <source>Manage Profile Libraries</source>
@@ -426,6 +426,210 @@
     <message>
         <source>Create, edit and manage custom profile libraries and dimensions</source>
         <translation>Crear, editar y gestionar bibliotecas y dimensiones de perfiles personalizados</translation>
+    </message>
+    <message>
+        <source>Folder libraries require an empty folder on disk. Existing legacy data is not automatically moved.</source>
+        <translation>Las bibliotecas en carpeta requieren una carpeta vacía en disco. Los datos existentes no se trasladan automáticamente.</translation>
+    </message>
+    <message>
+        <source>Failed to load libraries: %s</source>
+        <translation>No se pudieron cargar las bibliotecas: %s</translation>
+    </message>
+    <message>
+        <source>Error loading libraries: %s</source>
+        <translation>Error al cargar las bibliotecas: %s</translation>
+    </message>
+    <message>
+        <source>[Folder] </source>
+        <translation>[Carpeta] </translation>
+    </message>
+    <message>
+        <source>Error loading library '%s': %s</source>
+        <translation>Error al cargar la biblioteca '%s': %s</translation>
+    </message>
+    <message>
+        <source>Unregister Folder Library</source>
+        <translation>Quitar registro de biblioteca en carpeta</translation>
+    </message>
+    <message>
+        <source>Folder Library: %s%s | Material: %s (Editable)</source>
+        <translation>Biblioteca en carpeta: %s%s | Material: %s (Editable)</translation>
+    </message>
+    <message>
+        <source>Invalid weight '%s' for custom profile '%s'. Weight must be a positive finite number.</source>
+        <translation>Peso '%s' inválido para el perfil personalizado '%s'. El peso debe ser un número positivo y finito.</translation>
+    </message>
+    <message>
+        <source>Select Empty Folder for Library</source>
+        <translation>Seleccioná una carpeta vacía para la biblioteca</translation>
+    </message>
+    <message>
+        <source>Folder library '%s' created successfully.</source>
+        <translation>Biblioteca en carpeta '%s' creada correctamente.</translation>
+    </message>
+    <message>
+        <source>Select Existing Folder Library Directory</source>
+        <translation>Seleccioná la carpeta de una biblioteca existente</translation>
+    </message>
+    <message>
+        <source>Folder library '%s' registered successfully.</source>
+        <translation>Biblioteca en carpeta '%s' registrada correctamente.</translation>
+    </message>
+    <message>
+        <source>Select Empty Folder for Duplicated Library</source>
+        <translation>Seleccioná una carpeta vacía para duplicar la biblioteca</translation>
+    </message>
+    <message>
+        <source>Confirm Unregister</source>
+        <translation>Confirmar eliminación del registro</translation>
+    </message>
+    <message>
+        <source>Unregister folder library '%s'?
+
+All files and sketches on disk will be kept intact.</source>
+        <translation>¿Querés quitar el registro de la biblioteca en carpeta '%s'?
+
+Todos los archivos y croquis en disco se conservarán intactos.</translation>
+    </message>
+    <message>
+        <source>Folder library '%s' unregistered.</source>
+        <translation>Se quitó el registro de la biblioteca en carpeta '%s'.</translation>
+    </message>
+    <message>
+        <source>Cannot delete size with invalid asset path: %s</source>
+        <translation>No se puede eliminar la medida con una ruta de archivo de sección inválida: %s</translation>
+    </message>
+    <message>
+        <source>Error saving library: %s</source>
+        <translation>Error al guardar la biblioteca: %s</translation>
+    </message>
+    <message>
+        <source>Custom section capture is only available for folder libraries.</source>
+        <translation>La captura de secciones personalizadas solo está disponible para bibliotecas en carpeta.</translation>
+    </message>
+    <message>
+        <source>No sketches found in open FreeCAD documents.</source>
+        <translation>No se encontraron croquis en los documentos abiertos de FreeCAD.</translation>
+    </message>
+    <message>
+        <source>Select Section Sketch</source>
+        <translation>Seleccioná el croquis de la sección</translation>
+    </message>
+    <message>
+        <source>Choose sketch to capture:</source>
+        <translation>Elegí el croquis que querés capturar:</translation>
+    </message>
+    <message>
+        <source>Invalid Section Geometry</source>
+        <translation>Geometría de sección inválida</translation>
+    </message>
+    <message>
+        <source>The selected sketch cannot be used as a custom section: %s</source>
+        <translation>El croquis seleccionado no se puede usar como sección personalizada: %s</translation>
+    </message>
+    <message>
+        <source>Failed to compute section dimensions: %s</source>
+        <translation>No se pudieron calcular las dimensiones de la sección: %s</translation>
+    </message>
+    <message>
+        <source>Failed to save section asset: %s</source>
+        <translation>No se pudo guardar el archivo de la sección: %s</translation>
+    </message>
+    <message>
+        <source>Captured section '%s' successfully.</source>
+        <translation>Sección '%s' capturada correctamente.</translation>
+    </message>
+    <message>
+        <source>Select a section row to edit.</source>
+        <translation>Seleccioná una fila de sección para editar.</translation>
+    </message>
+    <message>
+        <source>Selected row does not have a linked section geometry asset.</source>
+        <translation>La fila seleccionada no tiene un archivo de geometría de sección vinculado.</translation>
+    </message>
+    <message>
+        <source>Security Warning</source>
+        <translation>Advertencia de seguridad</translation>
+    </message>
+    <message>
+        <source>Invalid asset path: %s</source>
+        <translation>Ruta de archivo de sección inválida: %s</translation>
+    </message>
+    <message>
+        <source>Failed to open section for editing: %s</source>
+        <translation>No se pudo abrir la sección para editar: %s</translation>
+    </message>
+    <message>
+        <source>Section opened in FreeCAD. Edit sketch, then click 'Apply Section Edit'.</source>
+        <translation>Sección abierta en FreeCAD. Editá el croquis y luego hacé clic en 'Aplicar edición de sección'.</translation>
+    </message>
+    <message>
+        <source>No active section edit session. Click 'Edit Section' first.</source>
+        <translation>No hay una sesión de edición de sección activa. Primero hacé clic en 'Editar sección'.</translation>
+    </message>
+    <message>
+        <source>Active edit session belongs to a different library.</source>
+        <translation>La sesión de edición activa pertenece a otra biblioteca.</translation>
+    </message>
+    <message>
+        <source>Active edit session belongs to a different family.</source>
+        <translation>La sesión de edición activa pertenece a otra familia.</translation>
+    </message>
+    <message>
+        <source>Target section row was removed or is invalid.</source>
+        <translation>La fila de la sección de destino fue eliminada o no es válida.</translation>
+    </message>
+    <message>
+        <source>Target section row index is out of bounds.</source>
+        <translation>El índice de la fila de la sección de destino está fuera de rango.</translation>
+    </message>
+    <message>
+        <source>Failed to apply section edit: %s</source>
+        <translation>No se pudo aplicar la edición de sección: %s</translation>
+    </message>
+    <message>
+        <source>Section edits applied. Save library to publish changes.</source>
+        <translation>Edición de sección aplicada. Guardá la biblioteca para publicar los cambios.</translation>
+    </message>
+    <message>
+        <source>No Preview</source>
+        <translation>Sin vista previa</translation>
+    </message>
+    <message>
+        <source>Code:</source>
+        <translation>Código:</translation>
+    </message>
+    <message>
+        <source>Profile Code</source>
+        <translation>Código de perfil</translation>
+    </message>
+    <message>
+        <source>Weight:</source>
+        <translation>Peso:</translation>
+    </message>
+    <message>
+        <source>Linear Weight (kg/m)</source>
+        <translation>Peso lineal (kg/m)</translation>
+    </message>
+    <message>
+        <source>New Folder Library</source>
+        <translation>Nueva biblioteca en carpeta</translation>
+    </message>
+    <message>
+        <source>Register Folder Library</source>
+        <translation>Registrar biblioteca en carpeta</translation>
+    </message>
+    <message>
+        <source>Capture Section</source>
+        <translation>Capturar sección</translation>
+    </message>
+    <message>
+        <source>Edit Section</source>
+        <translation>Editar sección</translation>
+    </message>
+    <message>
+        <source>Apply Section Edit</source>
+        <translation>Aplicar edición de sección</translation>
     </message>
 </context>
 </TS>
