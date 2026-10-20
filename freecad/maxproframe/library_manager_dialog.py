@@ -10,7 +10,7 @@ except ImportError:
 import FreeCAD as App
 import FreeCADGui as Gui
 
-from freecad.maxproframe.ff_tools import add_command, ICONPATH, PROFILEIMAGES_PATH, TRANSLATIONSPATH, translate
+from freecad.maxproframe.ff_tools import ICONPATH, PROFILEIMAGES_PATH, TRANSLATIONSPATH, add_command, translate
 from freecad.maxproframe.library_manager import (
     KNOWN_FAMILIES,
     STANDARD_DENSITIES,
@@ -46,26 +46,27 @@ except ImportError:
 try:
     from freecad.maxproframe.library_manager import FILLET_FAMILIES, get_canonical_family
 except ImportError:
-    FILLET_FAMILIES = frozenset([
-        "Square Hollow",
-        "Rectangular Hollow",
-        "Equal Leg Angles",
-        "Unequal Leg Angles",
-        "HEA",
-        "HEB",
-        "HEM",
-        "IPE",
-        "IPN",
-        "UPE",
-        "UPN",
-        "C",
-    ])
+    FILLET_FAMILIES = frozenset(
+        [
+            "Square Hollow",
+            "Rectangular Hollow",
+            "Equal Leg Angles",
+            "Unequal Leg Angles",
+            "HEA",
+            "HEB",
+            "HEM",
+            "IPE",
+            "IPN",
+            "UPE",
+            "UPN",
+            "C",
+        ]
+    )
 
     def get_canonical_family(family_key, family_data=None):
         if family_data and isinstance(family_data, dict) and "canonical_family" in family_data:
             return family_data["canonical_family"]
         return family_key
-
 
 
 def is_dark_theme(widget):
@@ -112,9 +113,7 @@ class NewLibraryDialog(QtWidgets.QDialog):
         layout.addWidget(QtWidgets.QLabel(translate("frameforge", "Material / Density:")))
         self.combo_material = QtWidgets.QComboBox()
         for mat, dens in STANDARD_DENSITIES.items():
-            self.combo_material.addItem(
-                f"{translate('frameforge', mat)} ({dens} g/cm³)", (mat, dens)
-            )
+            self.combo_material.addItem(f"{translate('frameforge', mat)} ({dens} g/cm³)", (mat, dens))
 
         # Preselect default material
         for i in range(self.combo_material.count()):
@@ -133,9 +132,7 @@ class NewLibraryDialog(QtWidgets.QDialog):
             layout.addWidget(self.cb_recalc)
 
         # Buttons
-        btn_box = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-        )
+        btn_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
@@ -185,13 +182,9 @@ class AddFamilyDialog(QtWidgets.QDialog):
         self.lbl_preview.setAlignment(QtCore.Qt.AlignCenter)
         dark = is_dark_theme(self)
         if dark:
-            self.lbl_preview.setStyleSheet(
-                "background-color: #202428; border: 1px solid #455a64; border-radius: 4px;"
-            )
+            self.lbl_preview.setStyleSheet("background-color: #202428; border: 1px solid #455a64; border-radius: 4px;")
         else:
-            self.lbl_preview.setStyleSheet(
-                "background-color: #f5f7f8; border: 1px solid #cfd8dc; border-radius: 4px;"
-            )
+            self.lbl_preview.setStyleSheet("background-color: #f5f7f8; border: 1px solid #cfd8dc; border-radius: 4px;")
         preview_container.addStretch()
         preview_container.addWidget(self.lbl_preview)
         preview_container.addStretch()
@@ -203,9 +196,7 @@ class AddFamilyDialog(QtWidgets.QDialog):
         layout.addWidget(self.cb_fillet)
 
         # Buttons
-        btn_box = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-        )
+        btn_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
@@ -292,7 +283,6 @@ class AddFamilyDialog(QtWidgets.QDialog):
         return fam_key, fillet
 
 
-
 class ProfileLibraryManagerDialog(QtWidgets.QDialog):
     """
     Dialog for managing FrameForge profile libraries:
@@ -327,6 +317,17 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                     break
         except Exception:
             pass
+
+    @classmethod
+    def uninstall_translations(cls):
+        """Removes the class-level translator from QApplication if installed."""
+        if getattr(cls, "_translator", None) is not None:
+            try:
+                QtWidgets.QApplication.removeTranslator(cls._translator)
+            except Exception:
+                pass
+            cls._translator = None
+        cls._translator_installed = False
 
     def __init__(self, parent=None, library_manager=None):
         super().__init__(parent)
@@ -471,12 +472,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.btn_capture_section = self._compact_button(
             "custom_profile.svg", "Capture Section", self._on_capture_section
         )
-        self.btn_edit_section = self._compact_button(
-            "duplicate.svg", "Edit Section", self._on_edit_section
-        )
-        self.btn_apply_edit = self._compact_button(
-            "recompute.svg", "Apply Section Edit", self.apply_section_edit
-        )
+        self.btn_edit_section = self._compact_button("duplicate.svg", "Edit Section", self._on_edit_section)
+        self.btn_apply_edit = self._compact_button("recompute.svg", "Apply Section Edit", self.apply_section_edit)
         self.btn_apply_edit.setEnabled(False)
 
         meta_row.addWidget(self.btn_add_size)
@@ -501,6 +498,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         # Custom Profile Cards view
         from freecad.maxproframe.custom_profile_cards import CustomProfileCardsView
+
         self.cards_view = CustomProfileCardsView(dialog=self)
         self.cards_view.setObjectName("custom_profile_cards")
         right_layout.addWidget(self.cards_view, 1)
@@ -517,7 +515,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         bottom_layout.addWidget(self.lbl_status, 1)
 
         self.btn_save = QtWidgets.QPushButton(translate("frameforge", "Save Changes"))
-        self.btn_save.setStyleSheet("""
+        self.btn_save.setStyleSheet(
+            """
             QPushButton {
                 font-weight: bold;
                 background-color: #1976d2;
@@ -532,7 +531,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             QPushButton:pressed {
                 background-color: #0d47a1;
             }
-        """)
+        """
+        )
         self.btn_save.clicked.connect(self._on_save_library)
         self.btn_close = QtWidgets.QPushButton(translate("frameforge", "Close"))
         self.btn_close.clicked.connect(self.close)
@@ -563,9 +563,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 translate("frameforge", "Error"),
                 translate("frameforge", "Failed to load libraries: %s") % str(err),
             )
-            self._set_status(
-                translate("frameforge", "Error loading libraries: %s") % str(err), is_error=True
-            )
+            self._set_status(translate("frameforge", "Error loading libraries: %s") % str(err), is_error=True)
             return False
 
         self._refresh_load_error = None
@@ -740,8 +738,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 )
         elif is_user:
             self.lbl_lib_banner.setText(
-                translate("frameforge", "User Library: %s | Material: %s (Editable)")
-                % (name, mat_display)
+                translate("frameforge", "User Library: %s | Material: %s (Editable)") % (name, mat_display)
             )
             self.lbl_lib_banner.setToolTip("")
             if dark:
@@ -877,7 +874,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         fam_data = self.current_lib_data.get(family_name, {}) if has_family else {}
         is_explicit = bool(isinstance(fam_data, dict) and "canonical_family" in fam_data)
         canonical = get_canonical_family(family_name, fam_data) if has_family else ""
-        is_custom_geom = (canonical == "Custom Profile")
+        is_custom_geom = canonical == "Custom Profile"
 
         self.btn_del_family.setEnabled(is_user and has_family)
         self.btn_add_size.setEnabled(is_user and has_family and not is_custom_geom)
@@ -999,8 +996,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             fields[family] = {"Height", "Width", "Thickness", "Flange Thickness", "Radius1"}
         for family in ("UPE", "UPN", "IPN"):
             fields[family] = {key for key, _ in self.TABLE_COLUMNS if key != "Lip Length"}
-        for family in ("V-Slot", "T-Slot", "T-Slot 3-Slots", "T-Slot 2-Slots",
-                       "T-Slot 2-Slots Opp", "T-Slot 1-Slot"):
+        for family in ("V-Slot", "T-Slot", "T-Slot 3-Slots", "T-Slot 2-Slots", "T-Slot 2-Slots Opp", "T-Slot 1-Slot"):
             fields[family] = {"Height", "Width"}
 
         fields["Custom Profile"] = {"Height", "Width"}
@@ -1048,7 +1044,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         is_editable = bool(self.current_lib_meta and self.current_lib_meta["is_user"])
         fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
         canonical = get_canonical_family(self.current_family, fam_data)
-        is_geometry_family = (canonical == "Custom Profile")
+        is_geometry_family = canonical == "Custom Profile"
 
         for size_key, size_props in sizes_dict.items():
             row = self.table_sizes.rowCount()
@@ -1308,9 +1304,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         }
 
         try:
-            self.manager.save_user_library(
-                name, default_data, overwrite=False, material=mat, density=dens
-            )
+            self.manager.save_user_library(name, default_data, overwrite=False, material=mat, density=dens)
         except FileExistsError:
             QtWidgets.QMessageBox.warning(
                 self,
@@ -1383,9 +1377,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         }
 
         try:
-            self.manager.create_folder_library(
-                folder_path, name, material=mat, density=dens, data=default_data
-            )
+            self.manager.create_folder_library(folder_path, name, material=mat, density=dens, data=default_data)
         except (FileExistsError, ValueError, OSError) as err:
             QtWidgets.QMessageBox.warning(
                 self,
@@ -1421,9 +1413,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         reg_name = meta.get("name") if isinstance(meta, dict) else None
         if not self.refresh_libraries(select_name=reg_name):
             return
-        self._set_status(
-            translate("frameforge", "Folder library '%s' registered successfully.") % reg_name
-        )
+        self._set_status(translate("frameforge", "Folder library '%s' registered successfully.") % reg_name)
 
     def _on_duplicate_library(self):
         if not self.current_lib_meta:
@@ -1596,9 +1586,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             existing_fillet = bool(existing_data.get("fillet", False))
             if existing_canonical == canonical_family and existing_fillet == with_fillet:
                 fillet_label = (
-                    translate("frameforge", "With Fillet")
-                    if with_fillet
-                    else translate("frameforge", "No Fillet")
+                    translate("frameforge", "With Fillet") if with_fillet else translate("frameforge", "No Fillet")
                 )
                 QtWidgets.QMessageBox.warning(
                     self,
@@ -1623,9 +1611,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         # Guard against destination-key collision before insertion
         if new_family_key in self.current_lib_data:
             fillet_label = (
-                translate("frameforge", "With Fillet")
-                if with_fillet
-                else translate("frameforge", "No Fillet")
+                translate("frameforge", "With Fillet") if with_fillet else translate("frameforge", "No Fillet")
             )
             QtWidgets.QMessageBox.warning(
                 self,
@@ -1751,6 +1737,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             if is_folder and folder_path:
                 try:
                     from freecad.maxproframe.section_library import resolve_and_validate_asset_path
+
                     resolve_and_validate_asset_path(folder_path, ap)
                 except Exception as err:
                     QtWidgets.QMessageBox.warning(
@@ -1775,7 +1762,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         row = self.table_sizes.currentRow()
         if row < 0:
             QtWidgets.QMessageBox.information(
-                self, translate("frameforge", "Information"), translate("frameforge", "Select a row to calculate weight.")
+                self,
+                translate("frameforge", "Information"),
+                translate("frameforge", "Select a row to calculate weight."),
             )
             return
 
@@ -1835,14 +1824,18 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             self._mark_dirty()
             self._set_status(translate("frameforge", "Calculated weight: %s kg/m (%s)") % (calc_weight, mat_key))
         except Exception as e:
-            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), translate("frameforge", "Could not calculate weight: %s") % e)
+            QtWidgets.QMessageBox.warning(
+                self, translate("frameforge", "Error"), translate("frameforge", "Could not calculate weight: %s") % e
+            )
             self._set_status(translate("frameforge", "Error calculating weight: %s") % e, is_error=True)
 
     def _on_save_library(self):
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
             return
 
-        if self.table_sizes.rowCount() > 0 and (not self.current_family or self.current_family not in self.current_lib_data):
+        if self.table_sizes.rowCount() > 0 and (
+            not self.current_family or self.current_family not in self.current_lib_data
+        ):
             self._set_status(
                 translate("frameforge", "Cannot save orphan dimensions without an active family."),
                 is_error=True,
@@ -1863,7 +1856,10 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         try:
             if is_folder:
-                from freecad.maxproframe.section_library import resolve_and_validate_asset_path, purge_unreferenced_assets
+                from freecad.maxproframe.section_library import (
+                    purge_unreferenced_assets,
+                    resolve_and_validate_asset_path,
+                )
 
                 # Pre-validate all staged deletions before writing manifest
                 for ap in self._staged_deleted_assets:
@@ -1918,8 +1914,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         is_folder = bool(self.current_lib_meta and self.current_lib_meta.get("is_folder"))
         fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
         canonical = get_canonical_family(self.current_family, fam_data) if self.current_family else ""
-        is_custom_geom = (canonical == "Custom Profile")
-        has_row = (self.table_sizes.currentRow() >= 0)
+        is_custom_geom = canonical == "Custom Profile"
+        has_row = self.table_sizes.currentRow() >= 0
 
         if hasattr(self, "btn_add_size"):
             self.btn_add_size.setEnabled(is_user and bool(self.current_family) and not is_custom_geom)
@@ -1962,7 +1958,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         selected_objs = []
         if hasattr(Gui, "Selection"):
             selected_objs = [
-                obj for obj in Gui.Selection.getSelection()
+                obj
+                for obj in Gui.Selection.getSelection()
                 if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject")
             ]
 
@@ -2006,6 +2003,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         # Validate geometry via build_custom_section_face
         from freecad.maxproframe.custom_section_geometry import build_custom_section_face
         from freecad.maxproframe.section_library import compute_sketch_dimensions_and_weight
+
         try:
             face = build_custom_section_face(chosen_sketch)
             if not face.isValid():
@@ -2034,6 +2032,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         # Save autonomous asset into folder library
         from freecad.maxproframe.section_capture import save_section_asset
+
         try:
             asset_meta = save_section_asset(
                 folder_path,
@@ -2134,6 +2133,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         asset_path = size_props["asset_path"]
 
         from freecad.maxproframe.section_library import SectionEditSession, resolve_and_validate_asset_path
+
         try:
             resolve_and_validate_asset_path(folder_path, asset_path)
         except Exception as err:
@@ -2172,8 +2172,11 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             )
             return
 
-        # Attempt entering Sketcher and activating sketch edit mode in GUI
-        if Gui is not None:
+        # Attempt entering Sketcher and activating sketch edit mode in GUI only when dialog is visible
+        was_visible = bool(self.isVisible())
+        entered_gui_edit = False
+
+        if Gui is not None and was_visible:
             try:
                 if hasattr(App, "setActiveDocument"):
                     App.setActiveDocument(session.working_doc_name)
@@ -2188,8 +2191,13 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 if not set_edit_ok:
                     raise RuntimeError("Failed to enter edit mode for sketch.")
                 in_edit = gui_doc.getInEdit() if hasattr(gui_doc, "getInEdit") else None
-                if in_edit is None or getattr(in_edit, "Object", None) is None or in_edit.Object.Name != session.working_sketch_name:
+                if (
+                    in_edit is None
+                    or getattr(in_edit, "Object", None) is None
+                    or in_edit.Object.Name != session.working_sketch_name
+                ):
                     raise RuntimeError("Sketch edit mode could not be verified.")
+                entered_gui_edit = True
             except Exception as err:
                 session.close(discard_uncommitted=True)
                 self._detach_sketch_edit_watcher()
@@ -2207,41 +2215,44 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             is_warning=True,
         )
 
-        # Watch FreeCAD GUI to restore dialog when sketch editing ends
-        self._is_hidden_for_sketch_edit = True
-        try:
-            if Gui is not None and hasattr(Gui, "addDocumentObserver"):
-                obs = _SectionEditGuiObserver(self, session.working_doc_name)
-                self._sketch_edit_observer = obs
-                Gui.addDocumentObserver(obs)
-        except Exception:
-            pass
+        if entered_gui_edit:
+            # Watch FreeCAD GUI to restore dialog when sketch editing ends
+            self._is_hidden_for_sketch_edit = True
+            try:
+                if Gui is not None and hasattr(Gui, "addDocumentObserver"):
+                    obs = _SectionEditGuiObserver(self, session.working_doc_name)
+                    self._sketch_edit_observer = obs
+                    Gui.addDocumentObserver(obs)
+            except Exception:
+                pass
 
-        poll_timer = QtCore.QTimer(self)
-        poll_timer.setInterval(150)
-        def _check_in_edit():
-            if not getattr(self, "_is_hidden_for_sketch_edit", False):
-                return
-            if self._active_edit_session is None:
-                self._on_sketch_edit_finished()
-                return
-            d_name = self._active_edit_session.working_doc_name
-            if App is not None and d_name not in App.listDocuments():
-                self._on_sketch_edit_finished()
-                return
-            if Gui is not None and hasattr(Gui, "getDocument"):
-                try:
-                    g_doc = Gui.getDocument(d_name)
-                    if g_doc is not None and hasattr(g_doc, "getInEdit") and g_doc.getInEdit() is None:
-                        self._on_sketch_edit_finished()
-                except Exception:
-                    pass
-        poll_timer.timeout.connect(_check_in_edit)
-        self._sketch_edit_poll_timer = poll_timer
-        poll_timer.start()
+            poll_timer = QtCore.QTimer(self)
+            poll_timer.setInterval(150)
 
-        # Hide library manager dialog only after confirmed edit entry
-        self.hide()
+            def _check_in_edit():
+                if not getattr(self, "_is_hidden_for_sketch_edit", False):
+                    return
+                if self._active_edit_session is None:
+                    self._on_sketch_edit_finished()
+                    return
+                d_name = self._active_edit_session.working_doc_name
+                if App is not None and d_name not in App.listDocuments():
+                    self._on_sketch_edit_finished()
+                    return
+                if Gui is not None and hasattr(Gui, "getDocument"):
+                    try:
+                        g_doc = Gui.getDocument(d_name)
+                        if g_doc is not None and hasattr(g_doc, "getInEdit") and g_doc.getInEdit() is None:
+                            self._on_sketch_edit_finished()
+                    except Exception:
+                        pass
+
+            poll_timer.timeout.connect(_check_in_edit)
+            self._sketch_edit_poll_timer = poll_timer
+            poll_timer.start()
+
+            # Hide library manager dialog only after confirmed edit entry
+            self.hide()
 
     def apply_section_edit(self):
         """Applies edits made to the working sketch in FreeCAD back to the library table."""
@@ -2359,6 +2370,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
         folder_path = self.current_lib_meta["folder_path"]
         from freecad.maxproframe.section_library import resolve_and_validate_asset_path
+
         for rel_path in list(self._staged_new_assets):
             try:
                 full_path = resolve_and_validate_asset_path(folder_path, rel_path)
@@ -2389,6 +2401,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
     def _on_sketch_edit_finished(self):
         self._detach_sketch_edit_watcher()
         self._is_hidden_for_sketch_edit = False
+
+        if getattr(self, "_is_closed", False):
+            return
 
         if self._active_edit_session is not None:
             doc_name = self._active_edit_session.working_doc_name
@@ -2431,11 +2446,13 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
     def done(self, result):
         self._is_closed = True
         self._cleanup_edit_session_and_staged_assets()
+        self.uninstall_translations()
         super().done(result)
 
     def closeEvent(self, event):
         self._is_closed = True
         self._cleanup_edit_session_and_staged_assets()
+        self.uninstall_translations()
         super().closeEvent(event)
 
 
@@ -2478,6 +2495,11 @@ class _SectionEditGuiObserver:
         if not self._active:
             return
         self.detach()
+        if Gui is not None and hasattr(Gui, "removeDocumentObserver"):
+            try:
+                Gui.removeDocumentObserver(self)
+            except Exception:
+                pass
         if self.dialog is not None:
             try:
                 self.dialog._on_sketch_edit_finished()

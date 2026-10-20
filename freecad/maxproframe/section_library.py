@@ -414,7 +414,16 @@ class SectionEditSession:
 
     def close(self, discard_uncommitted=True):
         """Closes working document and cleans up any uncommitted staged files."""
-        if self.working_doc_name and self.working_doc_name in App.listDocuments():
+        if self.working_doc_name and App is not None and self.working_doc_name in App.listDocuments():
+            try:
+                import FreeCADGui as _Gui
+
+                if hasattr(_Gui, "getDocument"):
+                    gui_doc = _Gui.getDocument(self.working_doc_name)
+                    if gui_doc is not None and hasattr(gui_doc, "getInEdit") and gui_doc.getInEdit() is not None:
+                        gui_doc.resetEdit()
+            except Exception:
+                pass
             try:
                 App.closeDocument(self.working_doc_name)
             except Exception:

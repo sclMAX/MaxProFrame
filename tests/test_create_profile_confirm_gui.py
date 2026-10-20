@@ -89,6 +89,16 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
             if hasattr(QtGui, "QMessageBox") and QtGui.QMessageBox is not QtWidgets.QMessageBox:
                 self.messages.enter_context(patch.object(QtGui.QMessageBox, method_name, _record_static))
 
+        # Direct interception at create_profiles_tool imported QtGui.QMessageBox
+        import freecad.maxproframe.create_profiles_tool as cpt
+
+        target_msgbox = getattr(getattr(cpt, "QtGui", None), "QMessageBox", None)
+        if target_msgbox is not None and target_msgbox is not QtWidgets.QMessageBox:
+            self.messages.enter_context(patch.object(target_msgbox, "exec_", _record_box))
+            for method_name in ("warning", "critical", "information", "question"):
+                if hasattr(target_msgbox, method_name):
+                    self.messages.enter_context(patch.object(target_msgbox, method_name, _record_static))
+
         # Snapshot preferences
         self.canonical_param_group = get_param_group(writable=True)
         self.saved_canonical_pref_contents = self._snapshot_param_group(self.canonical_param_group)
@@ -290,11 +300,26 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
                 return btn
         return None
 
+    def _dismiss_active_modals(self):
+        """Auto-dismisses any active native modal dialogs in offscreen mode, recording their contents."""
+        for top in QtWidgets.QApplication.topLevelWidgets():
+            try:
+                if top.isVisible() and (top.isModal() or top.inherits("QMessageBox")):
+                    t = str(top.windowTitle() if hasattr(top, "windowTitle") else "")
+                    m = str(top.text() if hasattr(top, "text") else "")
+                    if (t, m) not in self.recorded_modals:
+                        self.recorded_modals.append((t, m))
+                    if hasattr(top, "done"):
+                        top.done(QtWidgets.QMessageBox.Ok)
+            except Exception:
+                pass
+
     def _pump_events(self, duration_ms=200):
         """Pumps Qt event loop to ensure scheduled timers and events process."""
         start = time.time()
         while (time.time() - start) * 1000 < duration_ms:
             QtWidgets.QApplication.processEvents()
+            self._dismiss_active_modals()
             QtCore.QThread.msleep(10)
 
     def _select_profile(self, panel, library, family, size):

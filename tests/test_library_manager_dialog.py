@@ -14,36 +14,78 @@ class TestLibraryManagerDialog(unittest.TestCase):
         # Set offscreen platform for headless Qt execution
         os.environ["FREECAD_QT_QPA_PLATFORM"] = "offscreen"
         os.environ["QT_QPA_PLATFORM"] = "offscreen"
+        from PySide import QtCore
+
+        cls._orig_default_locale = QtCore.QLocale()
+
+    @classmethod
+    def tearDownClass(cls):
+        from PySide import QtCore, QtWidgets
+
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
+
+        app = QtWidgets.QApplication.instance()
+        tr = getattr(ProfileLibraryManagerDialog, "_translator", None)
+        if tr is not None and app is not None:
+            app.removeTranslator(tr)
+        ProfileLibraryManagerDialog._translator = None
+        ProfileLibraryManagerDialog._translator_installed = False
+        if hasattr(cls, "_orig_default_locale"):
+            QtCore.QLocale.setDefault(cls._orig_default_locale)
 
     def setUp(self):
         self.test_user_dir = tempfile.mkdtemp(prefix="ff_test_dialog_user_")
         self.manager = LibraryManager(user_dir=self.test_user_dir)
 
     def tearDown(self):
+        from PySide import QtWidgets
+
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
+
+        app = QtWidgets.QApplication.instance()
+        tr = getattr(ProfileLibraryManagerDialog, "_translator", None)
+        if tr is not None and app is not None:
+            app.removeTranslator(tr)
+        ProfileLibraryManagerDialog._translator = None
+        ProfileLibraryManagerDialog._translator_installed = False
+
         if os.path.exists(self.test_user_dir):
             shutil.rmtree(self.test_user_dir)
 
     def test_dynamic_family_columns_and_hidden_value_preservation(self):
         from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog, QtWidgets
+
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
         families = {
-            "Round Bar": {0, 1, 7}, "Pipe": {0, 1, 3, 7},
-            "Flat Sections": {0, 1, 2, 7}, "Square": {0, 1, 2, 7},
+            "Round Bar": {0, 1, 7},
+            "Pipe": {0, 1, 3, 7},
+            "Flat Sections": {0, 1, 2, 7},
+            "Square": {0, 1, 2, 7},
             "Square Hollow": {0, 1, 2, 3, 5, 6, 7},
             "Rectangular Hollow": {0, 1, 2, 3, 5, 6, 7},
             "Equal Leg Angles": {0, 1, 2, 3, 5, 6, 7},
             "Unequal Leg Angles": {0, 1, 2, 3, 5, 6, 7},
             "IPE": {0, 1, 2, 3, 4, 5, 7},
-            "UPE": set(range(8)), "T-Slot": {0, 1, 2, 7},
+            "UPE": set(range(8)),
+            "T-Slot": {0, 1, 2, 7},
             "Unknown": set(range(8)),
         }
-        self.manager.save_user_library("Dynamic", {
-            "_metadata": {"name": "Dynamic"},
-            **{name: {"norm": "Test", "fillet": True,
-                       "sizes": {"S1": {"Height": "20", "Width": "20",
-                                        "Thickness": "2", "Radius1": "4", "Radius2": "2"}}}
-               for name in families},
-        })
+        self.manager.save_user_library(
+            "Dynamic",
+            {
+                "_metadata": {"name": "Dynamic"},
+                **{
+                    name: {
+                        "norm": "Test",
+                        "fillet": True,
+                        "sizes": {
+                            "S1": {"Height": "20", "Width": "20", "Thickness": "2", "Radius1": "4", "Radius2": "2"}
+                        },
+                    }
+                    for name in families
+                },
+            },
+        )
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(dialog.close)
         dialog.refresh_libraries(select_name="Dynamic")
@@ -68,23 +110,28 @@ class TestLibraryManagerDialog(unittest.TestCase):
         self.assertEqual(dialog.table_sizes.item(0, 5).text(), "4")
         dialog.combo_family.setCurrentText("Pipe")
         from freecad.maxproframe.ff_tools import translate
-        self.assertEqual(dialog.table_sizes.horizontalHeaderItem(1).text(),
-                         translate("frameforge", "Diameter [mm]"))
+
+        self.assertEqual(dialog.table_sizes.horizontalHeaderItem(1).text(), translate("frameforge", "Diameter [mm]"))
         dialog.combo_family.setCurrentText("Square")
-        self.assertEqual(dialog.table_sizes.horizontalHeaderItem(1).text(),
-                         translate("frameforge", "Height [mm]"))
+        self.assertEqual(dialog.table_sizes.horizontalHeaderItem(1).text(), translate("frameforge", "Height [mm]"))
 
     def test_master_detail_families_list_and_icons(self):
-        from freecad.maxproframe.library_manager_dialog import (
-            ProfileLibraryManagerDialog, QtCore, QtGui, QtWidgets,
-        )
         from freecad.maxproframe.ff_tools import PROFILEIMAGES_PATH, translate
+        from freecad.maxproframe.library_manager_dialog import (
+            ProfileLibraryManagerDialog,
+            QtCore,
+            QtGui,
+            QtWidgets,
+        )
+
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
         data = {"_metadata": {"name": "MasterDetail"}}
-        for key, code, fillet in [("Square Hollow", "S1", True), ("Pipe", "P1", False),
-                                  ("Custom Family", "C1", False)]:
-            data[key] = {"norm": key + " standard", "fillet": fillet,
-                         "sizes": {code: {"Height": "20", "Width": "20", "Thickness": "2"}}}
+        for key, code, fillet in [("Square Hollow", "S1", True), ("Pipe", "P1", False), ("Custom Family", "C1", False)]:
+            data[key] = {
+                "norm": key + " standard",
+                "fillet": fillet,
+                "sizes": {code: {"Height": "20", "Width": "20", "Thickness": "2"}},
+            }
         self.manager.save_user_library("MasterDetail", data)
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(dialog.close)
@@ -107,8 +154,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
             image = os.path.join(PROFILEIMAGES_PATH, "Metal", key.replace(" ", "_") + ".png")
             if not os.path.isfile(image):
                 image = os.path.join(PROFILEIMAGES_PATH, "Warehouse.png")
-            self.assertEqual(item.icon().pixmap(60, 30).toImage(),
-                             QtGui.QIcon(image).pixmap(60, 30).toImage())
+            self.assertEqual(item.icon().pixmap(60, 30).toImage(), QtGui.QIcon(image).pixmap(60, 30).toImage())
             families.setCurrentItem(item)
             self.assertEqual(dialog.combo_family.currentText(), key)
             self.assertEqual(dialog.table_sizes.rowCount(), 1)
@@ -118,23 +164,29 @@ class TestLibraryManagerDialog(unittest.TestCase):
             self.assertIsNotNone(dialog.lbl_family_icon.pixmap())
             self.assertFalse(dialog.lbl_family_icon.pixmap().isNull())
         self.assertEqual(dialog.lbl_family_icon.size(), QtCore.QSize(120, 60))
-        for button, tooltip in [(dialog.btn_new_lib, "New Library"),
-                                (dialog.btn_dup_lib, "Duplicate Library"),
-                                (dialog.btn_del_lib, "Delete Library"),
-                                (dialog.btn_add_family, "Add Family"),
-                                (dialog.btn_del_family, "Delete Family"),
-                                (dialog.btn_add_size, "Add Size"),
-                                (dialog.btn_del_size, "Remove Size")]:
+        for button, tooltip in [
+            (dialog.btn_new_lib, "New Library"),
+            (dialog.btn_dup_lib, "Duplicate Library"),
+            (dialog.btn_del_lib, "Delete Library"),
+            (dialog.btn_add_family, "Add Family"),
+            (dialog.btn_del_family, "Delete Family"),
+            (dialog.btn_add_size, "Add Size"),
+            (dialog.btn_del_size, "Remove Size"),
+        ]:
             self.assertEqual(button.size(), QtCore.QSize(26, 26))
             self.assertEqual(button.minimumSize(), button.maximumSize())
             self.assertEqual(button.text(), "")
             self.assertFalse(button.icon().isNull())
             self.assertEqual(button.toolTip(), translate("frameforge", tooltip))
-            expected_parent = (dialog.list_libraries.parentWidget()
-                               if button in (dialog.btn_new_lib, dialog.btn_dup_lib, dialog.btn_del_lib)
-                               else families.parentWidget()
-                               if button in (dialog.btn_add_family, dialog.btn_del_family)
-                               else dialog.table_sizes.parentWidget())
+            expected_parent = (
+                dialog.list_libraries.parentWidget()
+                if button in (dialog.btn_new_lib, dialog.btn_dup_lib, dialog.btn_del_lib)
+                else (
+                    families.parentWidget()
+                    if button in (dialog.btn_add_family, dialog.btn_del_family)
+                    else dialog.table_sizes.parentWidget()
+                )
+            )
             self.assertEqual(button.parentWidget(), expected_parent)
         dialog.combo_family.setCurrentText("Pipe")
         self.assertEqual(families.currentItem().data(QtCore.Qt.UserRole), "Pipe")
@@ -142,15 +194,21 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
     def test_family_toolbar_crud_and_edit_preservation(self):
         from unittest.mock import patch
+
         from freecad.maxproframe.library_manager_dialog import (
-            ProfileLibraryManagerDialog, QtCore, QtWidgets,
+            ProfileLibraryManagerDialog,
+            QtCore,
+            QtWidgets,
         )
+
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
-        self.manager.save_user_library("FamilyToolbar", {
-            "_metadata": {"name": "FamilyToolbar"},
-            "Square Hollow": {"norm": "Original", "fillet": False,
-                              "sizes": {"S1": {"Height": "20"}}},
-        })
+        self.manager.save_user_library(
+            "FamilyToolbar",
+            {
+                "_metadata": {"name": "FamilyToolbar"},
+                "Square Hollow": {"norm": "Original", "fillet": False, "sizes": {"S1": {"Height": "20"}}},
+            },
+        )
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(dialog.close)
         dialog.refresh_libraries(select_name="FamilyToolbar")
@@ -310,15 +368,24 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
     def test_family_switch_with_duplicate_code_validation_failure_preserves_edits(self):
         from unittest.mock import patch
-        from PySide import QtWidgets, QtCore
+
+        from PySide import QtCore, QtWidgets
+
         from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
-        self.manager.save_user_library("DupCheckLib", {
-            "_metadata": {"name": "DupCheckLib"},
-            "FamilyA": {"norm": "NormA", "fillet": False, "sizes": {"A1": {"Height": "50"}, "A2": {"Height": "60"}}},
-            "FamilyB": {"norm": "NormB", "fillet": False, "sizes": {"B1": {"Height": "70"}}},
-        })
+        self.manager.save_user_library(
+            "DupCheckLib",
+            {
+                "_metadata": {"name": "DupCheckLib"},
+                "FamilyA": {
+                    "norm": "NormA",
+                    "fillet": False,
+                    "sizes": {"A1": {"Height": "50"}, "A2": {"Height": "60"}},
+                },
+                "FamilyB": {"norm": "NormB", "fillet": False, "sizes": {"B1": {"Height": "70"}}},
+            },
+        )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         dialog.refresh_libraries(select_name="DupCheckLib")
@@ -330,8 +397,11 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
         # Attempt to switch to FamilyB: should fail validation and abort switch
         with patch.object(QtWidgets.QMessageBox, "warning") as mock_warn:
-            item_b = [dialog.list_families.item(i) for i in range(dialog.list_families.count())
-                      if dialog.list_families.item(i).data(QtCore.Qt.UserRole) == "FamilyB"][0]
+            item_b = [
+                dialog.list_families.item(i)
+                for i in range(dialog.list_families.count())
+                if dialog.list_families.item(i).data(QtCore.Qt.UserRole) == "FamilyB"
+            ][0]
             dialog.list_families.setCurrentItem(item_b)
             mock_warn.assert_called_once()
 
@@ -342,18 +412,26 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
     def test_library_switch_dirty_guard_save_and_cancel(self):
         from unittest.mock import patch
-        from PySide import QtWidgets, QtCore
+
+        from PySide import QtCore, QtWidgets
+
         from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
-        self.manager.save_user_library("LibOne", {
-            "_metadata": {"name": "LibOne"},
-            "FamOne": {"norm": "Original", "fillet": False, "sizes": {"S1": {"Height": "10"}}},
-        })
-        self.manager.save_user_library("LibTwo", {
-            "_metadata": {"name": "LibTwo"},
-            "FamTwo": {"norm": "Original", "fillet": False, "sizes": {"S2": {"Height": "20"}}},
-        })
+        self.manager.save_user_library(
+            "LibOne",
+            {
+                "_metadata": {"name": "LibOne"},
+                "FamOne": {"norm": "Original", "fillet": False, "sizes": {"S1": {"Height": "10"}}},
+            },
+        )
+        self.manager.save_user_library(
+            "LibTwo",
+            {
+                "_metadata": {"name": "LibTwo"},
+                "FamTwo": {"norm": "Original", "fillet": False, "sizes": {"S2": {"Height": "20"}}},
+            },
+        )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         dialog.refresh_libraries(select_name="LibOne")
@@ -365,8 +443,11 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
         # 1. Test Cancel: should abort switch and keep LibOne selected and dirty
         with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Cancel):
-            item_two = [dialog.list_libraries.item(i) for i in range(dialog.list_libraries.count())
-                        if dialog.list_libraries.item(i).data(QtCore.Qt.UserRole)["name"] == "LibTwo"][0]
+            item_two = [
+                dialog.list_libraries.item(i)
+                for i in range(dialog.list_libraries.count())
+                if dialog.list_libraries.item(i).data(QtCore.Qt.UserRole)["name"] == "LibTwo"
+            ][0]
             dialog.list_libraries.setCurrentItem(item_two)
 
         self.assertEqual(dialog.current_lib_meta["name"], "LibOne")
@@ -385,6 +466,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
     def test_auto_calculate_linear_weight_on_dimension_edits_and_manual_override(self):
         from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog, QtWidgets
+
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
 
         alu_data = {
@@ -409,6 +491,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
         # Verify banner displays material and density
         from freecad.maxproframe.ff_tools import translate
+
         self.assertIn(translate("frameforge", "Aluminium"), dialog.lbl_lib_banner.text())
         self.assertIn("2.7", dialog.lbl_lib_banner.text())
 
@@ -556,15 +639,16 @@ class TestLibraryManagerDialog(unittest.TestCase):
         with open(library_manager_dialog.__file__, encoding="utf-8") as source_file:
             tree = ast.parse(source_file.read())
         strings = [
-            node.value for node in ast.walk(tree)
-            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)
         ]
         self.assertNotIn("Aviso", strings)
         self.assertIn("Warning", strings)
 
     def test_spanish_locale_translation_survives(self):
         from freecad.maxproframe.library_manager_dialog import (
-            ProfileLibraryManagerDialog, QtCore, QtWidgets,
+            ProfileLibraryManagerDialog,
+            QtCore,
+            QtWidgets,
         )
 
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
@@ -608,14 +692,13 @@ class TestLibraryManagerDialog(unittest.TestCase):
             translator = getattr(cls, "_translator", None)
             if translator is not None:
                 app.removeTranslator(translator)
-            cls._translator = original_translator
-            cls._translator_installed = original_installed
+            cls._translator = None
+            cls._translator_installed = False
             QtCore.QLocale.setDefault(original_locale)
-            if original_translator is not None:
-                app.installTranslator(original_translator)
 
     def test_translations_and_indumatics_removal(self):
         from PySide import QtCore, QtWidgets
+
         from freecad.maxproframe.ff_tools import TRANSLATIONSPATH
         from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
@@ -654,10 +737,10 @@ class TestLibraryManagerDialog(unittest.TestCase):
             }
             for source, expected in expected_families.items():
                 self.assertEqual(translator.translate("frameforge", source), expected)
-            self.assertEqual(translator.translate("frameforge", "Library Families"),
-                             "Familias en la biblioteca")
-            self.assertIn("<b>Familias en la biblioteca:</b>",
-                          [label.text() for label in dialog.findChildren(QtWidgets.QLabel)])
+            self.assertEqual(translator.translate("frameforge", "Library Families"), "Familias en la biblioteca")
+            self.assertIn(
+                "<b>Familias en la biblioteca:</b>", [label.text() for label in dialog.findChildren(QtWidgets.QLabel)]
+            )
             self.assertEqual(dialog.btn_add_family.toolTip(), "Agregar Familia")
             self.assertEqual(dialog.btn_del_family.toolTip(), "Eliminar Familia")
             for row in range(dialog.list_families.count()):
@@ -671,7 +754,6 @@ class TestLibraryManagerDialog(unittest.TestCase):
             self.assertIn("Tubos Aluminio", dialog.findChildren(QtWidgets.QLabel)[0].text())
         finally:
             app.removeTranslator(translator)
-
 
 
 if __name__ == "__main__":

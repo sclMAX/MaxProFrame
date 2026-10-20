@@ -1,11 +1,12 @@
 """Tests for Profile Library Manager window lifecycle, modeless modality,
 single-owner persistence, and S10/S9 cleanup.
 """
+
 import os
 import tempfile
 import unittest
-from pathlib import Path
 from contextlib import ExitStack
+from pathlib import Path
 from unittest.mock import patch
 
 try:
@@ -158,6 +159,7 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
                 dlg.close()
             except Exception:
                 pass
+        ProfileLibraryManagerDialog.uninstall_translations()
         if self.mw is not None:
             try:
                 setattr(self.mw, "_frameforge_library_manager", None)
@@ -254,7 +256,8 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         # Snapshot disk state before
         disk_before = {
             os.path.relpath(os.path.join(r, f), self.test_root): open(os.path.join(r, f), "rb").read()
-            for r, _, fs in os.walk(self.folder_lib_path) for f in fs
+            for r, _, fs in os.walk(self.folder_lib_path)
+            for f in fs
         }
 
         # Select sketch in Gui.Selection
@@ -305,7 +308,8 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         # Verify disk library catalog is unchanged
         disk_after = {
             os.path.relpath(os.path.join(r, f), self.test_root): open(os.path.join(r, f), "rb").read()
-            for r, _, fs in os.walk(self.folder_lib_path) for f in fs
+            for r, _, fs in os.walk(self.folder_lib_path)
+            for f in fs
         }
         self.assertEqual(disk_before, disk_after, "Closing without Save must preserve saved catalog and disk assets.")
 
@@ -344,8 +348,9 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         self.assertFalse(dialog.isVisible())
         self.assertIn(working.Name, App.listDocuments())
         self.assertEqual(Gui.activeWorkbench().name(), "SketcherWorkbench")
-        self.assertEqual(Gui.getDocument(working.Name).getInEdit().Object.Name,
-                         dialog._active_edit_session.working_sketch_name)
+        self.assertEqual(
+            Gui.getDocument(working.Name).getInEdit().Object.Name, dialog._active_edit_session.working_sketch_name
+        )
 
     def test_finishing_sketch_restores_same_library_without_applying(self):
         dialog, working, code = self._start_custom_edit()
@@ -354,9 +359,9 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         props_before = dict(dialog.table_sizes.item(0, 0).data(QtCore.Qt.UserRole))
         staged_before = set(dialog._staged_new_assets)
         assets_before = {
-            os.path.relpath(os.path.join(root, name), self.folder_lib_path):
-                Path(os.path.join(root, name)).read_bytes()
-            for root, _, files in os.walk(self.folder_lib_path) for name in files
+            os.path.relpath(os.path.join(root, name), self.folder_lib_path): Path(os.path.join(root, name)).read_bytes()
+            for root, _, files in os.walk(self.folder_lib_path)
+            for name in files
         }
         Gui.getDocument(working.Name).resetEdit()
         _qWait(400)
@@ -366,11 +371,16 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         self.assertEqual(dialog.table_sizes.item(0, 0).data(QtCore.Qt.UserRole), props_before)
         self.assertEqual(dialog._staged_new_assets, staged_before)
         self.assertIsNone(session.staged_asset_path)
-        self.assertEqual(assets_before, {
-            os.path.relpath(os.path.join(root, name), self.folder_lib_path):
-                Path(os.path.join(root, name)).read_bytes()
-            for root, _, files in os.walk(self.folder_lib_path) for name in files
-        })
+        self.assertEqual(
+            assets_before,
+            {
+                os.path.relpath(os.path.join(root, name), self.folder_lib_path): Path(
+                    os.path.join(root, name)
+                ).read_bytes()
+                for root, _, files in os.walk(self.folder_lib_path)
+                for name in files
+            },
+        )
         ManageProfileLibrariesCommand().Activated()
         self.assertIs(_find_live_manager(), dialog)
 
@@ -412,7 +422,10 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         dialog.btn_capture_section.click()
         self.assertTrue(dialog.btn_edit_section.isEnabled())
 
-        with patch("freecad.maxproframe.section_library.SectionEditSession.open", side_effect=RuntimeError("Simulated open failure")):
+        with patch(
+            "freecad.maxproframe.section_library.SectionEditSession.open",
+            side_effect=RuntimeError("Simulated open failure"),
+        ):
             dialog.btn_edit_section.click()
 
         self.assertTrue(dialog.isVisible(), "Dialog must remain visible when edit fails.")
@@ -444,14 +457,17 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         self.assertTrue(dialog.btn_edit_section.isEnabled())
 
         orig_get_doc = Gui.getDocument
+
         def mock_get_doc(name):
             gdoc = orig_get_doc(name)
             if gdoc is not None and name.startswith("Edit_"):
+
                 class FailGuiDoc:
                     def __getattr__(self, attr):
                         if attr == "setEdit":
                             raise RuntimeError("Simulated setEdit failure")
                         return getattr(gdoc, attr)
+
                 return FailGuiDoc()
             return gdoc
 
@@ -492,14 +508,17 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         self.assertTrue(dialog.btn_edit_section.isEnabled())
 
         orig_get_doc = Gui.getDocument
+
         def mock_get_doc(name):
             gdoc = orig_get_doc(name)
             if gdoc is not None and name.startswith("Edit_"):
+
                 class FalseGuiDoc:
                     def __getattr__(self, attr):
                         if attr == "setEdit":
                             return lambda *args, **kwargs: False
                         return getattr(gdoc, attr)
+
                 return FalseGuiDoc()
             return gdoc
 
@@ -534,7 +553,9 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         # Click Apply Section Edit
         dialog.btn_apply_edit.click()
         self.assertTrue(dialog.is_dirty, "Applying edit must mark dialog dirty.")
-        self.assertEqual(len(dialog._staged_new_assets), 2, "Capture and edited assets must both be staged before save.")
+        self.assertEqual(
+            len(dialog._staged_new_assets), 2, "Capture and edited assets must both be staged before save."
+        )
 
         # Click Save Changes
         dialog.btn_save.click()
@@ -550,6 +571,60 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         working_name = working.Name
         dialog.btn_close.click()
         self.assertNotIn(working_name, App.listDocuments(), "Close must destroy working copy document.")
+
+    def test_edit_when_dialog_unshown_skips_sketcher_entry_and_hiding(self):
+        """When ProfileLibraryManagerDialog is not visible (headless/direct usage by older tests),
+        _on_edit_section opens the session without entering Sketcher workbench or hiding,
+        preventing task dialog conflicts and offscreen modal hangs.
+        """
+        doc = App.newDocument("UnshownEditSource")
+        self.created_docs.append(doc.Name)
+        sketch = doc.addObject("Sketcher::SketchObject", "CustomSection")
+        sketch.Label = "Unshown Custom Profile"
+        points = [(0, 0), (30, 0), (30, 20), (0, 20)]
+        for i, point in enumerate(points):
+            end = points[(i + 1) % 4]
+            sketch.addGeometry(Part.LineSegment(App.Vector(*point, 0), App.Vector(*end, 0)), False)
+        doc.recompute()
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, sketch.Name)
+
+        orig_wb = Gui.activeWorkbench().name()
+        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        self.addCleanup(dialog.close)
+        self.assertFalse(dialog.isVisible(), "Directly instantiated dialog is not visible.")
+        dialog.refresh_libraries(select_name="ProbeLib")
+        dialog.btn_capture_section.click()
+        self.assertTrue(dialog.btn_edit_section.isEnabled())
+
+        dialog.btn_edit_section.click()
+
+        session = dialog._active_edit_session
+        self.assertIsNotNone(session, "Edit session must be active.")
+        self.created_docs.append(session.working_doc_name)
+        self.assertFalse(dialog.isVisible(), "Unshown dialog remains unshown.")
+        self.assertFalse(dialog._is_hidden_for_sketch_edit, "Not marked hidden for sketch edit.")
+        self.assertIsNone(dialog._sketch_edit_observer, "No GUI observer attached for unshown edit.")
+        self.assertIsNone(dialog._sketch_edit_poll_timer, "No poll timer started for unshown edit.")
+        self.assertEqual(Gui.activeWorkbench().name(), orig_wb, "Workbench must remain untouched.")
+        gui_working = Gui.getDocument(session.working_doc_name)
+        if gui_working is not None and hasattr(gui_working, "getInEdit"):
+            self.assertIsNone(gui_working.getInEdit(), "Sketcher edit mode was not entered.")
+
+    def test_close_resets_gui_edit_mode_before_document_destruction(self):
+        """Closing a SectionEditSession resets GUI edit mode before closing the document,
+        preventing dangling ViewProviderEdit pointers in FreeCAD GUI.
+        """
+        dialog, working, code = self._start_custom_edit()
+        session = dialog._active_edit_session
+        self.assertIsNotNone(session)
+        gui_doc = Gui.getDocument(working.Name)
+        self.assertIsNotNone(gui_doc.getInEdit(), "Working sketch is in edit mode.")
+
+        working_name = working.Name
+        session.close(discard_uncommitted=True)
+        self.assertNotIn(working_name, App.listDocuments(), "Document must be closed.")
+        self.assertIsNone(session.working_doc_name)
 
     def test_next_activation_after_close_creates_fresh_manager_without_staged_assets(self):
         """Rule 4: After close, persistent references are retired and next activation
@@ -580,7 +655,9 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         self.assertFalse(dialog2.isModal())
         self.assertIsNone(self.app.activeModalWidget())
         self.assertIsNone(dialog2._active_edit_session, "Fresh manager must have no active edit session.")
-        self.assertEqual(len(getattr(dialog2, "_staged_new_assets", set())), 0, "Fresh manager must have 0 staged assets.")
+        self.assertEqual(
+            len(getattr(dialog2, "_staged_new_assets", set())), 0, "Fresh manager must have 0 staged assets."
+        )
 
         dialog2.close()
 
