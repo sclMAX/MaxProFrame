@@ -327,6 +327,9 @@ class TestCreateProfileApply(unittest.TestCase):
         original_locale = QtCore.QLocale()
         original_translator = getattr(cls, "_translator", None)
         original_installed = getattr(cls, "_translator_installed", False)
+        prefs = App.ParamGet("User parameter:BaseApp/Preferences/General")
+        orig_fc_lang = prefs.GetString("Language", "")
+        orig_fc_locale = Gui.getLocale() if hasattr(Gui, "getLocale") else "English"
 
         def restore_language():
             if cls._translator is not None:
@@ -334,6 +337,11 @@ class TestCreateProfileApply(unittest.TestCase):
             cls._translator = original_translator
             cls._translator_installed = original_installed
             QtCore.QLocale.setDefault(original_locale)
+            if hasattr(Gui, "setLocale"):
+                Gui.setLocale(orig_fc_locale)
+            prefs.SetString("Language", orig_fc_lang)
+            if hasattr(Gui, "updateLocale"):
+                Gui.updateLocale()
             if original_translator is not None:
                 self.app.installTranslator(original_translator)
 
@@ -344,6 +352,12 @@ class TestCreateProfileApply(unittest.TestCase):
             cls._translator = None
             cls._translator_installed = False
             QtCore.QLocale.setDefault(QtCore.QLocale("es_ES" if spanish else "en_US"))
+            target_lang = "Spanish" if spanish else "English"
+            if hasattr(Gui, "setLocale"):
+                Gui.setLocale(target_lang)
+            prefs.SetString("Language", target_lang)
+            if hasattr(Gui, "updateLocale"):
+                Gui.updateLocale()
             translator = QtCore.QTranslator()
             if spanish:
                 self.assertTrue(translator.load(os.path.join(TRANSLATIONSPATH, "frameforge_es.qm")))

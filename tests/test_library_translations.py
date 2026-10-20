@@ -81,7 +81,7 @@ class TestLibraryTranslationCatalogs(unittest.TestCase):
             self.skipTest("Native FreeCAD Qt runtime required")
         entries = catalog(TRANSLATIONS / "maxproframe_es.ts")
         for prefix in ("frameforge", "FrameForge", "maxproframe", "MaxProFrame"):
-            for locale in ("es", "es-ES"):
+            for locale in ("es", "es-ES", "es-CO", "es-AR"):
                 with self.subTest(prefix=prefix, locale=locale):
                     translator = QtCore.QTranslator()
                     self.assertTrue(translator.load(str(TRANSLATIONS / f"{prefix}_{locale}.qm")))

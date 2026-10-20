@@ -109,16 +109,37 @@ def compile_ts(ts_path, qm_path=None):
 
 
 def compile_all_translations(translations_dir):
-    """Finds all .ts files in translations_dir and compiles them to .qm."""
+    """Finds all .ts files in translations_dir and compiles them to .qm, including FreeCAD runtime aliases."""
     compiled = []
     if not os.path.isdir(translations_dir):
         return compiled
 
-    for fname in os.listdir(translations_dir):
+    # FreeCAD supportedLocales mappings and Qt aliases for recognized project Spanish catalogs:
+    # FreeCAD maps 'Spanish' -> 'es-CO' and 'Spanish (Argentina)' -> 'es-AR'
+    SPANISH_KNOWN_SOURCES = {"frameforge_es.ts", "maxproframe_es.ts"}
+    SPANISH_LOCALES = ["es", "es-ES", "es-CO", "es-AR"]
+    PROJECT_PREFIXES = ["frameforge", "FrameForge", "maxproframe", "MaxProFrame"]
+
+    for fname in sorted(os.listdir(translations_dir)):
         if fname.endswith(".ts"):
             ts_path = os.path.join(translations_dir, fname)
             qm_path = compile_ts(ts_path)
-            compiled.append(qm_path)
+            if qm_path not in compiled:
+                compiled.append(qm_path)
+
+            if fname in SPANISH_KNOWN_SOURCES:
+                with open(qm_path, "rb") as f:
+                    qm_bytes = f.read()
+                for prefix in PROJECT_PREFIXES:
+                    for loc in SPANISH_LOCALES:
+                        alias_name = f"{prefix}_{loc}.qm"
+                        alias_path = os.path.join(translations_dir, alias_name)
+                        if alias_path != qm_path:
+                            with open(alias_path, "wb") as f_out:
+                                f_out.write(qm_bytes)
+                            if alias_path not in compiled:
+                                compiled.append(alias_path)
+
     return compiled
 
 
