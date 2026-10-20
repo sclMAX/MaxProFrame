@@ -343,6 +343,7 @@ class SectionEditSession:
             doc_id = uuid.uuid4().hex[:8]
             working_doc = App.newDocument(f"Edit_{self.size_code or 'Section'}_{doc_id}")
             self.working_doc_name = working_doc.Name
+            working_doc.Label = self.size_code or "Section"
 
             # Capture autonomous copy into working doc
             copied_sketch = capture_section_sketch(
@@ -351,6 +352,7 @@ class SectionEditSession:
                 name=source_sketch.Name or "Section",
             )
             self.working_sketch_name = copied_sketch.Name
+            copied_sketch.Label = self.size_code or "Section"
             working_doc.recompute()
             return working_doc
 
@@ -359,6 +361,12 @@ class SectionEditSession:
             if source_doc_name in App.listDocuments():
                 try:
                     App.closeDocument(source_doc_name)
+                except Exception:
+                    pass
+            # Explicitly ensure App active document is restored to the working document
+            if self.working_doc_name and self.working_doc_name in App.listDocuments():
+                try:
+                    App.setActiveDocument(self.working_doc_name)
                 except Exception:
                     pass
 

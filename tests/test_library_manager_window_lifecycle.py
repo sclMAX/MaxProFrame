@@ -4,6 +4,7 @@ single-owner persistence, and S10/S9 cleanup.
 import os
 import tempfile
 import unittest
+from pathlib import Path
 from contextlib import ExitStack
 from unittest.mock import patch
 
@@ -14,6 +15,27 @@ except ImportError:
         from PySide2 import QtCore, QtGui, QtWidgets
     except ImportError:
         QtCore = QtGui = QtWidgets = None
+
+try:
+    from PySide6 import QtTest
+except ImportError:
+    try:
+        from PySide2 import QtTest
+    except ImportError:
+        try:
+            from PySide import QtTest
+        except ImportError:
+            QtTest = None
+
+
+def _qWait(ms):
+    if QtTest is not None and hasattr(QtTest, "QTest") and hasattr(QtTest.QTest, "qWait"):
+        QtTest.QTest.qWait(ms)
+    elif QtCore is not None:
+        loop = QtCore.QEventLoop()
+        QtCore.QTimer.singleShot(ms, loop.quit)
+        loop.exec_()
+
 
 try:
     import FreeCAD as App
@@ -286,6 +308,248 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
             for r, _, fs in os.walk(self.folder_lib_path) for f in fs
         }
         self.assertEqual(disk_before, disk_after, "Closing without Save must preserve saved catalog and disk assets.")
+
+    def _start_custom_edit(self):
+        doc = App.newDocument("CustomEditSource")
+        self.created_docs.append(doc.Name)
+        sketch = doc.addObject("Sketcher::SketchObject", "CustomSection")
+        sketch.Label = "My custom profile"
+        points = [(0, 0), (30, 0), (30, 20), (0, 20)]
+        for i, point in enumerate(points):
+            end = points[(i + 1) % 4]
+            sketch.addGeometry(Part.LineSegment(App.Vector(*point, 0), App.Vector(*end, 0)), False)
+        doc.recompute()
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, sketch.Name)
+        ManageProfileLibrariesCommand().Activated()
+        dialog = _find_live_manager()
+        self.addCleanup(dialog.close)
+        dialog.refresh_libraries(select_name="ProbeLib")
+        dialog.btn_capture_section.click()
+        code = dialog.table_sizes.item(0, 0).text()
+        dialog.btn_edit_section.click()
+        session = dialog._active_edit_session
+        self.assertIsNotNone(session)
+        self.created_docs.append(session.working_doc_name)
+        working = App.getDocument(session.working_doc_name)
+        return dialog, working, code
+
+    def test_edit_uses_profile_name_for_document_and_sketch(self):
+        dialog, working, code = self._start_custom_edit()
+        self.assertEqual(working.Label, code)
+        self.assertEqual(working.getObject(dialog._active_edit_session.working_sketch_name).Label, code)
+
+    def test_edit_enters_sketcher_and_hides_without_closing(self):
+        dialog, working, code = self._start_custom_edit()
+        self.assertFalse(dialog.isVisible())
+        self.assertIn(working.Name, App.listDocuments())
+        self.assertEqual(Gui.activeWorkbench().name(), "SketcherWorkbench")
+        self.assertEqual(Gui.getDocument(working.Name).getInEdit().Object.Name,
+                         dialog._active_edit_session.working_sketch_name)
+
+    def test_finishing_sketch_restores_same_library_without_applying(self):
+        dialog, working, code = self._start_custom_edit()
+        self.assertFalse(dialog.isVisible(), "Dialog must be hidden during custom section edit session.")
+        session = dialog._active_edit_session
+        props_before = dict(dialog.table_sizes.item(0, 0).data(QtCore.Qt.UserRole))
+        staged_before = set(dialog._staged_new_assets)
+        assets_before = {
+            os.path.relpath(os.path.join(root, name), self.folder_lib_path):
+                Path(os.path.join(root, name)).read_bytes()
+            for root, _, files in os.walk(self.folder_lib_path) for name in files
+        }
+        Gui.getDocument(working.Name).resetEdit()
+        _qWait(400)
+        self.assertTrue(dialog.isVisible())
+        self.assertIs(dialog._active_edit_session, session)
+        self.assertIn(working.Name, App.listDocuments())
+        self.assertEqual(dialog.table_sizes.item(0, 0).data(QtCore.Qt.UserRole), props_before)
+        self.assertEqual(dialog._staged_new_assets, staged_before)
+        self.assertIsNone(session.staged_asset_path)
+        self.assertEqual(assets_before, {
+            os.path.relpath(os.path.join(root, name), self.folder_lib_path):
+                Path(os.path.join(root, name)).read_bytes()
+            for root, _, files in os.walk(self.folder_lib_path) for name in files
+        })
+        ManageProfileLibrariesCommand().Activated()
+        self.assertIs(_find_live_manager(), dialog)
+
+    def test_reinvoking_command_while_dialog_hidden_in_edit_reuses_same_instance(self):
+        """Re-invoking command while dialog is hidden in active sketch editing must reuse
+        the same instance and restore/raise it without creating duplicate dialogs.
+        """
+        dialog, working, code = self._start_custom_edit()
+        self.assertFalse(dialog.isVisible(), "Dialog must be hidden during edit.")
+        session = dialog._active_edit_session
+        self.assertIsNotNone(session)
+
+        cmd = ManageProfileLibrariesCommand()
+        cmd.Activated()
+
+        self.assertIs(_find_live_manager(), dialog, "Reinvoking must restore and reuse same dialog.")
+        self.assertIs(dialog._active_edit_session, session, "Active edit session must be preserved.")
+        self.assertEqual(dialog._active_edit_session.working_doc_name, working.Name)
+
+    def test_edit_failure_preserves_dialog_visibility(self):
+        """If starting an edit session fails, the dialog must remain visible and not hidden."""
+        doc = App.newDocument("FailEditSource")
+        self.created_docs.append(doc.Name)
+        sketch = doc.addObject("Sketcher::SketchObject", "CustomSection")
+        sketch.Label = "Fail edit profile"
+        points = [(0, 0), (30, 0), (30, 20), (0, 20)]
+        for i, point in enumerate(points):
+            end = points[(i + 1) % 4]
+            sketch.addGeometry(Part.LineSegment(App.Vector(*point, 0), App.Vector(*end, 0)), False)
+        doc.recompute()
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, sketch.Name)
+
+        cmd = ManageProfileLibrariesCommand()
+        cmd.Activated()
+        dialog = _find_live_manager()
+        self.addCleanup(dialog.close)
+        dialog.refresh_libraries(select_name="ProbeLib")
+        dialog.btn_capture_section.click()
+        self.assertTrue(dialog.btn_edit_section.isEnabled())
+
+        with patch("freecad.maxproframe.section_library.SectionEditSession.open", side_effect=RuntimeError("Simulated open failure")):
+            dialog.btn_edit_section.click()
+
+        self.assertTrue(dialog.isVisible(), "Dialog must remain visible when edit fails.")
+        self.assertIsNone(dialog._active_edit_session, "Edit session must be None on failure.")
+
+    def test_setedit_failure_preserves_dialog_visibility_and_cleans_working_doc(self):
+        """When setEdit raises an error or fails to enter edit mode, the dialog must remain
+        visible, the failed session and working copy must be closed without leaks, and
+        watchers must be safely detached.
+        """
+        doc = App.newDocument("SetEditFailSource")
+        self.created_docs.append(doc.Name)
+        sketch = doc.addObject("Sketcher::SketchObject", "CustomSection")
+        sketch.Label = "SetEdit Fail Profile"
+        points = [(0, 0), (30, 0), (30, 20), (0, 20)]
+        for i, point in enumerate(points):
+            end = points[(i + 1) % 4]
+            sketch.addGeometry(Part.LineSegment(App.Vector(*point, 0), App.Vector(*end, 0)), False)
+        doc.recompute()
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, sketch.Name)
+
+        cmd = ManageProfileLibrariesCommand()
+        cmd.Activated()
+        dialog = _find_live_manager()
+        self.addCleanup(dialog.close)
+        dialog.refresh_libraries(select_name="ProbeLib")
+        dialog.btn_capture_section.click()
+        self.assertTrue(dialog.btn_edit_section.isEnabled())
+
+        orig_get_doc = Gui.getDocument
+        def mock_get_doc(name):
+            gdoc = orig_get_doc(name)
+            if gdoc is not None and name.startswith("Edit_"):
+                class FailGuiDoc:
+                    def __getattr__(self, attr):
+                        if attr == "setEdit":
+                            raise RuntimeError("Simulated setEdit failure")
+                        return getattr(gdoc, attr)
+                return FailGuiDoc()
+            return gdoc
+
+        with patch.object(Gui, "getDocument", side_effect=mock_get_doc):
+            dialog.btn_edit_section.click()
+
+        self.assertTrue(dialog.isVisible(), "Dialog must remain visible when setEdit fails.")
+        self.assertIsNone(dialog._active_edit_session, "Session must be None after setEdit failure.")
+        self.assertFalse(dialog.btn_apply_edit.isEnabled(), "Apply button must be disabled.")
+        leaked_docs = [d for d in App.listDocuments() if d.startswith("Edit_")]
+        self.assertEqual(leaked_docs, [], f"Working copy document leaked: {leaked_docs}")
+        self.assertFalse(getattr(dialog, "_is_hidden_for_sketch_edit", False))
+        self.assertIsNone(getattr(dialog, "_sketch_edit_observer", None))
+        self.assertIsNone(getattr(dialog, "_sketch_edit_poll_timer", None))
+
+    def test_setedit_returning_false_or_wrong_in_edit_cleans_working_doc(self):
+        """When setEdit returns False or getInEdit does not match working sketch,
+        the dialog must remain visible, working doc closed, and session invalidated.
+        """
+        doc = App.newDocument("SetEditFalseSource")
+        self.created_docs.append(doc.Name)
+        sketch = doc.addObject("Sketcher::SketchObject", "CustomSection")
+        sketch.Label = "SetEdit False Profile"
+        points = [(0, 0), (30, 0), (30, 20), (0, 20)]
+        for i, point in enumerate(points):
+            end = points[(i + 1) % 4]
+            sketch.addGeometry(Part.LineSegment(App.Vector(*point, 0), App.Vector(*end, 0)), False)
+        doc.recompute()
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, sketch.Name)
+
+        cmd = ManageProfileLibrariesCommand()
+        cmd.Activated()
+        dialog = _find_live_manager()
+        self.addCleanup(dialog.close)
+        dialog.refresh_libraries(select_name="ProbeLib")
+        dialog.btn_capture_section.click()
+        self.assertTrue(dialog.btn_edit_section.isEnabled())
+
+        orig_get_doc = Gui.getDocument
+        def mock_get_doc(name):
+            gdoc = orig_get_doc(name)
+            if gdoc is not None and name.startswith("Edit_"):
+                class FalseGuiDoc:
+                    def __getattr__(self, attr):
+                        if attr == "setEdit":
+                            return lambda *args, **kwargs: False
+                        return getattr(gdoc, attr)
+                return FalseGuiDoc()
+            return gdoc
+
+        with patch.object(Gui, "getDocument", side_effect=mock_get_doc):
+            dialog.btn_edit_section.click()
+
+        self.assertTrue(dialog.isVisible(), "Dialog must remain visible when setEdit returns False.")
+        self.assertIsNone(dialog._active_edit_session, "Session must be None after setEdit False.")
+        self.assertFalse(dialog.btn_apply_edit.isEnabled())
+        leaked_docs = [d for d in App.listDocuments() if d.startswith("Edit_")]
+        self.assertEqual(leaked_docs, [], f"Working copy document leaked: {leaked_docs}")
+        self.assertFalse(getattr(dialog, "_is_hidden_for_sketch_edit", False))
+        self.assertIsNone(getattr(dialog, "_sketch_edit_observer", None))
+        self.assertIsNone(getattr(dialog, "_sketch_edit_poll_timer", None))
+
+    def test_custom_edit_apply_and_save_publishes_updated_asset_and_catalog(self):
+        """End-to-end regression: capture section -> edit section (hidden) -> exit edit mode
+        (dialog restored, unapplied) -> click Apply Section Edit -> click Save Changes
+        publishes updated asset and catalog cleanly, and close cleans up working document.
+        """
+        dialog, working, code = self._start_custom_edit()
+        session = dialog._active_edit_session
+        self.assertFalse(dialog.isVisible(), "Dialog must be hidden during edit.")
+
+        # Simulate user exiting sketcher edit mode
+        Gui.getDocument(working.Name).resetEdit()
+        _qWait(400)
+        self.assertTrue(dialog.isVisible(), "Dialog must restore when exiting sketch edit.")
+        self.assertIs(dialog._active_edit_session, session, "Edit session must remain active before apply.")
+        self.assertTrue(dialog.btn_apply_edit.isEnabled(), "Apply button must be enabled.")
+
+        # Click Apply Section Edit
+        dialog.btn_apply_edit.click()
+        self.assertTrue(dialog.is_dirty, "Applying edit must mark dialog dirty.")
+        self.assertEqual(len(dialog._staged_new_assets), 2, "Capture and edited assets must both be staged before save.")
+
+        # Click Save Changes
+        dialog.btn_save.click()
+        self.assertFalse(dialog.is_dirty, "Saving must clear dirty flag.")
+        self.assertEqual(len(dialog._staged_new_assets), 0, "Saving must commit staged assets.")
+
+        # Verify catalog on disk contains Custom Profile
+        cat = self.manager.get_library("ProbeLib")
+        self.assertIn("Custom Profile", cat)
+        self.assertIn(code, cat["Custom Profile"]["sizes"])
+
+        # Close dialog cleanly cleans up working copy
+        working_name = working.Name
+        dialog.btn_close.click()
+        self.assertNotIn(working_name, App.listDocuments(), "Close must destroy working copy document.")
 
     def test_next_activation_after_close_creates_fresh_manager_without_staged_assets(self):
         """Rule 4: After close, persistent references are retired and next activation

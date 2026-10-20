@@ -339,6 +339,10 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self._staged_deleted_assets = set()
         self._staged_new_assets = set()
         self._active_edit_session = None
+        self._is_hidden_for_sketch_edit = False
+        self._sketch_edit_observer = None
+        self._sketch_edit_poll_timer = None
+        self._is_closed = False
 
         self.setWindowTitle(translate("frameforge", "FrameForge - Profile Library Manager"))
         self.resize(920, 580)
@@ -2140,7 +2144,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             )
             return
 
-        # Close any previous active session
+        # Close any previous active session and watcher
+        self._detach_sketch_edit_watcher()
         if self._active_edit_session is not None:
             self._active_edit_session.close(discard_uncommitted=True)
             self._active_edit_session = None
@@ -2167,6 +2172,34 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             )
             return
 
+        # Attempt entering Sketcher and activating sketch edit mode in GUI
+        if Gui is not None:
+            try:
+                if hasattr(App, "setActiveDocument"):
+                    App.setActiveDocument(session.working_doc_name)
+                if hasattr(Gui, "setActiveDocument"):
+                    Gui.setActiveDocument(session.working_doc_name)
+                if hasattr(Gui, "activateWorkbench"):
+                    Gui.activateWorkbench("SketcherWorkbench")
+                gui_doc = Gui.getDocument(session.working_doc_name) if hasattr(Gui, "getDocument") else None
+                if gui_doc is None or not hasattr(gui_doc, "setEdit"):
+                    raise RuntimeError("Active FreeCAD GUI document not available for editing.")
+                set_edit_ok = gui_doc.setEdit(session.working_sketch_name)
+                if not set_edit_ok:
+                    raise RuntimeError("Failed to enter edit mode for sketch.")
+                in_edit = gui_doc.getInEdit() if hasattr(gui_doc, "getInEdit") else None
+                if in_edit is None or getattr(in_edit, "Object", None) is None or in_edit.Object.Name != session.working_sketch_name:
+                    raise RuntimeError("Sketch edit mode could not be verified.")
+            except Exception as err:
+                session.close(discard_uncommitted=True)
+                self._detach_sketch_edit_watcher()
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    translate("frameforge", "Error"),
+                    translate("frameforge", "Failed to open section for editing: %s") % str(err),
+                )
+                return
+
         self._active_edit_session = session
         self.btn_apply_edit.setEnabled(True)
         self._set_status(
@@ -2174,8 +2207,46 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             is_warning=True,
         )
 
+        # Watch FreeCAD GUI to restore dialog when sketch editing ends
+        self._is_hidden_for_sketch_edit = True
+        try:
+            if Gui is not None and hasattr(Gui, "addDocumentObserver"):
+                obs = _SectionEditGuiObserver(self, session.working_doc_name)
+                self._sketch_edit_observer = obs
+                Gui.addDocumentObserver(obs)
+        except Exception:
+            pass
+
+        poll_timer = QtCore.QTimer(self)
+        poll_timer.setInterval(150)
+        def _check_in_edit():
+            if not getattr(self, "_is_hidden_for_sketch_edit", False):
+                return
+            if self._active_edit_session is None:
+                self._on_sketch_edit_finished()
+                return
+            d_name = self._active_edit_session.working_doc_name
+            if App is not None and d_name not in App.listDocuments():
+                self._on_sketch_edit_finished()
+                return
+            if Gui is not None and hasattr(Gui, "getDocument"):
+                try:
+                    g_doc = Gui.getDocument(d_name)
+                    if g_doc is not None and hasattr(g_doc, "getInEdit") and g_doc.getInEdit() is None:
+                        self._on_sketch_edit_finished()
+                except Exception:
+                    pass
+        poll_timer.timeout.connect(_check_in_edit)
+        self._sketch_edit_poll_timer = poll_timer
+        poll_timer.start()
+
+        # Hide library manager dialog only after confirmed edit entry
+        self.hide()
+
     def apply_section_edit(self):
         """Applies edits made to the working sketch in FreeCAD back to the library table."""
+        self._detach_sketch_edit_watcher()
+        self._is_hidden_for_sketch_edit = False
         if self._active_edit_session is None:
             QtWidgets.QMessageBox.information(
                 self,
@@ -2297,7 +2368,55 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 pass
         self._staged_new_assets.clear()
 
+    def _detach_sketch_edit_watcher(self):
+        if getattr(self, "_sketch_edit_poll_timer", None) is not None:
+            try:
+                self._sketch_edit_poll_timer.stop()
+                self._sketch_edit_poll_timer.deleteLater()
+            except Exception:
+                pass
+            self._sketch_edit_poll_timer = None
+
+        if getattr(self, "_sketch_edit_observer", None) is not None:
+            try:
+                self._sketch_edit_observer.detach()
+                if Gui is not None and hasattr(Gui, "removeDocumentObserver"):
+                    Gui.removeDocumentObserver(self._sketch_edit_observer)
+            except Exception:
+                pass
+            self._sketch_edit_observer = None
+
+    def _on_sketch_edit_finished(self):
+        self._detach_sketch_edit_watcher()
+        self._is_hidden_for_sketch_edit = False
+
+        if self._active_edit_session is not None:
+            doc_name = self._active_edit_session.working_doc_name
+            if App is not None and doc_name not in App.listDocuments():
+                try:
+                    self._active_edit_session.close(discard_uncommitted=True)
+                except Exception:
+                    pass
+                self._active_edit_session = None
+                if hasattr(self, "btn_apply_edit"):
+                    self.btn_apply_edit.setEnabled(False)
+
+        try:
+            self.show()
+            self.raise_()
+            self.activateWindow()
+        except (RuntimeError, AttributeError):
+            pass
+
+        if self._active_edit_session is not None:
+            self._set_status(
+                translate("frameforge", "Section opened in FreeCAD. Edit sketch, then click 'Apply Section Edit'."),
+                is_warning=True,
+            )
+
     def _cleanup_edit_session_and_staged_assets(self):
+        self._detach_sketch_edit_watcher()
+        self._is_hidden_for_sketch_edit = False
         if getattr(self, "_active_edit_session", None) is not None:
             try:
                 self._active_edit_session.close(discard_uncommitted=True)
@@ -2310,20 +2429,71 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self._cleanup_uncommitted_staged_new_assets()
 
     def done(self, result):
+        self._is_closed = True
         self._cleanup_edit_session_and_staged_assets()
         super().done(result)
 
     def closeEvent(self, event):
+        self._is_closed = True
         self._cleanup_edit_session_and_staged_assets()
         super().closeEvent(event)
 
 
+class _SectionEditGuiObserver:
+    """Watches FreeCAD GUI edit state to restore the library manager dialog when sketch editing ends."""
+
+    def __init__(self, dialog, doc_name):
+        self.dialog = dialog
+        self.doc_name = doc_name
+        self._active = True
+
+    def detach(self):
+        self._active = False
+
+    def slotResetEdit(self, view_provider):
+        if not self._active:
+            return
+        try:
+            obj = getattr(view_provider, "Object", None)
+            if obj is not None:
+                doc = getattr(obj, "Document", None)
+                if doc is not None and doc.Name != self.doc_name:
+                    return
+        except Exception:
+            pass
+        QtCore.QTimer.singleShot(0, self._restore)
+
+    def slotDeletedDocument(self, gui_doc):
+        if not self._active:
+            return
+        try:
+            doc_name = getattr(gui_doc, "Name", None)
+            if doc_name and doc_name != self.doc_name:
+                return
+        except Exception:
+            pass
+        QtCore.QTimer.singleShot(0, self._restore)
+
+    def _restore(self):
+        if not self._active:
+            return
+        self.detach()
+        if self.dialog is not None:
+            try:
+                self.dialog._on_sketch_edit_finished()
+            except Exception:
+                pass
+
+
 def _is_live_manager(dialog):
-    """Safely checks if a dialog wrapper and underlying C++ QObject are alive and visible."""
+    """Safely checks if a dialog wrapper and underlying C++ QObject are alive and active."""
     if dialog is None:
         return False
     try:
-        return bool(dialog.isVisible())
+        if getattr(dialog, "_is_closed", False):
+            return False
+        _ = dialog.windowTitle()
+        return bool(dialog.isVisible() or getattr(dialog, "_active_edit_session", None) is not None)
     except (RuntimeError, AttributeError, ReferenceError):
         return False
 
