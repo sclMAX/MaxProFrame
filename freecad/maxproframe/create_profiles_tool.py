@@ -212,6 +212,8 @@ class BaseProfileTaskPanel(ABC):
 
     def get_anchor(self):
         """Return (anchor_x, anchor_y) 0=left/bottom, 1=center, 2=right/top."""
+        if hasattr(self, "_saved_anchor") and self._saved_anchor is not None:
+            return self._saved_anchor
         for ax in range(3):
             for ay in range(3):
                 if getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}").isChecked():
@@ -225,6 +227,8 @@ class BaseProfileTaskPanel(ABC):
 
     def get_rotation(self):
         """Return rotation angle in degrees (float)."""
+        if hasattr(self, "_saved_rotation") and self._saved_rotation is not None:
+            return self._saved_rotation
         try:
             return float(self.form_proxy.combo_rotation.currentText())
         except (TypeError, ValueError):
@@ -492,11 +496,85 @@ class BaseProfileTaskPanel(ABC):
         return True
 
 
+class _SnapshotWidget:
+    def __init__(self, text="", value=0.0, checked=False):
+        self._text = text
+        self._value = value
+        self._checked = checked
+
+    def currentText(self):
+        return self._text
+
+    def value(self):
+        return self._value
+
+    def isChecked(self):
+        return self._checked
+
+    def text(self):
+        return self._text
+
+    def setText(self, *args, **kwargs):
+        pass
+
+    def setVisible(self, *args, **kwargs):
+        pass
+
+    def setEnabled(self, *args, **kwargs):
+        pass
+
+
+class _SnapshotFormProxy:
+    def __init__(self, real_proxy):
+        self._widgets = {}
+        for member in getattr(real_proxy, "members", {}):
+            try:
+                w = getattr(real_proxy, member)
+                text = ""
+                if hasattr(w, "currentText"):
+                    try:
+                        text = str(w.currentText())
+                    except Exception:
+                        pass
+                elif hasattr(w, "text"):
+                    try:
+                        text = str(w.text())
+                    except Exception:
+                        pass
+                val = 0.0
+                if hasattr(w, "value"):
+                    try:
+                        val = float(w.value())
+                    except Exception:
+                        pass
+                checked = False
+                if hasattr(w, "isChecked"):
+                    try:
+                        checked = bool(w.isChecked())
+                    except Exception:
+                        pass
+                self._widgets[member] = _SnapshotWidget(text=text, value=val, checked=checked)
+            except Exception:
+                pass
+        self.members = dict(getattr(real_proxy, "members", {}))
+
+    def __getattr__(self, name):
+        if name in self._widgets:
+            return self._widgets[name]
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+
 class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def __init__(self):
         self._session_imported_sketches = set()
         self._target_doc = None
         self._has_pending_changes = False
+        self._accept_finalizing = False
+        self._reject_called = False
+        self._saved_anchor = None
+        self._saved_rotation = None
+        self._saved_selection = None
+        self._saved_form_proxy = None
         super().__init__()
 
     @property
@@ -544,6 +622,12 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def open(self):
         self._session_imported_sketches = set()
         self._target_doc = getattr(App, "ActiveDocument", None)
+        self._accept_finalizing = False
+        self._reject_called = False
+        self._saved_anchor = None
+        self._saved_rotation = None
+        self._saved_selection = None
+        self._saved_form_proxy = None
 
         App.ActiveDocument.openTransaction("Add Profile")
 
@@ -553,13 +637,23 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self._set_initial_state()
 
     def reject(self):
+        self._reject_called = True
+        self._accept_finalizing = False
+
         self.clean()
 
-        App.ActiveDocument.abortTransaction()
+        target_doc = getattr(self, "_target_doc", None) or getattr(App, "ActiveDocument", None)
+        if target_doc is not None and (not hasattr(App, "listDocuments") or target_doc.Name in App.listDocuments()):
+            try:
+                target_doc.abortTransaction()
+            except Exception:
+                pass
 
         if hasattr(self, "_session_imported_sketches"):
             for doc_name, sk_name in list(self._session_imported_sketches):
                 doc = App.getDocument(doc_name) if hasattr(App, "getDocument") else None
+                if doc is None and hasattr(App, "listDocuments") and doc_name in App.listDocuments():
+                    doc = App.listDocuments()[doc_name]
                 if doc is not None and hasattr(doc, "getObject") and doc.getObject(sk_name) is not None:
                     try:
                         doc.removeObject(sk_name)
@@ -590,51 +684,63 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
             return False
 
-    def accept(self):
-        has_sel = len(Gui.Selection.getSelectionEx()) if hasattr(Gui, "Selection") else 0
-        if has_sel or self.form_proxy.sb_length.value() > 0:
-            App.Console.PrintMessage(translate("frameforge", "Accepting CreateProfile\n"))
+    def _needs_first_custom_import(self):
+        try:
+            material_name = self.form_proxy.combo_material.currentText()
+            selected_family = self.form_proxy.combo_family.currentText()
+            family_data = (
+                self.profiles.get(material_name, {}).get(selected_family)
+                if hasattr(self, "profiles") and self.profiles
+                else None
+            )
+            canonical_family = get_canonical_family(selected_family, family_data)
+            if canonical_family != "Custom Profile":
+                return False
 
-            param = get_param_group(writable=True)
-            param.SetString("Default Profile Material", self.form_proxy.combo_material.currentText())
-            param.SetString("Default Profile Family", self.form_proxy.combo_family.currentText())
-            param.SetString("Default Profile Size", self.form_proxy.combo_size.currentText())
+            size_name = self.form_proxy.combo_size.currentText()
+            size_data = family_data.get("sizes", {}).get(size_name, {}) if isinstance(family_data, dict) else {}
+            folder_root = self.library_manager._get_registered_folder(material_name)
+            asset_path = size_data.get("asset_path")
+            object_name = size_data.get("object_name", "Section")
+            asset_id = size_data.get("asset_id", "")
+            if not (folder_root and asset_path):
+                return False
 
-            param.SetBool("Default Sketch in Name", self.form_proxy.cb_sketch_in_name.isChecked())
-            param.SetBool("Default Family in Name", self.form_proxy.cb_family_in_name.isChecked())
-            param.SetBool("Default Size in Name", self.form_proxy.cb_size_in_name.isChecked())
-            param.SetBool("Default Prefix Profile in Name", self.form_proxy.cb_prefix_profile_in_name.isChecked())
+            target_doc = getattr(self, "_target_doc", None) or App.ActiveDocument
+            if target_doc is None:
+                return False
 
-            param.SetBool("Default Make Fillet", self.form_proxy.cb_make_fillet.isChecked())
-            param.SetBool("Default Mirror Horizontally", self.form_proxy.cb_mirror_h.isChecked())
-            param.SetBool("Default Mirror Vertically", self.form_proxy.cb_mirror_v.isChecked())
-            param.SetBool("Default Pre Extend", self.form_proxy.cb_pre_extend.isChecked())
+            canonical_root = os.path.realpath(os.path.abspath(folder_root))
+            norm_asset_path = os.path.normpath(asset_path).replace("\\", "/")
+            target_aid = str(asset_id) if asset_id is not None else ""
 
-            ax, ay = self.get_anchor()
-            param.SetInt("Default AnchorX", ax)
-            param.SetInt("Default AnchorY", ay)
-            param.SetString("Default RotationAngle", self.form_proxy.combo_rotation.currentText())
-            param.SetBool("Default Centered Bevel", self.form_proxy.cb_combined_bevel.isChecked())
-
-            param.RemBool("Default Reverse Attachement")
-
-            self.proceed()
-            self.clean()
-
-            if hasattr(self, "_session_imported_sketches"):
-                self._session_imported_sketches.clear()
-
-            for o in self._objects.values():
-                if getattr(o, "ViewObject", None) is not None:
-                    o.ViewObject.Transparency = 0
-                    o.ViewObject.ShapeColor = (0.44, 0.47, 0.5)
-
-            App.ActiveDocument.commitTransaction()
-            App.ActiveDocument.recompute()
+            for obj in getattr(target_doc, "Objects", []):
+                if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject"):
+                    p_prov = getattr(obj, "FF_Provenance", None)
+                    p_aid = getattr(obj, "FF_AssetId", None)
+                    p_oname = getattr(obj, "FF_ObjectName", None)
+                    p_apath = getattr(obj, "FF_AssetPath", None)
+                    if (
+                        p_prov == canonical_root
+                        and p_apath == norm_asset_path
+                        and p_oname == str(object_name)
+                        and (not target_aid or p_aid == target_aid)
+                    ):
+                        return False
 
             return True
+        except Exception:
+            return False
 
-        else:
+    def _is_active_gui_dialog(self):
+        try:
+            return bool(hasattr(Gui, "Control") and Gui.Control.activeDialog())
+        except Exception:
+            return False
+
+    def accept(self, defer=None):
+        has_sel = len(Gui.Selection.getSelectionEx()) if hasattr(Gui, "Selection") else 0
+        if not (has_sel or self.form_proxy.sb_length.value() > 0):
             App.Console.PrintMessage(
                 translate("frameforge", "Not Accepting CreateProfile\nSelect Edges or set Length\n")
             )
@@ -649,10 +755,134 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
             return False
 
+        if getattr(self, "_accept_finalizing", False):
+            return True
+
+        if defer is None:
+            defer = self._is_active_gui_dialog() and self._needs_first_custom_import()
+
+        App.Console.PrintMessage(translate("frameforge", "Accepting CreateProfile\n"))
+
+        param = get_param_group(writable=True)
+        param.SetString("Default Profile Material", self.form_proxy.combo_material.currentText())
+        param.SetString("Default Profile Family", self.form_proxy.combo_family.currentText())
+        param.SetString("Default Profile Size", self.form_proxy.combo_size.currentText())
+
+        param.SetBool("Default Sketch in Name", self.form_proxy.cb_sketch_in_name.isChecked())
+        param.SetBool("Default Family in Name", self.form_proxy.cb_family_in_name.isChecked())
+        param.SetBool("Default Size in Name", self.form_proxy.cb_size_in_name.isChecked())
+        param.SetBool("Default Prefix Profile in Name", self.form_proxy.cb_prefix_profile_in_name.isChecked())
+
+        param.SetBool("Default Make Fillet", self.form_proxy.cb_make_fillet.isChecked())
+        param.SetBool("Default Mirror Horizontally", self.form_proxy.cb_mirror_h.isChecked())
+        param.SetBool("Default Mirror Vertically", self.form_proxy.cb_mirror_v.isChecked())
+        param.SetBool("Default Pre Extend", self.form_proxy.cb_pre_extend.isChecked())
+
+        ax, ay = self.get_anchor()
+        param.SetInt("Default AnchorX", ax)
+        param.SetInt("Default AnchorY", ay)
+        param.SetString("Default RotationAngle", self.form_proxy.combo_rotation.currentText())
+        param.SetBool("Default Centered Bevel", self.form_proxy.cb_combined_bevel.isChecked())
+
+        param.RemBool("Default Reverse Attachement")
+
+        if defer:
+            self._accept_finalizing = True
+            self._saved_anchor = (ax, ay)
+            self._saved_rotation = self.get_rotation()
+            self._saved_selection = list(Gui.Selection.getSelectionEx()) if hasattr(Gui, "Selection") else []
+            self._saved_form_proxy = _SnapshotFormProxy(self.form_proxy)
+            self.clean()
+            QtCore.QTimer.singleShot(0, self._finalize_accept)
+            return True
+
+        self.clean()
+        return self._finalize_accept()
+
+    def _finalize_accept(self):
+        if getattr(self, "_reject_called", False):
+            self._accept_finalizing = False
+            return False
+
+        if hasattr(self, "_saved_form_proxy") and self._saved_form_proxy is not None:
+            self.form_proxy = self._saved_form_proxy
+
+        target_doc = getattr(self, "_target_doc", None) or App.ActiveDocument
+        if target_doc is None:
+            self._accept_finalizing = False
+            return False
+        if hasattr(App, "listDocuments") and target_doc.Name not in App.listDocuments():
+            self._accept_finalizing = False
+            return False
+
+        try:
+            self.proceed()
+
+            if hasattr(self, "_session_imported_sketches"):
+                self._session_imported_sketches.clear()
+
+            for o in self._objects.values():
+                if getattr(o, "ViewObject", None) is not None:
+                    o.ViewObject.Transparency = 0
+                    o.ViewObject.ShapeColor = (0.44, 0.47, 0.5)
+
+            target_doc.commitTransaction()
+            target_doc.recompute()
+            return True
+        except Exception as err:
+            App.Console.PrintError(f"Create Profile error: {err}\n")
+            try:
+                diag = QtGui.QMessageBox(
+                    QtGui.QMessageBox.Critical,
+                    "Create Profile",
+                    f"{translate('frameforge', 'Failed to create profile')}: {err}",
+                )
+                diag.setWindowModality(QtCore.Qt.ApplicationModal)
+                diag.exec_()
+            except Exception:
+                pass
+
+            if target_doc is not None and (not hasattr(App, "listDocuments") or target_doc.Name in App.listDocuments()):
+                try:
+                    target_doc.abortTransaction()
+                except Exception:
+                    pass
+
+            if hasattr(self, "_session_imported_sketches"):
+                for doc_name, sk_name in list(self._session_imported_sketches):
+                    doc = App.getDocument(doc_name) if hasattr(App, "getDocument") else None
+                    if doc is None and hasattr(App, "listDocuments") and doc_name in App.listDocuments():
+                        doc = App.listDocuments()[doc_name]
+                    if doc is not None and hasattr(doc, "getObject") and doc.getObject(sk_name) is not None:
+                        try:
+                            doc.removeObject(sk_name)
+                        except Exception:
+                            pass
+                self._session_imported_sketches.clear()
+
+            for o in list(self._objects.values()):
+                if o is not None:
+                    try:
+                        doc = getattr(o, "Document", None) or target_doc
+                        if doc is not None and hasattr(doc, "removeObject") and hasattr(o, "Name"):
+                            doc.removeObject(o.Name)
+                    except Exception:
+                        pass
+            self._objects.clear()
+            return False
+        finally:
+            self._accept_finalizing = False
+
     def clean(self):
         if hasattr(Gui, "Selection"):
-            Gui.Selection.removeObserver(self)
-            Gui.Selection.removeSelectionGate()
+            try:
+                Gui.Selection.removeObserver(self)
+            except Exception:
+                pass
+            try:
+                Gui.Selection.removeSelectionGate()
+            except Exception:
+                pass
 
     def _clean_unreferenced_session_sources(self):
         if not hasattr(self, "_session_imported_sketches") or not self._session_imported_sketches:
@@ -717,7 +947,11 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
         seen_profiles = []
 
-        selection_list = Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else []
+        selection_list = (
+            getattr(self, "_saved_selection", None)
+            if getattr(self, "_saved_selection", None) is not None
+            else (Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else [])
+        )
 
         p_name = "Profile_" if self.form_proxy.cb_prefix_profile_in_name.isChecked() else ""
 
