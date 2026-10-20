@@ -676,7 +676,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
             diag = QtGui.QMessageBox(
                 QtGui.QMessageBox.Warning,
-                "Create Profile",
+                translate("frameforge", "Create Profile"),
                 translate("frameforge", "Select Edges or set Length to create a profile"),
             )
             diag.setWindowModality(QtCore.Qt.ApplicationModal)
@@ -747,7 +747,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
             diag = QtGui.QMessageBox(
                 QtGui.QMessageBox.Warning,
-                "Create Profile",
+                translate("frameforge", "Create Profile"),
                 translate("frameforge", "Select Edges or set Length to create a profile"),
             )
             diag.setWindowModality(QtCore.Qt.ApplicationModal)

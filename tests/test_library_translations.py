@@ -64,6 +64,7 @@ class TestLibraryTranslationCatalogs(unittest.TestCase):
             "Height [mm]": "Alto [mm]",
             "Weight [kg/m]": "Peso [kg/m]",
             "Apply": "Aplicar",
+            "Create Profile": "Crear perfil",
             "Preview": "Previsualización",
             "No preview": "Sin previsualización",
             "Unapplied changes": "Cambios sin aplicar",
@@ -84,7 +85,10 @@ class TestLibraryTranslationCatalogs(unittest.TestCase):
                 with self.subTest(prefix=prefix, locale=locale):
                     translator = QtCore.QTranslator()
                     self.assertTrue(translator.load(str(TRANSLATIONS / f"{prefix}_{locale}.qm")))
-                    for context, source in library_sources():
+                    for context, source in library_sources() | {
+                        ("frameforge", "Create Profile"),
+                        ("frameforge", "Select Edges or set Length to create a profile"),
+                    }:
                         self.assertEqual(translator.translate(context, source), entries[(context, source)])
                     self.assertFalse(translator.translate("frameforge", "Untranslated sentinel"))
                     self.assertFalse(translator.translate("unrelated-context", "Save Changes"))

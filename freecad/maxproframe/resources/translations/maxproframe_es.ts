@@ -656,6 +656,10 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
         <translation>Aplicar cambios y actualizar previsualización</translation>
     </message>
     <message>
+        <source>Create Profile</source>
+        <translation>Crear perfil</translation>
+    </message>
+    <message>
         <source>Select Edges or set Length to create a profile</source>
         <translation>Seleccione aristas o defina la longitud para crear un perfil</translation>
     </message>

@@ -318,6 +318,74 @@ class TestCreateProfileApply(unittest.TestCase):
         self.assertFalse(applied, "Apply must return False when neither edges nor length are set.")
         self.assertEqual(set(doc.Objects), baseline_objects, "Rejected apply must not create preview geometry.")
 
+    def test_validation_warning_language_and_unchanged_document(self):
+        """Both confirmation paths localize the warning without creating objects."""
+        from freecad.maxproframe.ff_tools import TRANSLATIONSPATH
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
+
+        cls = ProfileLibraryManagerDialog
+        original_locale = QtCore.QLocale()
+        original_translator = getattr(cls, "_translator", None)
+        original_installed = getattr(cls, "_translator_installed", False)
+
+        def restore_language():
+            if cls._translator is not None:
+                self.app.removeTranslator(cls._translator)
+            cls._translator = original_translator
+            cls._translator_installed = original_installed
+            QtCore.QLocale.setDefault(original_locale)
+            if original_translator is not None:
+                self.app.installTranslator(original_translator)
+
+        self.addCleanup(restore_language)
+        for spanish in (False, True):
+            if getattr(cls, "_translator", None) is not None:
+                self.app.removeTranslator(cls._translator)
+            cls._translator = None
+            cls._translator_installed = False
+            QtCore.QLocale.setDefault(QtCore.QLocale("es_ES" if spanish else "en_US"))
+            translator = QtCore.QTranslator()
+            if spanish:
+                self.assertTrue(translator.load(os.path.join(TRANSLATIONSPATH, "frameforge_es.qm")))
+                self.app.installTranslator(translator)
+            try:
+                for action in ("accept", "apply"):
+                    with self.subTest(spanish=spanish, action=action):
+                        doc = self._new_doc("DocWarningLanguage")
+                        App.setActiveDocument(doc.Name)
+                        panel = CreateProfileTaskPanel()
+                        self.panels.append(panel)
+                        panel.open()
+                        Gui.Selection.clearSelection()
+                        panel.update_selection()
+                        panel.form_proxy.sb_length.setValue(0.0)
+                        baseline_names = [obj.Name for obj in doc.Objects]
+                        warnings = []
+
+                        def capture_warning(dialog):
+                            warnings.append((dialog.windowTitle(), dialog.text()))
+                            return QtWidgets.QMessageBox.Ok
+
+                        with patch.object(QtGui.QMessageBox, "exec_", capture_warning):
+                            self.assertFalse(getattr(panel, action)())
+                        self.assertEqual(
+                            warnings,
+                            [
+                                (
+                                    "Crear perfil" if spanish else "Create Profile",
+                                    "Seleccione aristas o defina la longitud para crear un perfil"
+                                    if spanish
+                                    else "Select Edges or set Length to create a profile",
+                                )
+                            ],
+                        )
+                        self.assertEqual([obj.Name for obj in doc.Objects], baseline_names)
+            finally:
+                if spanish:
+                    self.app.removeTranslator(translator)
+                if cls._translator is not None:
+                    self.app.removeTranslator(cls._translator)
+
     def test_s2_spanish_translation_of_apply_and_status(self):
         """S2, S3: Spanish catalog faithfully translates Apply button and pending/applied states."""
         from freecad.maxproframe.ff_tools import TRANSLATIONSPATH
