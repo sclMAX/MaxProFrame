@@ -205,8 +205,32 @@ class TestDXFSectionImport(unittest.TestCase):
     def test_arc_true_bounds_and_area(self):
         # Major arc has extrema beyond both endpoint coordinates.
         path = self.source(poly([(10, 20, 2), (18, 20), (18, 24), (10, 24)]))
-        sketch = import_dxf_section(path, self.doc)
-        b = sketch.Shape.BoundBox
+        reader = Import.readDXF
+        source_bounds = []
+
+        def observe(filename):
+            stats = reader(filename)
+            for obj in App.ActiveDocument.Objects:
+                if hasattr(obj, "Shape") and not obj.Shape.isNull():
+                    bounds = obj.Shape.optimalBoundingBox(False, False)
+                    factor = stats["finalScalingFactor"]
+                    source_bounds.append(
+                        tuple(v / factor for v in (bounds.XMin, bounds.YMin, bounds.XMax, bounds.YMax))
+                    )
+            return stats
+
+        with patch.object(Import, "readDXF", side_effect=observe):
+            sketch = import_dxf_section(path, self.doc)
+        # Chord=8, bulge=2: radius=8*(1+4)/(4*2)=5,
+        # center=(14,17), sweep=4*atan(2). True bounds=(9,12,19,24),
+        # so the only requested translation is (-14,-18).
+        for bounds in source_bounds:
+            for actual, expected in zip(bounds, (9, 12, 19, 24)):
+                self.assertAlmostEqual(actual, expected, places=7)
+        self.assertEqual(len(source_bounds), 1)
+        b = sketch.Shape.optimalBoundingBox(False, False)
+        for actual, expected in zip((b.XMin, b.YMin, b.XMax, b.YMax), (-5, -6, 5, 6)):
+            self.assertAlmostEqual(actual, expected, places=7)
         self.assertAlmostEqual(b.XMin + b.XMax, 0, places=6)
         self.assertAlmostEqual(b.YMin + b.YMax, 0, places=6)
         self.assertAlmostEqual(b.ZMin, 0, places=6)
@@ -214,6 +238,20 @@ class TestDXFSectionImport(unittest.TestCase):
         self.assertAlmostEqual(build_custom_section_face(sketch).Area, 32 + 12.5 * (theta - math.sin(theta)), places=5)
         self.assertAlmostEqual(b.XLength, 10, places=5)
         self.assertTrue(sketch.FullyConstrained)
+        self.assertEqual(sketch.solve(), 0)
+        self.assertTrue(sketch.Placement.isIdentity())
+        self.assertEqual(sketch.GeometryCount, 4)
+        arcs = [g for g in sketch.Geometry if hasattr(g, "Radius")]
+        self.assertEqual(len(arcs), 1)
+        arc = arcs[0]
+        self.assertAlmostEqual(arc.Radius, 5, places=7)
+        self.assertAlmostEqual(arc.Center.x, 0, places=7)
+        self.assertAlmostEqual(arc.Center.y, -1, places=7)
+        self.assertAlmostEqual(arc.LastParameter - arc.FirstParameter, theta, places=7)
+        self.assertEqual(
+            {(round(v.Point.x, 7), round(v.Point.y, 7)) for v in sketch.Shape.Vertexes},
+            {(-4, 2), (4, 2), (4, 6), (-4, 6)},
+        )
         self.unchanged(("Sentinel", sketch.Name))
 
     def test_units_and_override(self):

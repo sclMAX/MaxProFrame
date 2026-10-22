@@ -262,7 +262,9 @@ def import_dxf_section(path, target_doc, *, unit_override=None, name="ImportedSe
             raise ValueError("Native DXF import omitted or duplicated polyline segments")
         build_custom_section_face(SimpleNamespace(Shape=shape))
         shape.scale(scale / native_scale)
-        bounds = shape.BoundBox
+        # Ignore GUI display triangulation and shape tolerances: centering is
+        # defined by the curves themselves, including circular arc extrema.
+        bounds = shape.optimalBoundingBox(False, False)
         shape.translate(App.Vector(-(bounds.XMin + bounds.XMax) / 2, -(bounds.YMin + bounds.YMax) / 2, -bounds.ZMin))
         sketch = target_doc.addObject("Sketcher::SketchObject", name)
         for edge in shape.Edges:

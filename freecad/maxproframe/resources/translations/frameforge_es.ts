@@ -663,5 +663,53 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
         <source>Select Edges or set Length to create a profile</source>
         <translation>Seleccione aristas o defina la longitud para crear un perfil</translation>
     </message>
+    <message>
+        <source>Import DXF</source>
+        <translation>Importar DXF</translation>
+    </message>
+    <message>
+        <source>Confirm DXF Units</source>
+        <translation>Confirmar unidades del DXF</translation>
+    </message>
+    <message>
+        <source>Declared INSUNITS: %s; millimeters per drawing unit: %s</source>
+        <translation>INSUNITS declarado: %s; milímetros por unidad de dibujo: %s</translation>
+    </message>
+    <message>
+        <source>Confirm the drawing units. Override incorrect metadata before importing.</source>
+        <translation>Confirme las unidades del dibujo. Corrija los metadatos incorrectos antes de importar.</translation>
+    </message>
+    <message>
+        <source>Select confirmed units</source>
+        <translation>Seleccione las unidades confirmadas</translation>
+    </message>
+    <message>
+        <source>Review DXF Section</source>
+        <translation>Revisar sección DXF</translation>
+    </message>
+    <message>
+        <source>Destination: %s | Material: %s (%s g/cm³)</source>
+        <translation>Destino: %s | Material: %s (%s g/cm³)</translation>
+    </message>
+    <message>
+        <source>Review the fixed XY sketch in FreeCAD. Adding stages it; Save Changes publishes it.</source>
+        <translation>Revise el croquis fijo en XY en FreeCAD. Agregar lo prepara; Guardar Cambios lo publica.</translation>
+    </message>
+    <message>
+        <source>Add as Custom</source>
+        <translation>Agregar como personalizado</translation>
+    </message>
+    <message>
+        <source>Finish the active section edit before importing DXF.</source>
+        <translation>Finalice la edición de sección activa antes de importar DXF.</translation>
+    </message>
+    <message>
+        <source>Enter a non-empty size code.</source>
+        <translation>Introduzca un código de tamaño no vacío.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancelar</translation>
+    </message>
 </context>
 </TS>

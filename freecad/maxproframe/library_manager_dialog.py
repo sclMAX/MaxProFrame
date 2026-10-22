@@ -10,6 +10,8 @@ except ImportError:
 import FreeCAD as App
 import FreeCADGui as Gui
 
+from freecad.maxproframe.dxf_section_dialog import DXFSectionReview, DXFUnitsDialog
+from freecad.maxproframe.dxf_section_import import import_dxf_section, inspect_dxf
 from freecad.maxproframe.ff_tools import ICONPATH, PROFILEIMAGES_PATH, TRANSLATIONSPATH, add_command, translate
 from freecad.maxproframe.library_manager import (
     KNOWN_FAMILIES,
@@ -340,6 +342,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self._staged_deleted_assets = set()
         self._staged_new_assets = set()
         self._active_edit_session = None
+        self._dxf_review = None
+        self._dxf_previous_doc = None
+        self._dxf_restore_visible = False
         self._is_hidden_for_sketch_edit = False
         self._sketch_edit_observer = None
         self._sketch_edit_poll_timer = None
@@ -472,6 +477,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.btn_capture_section = self._compact_button(
             "custom_profile.svg", "Capture Section", self._on_capture_section
         )
+        self.btn_import_dxf = self._compact_button("custom_profile.svg", "Import DXF", self._on_import_dxf)
         self.btn_edit_section = self._compact_button("duplicate.svg", "Edit Section", self._on_edit_section)
         self.btn_apply_edit = self._compact_button("recompute.svg", "Apply Section Edit", self.apply_section_edit)
         self.btn_apply_edit.setEnabled(False)
@@ -479,6 +485,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         meta_row.addWidget(self.btn_add_size)
         meta_row.addWidget(self.btn_del_size)
         meta_row.addWidget(self.btn_capture_section)
+        meta_row.addWidget(self.btn_import_dxf)
         meta_row.addWidget(self.btn_edit_section)
         meta_row.addWidget(self.btn_apply_edit)
 
@@ -680,6 +687,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
 
         # Commit state only after get_library succeeds
+        self._cancel_dxf_review()
         self._cleanup_uncommitted_staged_new_assets()
 
         if self._active_edit_session is not None:
@@ -1919,6 +1927,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         if hasattr(self, "btn_add_size"):
             self.btn_add_size.setEnabled(is_user and bool(self.current_family) and not is_custom_geom)
+        if hasattr(self, "btn_import_dxf"):
+            self.btn_import_dxf.setEnabled(is_user and is_folder)
         if hasattr(self, "btn_capture_section"):
             self.btn_capture_section.setEnabled(is_user and is_folder)
         if hasattr(self, "btn_edit_section"):
@@ -1927,6 +1937,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             self.btn_apply_edit.setEnabled(bool(self._active_edit_session and is_user and is_folder and is_custom_geom))
 
     def _on_capture_section(self):
+        if self._dxf_review is not None:
+            self._dxf_review.raise_()
+            return
         if not self.current_lib_meta or not self.current_lib_meta.get("is_user"):
             return
         if not self.current_lib_meta.get("is_folder") or not self.current_lib_meta.get("folder_path"):
@@ -1939,20 +1952,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         folder_path = self.current_lib_meta["folder_path"]
 
-        # Ensure Custom Profile family exists and is active
-        if "Custom Profile" not in self.current_lib_data:
-            self.current_lib_data["Custom Profile"] = {
-                "norm": "Custom",
-                "fillet": False,
-                "canonical_family": "Custom Profile",
-                "sizes": {},
-            }
-            self._populate_families(select_family="Custom Profile")
-            self._mark_dirty()
-        elif self.current_family != "Custom Profile":
-            idx = self.combo_family.findText("Custom Profile")
-            if idx >= 0:
-                self.combo_family.setCurrentIndex(idx)
+        self._activate_custom_section_family()
 
         # Explicit sketch selection via Gui.Selection
         selected_objs = []
@@ -2066,21 +2066,28 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             candidate_code = f"{base_code}_{counter}"
             counter += 1
 
-        size_entry = {
+        size_entry = self._section_size_entry(asset_meta, height, width, weight)
+        self._insert_section_row(candidate_code, size_entry)
+        self._set_status(translate("frameforge", "Captured section '%s' successfully.") % candidate_code)
+
+    @staticmethod
+    def _section_size_entry(asset_meta, height, width, weight, weight_format=".2f"):
+        return {
             "Height": f"{height:.1f}",
             "Width": f"{width:.1f}",
             "Thickness": "0.0",
             "Flange Thickness": "0.0",
             "Radius1": "0.0",
             "Radius2": "0.0",
-            "Weight": f"{weight:.2f}",
+            "Weight": format(weight, weight_format),
             "Lip Length": "0.0",
-            "asset_path": asset_path,
+            "asset_path": asset_meta["asset_path"],
             "object_name": asset_meta["object_name"],
             "asset_id": asset_meta["asset_id"],
         }
 
-        # Insert row into table
+    def _insert_section_row(self, candidate_code, size_entry):
+        # Shared capture insertion keeps metadata, read-only cells and selection together.
         row = self.table_sizes.rowCount()
         self.table_sizes.insertRow(row)
 
@@ -2099,9 +2106,145 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             self.cards_view.select_card(row)
         self._mark_dirty()
         self._update_section_buttons()
-        self._set_status(translate("frameforge", "Captured section '%s' successfully.") % candidate_code)
+
+    def _activate_custom_section_family(self):
+        if "Custom Profile" not in self.current_lib_data:
+            self.current_lib_data["Custom Profile"] = {
+                "norm": "Custom",
+                "fillet": False,
+                "canonical_family": "Custom Profile",
+                "sizes": {},
+            }
+            self._populate_families(select_family="Custom Profile")
+            self._mark_dirty()
+        elif self.current_family != "Custom Profile":
+            idx = self.combo_family.findText("Custom Profile")
+            if idx >= 0:
+                self.combo_family.setCurrentIndex(idx)
+
+    def _on_import_dxf(self):
+        if self._dxf_review is not None:
+            self._dxf_review.show()
+            self._dxf_review.raise_()
+            return
+        meta = self.current_lib_meta
+        if (
+            self._is_closed
+            or not meta
+            or not meta.get("is_user")
+            or not meta.get("is_folder")
+            or not meta.get("folder_path")
+        ):
+            return
+        # Resolve an existing sketch edit explicitly before starting another owned document.
+        if self._active_edit_session is not None:
+            QtWidgets.QMessageBox.warning(
+                self,
+                translate("frameforge", "Warning"),
+                translate("frameforge", "Finish the active section edit before importing DXF."),
+            )
+            return
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, translate("frameforge", "Import DXF"), "", "DXF (*.dxf *.DXF)"
+        )
+        if not path:
+            return
+        doc = None
+        previous_doc = App.ActiveDocument.Name if App.ActiveDocument else None
+        try:
+            metadata = inspect_dxf(path)
+            units = DXFUnitsDialog(metadata, self)
+            if units.exec_() != QtWidgets.QDialog.Accepted or units.confirmed_unit() is None:
+                return
+            # Modal confirmation may have processed a close or library switch.
+            if self._is_closed or self.current_lib_meta is not meta:
+                return
+            doc = App.newDocument("DXFReview")
+            sketch = import_dxf_section(path, doc, unit_override=units.confirmed_unit())
+            material, density = self.manager.get_library_material_info(meta["name"])
+            review = DXFSectionReview(sketch, meta["name"], material, density, self._add_dxf_section)
+            review.library_root = os.path.realpath(meta["folder_path"])
+            App.setActiveDocument(doc.Name)
+            Gui.setActiveDocument(doc.Name)
+            view = Gui.getDocument(doc.Name).activeView()
+            view.viewTop()
+            view.fitAll()
+            self._dxf_review = review
+            self._dxf_previous_doc = previous_doc
+            self._dxf_restore_visible = self.isVisible()
+            review.finished.connect(lambda *_: self._finish_dxf_review(review))
+            self.hide()
+            review.show()
+            # Keep the small controls at the viewport edge, not over the sketch.
+            review.move(self.pos())
+        except Exception as err:
+            if doc is not None and doc.Name in App.listDocuments():
+                App.closeDocument(doc.Name)
+            if previous_doc in App.listDocuments():
+                App.setActiveDocument(previous_doc)
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Import DXF"), str(err))
+
+    def _add_dxf_section(self, code):
+        review = self._dxf_review
+        if review is None or self._is_closed:
+            return
+        meta = self.current_lib_meta or {}
+        if os.path.realpath(meta.get("folder_path", "")) != review.library_root:
+            self._cancel_dxf_review()
+            return
+        try:
+            if not code:
+                raise ValueError(translate("frameforge", "Enter a non-empty size code."))
+            # Read current table codes as well as the inactive Custom family without committing edits.
+            codes = set(self.current_lib_data.get("Custom Profile", {}).get("sizes", {}))
+            if self.current_family == "Custom Profile":
+                codes = {self.table_sizes.item(row, 0).text().strip() for row in range(self.table_sizes.rowCount())}
+            if code in codes:
+                raise ValueError(
+                    translate("frameforge", "Duplicate size codes found: %s. Each size must have a unique code.") % code
+                )
+            # Reuse existing table/card validation without consuming unsaved catalog state.
+            original_data = copy.deepcopy(self.current_lib_data)
+            try:
+                self._commit_current_family_edits()
+            finally:
+                self.current_lib_data = original_data
+            build_custom_section_face(review.sketch)
+            _, density = self.manager.get_library_material_info(meta["name"])
+            height, width, weight, _ = compute_sketch_dimensions_and_weight(review.sketch, density)
+            # No catalog/family/dirty changes until all validation and native serialization succeed.
+            asset_meta = save_section_asset(meta["folder_path"], review.sketch, name=code)
+        except Exception as err:
+            QtWidgets.QMessageBox.warning(review, translate("frameforge", "Import DXF"), str(err))
+            return
+        self._staged_new_assets.add(asset_meta["asset_path"])
+        self._activate_custom_section_family()
+        self._insert_section_row(code, self._section_size_entry(asset_meta, height, width, weight, ".8g"))
+        review.accept()
+
+    def _cancel_dxf_review(self):
+        if self._dxf_review is not None:
+            self._dxf_review.reject()
+
+    def _finish_dxf_review(self, review):
+        if self._dxf_review is not review:
+            return
+        self._dxf_review = None
+        if review.document_name in App.listDocuments():
+            App.closeDocument(review.document_name)
+        if self._dxf_previous_doc in App.listDocuments():
+            App.setActiveDocument(self._dxf_previous_doc)
+        self._dxf_previous_doc = None
+        if self._dxf_restore_visible and not self._is_closed:
+            self.show()
+            self.raise_()
+        self._dxf_restore_visible = False
+        review.deleteLater()
 
     def _on_edit_section(self):
+        if self._dxf_review is not None:
+            self._dxf_review.raise_()
+            return
         if not self.current_lib_meta or not self.current_lib_meta.get("is_user"):
             return
         if not self.current_lib_meta.get("is_folder") or not self.current_lib_meta.get("folder_path"):
@@ -2430,6 +2573,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             )
 
     def _cleanup_edit_session_and_staged_assets(self):
+        self._cancel_dxf_review()
         self._detach_sketch_edit_watcher()
         self._is_hidden_for_sketch_edit = False
         if getattr(self, "_active_edit_session", None) is not None:
@@ -2515,7 +2659,11 @@ def _is_live_manager(dialog):
         if getattr(dialog, "_is_closed", False):
             return False
         _ = dialog.windowTitle()
-        return bool(dialog.isVisible() or getattr(dialog, "_active_edit_session", None) is not None)
+        return bool(
+            dialog.isVisible()
+            or getattr(dialog, "_active_edit_session", None) is not None
+            or getattr(dialog, "_dxf_review", None) is not None
+        )
     except (RuntimeError, AttributeError, ReferenceError):
         return False
 

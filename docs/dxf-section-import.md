@@ -1,10 +1,30 @@
 # Import a strict DXF section as a fixed sketch
 
-The core API creates an independent fixed sketch without saving to the library.
-Synthetic tests and both authorized original drawings pass on FreeCAD 26.3rc2 and
-1.1.4. Independent core verification passed, including preference restoration and
-native-import preservation. Full-suite checks and UI integration remain separate;
-existing section capture and library persistence are unchanged.
+Import one closed DXF section, review its fixed native sketch, and explicitly add
+it to an editable folder library. Library material and density determine its weight.
+
+## Quick path
+
+1. Open **Profile Library Manager** and select an editable **Folder Library**.
+2. Click **Import DXF**, beside **Capture Section**, and select a DXF file.
+3. Review the declared INSUNITS and confirm the actual units. You can override
+   incorrect metadata (for example, declared meters when the drawing is in mm).
+   Missing or unknown units require a selection; they are never assumed to be mm.
+4. Review the actual native sketch in FreeCAD's viewport. The manager hides while
+   small, modeless review controls show the destination library and its material.
+   Geometry keeps its orientation in XY, Z=0, centered by the true bounding box
+   including arc extrema, with identity Placement and fully fixed constraints.
+5. Enter a non-empty, unique Custom Profile code and click **Add as Custom**.
+   This stages an autonomous asset and selects its new card; it does not publish.
+6. Click the existing **Save Changes** to publish the catalog and asset reference.
+
+Cancel at the file picker, units confirmation, or review (including code entry)
+leaves catalog, families, dirty state and assets unchanged. Invalid or duplicate
+codes keep the review open for correction. The source DXF is never modified.
+Closing the manager, switching libraries, or closing the preview document cancels
+its owned review document. Repeated import reuses the active review; finish an
+existing section edit before importing. Closing before **Save Changes** discards
+new staged assets. The library's material cannot be overridden per profile.
 
 ## Public API
 
@@ -27,7 +47,24 @@ known INSUNITS are inches, feet, millimeters, centimeters, and meters. Other uni
 require an explicit override; they are never guessed as mm. Normalization divides
 the requested scale by the native reported scaling factor, avoiding double INSUNITS
 conversion. Actual geometry is translated by its true bounding-box midpoint,
-including circular arc extrema; Placement remains identity.
+including circular arc extrema; Placement remains identity. Bounds are obtained with
+FreeCAD's documented `optimalBoundingBox(False, False)` API: neither display
+triangulation nor shape tolerance participates. The default `Shape.BoundBox` can
+reflect a GUI display mesh rather than the curve extrema and is not the geometric
+centering oracle.
+
+The synthetic bulge-2 arc from (10,20) to (18,20) has radius 5 and center
+(14,17), with sweep `4*atan(2)`. Together with the closing rectangle edges its
+true bounds are (9,12)–(19,24); translation is exactly (-14,-18). In a native GUI
+runtime the unscaled imported shape's default bounds were approximately
+(63.0004,84.051)–(133,168), versus exact curve bounds (63,84)–(133,168)
+(native scaling factor 7). Using the default bounds produced the reproduced
+0.007290186603921889 mm Y-centering error. Exact bounds remove that error;
+regression checks independently pin source extrema, translated vertices, arc
+center/radius/sweep, area, fixed constraints and identity Placement. Both RC and
+stable GUI focused suites pass all 14 cases; console core/capture suites pass
+all 27 cases. The complete GUI suite also passes all 419 cases on both supported
+versions after this correction.
 
 ## Input boundary
 
@@ -104,6 +141,20 @@ committed regression: the expanded 27-test suite passes on RC and stable with
 unchanged prepared configurations. These regression-only checks pin already observed
 behavior; they do not introduce a new production rule or a new RED claim.
 
-Full-suite and visual verification remain pending. UI units
-confirmation, explicit Custom save, review/cancel integration, and library reopen
-belong to the future UI work unit.
+Full-suite automated verification passes; desktop visual acceptance remains pending.
+UI state tests cover units,
+review/cancel, staging, native asset save/reopen and destination density. Their
+console runtime mocks only viewport operations and sketch creation; the real
+native-DXF-to-library integration test requires a FreeCAD GUI runtime. Native DXF
+import alongside a manually created QApplication in console mode terminated the
+process during verification, so that integration is not claimed as console proof.
+Core native-import verification above remains separate and unchanged.
+
+The GUI-runtime suite now passes all 46 feature, manager, lifecycle and translation
+checks on both FreeCAD 26.3rc2 and 1.1.4, including the real native-DXF-to-library
+case without skips. That case releases state-test GUI mocks before calling the
+native reader. Prepared profile hashes remain unchanged. Offscreen execution does
+not establish desktop rendering quality. The complete suite passes 419/419 tests
+without skips on both versions: 158.921 seconds on RC and 73.515 seconds on stable.
+Prepared configurations remain byte-identical. Desktop visual acceptance remains
+pending and is not implied by offscreen functional success.
