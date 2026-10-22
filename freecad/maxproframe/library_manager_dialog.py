@@ -350,7 +350,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self._sketch_edit_poll_timer = None
         self._is_closed = False
 
-        self.setWindowTitle(translate("frameforge", "FrameForge - Profile Library Manager"))
+        self.setWindowTitle("MaxProFrame")
         self.resize(920, 580)
 
         self._build_ui()
@@ -475,9 +475,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.btn_add_size = self._compact_button("list-add.svg", "Add Size", self._on_add_size)
         self.btn_del_size = self._compact_button("list-remove.svg", "Remove Size", self._on_delete_size)
         self.btn_capture_section = self._compact_button(
-            "custom_profile.svg", "Capture Section", self._on_capture_section
+            "capture_section.svg", "Capture Section", self._on_capture_section
         )
-        self.btn_import_dxf = self._compact_button("custom_profile.svg", "Import DXF", self._on_import_dxf)
+        self.btn_import_dxf = self._compact_button("import_dxf.svg", "Import DXF", self._on_import_dxf)
         self.btn_edit_section = self._compact_button("duplicate.svg", "Edit Section", self._on_edit_section)
         self.btn_apply_edit = self._compact_button("recompute.svg", "Apply Section Edit", self.apply_section_edit)
         self.btn_apply_edit.setEnabled(False)
@@ -1924,6 +1924,11 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         canonical = get_canonical_family(self.current_family, fam_data) if self.current_family else ""
         is_custom_geom = canonical == "Custom Profile"
         has_row = self.table_sizes.currentRow() >= 0
+
+        for name in ("btn_capture_section", "btn_import_dxf", "btn_edit_section", "btn_apply_edit"):
+            button = getattr(self, name, None)
+            if button is not None:
+                button.setVisible(is_custom_geom)
 
         if hasattr(self, "btn_add_size"):
             self.btn_add_size.setEnabled(is_user and bool(self.current_family) and not is_custom_geom)

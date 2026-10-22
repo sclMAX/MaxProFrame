@@ -6,7 +6,7 @@ it to an editable folder library. Library material and density determine its wei
 ## Quick path
 
 1. Open **Profile Library Manager** and select an editable **Folder Library**.
-2. Click **Import DXF**, beside **Capture Section**, and select a DXF file.
+2. Add or select a **Custom Profile** family, then click **Import DXF**, beside **Capture Section**, and select a DXF file. Both actions use icon-only buttons with tooltips and are hidden in parametric families.
 3. Review the declared INSUNITS and confirm the actual units. You can override
    incorrect metadata (for example, declared meters when the drawing is in mm).
    Missing or unknown units require a selection; they are never assumed to be mm.

@@ -104,7 +104,7 @@ MaxProFrame supports storing custom profile sections directly in user-managed fo
 
 1. Open the **Profile Library Manager** from the toolbar.
 2. Create or register a **Folder Library** pointing to a directory on your machine or shared drive.
-3. Draw a Sketcher cross section and use **Capture Section**, or click **Import DXF** for a strict closed-polyline section.
+3. Add or select a **Custom Profile** family. Draw a Sketcher cross section and use **Capture Section**, or click **Import DXF** for a strict closed-polyline section. These icon-only actions have tooltips and appear only in custom geometry families.
 4. For DXF, confirm the actual units, review the fixed centered XY sketch, enter a unique code and click **Add as Custom**. Weight uses the library material/density; canceling leaves the library unchanged.
 5. Click **Save Changes** to publish the staged section, then reuse it without the original sketch or DXF. See [DXF section import](docs/dxf-section-import.md) for supported input and unit overrides.
 

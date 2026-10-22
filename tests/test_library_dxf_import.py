@@ -95,6 +95,40 @@ class TestLibraryDXFImport(unittest.TestCase):
         self.assertEqual(self.snapshot(), self.before)
         self.assertEqual(set(App.listDocuments()), self.before_docs)
 
+    def test_section_actions_follow_canonical_family_and_keep_icon_only_tooltips(self):
+        # Persist fixture families through the manager, then use the visible selector.
+        self.manager.save_folder_library(
+            str(self.root / "Alu"),
+            {
+                "My Sections": {"canonical_family": "Custom Profile", "norm": "Custom", "sizes": {}},
+                "Rectangular Hollow": {"canonical_family": "Rectangular Hollow", "norm": "", "sizes": {}},
+            },
+            overwrite=True,
+        )
+        self.dialog.refresh_libraries(select_name="Alu")
+        actions = (
+            self.dialog.btn_capture_section,
+            self.dialog.btn_import_dxf,
+            self.dialog.btn_edit_section,
+            self.dialog.btn_apply_edit,
+        )
+        for family in ("My Sections", "Rectangular Hollow", "My Sections"):
+            self.dialog.list_families.setCurrentRow(self.dialog.combo_family.findText(family))
+            for button in actions:
+                self.assertEqual(button.isHidden(), family != "My Sections")
+                self.assertEqual(button.text(), "")
+                self.assertTrue(button.toolTip())
+                self.assertFalse(button.icon().isNull())
+            self.assertEqual(self.dialog.btn_add_size.isEnabled(), family != "My Sections")
+        capture = actions[0].icon().pixmap(24, 24).toImage()
+        imported = actions[1].icon().pixmap(24, 24).toImage()
+        self.assertFalse(capture.isNull())
+        self.assertNotEqual(capture, imported)
+        self.manager.save_user_library("Empty", {})
+        self.dialog.refresh_libraries(select_name="Empty")
+        for button in actions:
+            self.assertTrue(button.isHidden())
+
     def test_action_enablement_preserves_capture_edit_apply(self):
         self.assertTrue(self.dialog.btn_import_dxf.isEnabled())
         self.assertTrue(self.dialog.btn_capture_section.isEnabled())

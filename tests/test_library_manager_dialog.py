@@ -668,12 +668,12 @@ class TestLibraryManagerDialog(unittest.TestCase):
             dialog = cls(library_manager=self.manager)
             gc.collect()
             self.assertEqual(dialog.btn_new_lib.toolTip(), "Nueva Biblioteca")
-            self.assertEqual(dialog.windowTitle(), "FrameForge - Gestor de Bibliotecas de Perfiles")
+            self.assertEqual(dialog.windowTitle(), "MaxProFrame")
             # A second dialog proves translation still works after the loader returns
             # and garbage collection, rather than merely retaining existing labels.
             fresh_dialog = cls(library_manager=self.manager)
             self.assertEqual(fresh_dialog.btn_new_lib.toolTip(), "Nueva Biblioteca")
-            self.assertEqual(fresh_dialog.windowTitle(), "FrameForge - Gestor de Bibliotecas de Perfiles")
+            self.assertEqual(fresh_dialog.windowTitle(), "MaxProFrame")
 
             # Preserve untranslated English UI when no matching catalog is loaded.
             app.removeTranslator(cls._translator)
@@ -681,7 +681,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
             QtCore.QLocale.setDefault(QtCore.QLocale("en_US"))
             english_dialog = cls(library_manager=self.manager)
             self.assertEqual(english_dialog.btn_new_lib.toolTip(), "New Library")
-            self.assertEqual(english_dialog.windowTitle(), "FrameForge - Profile Library Manager")
+            self.assertEqual(english_dialog.windowTitle(), "MaxProFrame")
         finally:
             if english_dialog is not None:
                 english_dialog.close()
@@ -715,7 +715,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
         try:
             dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
             # Under Spanish translator:
-            self.assertEqual(dialog.windowTitle(), "FrameForge - Gestor de Bibliotecas de Perfiles")
+            self.assertEqual(dialog.windowTitle(), "MaxProFrame")
             self.assertEqual(dialog.btn_new_lib.toolTip(), "Nueva Biblioteca")
             self.assertEqual(dialog.btn_dup_lib.toolTip(), "Duplicar Biblioteca")
             self.assertEqual(dialog.btn_del_lib.toolTip(), "Eliminar Biblioteca")
