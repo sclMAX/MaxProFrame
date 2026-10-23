@@ -1093,6 +1093,16 @@ class LibraryManager:
 
         raise FileNotFoundError(f"Library '{name}' not found in user libraries.")
 
+    def export_library_zip(self, name_or_path, archive_path):
+        """Export a registered custom folder; return the absolute ZIP path, never overwrite."""
+        from freecad.maxproframe.library_archive import export_library_zip
+        return export_library_zip(self, name_or_path, archive_path)
+
+    def import_library_zip(self, archive_path, target_folder_path=None):
+        """Validate and import into a new owned folder; return registration metadata."""
+        from freecad.maxproframe.library_archive import import_library_zip
+        return import_library_zip(self, archive_path, target_folder_path)
+
     def get_default_library_folder(self, name):
         """Return a dedicated safe child destination without creating it."""
         return os.path.join(os.path.abspath(self.user_dir), sanitize_library_name(name))
