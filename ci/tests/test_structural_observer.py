@@ -54,9 +54,10 @@ class TestStructuralObserver(unittest.TestCase):
 
     def test_write_failure_reports_only_structural_metadata_once(self):
         observer = diagnostics.StructuralObserver("/unused")
-        with mock.patch.object(pathlib.Path, "open", side_effect=OSError("private")), mock.patch(
-            "sys.stderr.write"
-        ) as stderr:
+        with (
+            mock.patch.object(pathlib.Path, "open", side_effect=OSError("private")),
+            mock.patch("sys.stderr.write") as stderr,
+        ):
             for _ in range(1000):
                 observer.write({"event": 17})
         stderr.assert_called_once_with('{"phase": "write", "error": "OSError"}\n')

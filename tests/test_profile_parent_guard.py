@@ -52,8 +52,17 @@ class TestProfileParentGuard(unittest.TestCase):
             panel.custom_profile = self.section
         else:
             panel = CreateProfileTaskPanel.__new__(CreateProfileTaskPanel)
-            values = {"width": 20, "height": 10, "main_thickness": 1, "flange_thickness": 1,
-                      "radius1": 0, "radius2": 0, "length": 100, "weight": 0, "unitprice": 0}
+            values = {
+                "width": 20,
+                "height": 10,
+                "main_thickness": 1,
+                "flange_thickness": 1,
+                "radius1": 0,
+                "radius2": 0,
+                "length": 100,
+                "weight": 0,
+                "unitprice": 0,
+            }
             fields = {"sb_" + key: Mock(value=Mock(return_value=value)) for key, value in values.items()}
             for key in ("pre_extend", "mirror_h", "mirror_v", "make_fillet", "combined_bevel"):
                 fields["cb_" + key] = Mock(isChecked=Mock(return_value=False))
@@ -115,7 +124,9 @@ class TestProfileParentGuard(unittest.TestCase):
         self.path.setDatum(0, App.Units.Quantity("150 mm"))
         self.doc.recompute()
         self.assert_parametric_profile(profile, 150)
-        with tempfile.TemporaryDirectory(prefix=".frameforge-test-", dir=Path(__file__).resolve().parents[1]) as directory:
+        with tempfile.TemporaryDirectory(
+            prefix=".frameforge-test-", dir=Path(__file__).resolve().parents[1]
+        ) as directory:
             filename = str(Path(directory) / "roundtrip.FCStd")
             self.doc.saveAs(filename)
             App.closeDocument(self.doc.Name)
@@ -182,7 +193,9 @@ class TestProfileParentGuard(unittest.TestCase):
         profile.removeProperty("Target")
         profile.addProperty("App::PropertyLinkSub", "Target", "Base", "Target face").Target = target
         self.doc.recompute()
-        with tempfile.TemporaryDirectory(prefix=".frameforge-test-", dir=Path(__file__).resolve().parents[1]) as directory:
+        with tempfile.TemporaryDirectory(
+            prefix=".frameforge-test-", dir=Path(__file__).resolve().parents[1]
+        ) as directory:
             filename = str(Path(directory) / "legacy.FCStd")
             self.doc.saveAs(filename)
             App.closeDocument(self.doc.Name)

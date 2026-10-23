@@ -136,8 +136,7 @@ def attach_structural(session, qt, widgets, directory):
     """Install a passive, retained application event filter in manual mode only."""
     observer = StructuralObserver(directory)
     kinds = {
-        event_number(getattr(qt.QEvent, name))
-        for name in ("Show", "Hide", "Close", "WindowBlocked", "WindowUnblocked")
+        event_number(getattr(qt.QEvent, name)) for name in ("Show", "Hide", "Close", "WindowBlocked", "WindowUnblocked")
     }
 
     class Filter(qt.QObject):
