@@ -32,6 +32,14 @@
       "sessions": 143,
       "memories": 274,
       "prompts": 143
+    },
+    {
+      "id": "61080920",
+      "created_by": "max",
+      "created_at": "2026-10-23T10:38:43.452105754Z",
+      "sessions": 45,
+      "memories": 69,
+      "prompts": 0
     }
   ]
 }
