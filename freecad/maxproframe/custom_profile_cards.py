@@ -307,7 +307,7 @@ class CustomProfileCard(QtWidgets.QFrame):
 
         self.setObjectName("custom_card")
         self.setFrameShape(QtWidgets.QFrame.StyledPanel)
-        self.setFixedWidth(170)
+        self.setFixedWidth(240)
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -333,19 +333,26 @@ class CustomProfileCard(QtWidgets.QFrame):
         code_layout.addWidget(self.code_edit, 1)
         layout.addLayout(code_layout)
 
+        description_layout = QtWidgets.QHBoxLayout()
+        lbl_description = QtWidgets.QLabel(translate("frameforge", "Description:"))
+        self.description_edit = QtWidgets.QLineEdit(str(self.props.get("Description", "")))
+        self.description_edit.setObjectName("card_description")
+        description_layout.addWidget(lbl_description)
+        description_layout.addWidget(self.description_edit, 1)
+        layout.addLayout(description_layout)
+
         # Weight row
         weight_layout = QtWidgets.QHBoxLayout()
         weight_layout.setSpacing(4)
-        lbl_weight = QtWidgets.QLabel(translate("frameforge", "Weight:"))
+        lbl_weight = QtWidgets.QLabel(translate("frameforge", "Weight (kg/m):"))
         lbl_weight.setStyleSheet("font-weight: bold; font-size: 11px;")
         self.weight_edit = QtWidgets.QLineEdit(str(weight))
         self.weight_edit.setObjectName("card_weight")
         self.weight_edit.setToolTip(translate("frameforge", "Linear Weight (kg/m)"))
-        lbl_unit = QtWidgets.QLabel("kg/m")
-        lbl_unit.setStyleSheet("font-size: 10px;")
         weight_layout.addWidget(lbl_weight)
         weight_layout.addWidget(self.weight_edit, 1)
-        weight_layout.addWidget(lbl_unit)
+        for label in (lbl_code, lbl_description, lbl_weight):
+            label.setMinimumWidth(90)
         layout.addLayout(weight_layout)
 
         # Aliases for interface discovery
@@ -360,12 +367,14 @@ class CustomProfileCard(QtWidgets.QFrame):
         # Signals
         self.code_edit.textChanged.connect(self._on_code_changed)
         self.weight_edit.textChanged.connect(self._on_weight_changed)
+        self.description_edit.textChanged.connect(self._on_description_changed)
 
         # Event filter for click/focus selection sync
         self.installEventFilter(self)
         self.thumbnail_label.installEventFilter(self)
         self.code_edit.installEventFilter(self)
         self.weight_edit.installEventFilter(self)
+        self.description_edit.installEventFilter(self)
 
         self._update_style()
         self._initializing = False
@@ -413,6 +422,7 @@ class CustomProfileCard(QtWidgets.QFrame):
     def set_editable(self, editable):
         self.code_edit.setReadOnly(not editable)
         self.weight_edit.setReadOnly(not editable)
+        self.description_edit.setReadOnly(not editable)
         palette = QtWidgets.QApplication.palette()
         background = QtGui.QPalette.Base if editable else QtGui.QPalette.AlternateBase
         style = (
@@ -423,6 +433,7 @@ class CustomProfileCard(QtWidgets.QFrame):
         )
         self.code_edit.setStyleSheet(style)
         self.weight_edit.setStyleSheet(style)
+        self.description_edit.setStyleSheet(style)
 
     def update_thumbnail(self, pixmap):
         if pixmap is not None:
@@ -440,6 +451,17 @@ class CustomProfileCard(QtWidgets.QFrame):
             finally:
                 self._updating_from_card = False
             self.dialog._mark_dirty()
+
+    def _on_description_changed(self, text):
+        if self._initializing or self._updating_from_table:
+            return
+        item = self.dialog.table_sizes.item(self.row, 0)
+        if item:
+            # Merge into the authoritative metadata, never the card's stale props.
+            props = item.data(QtCore.Qt.UserRole)
+            props = copy.deepcopy(props) if isinstance(props, dict) else {}
+            props['Description'] = text
+            item.setData(QtCore.Qt.UserRole, props)
 
     def _on_weight_changed(self, text):
         if getattr(self, "_initializing", False) or getattr(self, "_updating_from_table", False):
@@ -481,6 +503,17 @@ class CustomProfileCardsView(QtWidgets.QWidget):
 
         self.scroll_area.setWidget(self.container_widget)
         main_layout.addWidget(self.scroll_area)
+
+    def filter_from_table(self):
+        visible = 0
+        for card in self.cards:
+            self.grid_layout.removeWidget(card)
+            hidden = self.dialog.table_sizes.isRowHidden(card.row)
+            card.setHidden(hidden)
+            if not hidden:
+                self.grid_layout.addWidget(card, visible // 3, visible % 3)
+                visible += 1
+        self.on_table_selection_changed()
 
     def count(self):
         return len(self.cards)
@@ -532,6 +565,13 @@ class CustomProfileCardsView(QtWidgets.QWidget):
 
         text = item.text()
         if col == 0:
+            props = item.data(QtCore.Qt.UserRole)
+            description = str(props.get('Description', '')) if isinstance(props, dict) else ''
+            card._updating_from_table = True
+            try:
+                card.description_edit.setText(description)
+            finally:
+                card._updating_from_table = False
             if card.code_edit.text() != text:
                 card._last_source = "table"
                 card._updating_from_table = True

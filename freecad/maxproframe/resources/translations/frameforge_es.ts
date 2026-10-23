@@ -4,8 +4,32 @@
 <context>
     <name>frameforge</name>
     <message>
+        <source>Description:</source>
+        <translation>Descripción:</translation>
+    </message>
+    <message>
+        <source>Weight (kg/m):</source>
+        <translation>Peso (kg/m):</translation>
+    </message>
+    <message>
         <source>Read-only</source>
         <translation>Solo lectura</translation>
+    </message>
+    <message>
+        <source>Search this family…</source>
+        <translation>Buscar en esta familia…</translation>
+    </message>
+    <message>
+        <source>%s of %s profiles</source>
+        <translation>%s de %s perfiles</translation>
+    </message>
+    <message>
+        <source>No matching profiles.</source>
+        <translation>No hay perfiles que coincidan</translation>
+    </message>
+    <message>
+        <source>This family has no profiles.</source>
+        <translation>Esta familia no tiene perfiles.</translation>
     </message>
     <message>
         <source>Import Library</source>

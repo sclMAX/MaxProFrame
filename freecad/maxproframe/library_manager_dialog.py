@@ -1,6 +1,7 @@
 import copy
 import math
 import os
+import unicodedata
 
 try:
     from PySide import QtCore, QtGui, QtWidgets
@@ -538,6 +539,18 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         right_layout.addLayout(header_layout)
 
+        search_row = QtWidgets.QHBoxLayout()
+        self.le_search = QtWidgets.QLineEdit()
+        self.le_search.setPlaceholderText(translate("frameforge", "Search this family…"))
+        self.le_search.setClearButtonEnabled(True)
+        self.le_search.textChanged.connect(self._filter_profiles)
+        search_row.addWidget(self.le_search, 1)
+        self.lbl_profile_count = QtWidgets.QLabel()
+        search_row.addWidget(self.lbl_profile_count)
+        right_layout.addLayout(search_row)
+        self.lbl_profiles_empty = QtWidgets.QLabel()
+        right_layout.addWidget(self.lbl_profiles_empty)
+
         # Sizes Table
         self.table_sizes = QtWidgets.QTableWidget()
         self.table_sizes.setColumnCount(len(self.TABLE_COLUMNS))
@@ -929,7 +942,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             self.le_norm.setText("")
             self._update_family_icon()
             self.cards_view.hide()
-            self._update_section_buttons()
+            self._filter_profiles()
             return
 
         self.le_norm.blockSignals(True)
@@ -1104,9 +1117,33 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             if hasattr(self, "cards_view") and self.cards_view is not None:
                 self.cards_view.hide()
             self.table_sizes.show()
+        self._filter_profiles()
+
+    @staticmethod
+    def _search_key(text):
+        return ''.join(c for c in unicodedata.normalize('NFD', str(text).casefold())
+                       if not unicodedata.combining(c))
+
+    def _filter_profiles(self):
+        if not hasattr(self, 'table_sizes'):
+            return
+        query = self._search_key(self.le_search.text().strip())
+        visible = 0
+        for row in range(self.table_sizes.rowCount()):
+            item = self.table_sizes.item(row, 0)
+            props = item.data(QtCore.Qt.UserRole) if item else {}
+            description = props.get('Description', '') if isinstance(props, dict) else ''
+            matches = not query or any(query in self._search_key(value)
+                                       for value in (item.text() if item else '', description))
+            self.table_sizes.setRowHidden(row, not matches)
+            visible += int(matches)
+        self.cards_view.filter_from_table()
+        total = self.table_sizes.rowCount()
+        self.lbl_profile_count.setText(translate('frameforge', '%s of %s profiles') % (visible, total))
+        self.lbl_profiles_empty.setText(translate('frameforge', 'This family has no profiles.')
+                                        if not total else translate('frameforge', 'No matching profiles.'))
+        self.lbl_profiles_empty.setVisible(not visible)
         self._update_section_buttons()
-
-
 
     @staticmethod
     def _has_list_selection(widget):
@@ -1166,7 +1203,11 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 elif prop_key not in size_entry:
                     size_entry[prop_key] = "0"
 
-            size_item.setData(QtCore.Qt.UserRole, copy.deepcopy(size_entry))
+            was_blocked = self.table_sizes.blockSignals(True)
+            try:
+                size_item.setData(QtCore.Qt.UserRole, copy.deepcopy(size_entry))
+            finally:
+                self.table_sizes.blockSignals(was_blocked)
             sizes[size_name] = size_entry
 
         if duplicates:
@@ -1292,7 +1333,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         canonical = get_canonical_family(self.current_family, fam_data) if self.current_family else ""
         if canonical == "Custom Profile" and hasattr(self, "cards_view") and self.cards_view is not None:
             self.cards_view.on_table_item_changed(item)
-        self._update_section_buttons()
+        self._filter_profiles()
 
     def _on_new_library(self):
         if not self._prompt_dirty_save():
@@ -1687,7 +1728,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         self.table_sizes.selectRow(row)
         self._mark_dirty()
-        self._update_section_buttons()
+        self._filter_profiles()
 
     def _on_delete_size(self):
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
@@ -1728,7 +1769,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         if canonical == "Custom Profile" and hasattr(self, "cards_view") and self.cards_view is not None:
             self.cards_view.load_from_table(self.table_sizes, self)
         self._mark_dirty()
-        self._update_section_buttons()
+        self._filter_profiles()
 
     def _on_calc_weight(self):
         """Calculates theoretical linear weight for selected row or all rows."""
@@ -2081,7 +2122,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             self.cards_view.load_from_table(self.table_sizes, self)
             self.cards_view.select_card(row)
         self._mark_dirty()
-        self._update_section_buttons()
+        self._filter_profiles()
 
     def _activate_custom_section_family(self):
         if "Custom Profile" not in self.current_lib_data:
