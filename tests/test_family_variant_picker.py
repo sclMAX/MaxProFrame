@@ -503,8 +503,8 @@ class TestFamilyVariantPicker(unittest.TestCase):
         new_w = float(dialog.table_sizes.item(new_row, 7).text())
         self.assertAlmostEqual(new_w, 3.014, places=2)
 
-    def test_s4_explicit_variant_checkbox_informational_disabled(self):
-        """S4: Family-level checkbox is disabled (informational) for explicit variants, editable for legacy."""
+    def test_s4_stored_fillet_preserved_for_explicit_and_legacy_families(self):
+        """Editor does not expose or mutate creation-time fillet for either family shape."""
         from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
         self.manager.save_user_library(
@@ -529,15 +529,12 @@ class TestFamilyVariantPicker(unittest.TestCase):
         self.addCleanup(dialog.close)
         dialog.refresh_libraries(select_name="InfoCheckboxLib")
 
-        # Explicit variant: checkbox is disabled and checked
-        dialog.combo_family.setCurrentText("Square Hollow (Fillet)")
-        self.assertFalse(dialog.cb_fillet.isEnabled())
-        self.assertTrue(dialog.cb_fillet.isChecked())
-
-        # Legacy entry: checkbox is enabled and editable
-        dialog.combo_family.setCurrentText("Legacy Family")
-        self.assertTrue(dialog.cb_fillet.isEnabled())
-        self.assertFalse(dialog.cb_fillet.isChecked())
+        self.assertFalse(hasattr(dialog, "cb_fillet"))
+        for family, expected in (("Square Hollow (Fillet)", True), ("Legacy Family", False)):
+            dialog.combo_family.setCurrentText(family)
+            dialog.le_norm.setText("Edited")
+            dialog._commit_current_family_edits()
+            self.assertEqual(dialog.current_lib_data[family]["fillet"], expected)
 
     def test_b1_occupied_legacy_destination_key_collision_rejected_without_overwriting(self):
         """B1: Destination-key collision with legacy entry lacking canonical_family rejects with warning without overwriting sizes."""

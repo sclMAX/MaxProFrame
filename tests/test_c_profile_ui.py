@@ -297,7 +297,7 @@ class TestCProfileUI(unittest.TestCase):
         self.assertEqual(reloaded["Lip Length"], "25")
 
     def test_s1_s2_catalog_autoweight_responds_to_lip_length_and_radius_and_fillet(self):
-        """S1, S2: Editing Lip Length, Radius1 or toggling fillet triggers weight calculation."""
+        """Editing Lip Length and Radius1 calculates weight using stored fillet."""
         self._create_mock_library_with_c()
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(dialog.close)
@@ -311,9 +311,9 @@ class TestCProfileUI(unittest.TestCase):
         dialog.table_sizes.item(0, 8).setText("30")
         # Edit Radius1 (col 5)
         dialog.table_sizes.item(0, 5).setText("6")
-        # Toggle fillet
-        dialog.cb_fillet.setChecked(False)
-        dialog.cb_fillet.setChecked(True)
+        self.assertFalse(hasattr(dialog, "cb_fillet"))
+        dialog._commit_current_family_edits()
+        self.assertTrue(dialog.current_lib_data["C (Fillet)"]["fillet"])
 
     def test_s3_c_family_image_lookup_plain_and_fillet(self):
         """S3: Family image lookup resolves C.png and C_Fillet.png (or Warehouse fallback)."""
@@ -446,8 +446,8 @@ class TestCProfileUI(unittest.TestCase):
         self.assertEqual(saved_sh["Height"], "55")
         self.assertNotIn("Lip Length", saved_sh, "Non-C family must not acquire Lip Length field")
 
-    def test_preserve_non_c_custom_weight_preserved_on_fillet_toggle_and_table_edits(self):
-        """Preserve: Non-C custom weight unchanged on fillet toggle and radius edits."""
+    def test_preserve_non_c_custom_weight_and_stored_fillet_on_table_edits(self):
+        """Preserve: Non-C custom weight and stored fillet unchanged on radius edits."""
         lib_data = {
             "_metadata": {"name": "CustomWeightLib", "material": "Steel", "density": 7.85},
             "Square Hollow": {
@@ -472,9 +472,10 @@ class TestCProfileUI(unittest.TestCase):
 
         self.assertEqual(dialog.table_sizes.item(0, 7).text(), "9.999")
 
-        # Toggling fillet must NOT recalculate manual weight for non-C
-        dialog.cb_fillet.setChecked(True)
-        self.assertEqual(dialog.table_sizes.item(0, 7).text(), "9.999", "Fillet toggle must not overwrite non-C manual weight")
+        self.assertFalse(hasattr(dialog, "cb_fillet"))
+        dialog._commit_current_family_edits()
+        self.assertFalse(dialog.current_lib_data["Square Hollow"]["fillet"])
+        self.assertEqual(dialog.table_sizes.item(0, 7).text(), "9.999")
 
         # Editing Radius1 (col 5) must NOT recalculate manual weight for non-C
         dialog.table_sizes.item(0, 5).setText("4")

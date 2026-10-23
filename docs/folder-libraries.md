@@ -21,8 +21,9 @@ Portable folder libraries allow users to store FrameForge profile catalogs and s
    - For ZIP exchange instead, choose **Import ZIP…** from that menu. **Export Library** shares the selected saved custom library and referenced section assets; unsaved changes require **Save** or **Cancel**, never discard-and-export. Stock libraries must first be duplicated. See [ZIP exchange](library-zip.md).
 
 3. **Edit and save folder catalog data**:
-   - Select the `[Folder]` entry in the library list (banner shows folder path and material).
-   - Add/edit dimensions and families, then click **Save Changes**. Changes are atomically written to `<root>/library.json`.
+   - Select the `[Folder]` entry. The compact banner shows name and material, with the selected family below; hover for density and the full folder path. Stock catalogs also show **Read-only**.
+   - Add/edit dimensions and families, then click **Save Changes**. Changes are atomically written to `<root>/library.json`. Fillets are chosen in **Add Family** and retained from the stored family, not toggled in the editor.
+   - Remove buttons require an actual editable selection; merely having a current row is not enough.
 
 4. **Custom Profile Section Management (Cards View, Capture, Edit, Deferred Deletion)**:
    - When the `Custom Profile` family is selected in the Profile Library Manager, FrameForge presents a visual cards view instead of the table, displaying 2D silhouette vector thumbnails derived from stored section sketches via native face geometry. Standard families retain their standard parameter table (S1, S4).
@@ -98,7 +99,7 @@ Portable folder libraries allow users to store FrameForge profile catalogs and s
 | **Material Immutability & Validation** | Enforces that existing catalog material cannot be mutated on save, preserving downstream profile calculations. Preflight validation rejects invalid catalog shapes, non-string materials, and non-positive or non-finite densities before any writes occur. |
 | **Collision Protection** | Rejects creating, registering, or renaming folder libraries to display names that collide with bundled stock, legacy user, or other registered folder libraries. |
 | **GUI Header Actions** | **New Library** and **Duplicate Library** share the name/material/destination dialog. **Import Library** offers ZIP import and **Register Folder Library** for existing folders in place. **Export Library** is enabled only for custom libraries and requires saving unsaved edits or canceling. |
-| **Catalog Tagging & Banners** | Distinct `[Folder]` prefix in the library list with directory path tooltips; prominent banner showing library name, directory path, material info, and editable status. |
+| **Catalog Tagging & Banners** | Distinct `[Folder]` prefix in the library list with directory path tooltips; compact banner showing library name and material, a second family line, and a read-only indication for stock catalogs; density and full folder path remain in the tooltip. |
 | **Contextual Unregister** | When a folder library is selected, the Delete button adapts to **Unregister Folder Library**, prompting with explicit confirmation that disk files will be preserved. Never deletes directory contents from the GUI. Guarded by unsaved edits prompt before confirmation. |
 | **Unsaved Edits Guard & Cancellation Semantics** | Switching libraries or triggering create/register/unregister with unsaved changes prompts with Save / Discard / Cancel. Choosing **Discard** grants permission to proceed without saving, but does not immediately clear dirty state: if any subsequent step is canceled (picker cancel, dialog reject, unregister decline) or fails (backend write error, collision, refresh failure), the user remains on the current library with all unsaved edits and dirty state strictly preserved. Selecting another library loads catalog data before mutating active metadata, preventing split selection/write-target state on load failures. Refresh errors preserve diagnostic error status without overwriting with false success messages. |
 | **Modeless Window Lifecycle & Modality** | The Profile Library Manager opens modelessly from the start (`show()`), ensuring the FreeCAD main window and 3D viewport/Sketcher remain accessible and responsive without closing the dialog. Dialog ownership is retained on a single long-lived reference on the FreeCAD main window (`mw._frameforge_library_manager`). When editing a custom section sketch, the dialog temporarily hides to avoid obstructing the viewport and automatically restores when leaving Sketcher edit mode without applying changes. Re-activating the command while the dialog is open or hidden raises and activates the existing live instance without duplicating dialogs or losing unsaved edits. Closing the dialog retires ownership, cleanly discards uncommitted working copy documents, purges uncommitted staged assets (S9), and ensures `QApplication.activeModalWidget` is cleared (S10) so subsequent activations open a fresh manager instance. |
@@ -149,7 +150,7 @@ Convenience wrapper around `duplicate_library` specifically for folder libraries
 - [ ] Root confinement guards prevent symlink escape outside the library folder root.
 - [ ] Legacy stock and user libraries maintain existing metadata and behavior without modification.
 - [ ] New and Duplicate preview the destination folder; Register Folder remains available.
-- [ ] Folder entries are clearly identified with `[Folder]` tag, banner path info, and contextual unregister.
+- [ ] Folder entries are clearly identified with `[Folder]` tag, banner path tooltip, and contextual unregister.
 - [ ] Unsaved changes use Save/Discard/Cancel for switching actions; Export permits only Save or Cancel.
 - [ ] Folder duplication creates complete self-contained asset copies with native weight recalculation and rollback safety (verification pending).
 

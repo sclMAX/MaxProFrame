@@ -95,9 +95,9 @@ class TestLibraryManagerDialog(unittest.TestCase):
                 visible = {i for i in range(8) if not dialog.table_sizes.isColumnHidden(i)}
                 self.assertEqual(visible, expected)
         dialog.combo_family.setCurrentText("Square Hollow")
-        dialog.cb_fillet.setChecked(False)
-        self.assertTrue(dialog.table_sizes.isColumnHidden(5))
-        self.assertTrue(dialog.table_sizes.isColumnHidden(6))
+        self.assertFalse(hasattr(dialog, "cb_fillet"))
+        self.assertFalse(dialog.table_sizes.isColumnHidden(5))
+        self.assertFalse(dialog.table_sizes.isColumnHidden(6))
         dialog.table_sizes.item(0, 0).setText("Renamed")
         dialog.table_sizes.item(0, 1).setText("30")
         dialog.btn_save.click()
@@ -105,7 +105,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
         self.assertEqual(saved["Radius1"], "4")
         self.assertEqual(saved["Radius2"], "2")
         self.assertEqual(saved["Height"], "30")
-        dialog.cb_fillet.setChecked(True)
+        self.assertTrue(self.manager.get_library("Dynamic")["Square Hollow"]["fillet"])
         self.assertFalse(dialog.table_sizes.isColumnHidden(5))
         self.assertEqual(dialog.table_sizes.item(0, 5).text(), "4")
         dialog.combo_family.setCurrentText("Pipe")
@@ -160,7 +160,8 @@ class TestLibraryManagerDialog(unittest.TestCase):
             self.assertEqual(dialog.table_sizes.rowCount(), 1)
             self.assertEqual(dialog.table_sizes.item(0, 0).text(), next(iter(data[key]["sizes"])))
             self.assertEqual(dialog.le_norm.text(), data[key]["norm"])
-            self.assertEqual(dialog.cb_fillet.isChecked(), data[key]["fillet"])
+            dialog._commit_current_family_edits()
+            self.assertEqual(dialog.current_lib_data[key]["fillet"], data[key]["fillet"])
             self.assertIsNotNone(dialog.lbl_family_icon.pixmap())
             self.assertFalse(dialog.lbl_family_icon.pixmap().isNull())
         self.assertEqual(dialog.lbl_family_icon.size(), QtCore.QSize(120, 60))
@@ -493,7 +494,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
         from freecad.maxproframe.ff_tools import translate
 
         self.assertIn(translate("frameforge", "Aluminium"), dialog.lbl_lib_banner.text())
-        self.assertIn("2.7", dialog.lbl_lib_banner.text())
+        self.assertIn("2.7", dialog.lbl_lib_banner.toolTip())
 
         # Change Height (col 1) from 50 to 100
         dialog.table_sizes.item(0, 1).setText("100")

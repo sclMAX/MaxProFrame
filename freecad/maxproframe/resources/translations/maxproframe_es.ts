@@ -4,6 +4,10 @@
 <context>
     <name>frameforge</name>
     <message>
+        <source>Read-only</source>
+        <translation>Solo lectura</translation>
+    </message>
+    <message>
         <source>Import Library</source>
         <translation>Importar biblioteca</translation>
     </message>

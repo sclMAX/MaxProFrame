@@ -498,13 +498,13 @@ class CustomProfileCardsView(QtWidgets.QWidget):
         return None
 
     def select_card(self, index):
-        if not (0 <= index < len(self.cards)):
+        if not (0 <= index < len(self.cards)) or self.dialog.table_sizes.isRowHidden(index):
             return
         self._selected_index = index
         for i, c in enumerate(self.cards):
             c.setSelected(i == index)
 
-        if self.dialog.table_sizes.currentRow() != index:
+        if self.dialog._selected_profile_row() != index:
             self.dialog.table_sizes.blockSignals(True)
             self.dialog.table_sizes.setCurrentCell(index, 0)
             self.dialog.table_sizes.selectRow(index)
@@ -549,7 +549,7 @@ class CustomProfileCardsView(QtWidgets.QWidget):
                     card._updating_from_table = False
 
     def on_table_selection_changed(self):
-        row = self.dialog.table_sizes.currentRow()
+        row = self.dialog._selected_profile_row()
         if 0 <= row < len(self.cards):
             if self._selected_index != row:
                 self._selected_index = row

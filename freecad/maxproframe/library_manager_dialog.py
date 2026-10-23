@@ -452,6 +452,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         lib_layout.addLayout(lib_header)
         self.list_libraries = QtWidgets.QListWidget()
         self.list_libraries.currentItemChanged.connect(self._on_library_selection_changed)
+        self.list_libraries.itemSelectionChanged.connect(self._update_section_buttons)
         lib_layout.addWidget(self.list_libraries, 1)
 
         family_widget = QtWidgets.QWidget()
@@ -467,6 +468,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.list_families = QtWidgets.QListWidget()
         self.list_families.setIconSize(QtCore.QSize(60, 30))
         self.list_families.currentItemChanged.connect(self._on_family_selection_changed)
+        self.list_families.itemSelectionChanged.connect(self._update_section_buttons)
         family_layout.addWidget(self.list_families, 1)
 
         # Hidden raw-key selector retained for legacy callers; the list is the visible selector.
@@ -503,17 +505,16 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.lbl_lib_banner.setStyleSheet("padding: 4px; font-weight: bold; border-radius: 3px;")
         header_details_layout.addWidget(self.lbl_lib_banner)
 
-        # Metadata row: Norma & Fillet & Size compact actions
+        self.lbl_family_name = QtWidgets.QLabel()
+        header_details_layout.addWidget(self.lbl_family_name)
+
+        # Metadata and compact size actions
         meta_row = QtWidgets.QHBoxLayout()
         meta_row.setContentsMargins(0, 0, 0, 0)
         meta_row.addWidget(QtWidgets.QLabel(translate("frameforge", "Standard / Ref:")))
         self.le_norm = QtWidgets.QLineEdit()
         self.le_norm.textChanged.connect(self._mark_dirty)
         meta_row.addWidget(self.le_norm, 1)
-
-        self.cb_fillet = QtWidgets.QCheckBox(translate("frameforge", "With Fillet"))
-        self.cb_fillet.toggled.connect(self._on_fillet_toggled)
-        meta_row.addWidget(self.cb_fillet)
 
         self.btn_add_size = self._compact_button("list-add.svg", "Add Size", self._on_add_size)
         self.btn_del_size = self._compact_button("list-remove.svg", "Remove Size", self._on_delete_size)
@@ -772,14 +773,10 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
     def _update_banner(self, is_user, name, is_folder=False, folder_path=None):
         dark = is_dark_theme(self)
         mat, dens = self.manager.get_library_material_info(name)
-        mat_display = f"{translate('frameforge', mat)} ({dens} g/cm³)"
+        mat_display = translate('frameforge', mat)
         if is_folder:
-            folder_info = f" | {folder_path}" if folder_path else ""
-            self.lbl_lib_banner.setText(
-                translate("frameforge", "Folder Library: %s%s | Material: %s (Editable)")
-                % (name, folder_info, mat_display)
-            )
-            self.lbl_lib_banner.setToolTip(folder_path or "")
+            self.lbl_lib_banner.setText(f"{name} | {mat_display}")
+            self.lbl_lib_banner.setToolTip(f"{dens} g/cm³\n{folder_path or ''}")
             if dark:
                 self.lbl_lib_banner.setStyleSheet(
                     "background-color: #1a333a; color: #80deea; border: 1px solid #00838f; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
@@ -789,10 +786,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                     "background-color: #e0f7fa; color: #006064; border: 1px solid #80deea; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
                 )
         elif is_user:
-            self.lbl_lib_banner.setText(
-                translate("frameforge", "User Library: %s | Material: %s (Editable)") % (name, mat_display)
-            )
-            self.lbl_lib_banner.setToolTip("")
+            self.lbl_lib_banner.setText(f"{name} | {mat_display}")
+            self.lbl_lib_banner.setToolTip(f"{dens} g/cm³")
             if dark:
                 self.lbl_lib_banner.setStyleSheet(
                     "background-color: #1b3824; color: #81c784; border: 1px solid #2e7d32; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
@@ -802,14 +797,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                     "background-color: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
                 )
         else:
-            self.lbl_lib_banner.setText(
-                translate(
-                    "frameforge",
-                    "System Library: %s | Material: %s (Read-only - Use 'Duplicate' to customize)",
-                )
-                % (name, mat_display)
-            )
-            self.lbl_lib_banner.setToolTip("")
+            self.lbl_lib_banner.setText(f"{name} | {mat_display} | {translate('frameforge', 'Read-only')}")
+            self.lbl_lib_banner.setToolTip(f"{dens} g/cm³")
             if dark:
                 self.lbl_lib_banner.setStyleSheet(
                     "background-color: #2b3036; color: #cfd8dc; border: 1px solid #455a64; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
@@ -924,7 +913,6 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         has_family = bool(family_name and family_name in self.current_lib_data)
 
         fam_data = self.current_lib_data.get(family_name, {}) if has_family else {}
-        is_explicit = bool(isinstance(fam_data, dict) and "canonical_family" in fam_data)
         canonical = get_canonical_family(family_name, fam_data) if has_family else ""
         is_custom_geom = canonical == "Custom Profile"
 
@@ -932,25 +920,21 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.btn_add_size.setEnabled(is_user and has_family and not is_custom_geom)
         self.btn_del_size.setEnabled(is_user and has_family)
         self.le_norm.setEnabled(is_user and has_family)
-        self.cb_fillet.setEnabled(is_user and has_family and not is_explicit and not is_custom_geom)
+        self.lbl_family_name.setText(self._get_family_display_name(family_name, fam_data))
 
         self._update_section_buttons()
 
         if not has_family:
             self.table_sizes.setRowCount(0)
             self.le_norm.setText("")
-            self.cb_fillet.setChecked(False)
             self._update_family_icon()
+            self.cards_view.hide()
+            self._update_section_buttons()
             return
 
         self.le_norm.blockSignals(True)
-        self.cb_fillet.blockSignals(True)
-
         self.le_norm.setText(fam_data.get("norm", ""))
-        self.cb_fillet.setChecked(bool(fam_data.get("fillet", False)))
-
         self.le_norm.blockSignals(False)
-        self.cb_fillet.blockSignals(False)
 
         self._update_family_icon()
 
@@ -967,10 +951,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         canonical = get_canonical_family(fam, fam_data)
 
         if fillet is None:
-            if fam == self.current_family and hasattr(self, "cb_fillet"):
-                fillet = self.cb_fillet.isChecked()
-            else:
-                fillet = bool(fam_data.get("fillet", False)) if isinstance(fam_data, dict) else False
+            fillet = bool(fam_data.get("fillet", False)) if isinstance(fam_data, dict) else False
 
         lib_name = (self.current_lib_meta or {}).get("name", "Metal")
         base_name = canonical.replace(" ", "_")
@@ -1063,7 +1044,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             visible.discard("Lip Length")
         if canonical == "Custom Profile":
             visible.intersection_update({"Size", "Height", "Width", "Weight"})
-        if not self.cb_fillet.isChecked():
+        if not fam_data.get("fillet", False):
             visible.difference_update(("Radius1", "Radius2"))
         for index, (key, label) in enumerate(self.TABLE_COLUMNS):
             if key == "Height" and canonical in ("Round Bar", "Pipe"):
@@ -1078,16 +1059,6 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         header = self.table_sizes.horizontalHeader()
         for visual_index, logical_index in enumerate(order):
             header.moveSection(header.visualIndex(logical_index), visual_index)
-
-    def _on_fillet_toggled(self, checked):
-        self._mark_dirty()
-        self._update_family_icon()
-        self._update_size_columns()
-        fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
-        canonical = get_canonical_family(self.current_family, fam_data)
-        if canonical == "C":
-            for row in range(self.table_sizes.rowCount()):
-                self._recalculate_row_weight(row)
 
     def _populate_sizes_table(self, sizes_dict):
         self.table_sizes.blockSignals(True)
@@ -1133,6 +1104,20 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             if hasattr(self, "cards_view") and self.cards_view is not None:
                 self.cards_view.hide()
             self.table_sizes.show()
+        self._update_section_buttons()
+
+
+
+    @staticmethod
+    def _has_list_selection(widget):
+        current = widget.currentItem()
+        return bool(current and not current.isHidden() and current in widget.selectedItems())
+
+    def _selected_profile_row(self):
+        row = self.table_sizes.currentRow()
+        if row < 0 or self.table_sizes.isRowHidden(row):
+            return -1
+        return row if any(index.row() == row for index in self.table_sizes.selectedIndexes()) else -1
 
     def _commit_current_family_edits(self):
         """Commits table and metadata edits from widgets into current_lib_data for current_family."""
@@ -1210,7 +1195,6 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                     )
 
         self.current_lib_data[self.current_family]["norm"] = self.le_norm.text().strip()
-        self.current_lib_data[self.current_family]["fillet"] = self.cb_fillet.isChecked()
         self.current_lib_data[self.current_family]["sizes"] = sizes
 
     def _mark_dirty(self):
@@ -1258,7 +1242,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 lip_str = lip_item.text().strip() if lip_item else ""
                 r1 = float(r1_str) if r1_str else 0.0
                 lip = float(lip_str) if lip_str else 0.0
-                is_fillet = bool(self.cb_fillet.isChecked())
+                is_fillet = bool(fam_data.get("fillet", False))
                 calc_weight = calculate_linear_weight(
                     family=canonical,
                     width=w,
@@ -1308,6 +1292,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         canonical = get_canonical_family(self.current_family, fam_data) if self.current_family else ""
         if canonical == "Custom Profile" and hasattr(self, "cards_view") and self.cards_view is not None:
             self.cards_view.on_table_item_changed(item)
+        self._update_section_buttons()
 
     def _on_new_library(self):
         if not self._prompt_dirty_save():
@@ -1496,6 +1481,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             self._set_status(translate("frameforge", "Library duplicated as '%s'.") % new_name)
 
     def _on_delete_library(self):
+        if not self._has_list_selection(self.list_libraries):
+            return
         if not self.current_lib_meta or not self.current_lib_meta.get("is_user", False):
             return
 
@@ -1618,6 +1605,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self._mark_dirty()
 
     def _on_delete_family(self):
+        if not self._has_list_selection(self.list_families):
+            return
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
             return
 
@@ -1698,12 +1687,13 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         self.table_sizes.selectRow(row)
         self._mark_dirty()
+        self._update_section_buttons()
 
     def _on_delete_size(self):
         if not self.current_lib_meta or not self.current_lib_meta["is_user"]:
             return
 
-        row = self.table_sizes.currentRow()
+        row = self._selected_profile_row()
         if row < 0:
             return
 
@@ -1781,7 +1771,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 r1 = float(r1_item.text()) if (r1_item and r1_item.text().strip()) else 0.0
                 lip_item = self.table_sizes.item(row, 8) if self.table_sizes.columnCount() > 8 else None
                 lip = float(lip_item.text()) if (lip_item and lip_item.text().strip()) else 0.0
-                is_fillet = bool(self.cb_fillet.isChecked())
+                is_fillet = bool(fam_data.get("fillet", False))
                 calc_weight = calculate_linear_weight(
                     family=canonical,
                     width=w,
@@ -1898,7 +1888,13 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
         canonical = get_canonical_family(self.current_family, fam_data) if self.current_family else ""
         is_custom_geom = canonical == "Custom Profile"
-        has_row = self.table_sizes.currentRow() >= 0
+        has_row = self._selected_profile_row() >= 0
+        if hasattr(self, 'btn_del_size'):
+            self.btn_del_size.setEnabled(is_user and has_row)
+        if hasattr(self, 'btn_del_lib'):
+            self.btn_del_lib.setEnabled(is_user and self._has_list_selection(self.list_libraries))
+        if hasattr(self, 'btn_del_family'):
+            self.btn_del_family.setEnabled(is_user and self._has_list_selection(self.list_families))
 
         for name in ("btn_capture_section", "btn_import_dxf", "btn_edit_section", "btn_apply_edit"):
             button = getattr(self, name, None)
