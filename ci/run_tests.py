@@ -51,7 +51,14 @@ def main() -> None:
         default="stable",
         help="Target FreeCAD runtime to validate and test: 'stable' (FreeCAD 1.1.4 / Python 3.11, default) or 'rc' (FreeCAD 26.3rc2 / Python 3.13)",
     )
+    parser.add_argument(
+        "--native-diagnostics",
+        action="store_true",
+        help="Manual stable-only GDB capture at 150s, then continue; requires gdb and timeout >160s",
+    )
     args = parser.parse_args()
+    if args.native_diagnostics and (args.target != "stable" or args.timeout <= 160):
+        parser.error("--native-diagnostics requires --target stable and --timeout greater than 160")
 
     freecad_bin = pathlib.Path(args.freecad_bin).resolve()
     if not freecad_bin.is_file():
@@ -68,7 +75,18 @@ def main() -> None:
         sys.exit(1)
 
     # Clear stale evidence from previous invocations before launching
-    for stale_name in ("summary.json", "tests.log", "stdout.log", "stderr.log", "startup.log"):
+    for stale_name in (
+        "summary.json",
+        "tests.log",
+        "stdout.log",
+        "stderr.log",
+        "startup.log",
+        "python-stacks.log",
+        "modal-state.jsonl",
+        "qt-events.jsonl",
+        "native-stacks.jsonl",
+        "native-inferior.pid",
+    ):
         stale_file = reports_dir / stale_name
         if stale_file.is_file():
             stale_file.unlink()
@@ -122,6 +140,9 @@ def main() -> None:
         env["FF_ROOT"] = str(repo_root)
         env["FF_REPORTS"] = str(reports_dir)
         env["FF_TARGET"] = args.target
+        env.pop("FF_NATIVE_DIAGNOSTICS", None)
+        if args.native_diagnostics:
+            env["FF_NATIVE_DIAGNOSTICS"] = "1"
 
         # Reproduce official AppRun environment bootstrap when launched via AppRun without executing AppRun script
         if is_apprun_layout and appimage_dist_root:
@@ -141,6 +162,16 @@ def main() -> None:
             str(macro_path),
         ]
 
+        native = None
+        if args.native_diagnostics:
+            import native_diagnostics as native
+
+            try:
+                cmd, env = native.prepare(cmd, env, scratch, reports_dir)
+            except RuntimeError as exc:
+                sys.stderr.write(f"run_tests error: {exc}.\n")
+                sys.exit(1)
+
         timed_out = False
         proc = subprocess.Popen(
             cmd,
@@ -156,6 +187,8 @@ def main() -> None:
             stdout_text, stderr_text = proc.communicate(timeout=args.timeout)
         except subprocess.TimeoutExpired:
             timed_out = True
+            if native is not None:
+                native.kill_inferior(reports_dir, proc.pid)
             try:
                 pgid = os.getpgid(proc.pid)
                 os.killpg(pgid, signal.SIGKILL)
@@ -163,6 +196,8 @@ def main() -> None:
                 pass
             stdout_text, stderr_text = proc.communicate()
 
+        if native is not None:
+            native.kill_inferior(reports_dir, proc.pid)
         write_bounded_file(reports_dir / "stdout.log", stdout_text)
         write_bounded_file(reports_dir / "stderr.log", stderr_text)
 

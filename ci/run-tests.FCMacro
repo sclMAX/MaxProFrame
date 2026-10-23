@@ -1,6 +1,7 @@
 # FreeCAD Macro: run-tests.FCMacro
 # Runs full test suite in official FreeCAD 1.1.4 Linux GUI offscreen runner.
 
+import importlib.util
 import json
 import os
 import sys
@@ -24,10 +25,33 @@ def log_startup(marker: str) -> None:
 try:
     log_startup("macro-entry")
 
+    # Arm a one-shot stack watchdog before native imports; diagnostics are
+    # best-effort and must never change test verdicts or dialog behavior.
+    diagnostic_session = None
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "ci_timeout_diagnostics", os.path.join(os.path.dirname(__file__), "diagnostics.py")
+        )
+        diagnostics = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(diagnostics)
+        diagnostic_session = diagnostics.start(reports_dir)
+    except Exception:
+        log_startup("stack-diagnostics-unavailable")
+
     # 1. Import FreeCAD core modules before test suite imports
     import FreeCAD
     import FreeCADGui
     import Part
+
+    if diagnostic_session is not None:
+        try:
+            from PySide import QtCore, QtWidgets
+
+            diagnostic_session.attach_qt(QtCore, QtWidgets)
+            if os.environ.get("FF_NATIVE_DIAGNOSTICS") == "1":
+                diagnostics.attach_structural(diagnostic_session, QtCore, QtWidgets, reports_dir)
+        except Exception:
+            log_startup("modal-diagnostics-unavailable")
 
     # 2. Strict runtime version validation
     target = os.environ.get("FF_TARGET", "stable")
@@ -121,6 +145,11 @@ try:
 
     sys.stdout.flush()
     sys.stderr.flush()
+    if diagnostic_session is not None:
+        try:
+            diagnostic_session.stop()
+        except Exception:
+            pass
     os._exit(exit_code)
 
 except BaseException as exc:

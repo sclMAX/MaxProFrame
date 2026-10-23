@@ -542,6 +542,19 @@ class TestRunTestsPolicy(unittest.TestCase):
             },
         )
         self.assertEqual(proc.returncode, 124)
+        self.assertEqual(proc.stdout, "")
+        self.assertEqual(proc.stderr, "run_tests error: FreeCAD process timed out after 0.2s (killed process group).\n")
+        self.assertFalse((self.reports_dir / "summary.json").exists())
+
+    def test_stale_diagnostics_are_removed_without_changing_child_exit(self):
+        for name in ("python-stacks.log", "modal-state.jsonl"):
+            (self.reports_dir / name).write_text("stale private evidence", encoding="utf-8")
+        proc = self._run_tests_host(env_overrides={"FAKE_EXIT_CODE": "7"})
+        self.assertEqual(proc.returncode, 7)
+        self.assertEqual(proc.stdout, "")
+        self.assertEqual(proc.stderr, "run_tests error: FreeCAD child process failed with exit code 7.\n")
+        for name in ("python-stacks.log", "modal-state.jsonl"):
+            self.assertFalse((self.reports_dir / name).exists())
 
     def test_nonzero_child_exit_propagates_failure(self):
         proc = self._run_tests_host(env_overrides={"FAKE_EXIT_CODE": "1"})
@@ -763,6 +776,10 @@ class TestRunTestsPolicy(unittest.TestCase):
         )
         self.assertEqual(proc.returncode, 0, f"Stderr: {proc.stderr}")
         self.assertTrue(summary_file.is_file(), "summary.json must be generated")
+        self.assertTrue((summary_file.parent / "python-stacks.log").is_file())
+        self.assertNotIn(
+            "stack-diagnostics-unavailable", (summary_file.parent / "startup.log").read_text(encoding="utf-8")
+        )
         self.assertEqual(summary.get("tests"), 1)
         self.assertIs(summary.get("successful"), True)
 
