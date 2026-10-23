@@ -88,6 +88,19 @@ failure artifacts), without changing the runner deadline, verdicts or dialogs:
   modality, active modal class and elapsed time are recorded. No window titles,
   widget text, object names, environment or credentials are collected.
 
+### Structural Qt observer evidence
+
+The optional structural observer helper never pumps events or answers dialogs.
+`qt-events.jsonl` retains at most 272 records: the first 192 ordinary widget
+Show/Hide/Close/WindowBlocked/WindowUnblocked events, the latest 64 modal widget
+events, and 16 deduplicated structural errors. Separate modal/error capacity
+prevents ordinary startup widgets from hiding later modal evidence. Modal events
+remain a bounded tail, not a complete history. Records contain event number,
+class (80 characters), visibility, modality and elapsed time, never widget text.
+PySide enums use `.value` before integer conversion. Exception messages are
+excluded. An initial modal snapshot supplements existing periodic snapshots.
+This helper is inactive unless explicit manual instrumentation installs it.
+
 Diagnostics never pump events, dismiss or answer dialogs. If the GUI thread is
 blocked outside a nested event loop, Qt snapshots may stop; the independent stack
 watchdog can still provide evidence. A native call holding the GIL may also
