@@ -48,6 +48,8 @@ try:
             from PySide import QtCore, QtWidgets
 
             diagnostic_session.attach_qt(QtCore, QtWidgets)
+            if os.environ.get("FF_NATIVE_DIAGNOSTICS") == "1":
+                diagnostics.attach_structural(diagnostic_session, QtCore, QtWidgets, reports_dir)
         except Exception:
             log_startup("modal-diagnostics-unavailable")
 

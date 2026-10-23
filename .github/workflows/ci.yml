@@ -13,6 +13,11 @@ on:
         description: 'Base Git reference for change comparison'
         required: false
         default: 'HEAD^'
+      native_diagnostics:
+        description: 'Manual stable-only native stack and structural Qt evidence'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -105,6 +110,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libegl1 libopengl0 libxkbcommon-x11-0 libxcb-cursor0
 
+      - name: Install manual native debugger
+        if: github.event_name == 'workflow_dispatch' && inputs.native_diagnostics && matrix.target == 'stable'
+        run: |
+          sudo apt-get install -y --no-install-recommends gdb
+
       - name: Download and verify FreeCAD AppImage
         if: steps.planner.outputs.run_tests == 'true'
         run: |
@@ -120,15 +130,19 @@ jobs:
 
       - name: Run native FreeCAD tests
         if: steps.planner.outputs.run_tests == 'true'
+        env:
+          NATIVE_DIAGNOSTICS: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostics && matrix.target == 'stable' }}
         run: |
+          diagnostic_args=()
+          if [[ "$NATIVE_DIAGNOSTICS" == "true" ]]; then diagnostic_args+=(--native-diagnostics); fi
           python3 ci/run_tests.py \
             --freecad-bin "${{ runner.temp }}/squashfs-root/AppRun" \
             --reports "${{ runner.temp }}/test-reports" \
             --timeout ${{ matrix.timeout }} \
-            --target "${{ matrix.target }}"
+            --target "${{ matrix.target }}" "${diagnostic_args[@]}"
 
       - name: Upload test failure reports
-        if: failure()
+        if: failure() || (always() && github.event_name == 'workflow_dispatch' && inputs.native_diagnostics && matrix.target == 'stable')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-failure-reports-${{ matrix.target }}

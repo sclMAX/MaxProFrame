@@ -114,6 +114,39 @@ The hosted stable timeout at 420 seconds remains unexplained: both original loca
 450-test suites passed. This slice collects evidence, not a preventive dialog fix;
 a native modal escaping the existing offscreen fixture remains unproven.
 
+## Explicit manual native investigation (stable only)
+
+Dispatch CI with the boolean `native_diagnostics` enabled (default: false).
+Only the stable job installs GDB and passes `--native-diagnostics`; PR, push,
+RC and ordinary manual runs retain the normal launch path and deadlines.
+Locally, add `--native-diagnostics --target stable --timeout 420` to the native
+runner command above. GDB must already be installed; timeouts <=160 are rejected.
+
+The inferior is launched under GDB, not attached by a sibling process. AppImage
+Python bootstrap paths are applied to the inferior only, not GDB's Python.
+No sudo debugger, ptrace-policy changes or external debug-symbol downloads are used.
+At 150 seconds an independent debugger timer requests SIGSTOP, collects up to
+64 threads and 64 function names per thread (160 characters/name, no arguments,
+locals or source text), then continues the **same** inferior without delivering
+SIGSTOP. The original runner deadline and summary validation remain authoritative.
+Unexpected debugger stops record their bounded signal and native frames before
+interrupting the diagnostic run with failure, not success. In particular SIGSEGV
+is never suppressed or continued.
+Missing GDB fails explicitly; no retry or fallback suite is launched.
+
+Additional reports:
+
+- `native-stacks.jsonl`: arming, bounded native frames, structural capture errors
+  and inferior exit code. An early successful run has no capture frames.
+- `native-inferior.pid`: runtime-owned PID used for timeout cleanup, including
+  GDB's separate inferior process group within the runner's session.
+- `qt-events.jsonl`: bounded structural observer evidence described above.
+
+The stable report artifact is uploaded for this explicit mode even on success,
+using the existing `test-failure-reports-stable` name and seven-day retention.
+Missing/empty native frames or Qt events cannot exclude a modal or prove a cause.
+Diagnostics do not dismiss dialogs, synthesize input, skip tests or repair the GUI.
+
 ## GitHub Actions runner infrastructure and Node 24
 
 GitHub Actions JavaScript actions execute on the runner's internal Node.js runtime. GitHub Actions has updated official actions to Node 24 and flags workflows invoking Node 20 actions with runner deprecation warnings.
