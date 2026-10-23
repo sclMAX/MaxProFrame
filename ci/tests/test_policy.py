@@ -543,9 +543,7 @@ class TestRunTestsPolicy(unittest.TestCase):
         )
         self.assertEqual(proc.returncode, 124)
         self.assertEqual(proc.stdout, "")
-        self.assertEqual(
-            proc.stderr, "run_tests error: FreeCAD process timed out after 0.2s (killed process group).\n"
-        )
+        self.assertEqual(proc.stderr, "run_tests error: FreeCAD process timed out after 0.2s (killed process group).\n")
         self.assertFalse((self.reports_dir / "summary.json").exists())
 
     def test_stale_diagnostics_are_removed_without_changing_child_exit(self):
