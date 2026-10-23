@@ -74,6 +74,33 @@ To resolve both issues without patching vendor AppImages:
 6. Process-group timeouts are enforced (exit code 124 on timeout), and `ci/run-tests.FCMacro` emits structured diagnostic checkpoints (`macro-entry`, `validated-version`, `discovery-start`, `completed-summary`) to `startup.log`.
 7. Test outcomes require fresh, strictly validated `summary.json` containing positive test counts, zero failures/errors, and consistent non-negative counts. Previous execution artifacts are cleared before launch to avoid stale false-green results.
 
+## Timeout diagnostic evidence
+
+The macro writes evidence into the existing `--reports` directory (included in
+failure artifacts), without changing the runner deadline, verdicts or dialogs:
+
+- `python-stacks.log`: one all-thread Python stack dump after 120 seconds from
+  macro entry, independently of the Qt event loop. CPython bounds this to 100
+  threads, 100 frames per thread and 500 characters per string; no locals or
+  source lines are collected. A successful suite cancels the pending dump.
+- `modal-state.jsonl`: at most 12 snapshots, every 30 seconds on the GUI thread,
+  each limited to 32 top-level widgets. Only bounded class names, visibility,
+  modality, active modal class and elapsed time are recorded. No window titles,
+  widget text, object names, environment or credentials are collected.
+
+Diagnostics never pump events, dismiss or answer dialogs. If the GUI thread is
+blocked outside a nested event loop, Qt snapshots may stop; the independent stack
+watchdog can still provide evidence. A native call holding the GIL may also
+prevent Python timer callbacks. Empty/missing evidence can mean early startup
+failure or unavailable diagnostics, not proof that no modal existed. Short runner
+timeouts can expire before either diagnostic fires. Diagnostic setup/I/O failures
+are nonfatal and do not replace summary validation. Old diagnostic files are
+cleared with other stale reports before launch.
+
+The hosted stable timeout at 420 seconds remains unexplained: both original local
+450-test suites passed. This slice collects evidence, not a preventive dialog fix;
+a native modal escaping the existing offscreen fixture remains unproven.
+
 ## GitHub Actions runner infrastructure and Node 24
 
 GitHub Actions JavaScript actions execute on the runner's internal Node.js runtime. GitHub Actions has updated official actions to Node 24 and flags workflows invoking Node 20 actions with runner deprecation warnings.

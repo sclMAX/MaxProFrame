@@ -68,7 +68,15 @@ def main() -> None:
         sys.exit(1)
 
     # Clear stale evidence from previous invocations before launching
-    for stale_name in ("summary.json", "tests.log", "stdout.log", "stderr.log", "startup.log"):
+    for stale_name in (
+        "summary.json",
+        "tests.log",
+        "stdout.log",
+        "stderr.log",
+        "startup.log",
+        "python-stacks.log",
+        "modal-state.jsonl",
+    ):
         stale_file = reports_dir / stale_name
         if stale_file.is_file():
             stale_file.unlink()
