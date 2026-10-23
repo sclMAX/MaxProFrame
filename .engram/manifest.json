@@ -40,6 +40,14 @@
       "sessions": 45,
       "memories": 69,
       "prompts": 0
+    },
+    {
+      "id": "f61c8093",
+      "created_by": "max",
+      "created_at": "2026-10-23T19:37:47.191159792Z",
+      "sessions": 12,
+      "memories": 42,
+      "prompts": 10
     }
   ]
 }
