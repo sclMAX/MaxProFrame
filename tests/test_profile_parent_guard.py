@@ -1,5 +1,7 @@
+import io
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -14,6 +16,14 @@ from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
 # Console FreeCAD lacks command registration, which is unrelated to creation.
 with patch.object(Gui, "addCommand", create=True):
     from freecad.maxproframe import create_custom_profiles_tool as custom_module
+
+
+def source_content(snapshot):
+    # dumpContent() is a ZIP whose per-entry timestamps reflect serialization
+    # time, not source changes. Compare every entry in order, including duplicate
+    # names and empty payloads, without interpreting or normalizing its contents.
+    with zipfile.ZipFile(io.BytesIO(snapshot)) as archive:
+        return tuple((entry.filename, archive.read(entry)) for entry in archive.infolist())
 
 
 class TestProfileParentGuard(unittest.TestCase):
@@ -79,7 +89,7 @@ class TestProfileParentGuard(unittest.TestCase):
                 # Keep the separate custom-section link within its existing local scope.
                 parent.addObject(self.section)
         self.doc.recompute()
-        before_path = self.path.dumpContent()
+        before_path = source_content(self.path.dumpContent())
         before_group = tuple(parent.Group) if parent else ()
         before_objects = tuple(self.doc.Objects)
         with patch.object(App.Console, "PrintMessage") as message:
@@ -97,7 +107,7 @@ class TestProfileParentGuard(unittest.TestCase):
                     self.assertIn(profile, parent.Group)
                 else:
                     self.assertEqual(profile.Parents, [])
-        self.assertEqual(self.path.dumpContent(), before_path)
+        self.assertEqual(source_content(self.path.dumpContent()), before_path)
         self.assertEqual(tuple(self.doc.Objects), before_objects + (profile,))
         self.doc.recompute()
         self.assertEqual(profile.getTypeIdOfProperty("Target"), "App::PropertyLinkSubGlobal")
@@ -147,6 +157,24 @@ class TestProfileParentGuard(unittest.TestCase):
         self.assertAlmostEqual(profile.Shape.Volume, 200 * length)
         self.assertNotIn("Invalid", profile.State)
         self.assertNotIn("Error", profile.State)
+
+    def test_snapshot_ignores_only_archive_timestamp(self):
+        before = self.path.dumpContent()
+        rewritten = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(before)) as original, zipfile.ZipFile(rewritten, "w") as changed:
+            for entry in original.infolist():
+                payload = original.read(entry)
+                entry.date_time = (2000, 1, 1, 0, 0, 0)
+                changed.writestr(entry, payload)
+        self.assertNotEqual(before, rewritten.getvalue())
+        self.assertEqual(source_content(before), source_content(rewritten.getvalue()))
+
+    def test_snapshot_detects_real_source_mutation(self):
+        before = source_content(self.path.dumpContent())
+        self.path.setDatum(0, App.Units.Quantity("150 mm"))
+        self.doc.recompute()
+        with self.assertRaises(AssertionError):
+            self.assertEqual(source_content(self.path.dumpContent()), before)
 
     def test_legacy_local_target_is_not_migrated_on_reopen(self):
         profile = self.create(False)
