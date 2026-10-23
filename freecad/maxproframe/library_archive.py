@@ -1,4 +1,5 @@
 """Bounded, data-only ZIP exchange. Native sketches are never opened here."""
+import errno
 import json
 import math
 import os
@@ -89,7 +90,7 @@ def _index(archive):
     return {info.filename: info for info in names.values()}
 
 
-def _stream(source, target, total):
+def _stream(source, target, total, member_limit=None, total_limit=None):
     count = 0
     while True:
         chunk = source.read(CHUNK_BYTES)
@@ -97,7 +98,8 @@ def _stream(source, target, total):
             break
         count += len(chunk)
         total[0] += len(chunk)
-        if count > MAX_MEMBER_BYTES or total[0] > MAX_EXPANDED_BYTES:
+        if (count > (MAX_MEMBER_BYTES if member_limit is None else member_limit)
+                or total[0] > (MAX_EXPANDED_BYTES if total_limit is None else total_limit)):
             raise ValueError('Actual expanded size exceeds limit.')
         target.write(chunk)
     return count
@@ -161,8 +163,22 @@ def export_library_zip(manager, name_or_path, archive_path):
         with tempfile.TemporaryDirectory(prefix='mpf-zip-check-') as scratch:
             with zipfile.ZipFile(temporary) as archive:
                 _stage(manager, archive, Path(scratch))
-        # Atomic no-clobber publication, including a concurrent output creator.
-        os.link(temporary, output)
+        # Prefer atomic no-clobber publication on filesystems supporting links.
+        try:
+            os.link(temporary, output)
+        except OSError as error:
+            if error.errno not in {errno.EPERM, errno.EOPNOTSUPP, errno.ENOTSUP, errno.ENOSYS}:
+                raise
+            # Exclusive creation also refuses racing files and symlinks. Unlike
+            # linking, streaming exposes an incomplete file until close succeeds.
+            with open(temporary, 'rb') as source:
+                size = os.fstat(source.fileno()).st_size
+                # On failure retain the partial output: path-based cleanup
+                # could delete an unrelated replacement installed concurrently.
+                with output.open('xb') as target:
+                    copied = _stream(source, target, [0], size, size)
+                    if copied != size:
+                        raise ValueError('Archive size changed during publication.')
     finally:
         os.unlink(temporary)
     return str(output)

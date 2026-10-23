@@ -9,7 +9,18 @@ is separate; export reads the saved catalog only.
 - `export_library_zip(name_or_path, archive_path)` returns the absolute archive path.
   Existing outputs, including symlinks, are never overwritten. The output parent
   must exist and the output must be outside the source library. Publication occurs
-  only after a full validation pass.
+  only after a full validation pass. On filesystems supporting hard links,
+  publication is atomic and no-clobber. If linking reports EPERM, EOPNOTSUPP /
+  ENOTSUP, or ENOSYS (as on some cloud/FUSE mounts), export instead creates the
+  output exclusively and copies the validated archive in bounded chunks. This
+  fallback never overwrites a racing file or symlink, but the output may be
+  visible before copying finishes; universal atomic visibility is not promised.
+  A failed write or close may leave an incomplete destination. Remove that
+  incomplete export manually before retrying, or choose a new output name.
+  Export deliberately does not delete the destination on failure: another
+  process could have replaced it with an unrelated file. The temporary validated
+  archive is still cleaned up. Other link errors are reported without attempting
+  the fallback.
 - `import_library_zip(archive_path, target_folder_path=None)` returns the same
   registration metadata as `register_folder_library`. The default destination is
   `get_default_library_folder(name)`, a dedicated child of `user_dir`.

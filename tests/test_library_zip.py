@@ -1,5 +1,6 @@
 """ZIP exchange contracts through the public manager API; no sketch execution."""
 import copy
+import errno
 import hashlib
 import json
 from pathlib import Path
@@ -66,6 +67,122 @@ class TestLibraryZip(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             self.manager.export_library_zip('Portable', str(archive))
         self.assertEqual(self.snapshot(), before)
+
+    def cloud_source(self):
+        source = self.root / 'source'
+        self.manager.create_folder_library(str(source), 'Portable', material='Alloy', density=4.3, data=self.data)
+        (source / 'sections').mkdir()
+        (source / 'sections/a.FCStd').write_bytes(b'opaque native asset')
+        return self.root / 'out.zip'
+
+    def test_unsupported_link_roundtrip(self):
+        output = self.cloud_source()
+        before = self.snapshot()
+        for code in {errno.EPERM, errno.EOPNOTSUPP, errno.ENOTSUP, errno.ENOSYS}:
+            with self.subTest(errno=code):
+                target = output.with_name(str(code) + '.zip')
+                with patch('freecad.maxproframe.library_archive.os.link', side_effect=OSError(code, 'unsupported')):
+                    self.assertEqual(self.manager.export_library_zip('Portable', str(target)), str(target))
+                other = LibraryManager(user_dir=str(self.root / ('other' + str(code))), stock_dir=str(self.root / 'stock'))
+                result = other.import_library_zip(str(target))
+                self.assertEqual(other.get_library('Portable'), self.manager.get_library('Portable'))
+                self.assertEqual((Path(result['folder_path']) / 'sections/a.FCStd').read_bytes(), b'opaque native asset')
+        self.assertEqual({key: self.snapshot()[key] for key in before}, before)
+        self.assertFalse(list(self.root.glob('.library-zip-*')))
+
+    def test_cloud_existing_racing_and_symlink_outputs(self):
+        output = self.cloud_source()
+        for kind in ('existing', 'race', 'symlink'):
+            target = output.with_name(kind + '.zip')
+            if kind == 'existing':
+                target.write_bytes(b'keep')
+            elif kind == 'symlink':
+                target.symlink_to(self.root / 'missing')
+            before = self.snapshot()
+            def unsupported(*args):
+                if kind == 'race':
+                    target.write_bytes(b'keep')
+                raise OSError(errno.EPERM, 'unsupported')
+            with patch('freecad.maxproframe.library_archive.os.link', side_effect=unsupported):
+                with self.assertRaises(FileExistsError):
+                    self.manager.export_library_zip('Portable', str(target))
+            expected = dict(before)
+            if kind == 'race':
+                expected[target.name] = b'keep'
+            self.assertEqual(self.snapshot(), expected)
+            if kind == 'symlink':
+                self.assertTrue(target.is_symlink())
+            self.assertFalse(list(self.root.glob('.library-zip-*')))
+
+    def test_cloud_failure_preserves_replacement_after_stale_stat(self):
+        from freecad.maxproframe import library_archive
+        output = self.cloud_source()
+        before = self.snapshot()
+        libraries = self.manager.list_libraries()
+        owned_partial = self.root / 'owned-partial'
+        original_lstat = Path.lstat
+        original_stream = library_archive._stream
+
+        def replace_after_stat(path, *args, **kwargs):
+            result = original_lstat(path, *args, **kwargs)
+            if path == output:
+                path.rename(owned_partial)
+                output.write_bytes(b'unrelated replacement')
+            return result
+
+        def fail_publication(source, target, total, *limits):
+            if getattr(target, 'name', None) == str(output):
+                target.write(b'partial')
+                raise OSError(errno.EIO, 'copy failed')
+            return original_stream(source, target, total, *limits)
+
+        with patch.object(library_archive.os, 'link', side_effect=OSError(errno.EPERM, 'unsupported')):
+            with patch.object(library_archive, '_stream', side_effect=fail_publication):
+                with patch.object(Path, 'lstat', replace_after_stat):
+                    with self.assertRaises(OSError) as raised:
+                        self.manager.export_library_zip('Portable', str(output))
+        self.assertEqual(raised.exception.errno, errno.EIO)
+        self.assertEqual(str(raised.exception), '[Errno 5] copy failed')
+        after = self.snapshot()
+        self.assertEqual({key: after[key] for key in before}, before)
+        self.assertEqual(self.manager.list_libraries(), libraries)
+        if owned_partial.exists():
+            self.assertTrue(output.exists())
+            self.assertEqual(output.read_bytes(), b'unrelated replacement')
+            self.assertEqual(owned_partial.read_bytes(), b'partial')
+        else:
+            self.assertEqual(output.read_bytes(), b'partial')
+        self.assertFalse(list(self.root.glob('.library-zip-*')))
+
+    def test_cloud_copy_failure_and_other_link_errors_preserve_state(self):
+        from freecad.maxproframe import library_archive
+        output = self.cloud_source()
+        before = self.snapshot()
+        libraries = self.manager.list_libraries()
+        original = library_archive._stream
+        def fail_publication(source, target, total, *limits):
+            if str(getattr(target, 'name', '')).endswith('out.zip'):
+                target.write(b'partial')
+                raise OSError(errno.EIO, 'copy failed')
+            return original(source, target, total, *limits)
+        with patch.object(library_archive.os, 'link', side_effect=OSError(errno.EPERM, 'unsupported')):
+            with patch.object(library_archive, '_stream', side_effect=fail_publication):
+                with self.assertRaisesRegex(OSError, 'copy failed'):
+                    self.manager.export_library_zip('Portable', str(output))
+        expected = dict(before, **{'out.zip': b'partial'})
+        self.assertEqual(self.snapshot(), expected)
+        self.assertEqual(self.manager.list_libraries(), libraries)
+        self.assertFalse(list(self.root.glob('.library-zip-*')))
+        with self.assertRaises(FileExistsError):
+            self.manager.export_library_zip('Portable', str(output))
+        self.assertEqual(self.snapshot(), expected)
+        for code in (errno.EIO, errno.ENOSPC, errno.EACCES, errno.ENOENT):
+            with patch.object(library_archive.os, 'link', side_effect=OSError(code, 'link failed')):
+                with self.assertRaises(OSError) as raised:
+                    self.manager.export_library_zip('Portable', str(self.root / 'other.zip'))
+            self.assertEqual(raised.exception.errno, code)
+            self.assertEqual(self.snapshot(), expected)
+            self.assertFalse(list(self.root.glob('.library-zip-*')))
 
     def test_folder_duplicate_export_import_omits_provenance_only(self):
         for with_assets in (False, True):
