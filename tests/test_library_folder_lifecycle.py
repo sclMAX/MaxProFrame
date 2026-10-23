@@ -109,7 +109,7 @@ class TestFolderLifecycle(unittest.TestCase):
     def test_creation_buttons_use_folder_manager_and_reject_conflicts(self):
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(dialog.close)
-        for index, button in enumerate((dialog.btn_new_lib, dialog.btn_new_folder_lib)):
+        for index, button in enumerate((dialog.btn_new_lib,)):
             name = 'Created' + str(index)
             destination = str(self.root / name)
             with patch.object(NewLibraryDialog, 'exec_', return_value=QtWidgets.QDialog.Accepted), \

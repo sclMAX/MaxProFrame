@@ -1,8 +1,22 @@
 # Exchange custom libraries as ZIP
 
-The backend shares registered custom folder libraries without changing their source.
-Stock libraries must first be duplicated into a custom folder. UI save/cancel handling
-is separate; export reads the saved catalog only.
+Share custom folder libraries as self-contained ZIP archives from the Profile Library
+Manager. Stock libraries must first be duplicated into a custom folder.
+
+## Quick path
+
+1. Select a custom library and click **Export Library** (outward arrow).
+2. If there are unsaved edits, choose **Save** to save and export, or **Cancel**.
+   Export never discards edits; a failed save stops export.
+3. Choose a new `.zip` file outside the source folder. Existing files are not overwritten.
+4. On the receiving computer, click **Import Library** (inward arrow), then **Import ZIP…**.
+   Choose the archive; the imported library is registered in its own default folder and selected.
+   Conflicting names or destinations are rejected without overwriting existing content.
+
+To register an already unpacked folder in place instead, choose **Register Folder Library**
+from the same Import menu. Canceling a picker or rejecting an invalid archive keeps the
+current library and unsaved edits. Import uses the existing Save / Discard / Cancel guard
+before switching libraries. No existing user libraries are migrated or deleted.
 
 ## Manager API
 

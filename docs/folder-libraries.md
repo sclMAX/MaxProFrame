@@ -11,12 +11,14 @@ Portable folder libraries allow users to store FrameForge profile catalogs and s
    - Enter the display name and select material/density. The full default destination updates with the name: `<user profiles>/<safe name>/`.
    - Optionally click **Choose Folder…** to select an empty custom destination. Canceling the picker keeps the current destination; changing the name afterward keeps your chosen folder.
    - MaxProFrame creates `<destination>/library.json` and registers it locally. Existing manifests, unrelated content, and colliding names are never overwritten.
-   - The temporary **New Folder Library** button uses this same dialog. Existing libraries are not migrated or deleted.
+   - The icon-only toolbar order is **+**, **−**, **Import Library**, **Duplicate Library**, **Export Library**; hover for tooltips. There is no separate New Folder Library button. Existing libraries are not migrated or deleted.
 
 2. **Register an existing bundle on another computer**:
-   - Click **Register Folder Library** in the header.
+   - Click **Import Library**, then **Register Folder Library** in its menu.
    - Select the root folder containing `library.json`.
    - The catalog is validated and registered in place without modifying or copying files.
+
+   - For ZIP exchange instead, choose **Import ZIP…** from that menu. **Export Library** shares the selected saved custom library and referenced section assets; unsaved changes require **Save** or **Cancel**, never discard-and-export. Stock libraries must first be duplicated. See [ZIP exchange](library-zip.md).
 
 3. **Edit and save folder catalog data**:
    - Select the `[Folder]` entry in the library list (banner shows folder path and material).
@@ -95,7 +97,7 @@ Portable folder libraries allow users to store FrameForge profile catalogs and s
 | **Fail-Closed Registry** | Registry read errors (invalid JSON, decode errors, schema corruption, permission denial) fail closed immediately, preserving on-disk registry bytes and registered paths instead of silently resetting to empty. |
 | **Material Immutability & Validation** | Enforces that existing catalog material cannot be mutated on save, preserving downstream profile calculations. Preflight validation rejects invalid catalog shapes, non-string materials, and non-positive or non-finite densities before any writes occur. |
 | **Collision Protection** | Rejects creating, registering, or renaming folder libraries to display names that collide with bundled stock, legacy user, or other registered folder libraries. |
-| **GUI Header Actions** | **New Library** and **Duplicate Library** share the name/material/destination dialog. The temporary **New Folder Library** action routes through unified creation; **Register Folder Library** still registers existing folders in place. |
+| **GUI Header Actions** | **New Library** and **Duplicate Library** share the name/material/destination dialog. **Import Library** offers ZIP import and **Register Folder Library** for existing folders in place. **Export Library** is enabled only for custom libraries and requires saving unsaved edits or canceling. |
 | **Catalog Tagging & Banners** | Distinct `[Folder]` prefix in the library list with directory path tooltips; prominent banner showing library name, directory path, material info, and editable status. |
 | **Contextual Unregister** | When a folder library is selected, the Delete button adapts to **Unregister Folder Library**, prompting with explicit confirmation that disk files will be preserved. Never deletes directory contents from the GUI. Guarded by unsaved edits prompt before confirmation. |
 | **Unsaved Edits Guard & Cancellation Semantics** | Switching libraries or triggering create/register/unregister with unsaved changes prompts with Save / Discard / Cancel. Choosing **Discard** grants permission to proceed without saving, but does not immediately clear dirty state: if any subsequent step is canceled (picker cancel, dialog reject, unregister decline) or fails (backend write error, collision, refresh failure), the user remains on the current library with all unsaved edits and dirty state strictly preserved. Selecting another library loads catalog data before mutating active metadata, preventing split selection/write-target state on load failures. Refresh errors preserve diagnostic error status without overwriting with false success messages. |
@@ -148,7 +150,7 @@ Convenience wrapper around `duplicate_library` specifically for folder libraries
 - [ ] Legacy stock and user libraries maintain existing metadata and behavior without modification.
 - [ ] New and Duplicate preview the destination folder; Register Folder remains available.
 - [ ] Folder entries are clearly identified with `[Folder]` tag, banner path info, and contextual unregister.
-- [ ] Unsaved changes are guarded by Save/Discard/Cancel semantics across all library actions.
+- [ ] Unsaved changes use Save/Discard/Cancel for switching actions; Export permits only Save or Cancel.
 - [ ] Folder duplication creates complete self-contained asset copies with native weight recalculation and rollback safety (verification pending).
 
 ## Next steps

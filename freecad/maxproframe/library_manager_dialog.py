@@ -429,24 +429,24 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         lib_header = QtWidgets.QHBoxLayout()
         lib_header.addWidget(QtWidgets.QLabel(translate("frameforge", "<b>Available Libraries:</b>")), 1)
         self.btn_new_lib = self._compact_button("list-add.svg", "New Library", self._on_new_library)
-        self.btn_new_folder_lib = self._compact_button(
-            QtWidgets.QStyle.SP_FileDialogNewFolder,
-            "New Folder Library",
-            self._on_new_folder_library,
-        )
-        self.btn_register_folder_lib = self._compact_button(
-            QtWidgets.QStyle.SP_DialogOpenButton,
-            "Register Folder Library",
-            self._on_register_folder_library,
-        )
+        self.btn_import_lib = self._compact_button("import_library.svg", "Import Library", self._on_import_library)
+        # The menu owns activation: a toolbar click must not also import a ZIP.
+        self.btn_import_lib.clicked.disconnect(self._on_import_library)
+        self.btn_import_lib.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        import_menu = QtWidgets.QMenu(self.btn_import_lib)
+        import_menu.addAction(translate("frameforge", "Import ZIP…"), self._on_import_library)
+        import_menu.addAction(translate("frameforge", "Register Folder Library"), self._on_register_folder_library)
+        self.btn_import_lib.setMenu(import_menu)
+        self.btn_export_lib = self._compact_button("export_library.svg", "Export Library", self._on_export_library)
+        self.btn_export_lib.setEnabled(False)
         self.btn_dup_lib = self._compact_button("duplicate.svg", "Duplicate Library", self._on_duplicate_library)
         self.btn_del_lib = self._compact_button("list-remove.svg", "Delete Library", self._on_delete_library)
         for button in (
             self.btn_new_lib,
-            self.btn_new_folder_lib,
-            self.btn_register_folder_lib,
-            self.btn_dup_lib,
             self.btn_del_lib,
+            self.btn_import_lib,
+            self.btn_dup_lib,
+            self.btn_export_lib,
         ):
             lib_header.addWidget(button)
         lib_layout.addLayout(lib_header)
@@ -749,6 +749,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         folder_path = lib_meta.get("folder_path")
 
         self.btn_del_lib.setEnabled(is_user)
+        self.btn_export_lib.setEnabled(is_user)
         self.btn_save.setEnabled(is_user)
         self.btn_add_family.setEnabled(is_user)
 
@@ -1372,8 +1373,52 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
         self._set_status(translate("frameforge", "Library '%s' created successfully.") % name)
 
-    def _on_new_folder_library(self):
-        self._on_new_library()
+    def _on_import_library(self):
+        if not self._prompt_dirty_save():
+            return
+        archive, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, translate("frameforge", "Import Library ZIP"), "", "ZIP (*.zip)"
+        )
+        if not archive:
+            return
+        try:
+            meta = self.manager.import_library_zip(archive)
+        except Exception as err:
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(err))
+            return
+        if self.refresh_libraries(select_name=meta["name"]):
+            self._set_status(translate("frameforge", "Library '%s' imported successfully.") % meta["name"])
+
+    def _on_export_library(self):
+        if not self.current_lib_meta or not self.current_lib_meta.get("is_user"):
+            return
+        if self.is_dirty:
+            reply = QtWidgets.QMessageBox.question(
+                self, translate("frameforge", "Unsaved Changes"),
+                translate("frameforge", "Save changes before exporting the library?"),
+                QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Cancel,
+                QtWidgets.QMessageBox.Save,
+            )
+            if reply != QtWidgets.QMessageBox.Save:
+                return
+            self._on_save_library()
+            if self.is_dirty:
+                return
+        name = self.current_lib_meta["name"]
+        archive, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, translate("frameforge", "Export Library ZIP"),
+            sanitize_library_name(name) + ".zip", "ZIP (*.zip)"
+        )
+        if not archive:
+            return
+        if not archive.lower().endswith(".zip"):
+            archive += ".zip"
+        try:
+            self.manager.export_library_zip(name, archive)
+        except Exception as err:
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(err))
+            return
+        self._set_status(translate("frameforge", "Library '%s' exported successfully.") % name)
 
     def _on_register_folder_library(self):
         if not self._prompt_dirty_save():

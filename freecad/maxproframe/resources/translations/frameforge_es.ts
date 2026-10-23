@@ -4,6 +4,38 @@
 <context>
     <name>frameforge</name>
     <message>
+        <source>Import Library</source>
+        <translation>Importar biblioteca</translation>
+    </message>
+    <message>
+        <source>Export Library</source>
+        <translation>Exportar biblioteca</translation>
+    </message>
+    <message>
+        <source>Import ZIP…</source>
+        <translation>Importar ZIP…</translation>
+    </message>
+    <message>
+        <source>Import Library ZIP</source>
+        <translation>Importar biblioteca ZIP</translation>
+    </message>
+    <message>
+        <source>Export Library ZIP</source>
+        <translation>Exportar biblioteca ZIP</translation>
+    </message>
+    <message>
+        <source>Save changes before exporting the library?</source>
+        <translation>¿Guardar los cambios antes de exportar la biblioteca?</translation>
+    </message>
+    <message>
+        <source>Library '%s' imported successfully.</source>
+        <translation>Biblioteca '%s' importada correctamente.</translation>
+    </message>
+    <message>
+        <source>Library '%s' exported successfully.</source>
+        <translation>Biblioteca '%s' exportada correctamente.</translation>
+    </message>
+    <message>
         <source>Library Folder:</source>
         <translation>Carpeta de la biblioteca:</translation>
     </message>

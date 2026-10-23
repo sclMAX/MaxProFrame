@@ -143,13 +143,15 @@ class TestT3Preservation(unittest.TestCase):
                         NewLibraryDialog,
                         "exec_",
                         return_value=(
-                            QtWidgets.QDialog.Rejected if case == "new-name-reject" else QtWidgets.QDialog.Accepted
+                            QtWidgets.QDialog.Rejected if case in ("new-name-reject", "new-picker-cancel") else QtWidgets.QDialog.Accepted
                         ),
                     )
                 )
                 stack.enter_context(
                     patch.object(NewLibraryDialog, "get_values", return_value=("Created", "Steel", 7.85, False))
                 )
+                stack.enter_context(patch.object(NewLibraryDialog, "get_destination",
+                                                return_value=os.path.join(self.root, "new")))
                 if case == "new-collision":
                     stack.enter_context(
                         patch.object(self.manager, "create_folder_library", side_effect=FileExistsError("collision"))
@@ -158,12 +160,10 @@ class TestT3Preservation(unittest.TestCase):
                     stack.enter_context(
                         patch.object(self.manager, "create_folder_library", side_effect=OSError("write failed"))
                     )
-                button = (
-                    self.dialog.btn_register_folder_lib
-                    if case.startswith("register")
-                    else self.dialog.btn_new_folder_lib
-                )
-                button.click()
+                if case.startswith("register"):
+                    self.dialog.btn_import_lib.menu().actions()[1].trigger()
+                else:
+                    self.dialog.btn_new_lib.click()
                 self.assert_preserved(disk)
                 with patch.object(
                     QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Cancel
@@ -219,7 +219,7 @@ class TestT3Preservation(unittest.TestCase):
             ),
             patch.object(self.manager, "get_library", side_effect=fail_created),
         ):
-            self.dialog.btn_new_folder_lib.click()
+            self.dialog.btn_new_lib.click()
 
         self.assert_preserved(disk)
         self.assertEqual(
@@ -248,8 +248,10 @@ class TestT3Preservation(unittest.TestCase):
                     patch.object(self.manager, "register_folder_library", return_value={"name": "Created"})
                 )
                 stack.enter_context(patch.object(self.manager, "list_libraries", side_effect=OSError("refresh failed")))
-                button = self.dialog.btn_new_folder_lib if action == "create" else self.dialog.btn_register_folder_lib
-                button.click()
+                if action == "register":
+                    self.dialog.btn_import_lib.menu().actions()[1].trigger()
+                else:
+                    self.dialog.btn_new_lib.click()
                 self.assertEqual(
                     self.dialog.lbl_status.text(),
                     translate("frameforge", "Error loading libraries: %s") % "refresh failed",
@@ -278,12 +280,14 @@ class TestT3Preservation(unittest.TestCase):
                     self.manager.unregister_folder_library(f"Lib_{action}")
                     self.dialog.refresh_libraries(select_name="A")
                     self.dirty()
-                button = self.dialog.btn_new_folder_lib if action == "create" else self.dialog.btn_register_folder_lib
-                button.click()
+                if action == "register":
+                    self.dialog.btn_import_lib.menu().actions()[1].trigger()
+                else:
+                    self.dialog.btn_new_lib.click()
                 self.assertEqual(self.dialog.current_lib_meta["name"], f"Lib_{action}")
                 self.assertFalse(self.dialog.is_dirty)
                 message = (
-                    "Folder library '%s' created successfully."
+                    "Library '%s' created successfully."
                     if action == "create"
                     else "Folder library '%s' registered successfully."
                 )
@@ -336,7 +340,7 @@ class TestT3Preservation(unittest.TestCase):
             ),
             patch.object(QtWidgets.QFileDialog, "getExistingDirectory") as picker,
         ):
-            self.dialog.btn_new_folder_lib.click()
+            self.dialog.btn_new_lib.click()
         picker.assert_not_called()
         self.assert_preserved(before)
         self.assertEqual(hashes(self.snapshot()), hashes(before))
