@@ -12,11 +12,11 @@ S6. Approved proposal via "ok vamos con eso": "path completo en tooltip", "solo 
 
 ## Tasks
 T1 [S1-S3,S6] done; route delegated (context backstop); compact header, selection-safe removal and stored fillet; commit a9e687eb32bbba28d9aeba440ad44358196bef9c (slice 1).
-T2 [S4,S6] done; route delegated (context backstop); optional Custom description and aligned unit label, save/reload verified; slice 2 (commit locator: git log --all --format=%H --grep='^feat(library): add profile descriptions and family search$').
+T2 [S4,S6] done; route delegated (context backstop); optional Custom description and aligned unit label, save/reload verified; commit a59d612b9388a1ff7c9ec91de2e2bbbc5a346a41 (slice 2).
 T3 [S5-S6] done; route delegated (context backstop); non-destructive table/card filtering, counts and empty states verified; same slice 2 commit as T2.
 T4 [S1-S6] blocked on maintainer disposition of missing full-suite/interactive visual proof; bounded verification passed (58 writer tests, 60 independent tests), docs/Spanish TS+16 QM aliases and baseline differential verified. No severe blockers. Full suite unavailable per L4; interactive desktop not checked.
 
-T5 [S1-S6] parent + bounded slice preparation; in_progress; two coherent review commits; slice 1 a9e687eb32bbba28d9aeba440ad44358196bef9c, slice 2 prepared (336 authored lines plus this final evidence); no push or PR creation.
+T5 [S1-S6] done; parent + bounded slice preparation; two coherent behavior commits: a9e687eb32bbba28d9aeba440ad44358196bef9c (252 authored lines), a59d612b9388a1ff7c9ec91de2e2bbbc5a346a41 (339); closing tracking-only record follows. No push or PR creation.
 
 ## Log
 L1. Original request:
@@ -41,3 +41,4 @@ L12. Parent read production diff and relevant summary (58/0/0), reran git diff -
 L13. Independent verifier: S1-S6 met, no severe blockers. Isolated focused run passed 60 tests (58 existing plus 2 scratch-only independent probes), child exit 0; stdout empty, stderr offscreen/OpenGL warnings. Existing metadata/edits survive family switches; rejected hidden deletion leaves disk bytes unchanged. Full suite and interactive visual check remain unavailable; no correction requested. Evidence reported under /tmp/library-verify-VrM6Dn/work/.git/library-usability/verify-final; retained by verifier, not read outside project by parent.
 L14. Slice composition checked byte-for-byte; isolated first slice passed 52 relevant tests. Slice 1 committed as a9e687eb32bbba28d9aeba440ad44358196bef9c (+167/-85); committed-range assessment unavailable because provider still rejects untracked task document, even with committedOnly. No lineage created or review claim. Slice 2 contains descriptions/search, their tests/docs/localizations, and this task document. Feature-branch-chain is a local two-commit review chain; no remote delivery performed.
 L15. Risk: item 3 (existing table/card synchronization, selection, metadata save and weight calculations share changed paths). Independent verifier satisfied; native review remains additional and cannot replace the missing full-suite or interactive proof.
+L16. Slice 2 committed a59d612b9388a1ff7c9ec91de2e2bbbc5a346a41. Native committed-range assessment against a9e687eb32bbba28d9aeba440ad44358196bef9c returned medium, 23 paths / 339 changed lines, reviewDue false, reviewDueReason under_budget. No native review started, no consent requested, no authority consumed. Worktree clean after behavior commits. T4 waits for maintainer decision: accept bounded native verification plus manual visual check, or authorize a separate investigation of the pre-existing full-suite native crash. No further verification automatically scheduled.
