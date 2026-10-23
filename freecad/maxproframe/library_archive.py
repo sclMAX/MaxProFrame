@@ -136,6 +136,10 @@ def export_library_zip(manager, name_or_path, archive_path):
     manager._validate_not_symlink_escape(root, os.path.join(root, 'library.json'))
     with open(os.path.join(root, 'library.json'), encoding='utf-8') as source:
         data = json.load(source)
+    # This freshly decoded export copy must not share machine-local provenance.
+    # Keep stored manifests untouched and validate every remaining value normally.
+    if isinstance(data, dict) and isinstance(data.get('_metadata'), dict):
+        data['_metadata'].pop('cloned_from', None)
     assets = _catalog(manager, data, Path(root))
     for relative, resolved in assets.items():
         # Even internal symlinks are refused for exchange, without changing duplication.

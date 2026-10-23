@@ -20,8 +20,12 @@ ZIP root contains `library.json` and exactly its declared `sections/*.FCStd` ass
 (including nested section directories). Shared references are stored once.
 Names, material, density and weights are retained without recalculation. Libraries
 with only parametric families need no section entries. Original DXFs, unrelated files
-and registry entries are excluded. Absolute local paths in catalog values are rejected
-rather than exported. Source symlinks are refused for ZIP export.
+and registry entries are excluded. Export omits internal `_metadata.cloned_from`
+provenance from its in-memory catalog copy because folder duplication may record a
+machine-local source location there. Original source and duplicate manifests remain
+unchanged; all other catalog semantics are retained. Absolute local paths in every
+remaining catalog value are still rejected rather than exported, and asset confinement
+validation is unchanged. Source symlinks are refused for ZIP export.
 
 ## Validation and limits
 

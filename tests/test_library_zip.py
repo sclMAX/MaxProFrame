@@ -1,5 +1,6 @@
 """ZIP exchange contracts through the public manager API; no sketch execution."""
 import copy
+import hashlib
 import json
 from pathlib import Path
 import stat
@@ -65,6 +66,86 @@ class TestLibraryZip(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             self.manager.export_library_zip('Portable', str(archive))
         self.assertEqual(self.snapshot(), before)
+
+    def test_folder_duplicate_export_import_omits_provenance_only(self):
+        for with_assets in (False, True):
+            with self.subTest(with_assets=with_assets):
+                root = self.root / ('assets' if with_assets else 'parametric')
+                manager = LibraryManager(user_dir=str(root / 'user'), stock_dir=str(root / 'stock'))
+                if with_assets:
+                    manager.create_folder_library(str(root / 'source'), 'Source', material='Alloy',
+                                                  density=4.3, data=self.data)
+                    sections = root / 'source/sections'
+                    sections.mkdir()
+                    (sections / 'a.FCStd').write_bytes(b'opaque native asset')
+                else:
+                    manager.create_folder_library(str(root / 'source'), 'Source')
+                # This public wrapper passes the canonical source path as provenance.
+                manager.duplicate_folder_library('Source', str(root / 'duplicate'), target_name='Copy')
+                expected = manager.get_library('Copy')
+                self.assertEqual(expected['_metadata']['cloned_from'], str(root / 'source'))
+                expected['_metadata'].pop('cloned_from')
+                immutable = {path: hashlib.sha256(path.read_bytes()).hexdigest()
+                             for path in root.rglob('*') if path.is_file()}
+                archive = root / 'out.zip'
+                self.assertEqual(manager.export_library_zip('Copy', str(archive)), str(archive))
+                with zipfile.ZipFile(archive) as bundle:
+                    catalog_bytes = bundle.read('library.json')
+                    self.assertNotIn(str(root / 'source').encode(), catalog_bytes)
+                    self.assertEqual(json.loads(catalog_bytes), expected)
+                    self.assertNotIn('cloned_from', json.loads(catalog_bytes)['_metadata'])
+                other = LibraryManager(user_dir=str(root / 'other'), stock_dir=str(root / 'stock'))
+                result = other.import_library_zip(str(archive))
+                self.assertEqual(result['folder_path'], other.get_default_library_folder('Copy'))
+                self.assertEqual(other.get_library('Copy'), expected)
+                if with_assets:
+                    self.assertEqual((Path(result['folder_path']) / 'sections/a.FCStd').read_bytes(),
+                                     b'opaque native asset')
+                self.assertEqual({path: hashlib.sha256(path.read_bytes()).hexdigest()
+                                  for path in immutable}, immutable)
+
+    def test_unicode_collision_preserves_existing_registry(self):
+        self.manager.create_folder_library(str(self.root / 'existing'), 'Existing')
+        archive = self.archive(members=[('sections/a.FCStd', b'a'),
+                                        ('sections/caf\u00e9.FCStd', b'b'),
+                                        ('sections/cafe\u0301.FCStd', b'c')])
+        before = self.snapshot()
+        libraries = self.manager.list_libraries()
+        with self.assertRaisesRegex(ValueError,
+                                    '^Duplicate, special, encrypted or unsupported ZIP member\\.$'):
+            self.manager.import_library_zip(str(archive))
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.manager.list_libraries(), libraries)
+
+    def test_internal_asset_symlink_export_rejected(self):
+        source = self.root / 'source'
+        self.manager.create_folder_library(str(source), 'Portable', data=self.data)
+        (source / 'sections').mkdir()
+        (source / 'sections/real.FCStd').write_bytes(b'opaque native asset')
+        (source / 'sections/a.FCStd').symlink_to('real.FCStd')
+        before = self.snapshot()
+        libraries = self.manager.list_libraries()
+        with self.assertRaisesRegex(ValueError, '^Symlink section assets cannot be exported\\.$'):
+            self.manager.export_library_zip('Portable', str(self.root / 'out.zip'))
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.manager.list_libraries(), libraries)
+        self.assertTrue((source / 'sections/a.FCStd').is_symlink())
+
+    def test_registry_failure_preserves_existing_parent_and_registry(self):
+        self.manager.create_folder_library(str(self.root / 'existing'), 'Existing')
+        parent = self.root / 'parent'
+        parent.mkdir()
+        (parent / 'keep').write_bytes(b'pre-existing content')
+        archive = self.archive()
+        before = self.snapshot()
+        libraries = self.manager.list_libraries()
+        with patch.object(self.manager, '_save_registry', side_effect=OSError('registry denied')):
+            with self.assertRaisesRegex(OSError, '^registry denied$'):
+                self.manager.import_library_zip(str(archive), target_folder_path=str(parent / 'imported'))
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.manager.list_libraries(), libraries)
+        self.assertTrue(parent.is_dir())
+        self.assertFalse((parent / 'imported').exists())
 
     def test_only_parametric(self):
         data = copy.deepcopy(self.data)
