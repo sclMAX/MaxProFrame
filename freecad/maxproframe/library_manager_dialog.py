@@ -88,8 +88,12 @@ class NewLibraryDialog(QtWidgets.QDialog):
         default_material="Steel",
         is_duplicate=False,
         is_folder=False,
+        user_dir=None,
+        default_density=None,
     ):
         super().__init__(parent)
+        self._destination_manager = LibraryManager(user_dir=user_dir)
+        self._custom_destination = None
         self.setWindowTitle(translate("frameforge", title))
         self.resize(380, 160)
 
@@ -117,10 +121,21 @@ class NewLibraryDialog(QtWidgets.QDialog):
         for mat, dens in STANDARD_DENSITIES.items():
             self.combo_material.addItem(f"{translate('frameforge', mat)} ({dens} g/cm³)", (mat, dens))
 
-        # Preselect default material
+        if default_material not in STANDARD_DENSITIES:
+            density = default_density if default_density is not None else 7.85
+            self.combo_material.addItem(
+                f"{default_material} ({density} g/cm³)", (default_material, density)
+            )
+
+        # Preselect default material, retaining the source's explicit density.
         for i in range(self.combo_material.count()):
             mat_key, _ = self.combo_material.itemData(i)
             if mat_key.lower() == default_material.lower():
+                if default_density is not None:
+                    self.combo_material.setItemData(i, (mat_key, default_density))
+                    self.combo_material.setItemText(
+                        i, f"{translate('frameforge', mat_key)} ({default_density} g/cm³)"
+                    )
                 self.combo_material.setCurrentIndex(i)
                 break
         layout.addWidget(self.combo_material)
@@ -133,11 +148,39 @@ class NewLibraryDialog(QtWidgets.QDialog):
             self.cb_recalc.setChecked(True)
             layout.addWidget(self.cb_recalc)
 
+        layout.addWidget(QtWidgets.QLabel(translate("frameforge", "Library Folder:")))
+        destination_row = QtWidgets.QHBoxLayout()
+        self.le_destination = QtWidgets.QLineEdit()
+        self.le_destination.setReadOnly(True)
+        destination_row.addWidget(self.le_destination, 1)
+        self.btn_destination = QtWidgets.QPushButton(translate("frameforge", "Choose Folder…"))
+        self.btn_destination.clicked.connect(self._choose_destination)
+        destination_row.addWidget(self.btn_destination)
+        layout.addLayout(destination_row)
+        self.le_name.textChanged.connect(self._update_destination)
+        self._update_destination()
+
         # Buttons
         btn_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
+
+    def _update_destination(self):
+        path = self._custom_destination or self._destination_manager.get_default_library_folder(self.le_name.text())
+        self.le_destination.setText(path)
+        self.le_destination.setToolTip(path)
+
+    def _choose_destination(self):
+        path = QtWidgets.QFileDialog.getExistingDirectory(
+            self, translate("frameforge", "Select Empty Folder for Library"), self.get_destination()
+        )
+        if path:
+            self._custom_destination = os.path.abspath(path)
+            self._update_destination()
+
+    def get_destination(self):
+        return self.le_destination.text()
 
     def get_values(self):
         name = self.le_name.text().strip()
@@ -1269,79 +1312,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         if not self._prompt_dirty_save():
             return
 
-        dlg = NewLibraryDialog(self, title="New Library", default_material="Steel")
-        if dlg.exec_() != QtWidgets.QDialog.Accepted:
-            return
-
-        name, mat, dens, _ = dlg.get_values()
-        if not name:
-            return
-
-        initial_weight = "1.037"
-        try:
-            initial_weight = str(
-                calculate_linear_weight(
-                    family="Square Hollow",
-                    width=50,
-                    height=50,
-                    thickness=2,
-                    density_g_cm3=dens,
-                )
-            )
-        except Exception:
-            pass
-
-        default_data = {
-            "_metadata": {"name": name, "material": mat, "density": dens},
-            "Square Hollow": {
-                "norm": "Custom",
-                "unit": "Metric Units",
-                "fillet": False,
-                "sizes": {
-                    "50x50x2": {
-                        "Height": "50",
-                        "Width": "50",
-                        "Thickness": "2",
-                        "Flange Thickness": "0",
-                        "Radius1": "0",
-                        "Radius2": "0",
-                        "Weight": initial_weight,
-                    }
-                },
-            },
-        }
-
-        try:
-            self.manager.save_user_library(name, default_data, overwrite=False, material=mat, density=dens)
-        except FileExistsError:
-            QtWidgets.QMessageBox.warning(
-                self,
-                translate("frameforge", "Error"),
-                translate("frameforge", "A library named '%s' or equivalent file already exists.") % name,
-            )
-            return
-
-        if not self.refresh_libraries(select_name=name):
-            return
-        self._set_status(translate("frameforge", "Library '%s' created successfully.") % name)
-
-    def _on_new_folder_library(self):
-        if not self._prompt_dirty_save():
-            return
-
-        folder_path = QtWidgets.QFileDialog.getExistingDirectory(
-            self, translate("frameforge", "Select Empty Folder for Library")
-        )
-        if not folder_path:
-            return
-
-        default_name = os.path.basename(os.path.normpath(folder_path))
         dlg = NewLibraryDialog(
-            self,
-            title="New Folder Library",
-            default_name=default_name,
-            default_material="Steel",
-            is_folder=True,
+            self, title="New Library", default_material="Steel", user_dir=self.manager.user_dir
         )
         if dlg.exec_() != QtWidgets.QDialog.Accepted:
             return
@@ -1385,7 +1357,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         }
 
         try:
-            self.manager.create_folder_library(folder_path, name, material=mat, density=dens, data=default_data)
+            self.manager.create_folder_library(
+                dlg.get_destination(), name, data=default_data, material=mat, density=dens
+            )
         except (FileExistsError, ValueError, OSError) as err:
             QtWidgets.QMessageBox.warning(
                 self,
@@ -1396,7 +1370,10 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         if not self.refresh_libraries(select_name=name):
             return
-        self._set_status(translate("frameforge", "Folder library '%s' created successfully.") % name)
+        self._set_status(translate("frameforge", "Library '%s' created successfully.") % name)
+
+    def _on_new_folder_library(self):
+        self._on_new_library()
 
     def _on_register_folder_library(self):
         if not self._prompt_dirty_save():
@@ -1431,57 +1408,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
 
         source_name = self.current_lib_meta["name"]
-        source_mat, _ = self.manager.get_library_material_info(source_name)
-        is_folder = bool(self.current_lib_meta.get("is_folder"))
-
-        if is_folder:
-            target_folder = QtWidgets.QFileDialog.getExistingDirectory(
-                self, translate("frameforge", "Select Empty Folder for Duplicated Library")
-            )
-            if not target_folder:
-                return
-
-            default_name = os.path.basename(os.path.normpath(target_folder))
-            if not default_name:
-                default_name = translate("frameforge", "%s Custom") % source_name
-
-            dlg = NewLibraryDialog(
-                self,
-                title="Duplicate Library",
-                default_name=default_name,
-                default_material=source_mat,
-                is_duplicate=True,
-                is_folder=True,
-            )
-            if dlg.exec_() != QtWidgets.QDialog.Accepted:
-                return
-
-            new_name, target_mat, target_dens, recalc = dlg.get_values()
-            if not new_name:
-                return
-
-            try:
-                self.manager.duplicate_library(
-                    source_name,
-                    new_name,
-                    overwrite=False,
-                    target_material=target_mat,
-                    target_density=target_dens,
-                    recalculate_weights=recalc,
-                    target_folder_path=target_folder,
-                )
-            except (FileExistsError, ValueError, OSError) as err:
-                QtWidgets.QMessageBox.warning(
-                    self,
-                    translate("frameforge", "Error"),
-                    str(err),
-                )
-                return
-
-            if not self.refresh_libraries(select_name=new_name):
-                return
-            self._set_status(translate("frameforge", "Library duplicated as '%s'.") % new_name)
-        else:
+        source_mat, source_density = self.manager.get_library_material_info(source_name)
+        if self.current_lib_meta:
             default_name = translate("frameforge", "%s Custom") % source_name
 
             dlg = NewLibraryDialog(
@@ -1489,8 +1417,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 title="Duplicate Library",
                 default_name=default_name,
                 default_material=source_mat,
+                default_density=source_density,
                 is_duplicate=True,
-                is_folder=False,
+                user_dir=self.manager.user_dir,
             )
             if dlg.exec_() != QtWidgets.QDialog.Accepted:
                 return
@@ -1507,6 +1436,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                     target_material=target_mat,
                     target_density=target_dens,
                     recalculate_weights=recalc,
+                    target_folder_path=dlg.get_destination(),
                 )
             except (FileExistsError, ValueError, OSError) as err:
                 QtWidgets.QMessageBox.warning(

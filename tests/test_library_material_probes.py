@@ -91,13 +91,13 @@ class MaterialProbes(unittest.TestCase):
         self.assertEqual(clone["_metadata"]["density"], 7.85)
         self.assertEqual(clone["Square Hollow"]["sizes"]["A"]["Weight"], "3.014")
         self.assertEqual(self.digest(source), before)
-        target = os.path.join(self.tmp.name, "clone.json")
+        target = os.path.join(self.tmp.name, "clone", "library.json")
         target_before = self.digest(target)
         with self.assertRaises(FileExistsError) as error:
             self.manager.duplicate_library(
                 "Source", "Clone", target_material="Copper", recalculate_weights=True,
             )
-        self.assertEqual(str(error.exception), "A library file 'clone.json' already exists.")
+        self.assertEqual(str(error.exception), f"Target directory '{os.path.dirname(target)}' is not empty.")
         self.assertEqual(self.digest(target), target_before)
         self.assertEqual(self.digest(source), before)
         self.assertIn("Clone", self.manager.get_all_profiles())

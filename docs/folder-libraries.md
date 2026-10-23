@@ -7,10 +7,11 @@ Portable folder libraries allow users to store FrameForge profile catalogs and s
 ### Profile Library Manager GUI
 
 1. **Create a new folder library**:
-   - Click the **New Folder Library** compact header button in the Profile Library Manager.
-   - Select an empty directory on disk via the folder picker.
-   - Enter the library display name and select the material/density in the dialog.
-   - FrameForge creates `<root>/library.json` and registers it in the local workstation registry.
+   - Click **+ (New Library)** in the Profile Library Manager.
+   - Enter the display name and select material/density. The full default destination updates with the name: `<user profiles>/<safe name>/`.
+   - Optionally click **Choose Folder…** to select an empty custom destination. Canceling the picker keeps the current destination; changing the name afterward keeps your chosen folder.
+   - MaxProFrame creates `<destination>/library.json` and registers it locally. Existing manifests, unrelated content, and colliding names are never overwritten.
+   - The temporary **New Folder Library** button uses this same dialog. Existing libraries are not migrated or deleted.
 
 2. **Register an existing bundle on another computer**:
    - Click **Register Folder Library** in the header.
@@ -94,13 +95,13 @@ Portable folder libraries allow users to store FrameForge profile catalogs and s
 | **Fail-Closed Registry** | Registry read errors (invalid JSON, decode errors, schema corruption, permission denial) fail closed immediately, preserving on-disk registry bytes and registered paths instead of silently resetting to empty. |
 | **Material Immutability & Validation** | Enforces that existing catalog material cannot be mutated on save, preserving downstream profile calculations. Preflight validation rejects invalid catalog shapes, non-string materials, and non-positive or non-finite densities before any writes occur. |
 | **Collision Protection** | Rejects creating, registering, or renaming folder libraries to display names that collide with bundled stock, legacy user, or other registered folder libraries. |
-| **GUI Header Actions** | Two compact 26x26 actions (**New Folder Library** and **Register Folder Library**) alongside existing legacy New, Duplicate, and Delete buttons. Fully localizable via existing translations. |
+| **GUI Header Actions** | **New Library** and **Duplicate Library** share the name/material/destination dialog. The temporary **New Folder Library** action routes through unified creation; **Register Folder Library** still registers existing folders in place. |
 | **Catalog Tagging & Banners** | Distinct `[Folder]` prefix in the library list with directory path tooltips; prominent banner showing library name, directory path, material info, and editable status. |
 | **Contextual Unregister** | When a folder library is selected, the Delete button adapts to **Unregister Folder Library**, prompting with explicit confirmation that disk files will be preserved. Never deletes directory contents from the GUI. Guarded by unsaved edits prompt before confirmation. |
 | **Unsaved Edits Guard & Cancellation Semantics** | Switching libraries or triggering create/register/unregister with unsaved changes prompts with Save / Discard / Cancel. Choosing **Discard** grants permission to proceed without saving, but does not immediately clear dirty state: if any subsequent step is canceled (picker cancel, dialog reject, unregister decline) or fails (backend write error, collision, refresh failure), the user remains on the current library with all unsaved edits and dirty state strictly preserved. Selecting another library loads catalog data before mutating active metadata, preventing split selection/write-target state on load failures. Refresh errors preserve diagnostic error status without overwriting with false success messages. |
 | **Modeless Window Lifecycle & Modality** | The Profile Library Manager opens modelessly from the start (`show()`), ensuring the FreeCAD main window and 3D viewport/Sketcher remain accessible and responsive without closing the dialog. Dialog ownership is retained on a single long-lived reference on the FreeCAD main window (`mw._frameforge_library_manager`). When editing a custom section sketch, the dialog temporarily hides to avoid obstructing the viewport and automatically restores when leaving Sketcher edit mode without applying changes. Re-activating the command while the dialog is open or hidden raises and activates the existing live instance without duplicating dialogs or losing unsaved edits. Closing the dialog retires ownership, cleanly discards uncommitted working copy documents, purges uncommitted staged assets (S9), and ensures `QApplication.activeModalWidget` is cleared (S10) so subsequent activations open a fresh manager instance. |
 | **Selected Profile Import & Sketch Visibility (T7)** | In `CreateProfileTaskPanel`, selecting a Custom Profile imports only the selected section sketch into the target document without accumulating unselected catalog sketches from UI initialization or size changes (S11). Unreferenced session-imported sketches are pruned upon size switching or changing to a standard family, respecting external references and existing project sketches. Newly imported auxiliary sketches assign the catalog profile code as their visible `Label` (S12) and initialize hidden in the tree (`ShowInTree=False`) and viewport (`Visibility=False`) (S13) while remaining fully valid and linked to profile solids. |
-| **Folder Duplication & Portability** | Duplicating a folder library requires an explicit empty destination directory (`target_folder_path`), never flattening assets into legacy user JSON. Declared assets across all families are copied exclusively (ignoring unrelated notes or caches). Internal relative symlinks/aliases materialize as standalone regular files, ensuring portability upon source removal. Weight recalculation computes Custom Profile weights from the actual native face area of the disk asset and target density without modifying user documents or selections. Full rollback on failure cleans newly created artifacts while retaining pre-existing empty destination folders. (T6 verification pending). |
+| **Folder Duplication & Portability** | Duplicating any stock, user, or folder library creates a registered folder. The default destination is a dedicated child under `manager.user_dir`; an explicit `target_folder_path` may select another empty directory. No new duplicates are flattened into loose JSON. Declared assets across all families are copied exclusively (ignoring unrelated notes or caches). Internal relative symlinks/aliases materialize as standalone regular files, ensuring portability upon source removal. Weight recalculation computes Custom Profile weights from the actual native face area of the disk asset and target density without modifying user documents or selections. Full rollback on failure cleans newly created artifacts while retaining pre-existing empty destination folders. (T6 verification pending). |
 | **Custom Profile Cards & Silhouette Previews (T1 / S1-S4)** | Selecting `Custom Profile` displays selectable cards with vector silhouette thumbnails derived from native face geometry instead of table view; standard families retain tables. Cards show editable code and weight (kg/m) without dimensions. Positive finite weights and unique codes are validated before saving. Applying sketch geometry edits recomputes linear weight from face area and density (S3). Previews isolate documents and selection, with ephemeral caching and harmless fallback for missing or corrupted assets without writing disk files (S4). |
 
 ## API Reference
@@ -126,8 +127,9 @@ Removes the specified folder library from the local workstation registry.
 Atomically saves catalog updates to `<root>/library.json` preserving material immutability and metadata integrity. Also routed automatically through `save_user_library(name, data, ...)`.
 
 ### `duplicate_library(source_name, target_name, overwrite=False, target_material=None, target_density=None, recalculate_weights=False, target_folder_path=None)`
-Clones an existing library into a new user or folder library.
-- For folder libraries, requires `target_folder_path` pointing to an empty directory.
+Clones any existing library into its own registered folder.
+- If `target_folder_path` is omitted, uses `manager.get_default_library_folder(target_name)` under `manager.user_dir`.
+- Explicit destinations must be empty; `overwrite=True` does not permit replacing content.
 - Copies all declared section assets, materializing internal relative symlinks into portable standalone files.
 - If `recalculate_weights=True`, recalculates parametric weights via standard formulas and Custom Profile weights from actual disk asset native face geometry and target density.
 - Rolls back destination artifacts cleanly on failure, preserving pre-existing empty folders and the local registry.
@@ -144,7 +146,7 @@ Convenience wrapper around `duplicate_library` specifically for folder libraries
 - [ ] Unregistering removes local workstation registration only, preserving all assets.
 - [ ] Root confinement guards prevent symlink escape outside the library folder root.
 - [ ] Legacy stock and user libraries maintain existing metadata and behavior without modification.
-- [ ] Profile Library Manager provides explicit New Folder and Register Folder header actions.
+- [ ] New and Duplicate preview the destination folder; Register Folder remains available.
 - [ ] Folder entries are clearly identified with `[Folder]` tag, banner path info, and contextual unregister.
 - [ ] Unsaved changes are guarded by Save/Discard/Cancel semantics across all library actions.
 - [ ] Folder duplication creates complete self-contained asset copies with native weight recalculation and rollback safety (verification pending).

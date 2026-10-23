@@ -97,7 +97,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
         os.makedirs(new_dir, exist_ok=True)
 
         with (
-            patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=new_dir),
+            patch.object(NewLibraryDialog, "get_destination", return_value=new_dir),
             patch.object(NewLibraryDialog, "exec_", return_value=QtWidgets.QDialog.Accepted),
             patch.object(NewLibraryDialog, "get_values", return_value=("Alu Folder", "Aluminium", 2.7, False)),
         ):
@@ -188,7 +188,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
         self.assertEqual(dialog.btn_dup_lib.toolTip(), translate("frameforge", "Duplicate Library"))
 
         # When clicked with directory picker canceled, retains current library without throwing
-        with patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=""):
+        with patch.object(NewLibraryDialog, "exec_", return_value=QtWidgets.QDialog.Rejected):
             dialog.btn_dup_lib.click()
             # If clicked with canceled picker, it must retain current selection without throwing
             names = [
@@ -289,8 +289,8 @@ class TestFolderLibraryDialog(unittest.TestCase):
 
         initial_count = dialog.list_libraries.count()
 
-        # 1. Cancel New Folder Directory Picker
-        with patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=""):
+        # 1. Cancel unified creation dialog
+        with patch.object(NewLibraryDialog, "exec_", return_value=QtWidgets.QDialog.Rejected):
             dialog.btn_new_folder_lib.click()
         self.assertEqual(dialog.list_libraries.count(), initial_count)
 

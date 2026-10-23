@@ -149,8 +149,8 @@ class Boundary(fixture.TestFolderLibraryDuplication):
                     os.mkdir(dest)
                     with ExitStack() as stack:
                         stack.enter_context(patch.object(ui.QtWidgets.QMessageBox, "question", return_value=ui.QtWidgets.QMessageBox.Discard))
-                        stack.enter_context(patch.object(ui.QtWidgets.QFileDialog, "getExistingDirectory", return_value="" if outcome == "cancel" else dest))
-                        stack.enter_context(patch.object(ui.NewLibraryDialog, "exec_", return_value=ui.QtWidgets.QDialog.Accepted))
+                        stack.enter_context(patch.object(ui.NewLibraryDialog, "get_destination", return_value=dest))
+                        stack.enter_context(patch.object(ui.NewLibraryDialog, "exec_", return_value=ui.QtWidgets.QDialog.Rejected if outcome == "cancel" else ui.QtWidgets.QDialog.Accepted))
                         stack.enter_context(patch.object(ui.NewLibraryDialog, "get_values", return_value=(name, "Steel", 7.85, False)))
                         if outcome == "fail":
                             stack.enter_context(patch.object(ui.QtWidgets.QMessageBox, "warning"))
@@ -269,7 +269,7 @@ class Boundary(fixture.TestFolderLibraryDuplication):
             before = snapshot(), selection(), set(App.listDocuments()), self.saved()
             dest = os.path.join(self.test_root, mode)
             if d:
-                with patch.object(ui.QtWidgets.QFileDialog, "getExistingDirectory", return_value=dest), patch.object(ui.NewLibraryDialog, "exec_", return_value=ui.QtWidgets.QDialog.Accepted), patch.object(ui.NewLibraryDialog, "get_values", return_value=(mode, "Aluminium", 2.7, True)):
+                with patch.object(ui.NewLibraryDialog, "get_destination", return_value=dest), patch.object(ui.NewLibraryDialog, "exec_", return_value=ui.QtWidgets.QDialog.Accepted), patch.object(ui.NewLibraryDialog, "get_values", return_value=(mode, "Aluminium", 2.7, True)):
                     d._on_duplicate_library()
                 self.assertEqual(d.current_lib_meta["name"], mode)
             else:

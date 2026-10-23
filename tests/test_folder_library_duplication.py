@@ -2,7 +2,7 @@
 
 Covers S1, S3, S6, S7, S8, S9:
 - Rule 1: duplicate_library with folder library creates full duplicate, copies declared assets, registers canonical destination, and returns canonical manifest path
-- Rule 2: Folder duplication requires explicit target_folder_path, never flattens assets into legacy user JSON
+- Rule 2: Folder duplication defaults to an owned child folder, never loose user JSON
 - Rule 3: Rejection of non-empty destination directories without writes
 - Rule 4: Rejection of nested source/target directory paths before writes
 - Rule 5: Rejection of library name and registered folder path collisions
@@ -13,7 +13,7 @@ Covers S1, S3, S6, S7, S8, S9:
 - Rule 10: Material change with recalculate_weights=False preserves nominal weights
 - Rule 11: Material change with recalculate_weights=True computes Custom Profile weight from actual native face and target density
 - Rule 12: Recalculate weights with corrupted asset rejects cleanly and rolls back destination
-- Rule 13: Legacy stock and user JSON library duplication preserved as control
+- Rule 13: Stock duplication preserves material and weight semantics in an owned folder
 - Rule 14: UI duplicate button enabled for folder libraries, opens folder picker and NewLibraryDialog, registers clone
 - Rule 15: UI dirty prompt cancel or downstream picker cancellation preserves unsaved widget edits
 """
@@ -312,13 +312,13 @@ class TestFolderLibraryDuplication(unittest.TestCase):
         # Source remains registered and intact
         self.assertIn(os.path.realpath(self.source_folder), registered)
 
-    def test_duplicate_folder_library_requires_explicit_empty_destination(self):
-        """Rule 2: Folder duplication without target_folder_path raises ValueError
-        and does NOT flatten assets into a legacy user JSON library.
+    def test_duplicate_folder_library_uses_default_owned_destination(self):
+        """Rule 2: An omitted destination uses a dedicated child folder
+        and does NOT flatten assets into a loose user JSON library.
         """
-        with self.assertRaises(ValueError) as ctx:
-            self.manager.duplicate_library("SourceFolderLib", "FlattenAttempt")
-        self.assertIn("target_folder_path", str(ctx.exception).lower())
+        result = self.manager.duplicate_library("SourceFolderLib", "FlattenAttempt")
+        self.assertEqual(result, os.path.join(self.user_dir, "flattenattempt", "library.json"))
+        self.assertEqual(self.manager.get_folder_library_path("FlattenAttempt"), os.path.dirname(result))
 
         # Check no legacy file was created
         legacy_file = os.path.join(self.user_dir, "FlattenAttempt.json")
@@ -644,9 +644,8 @@ class TestFolderLibraryDuplication(unittest.TestCase):
         self.assertEqual(os.listdir(dest_folder), [])
         self.assertEqual(_file_hash(self.reg_path), reg_before)
 
-    def test_legacy_stock_and_user_duplication_preserved_as_control(self):
-        """Rule 13: Existing legacy duplicate_library semantics for stock/user JSON
-        remain identical and produce user JSON files.
+    def test_stock_duplication_material_and_weight_preserved(self):
+        """Rule 13: Stock duplication preserves material semantics in a folder.
         """
         res = self.manager.duplicate_library(
             "StockSteel",
@@ -657,7 +656,7 @@ class TestFolderLibraryDuplication(unittest.TestCase):
             recalculate_weights=True,
         )
 
-        expected_user_path = os.path.join(os.path.realpath(self.user_dir), "userstockcopy.json")
+        expected_user_path = os.path.join(os.path.realpath(self.user_dir), "userstockcopy", "library.json")
         self.assertEqual(os.path.realpath(res), expected_user_path)
         self.assertTrue(os.path.isfile(expected_user_path))
 
@@ -692,7 +691,7 @@ class TestFolderLibraryDuplication(unittest.TestCase):
             dest_folder = os.path.join(self.test_root, "UIDuplicateDest")
             os.makedirs(dest_folder, exist_ok=True)
 
-            with patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=dest_folder), \
+            with patch.object(NewLibraryDialog, "get_destination", return_value=dest_folder), \
                  patch("freecad.maxproframe.library_manager_dialog.NewLibraryDialog.exec_", return_value=QtWidgets.QDialog.Accepted), \
                  patch("freecad.maxproframe.library_manager_dialog.NewLibraryDialog.get_values", return_value=("UIDupFolderLib", "Aluminium", 2.70, False)):
                 dialog.btn_dup_lib.click()
@@ -729,10 +728,10 @@ class TestFolderLibraryDuplication(unittest.TestCase):
             self.assertEqual(dialog.table_sizes.item(0, 0).text(), "DirtyHeight_999")
             self.assertEqual(dialog.current_lib_meta["name"], "SourceFolderLib")
 
-            # Scenario 2: User clicks Discard on dirty prompt, but cancels folder picker -> edits kept
+            # Scenario 2: Discard permits proceeding, but canceling the unified dialog keeps edits
             dest_folder = os.path.join(self.test_root, "CancelledFolderPicker")
             with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Discard), \
-                 patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=""):
+                 patch.object(NewLibraryDialog, "exec_", return_value=QtWidgets.QDialog.Rejected):
                 dialog._on_duplicate_library()
             self.assertEqual(dialog.table_sizes.item(0, 0).text(), "DirtyHeight_999")
             self.assertEqual(dialog.current_lib_meta["name"], "SourceFolderLib")
@@ -753,7 +752,7 @@ def load_tests(loader, tests, pattern):
     suite = unittest.TestSuite()
     for method_name in [
         "test_duplicate_folder_library_basic_copy_and_registration",
-        "test_duplicate_folder_library_requires_explicit_empty_destination",
+        "test_duplicate_folder_library_uses_default_owned_destination",
         "test_duplicate_folder_library_rejects_nonempty_destination",
         "test_duplicate_folder_library_rejects_nested_source_and_target",
         "test_duplicate_folder_library_rejects_name_and_path_collisions",
@@ -764,7 +763,7 @@ def load_tests(loader, tests, pattern):
         "test_duplicate_folder_library_material_recalc_false_preserves_nominal",
         "test_duplicate_folder_library_material_recalc_true_computes_from_actual_face",
         "test_duplicate_folder_library_recalc_true_corrupt_asset_rejects_and_rolls_back",
-        "test_legacy_stock_and_user_duplication_preserved_as_control",
+        "test_stock_duplication_material_and_weight_preserved",
         "test_ui_duplicate_folder_library_workflow_success",
         "test_ui_duplicate_folder_library_dirty_cancel_preserves_unsaved_edits",
     ]:

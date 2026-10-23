@@ -1093,6 +1093,10 @@ class LibraryManager:
 
         raise FileNotFoundError(f"Library '{name}' not found in user libraries.")
 
+    def get_default_library_folder(self, name):
+        """Return a dedicated safe child destination without creating it."""
+        return os.path.join(os.path.abspath(self.user_dir), sanitize_library_name(name))
+
     def duplicate_library(
         self,
         source_name,
@@ -1104,20 +1108,33 @@ class LibraryManager:
         target_folder_path=None,
     ):
         """
-        Clones an existing library (stock, user, or folder) into a new user or folder library.
-        If overwrite is False, raises FileExistsError if target already exists.
-        If target_material is provided, assigns it to the clone.
-        If recalculate_weights is True, recalculates theoretical weights with target_density.
-        If source is a folder library, target_folder_path is required and assets are copied.
+        Clone stock, user, or folder libraries into a dedicated registered folder.
+        Never overwrite existing destination contents, even when overwrite is True.
+        Optional target material and density control requested weight recalculation.
+        Only declared, confined assets are copied; omitted destination uses user_dir.
         """
         source_folder = self._get_registered_folder(source_name)
+        if source_folder is None:
+            libraries = self.list_libraries()
+            source = next(
+                (lib for lib in libraries if lib["name"].lower() == source_name.strip().lower()),
+                None,
+            )
+            if source is None:
+                source = next(
+                    (lib for lib in libraries
+                     if os.path.splitext(lib["filename"])[0].lower() == source_name.strip().lower()),
+                    None,
+                )
+            if source is None:
+                raise FileNotFoundError(f"Library '{source_name}' not found.")
+            source_root = os.path.dirname(source["path"])
+        else:
+            source_root = source_folder
+        target_folder_path = target_folder_path or self.get_default_library_folder(target_name)
 
-        if source_folder is not None:
-            # Source is a registered folder library
-            if not target_folder_path:
-                raise ValueError("Folder library duplication requires an explicit target_folder_path.")
-
-            canon_src = os.path.realpath(os.path.abspath(source_folder))
+        if target_folder_path:
+            canon_src = os.path.realpath(os.path.abspath(source_root))
             canon_dest = os.path.realpath(os.path.abspath(target_folder_path))
 
             if canon_src == canon_dest:
@@ -1125,7 +1142,7 @@ class LibraryManager:
 
             src_with_sep = canon_src if canon_src.endswith(os.sep) else canon_src + os.sep
             dest_with_sep = canon_dest if canon_dest.endswith(os.sep) else canon_dest + os.sep
-            if canon_dest.startswith(src_with_sep) or canon_src.startswith(dest_with_sep):
+            if source_folder and (canon_dest.startswith(src_with_sep) or canon_src.startswith(dest_with_sep)):
                 raise ValueError("Nested source and target directories are not allowed.")
 
             dest_preexisted = False
@@ -1141,10 +1158,13 @@ class LibraryManager:
             if self._get_registered_folder(canon_dest):
                 raise FileExistsError(f"Target folder path '{target_folder_path}' is already registered.")
 
-            src_manifest_path = os.path.join(canon_src, "library.json")
+            src_manifest_path = (
+                os.path.join(canon_src, "library.json") if source_folder else source["path"]
+            )
             if not os.path.isfile(src_manifest_path):
                 raise FileNotFoundError(f"Source folder library manifest '{src_manifest_path}' not found.")
 
+            self._validate_not_symlink_escape(canon_src, src_manifest_path)
             try:
                 with open(src_manifest_path, "r", encoding="utf-8") as f:
                     source_data = json.load(f)
@@ -1152,6 +1172,9 @@ class LibraryManager:
                 raise ValueError(f"Cannot read source manifest '{src_manifest_path}': {err}")
 
             cloned_data = copy.deepcopy(source_data)
+            self._validate_folder_catalog_data(
+                cloned_data, material=target_material, density=target_density, require_name=False
+            )
 
             # Determine target material and density
             if target_material is None:
@@ -1333,8 +1356,13 @@ class LibraryManager:
                                     unrecalculated.append(f"{fam_name}/{size_key}")
 
                     if unrecalculated:
+                        prefix = (
+                            "Cannot recalculate weights for"
+                            if source_folder else
+                            "Cannot recalculate weights for unsupported complex families"
+                        )
                         raise ValueError(
-                            f"Cannot recalculate weights for: {', '.join(unrecalculated[:3])}. Duplicate without weight recalculation to preserve nominal weights."
+                            f"{prefix}: {', '.join(unrecalculated[:3])}. Duplicate without weight recalculation to preserve nominal weights."
                         )
 
                 # Write manifest atomically in destination folder
@@ -1360,94 +1388,6 @@ class LibraryManager:
             except Exception:
                 rollback()
                 raise
-
-        # Legacy stock or user library duplication
-        if target_folder_path is not None:
-            raise ValueError("target_folder_path is only supported for folder library duplication.")
-        source_data = self.get_library(source_name)
-        # Deep copy via serialization
-        cloned_data = json.loads(json.dumps(source_data))
-
-        # Determine target material and density
-        if target_material is None:
-            source_mat, source_dens = self.get_library_material_info(source_name)
-            target_material = source_mat
-            target_density = source_dens if target_density is None else float(target_density)
-        else:
-            if target_density is None:
-                target_density = STANDARD_DENSITIES.get(target_material, 7.85)
-            else:
-                target_density = float(target_density)
-
-        # Update metadata
-        if "_metadata" not in cloned_data:
-            cloned_data["_metadata"] = {}
-        cloned_data["_metadata"]["name"] = target_name
-        cloned_data["_metadata"]["cloned_from"] = source_name
-        cloned_data["_metadata"]["material"] = target_material
-        cloned_data["_metadata"]["density"] = float(target_density)
-
-        if recalculate_weights:
-            unrecalculated = []
-            for fam_name, fam_data in cloned_data.items():
-                if fam_name.startswith("_") or not isinstance(fam_data, dict):
-                    continue
-                sizes = fam_data.get("sizes", {})
-                for size_key, size_props in sizes.items():
-                    if not isinstance(size_props, dict):
-                        continue
-                    try:
-                        h = float(size_props.get("Height", 0))
-                        w = float(size_props.get("Width", 0))
-                        t = float(size_props.get("Thickness", 0))
-                        tf = (
-                            float(size_props.get("Flange Thickness", 0))
-                            if "Flange Thickness" in size_props
-                            else None
-                        )
-                        canonical = get_canonical_family(fam_name, fam_data)
-                        if canonical == "C":
-                            lip = (
-                                float(size_props.get("Lip Length", 0))
-                                if "Lip Length" in size_props
-                                else None
-                            )
-                            r1 = (
-                                float(size_props.get("Radius1", 0))
-                                if "Radius1" in size_props
-                                else None
-                            )
-                            make_fillet = bool(fam_data.get("fillet", False))
-                            new_weight = calculate_linear_weight(
-                                family=canonical,
-                                width=w,
-                                height=h,
-                                thickness=t,
-                                density_g_cm3=target_density,
-                                flange_thickness=tf,
-                                lip_length=lip,
-                                radius=r1,
-                                make_fillet=make_fillet,
-                            )
-                        else:
-                            new_weight = calculate_linear_weight(
-                                family=canonical,
-                                width=w,
-                                height=h,
-                                thickness=t,
-                                density_g_cm3=target_density,
-                                flange_thickness=tf,
-                            )
-                        size_props["Weight"] = str(new_weight)
-                    except Exception as err:
-                        unrecalculated.append(f"{fam_name}/{size_key}")
-
-            if unrecalculated:
-                raise ValueError(
-                    f"Cannot recalculate weights for unsupported complex families: {', '.join(unrecalculated[:3])}. Duplicate without weight recalculation to preserve nominal weights."
-                )
-
-        return self.save_user_library(target_name, cloned_data, overwrite=overwrite)
 
     def duplicate_folder_library(
         self,

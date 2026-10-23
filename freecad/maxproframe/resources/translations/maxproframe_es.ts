@@ -4,6 +4,14 @@
 <context>
     <name>frameforge</name>
     <message>
+        <source>Library Folder:</source>
+        <translation>Carpeta de la biblioteca:</translation>
+    </message>
+    <message>
+        <source>Choose Folder…</source>
+        <translation>Elegí una carpeta…</translation>
+    </message>
+    <message>
         <source>FrameForge - Profile Library Manager</source>
         <translation>FrameForge - Gestor de Bibliotecas de Perfiles</translation>
     </message>

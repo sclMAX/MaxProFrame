@@ -103,7 +103,7 @@ Beams and profiles are mapped onto Edges or parametric lines:
 MaxProFrame supports storing custom profile sections directly in user-managed folder libraries:
 
 1. Open the **Profile Library Manager** from the toolbar.
-2. Create or register a **Folder Library** pointing to a directory on your machine or shared drive.
+2. Click **+ (New Library)**, enter a name and material/density, and review the full destination path. The default is a dedicated child folder in your user profiles directory; **Choose Folder…** selects a custom empty destination. **Duplicate Library** also creates a folder, including declared section assets. Existing folders can still be registered in place; no existing data is moved or deleted.
 3. Add or select a **Custom Profile** family. Draw a Sketcher cross section and use **Capture Section**, or click **Import DXF** for a strict closed-polyline section. These icon-only actions have tooltips and appear only in custom geometry families.
 4. For DXF, confirm the actual units, review the fixed centered XY sketch, enter a unique code and click **Add as Custom**. Weight uses the library material/density; canceling leaves the library unchanged.
 5. Click **Save Changes** to publish the staged section, then reuse it without the original sketch or DXF. See [DXF section import](docs/dxf-section-import.md) for supported input and unit overrides.
