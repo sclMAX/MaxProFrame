@@ -8,7 +8,8 @@ Manager. Stock libraries must first be duplicated into a custom folder.
 1. Select a custom library and click **Export Library** (outward arrow).
 2. If there are unsaved edits, choose **Save** to save and export, or **Cancel**.
    Export never discards edits; a failed save stops export.
-3. Choose a new `.zip` file outside the source folder. Existing files are not overwritten.
+3. Choose a new `.zip` file outside the source folder, including on an external drive
+   or network share with an existing writable parent. Existing files are not overwritten.
 4. On the receiving computer, click **Import Library** (inward arrow), then **Import ZIP…**.
    Choose the archive; the imported library is registered in its own default folder and selected.
    Conflicting names or destinations are rejected without overwriting existing content.
@@ -51,6 +52,10 @@ machine-local source location there. Original source and duplicate manifests rem
 unchanged; all other catalog semantics are retained. Absolute local paths in every
 remaining catalog value are still rejected rather than exported, and asset confinement
 validation is unchanged. Source symlinks are refused for ZIP export.
+
+Cross-drive and UNC confinement boundaries are regression-tested using Windows path
+semantics with real local archive IO on Linux; actual Windows filesystem execution
+has not been verified by those tests.
 
 ## Validation and limits
 

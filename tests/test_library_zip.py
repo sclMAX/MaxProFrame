@@ -3,6 +3,8 @@ import copy
 import errno
 import hashlib
 import json
+import ntpath
+import os
 from pathlib import Path
 import stat
 import tempfile
@@ -74,6 +76,38 @@ class TestLibraryZip(unittest.TestCase):
         (source / 'sections').mkdir()
         (source / 'sections/a.FCStd').write_bytes(b'opaque native asset')
         return self.root / 'out.zip'
+
+    def test_cross_drive_and_unc_export_boundaries(self):
+        output = self.cloud_source()
+        before = self.snapshot()
+        libraries = self.manager.list_libraries()
+        commonpath = os.path.commonpath
+        for destination in ('D:\\share\\out.zip', r'\\server\share\out.zip'):
+            with self.subTest(destination=destination):
+                paths = [r'C:\libraries\source', destination]
+                with self.assertRaisesRegex(ValueError, "Paths don't have the same drive"):
+                    ntpath.commonpath(paths)
+                # Simulate only confinement; all archive IO uses real local paths.
+                with patch('freecad.maxproframe.library_archive.os.path.commonpath',
+                           side_effect=lambda local: ntpath.commonpath(paths) if str(local[1]) == str(output)
+                           else commonpath(local)) as boundary:
+                    self.assertEqual(self.manager.export_library_zip('Portable', str(output)), str(output))
+                self.assertIn(unittest.mock.call([str(self.root / 'source'), str(output)]), boundary.call_args_list)
+                with zipfile.ZipFile(output) as bundle:
+                    self.assertEqual(bundle.namelist(), ['library.json', 'sections/a.FCStd'])
+                    self.assertEqual(bundle.read('sections/a.FCStd'), b'opaque native asset')
+                self.assertEqual({k: v for k, v in self.snapshot().items() if k != output.name}, before)
+                self.assertEqual(self.manager.list_libraries(), libraries)
+                # A second export must still refuse an existing destination.
+                with patch('freecad.maxproframe.library_archive.os.path.commonpath',
+                           side_effect=ValueError("Paths don't have the same drive")):
+                    with self.assertRaises(FileExistsError):
+                        self.manager.export_library_zip('Portable', str(output))
+                output.unlink()
+        with self.assertRaisesRegex(ValueError, '^Export output must be outside the source library\\.$'):
+            self.manager.export_library_zip('Portable', str(self.root / 'source/inside.zip'))
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.manager.list_libraries(), libraries)
 
     def test_unsupported_link_roundtrip(self):
         output = self.cloud_source()

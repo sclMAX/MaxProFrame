@@ -131,7 +131,12 @@ def export_library_zip(manager, name_or_path, archive_path):
     if root is None:
         raise ValueError('Only registered custom folder libraries can be exported.')
     output = Path(os.path.abspath(archive_path))
-    if os.path.commonpath([root, os.path.realpath(output)]) == root:
+    try:
+        inside_source = os.path.commonpath([root, os.path.realpath(output)]) == root
+    except ValueError:
+        # Canonical absolute paths on different Windows drives/shares cannot nest.
+        inside_source = False
+    if inside_source:
         raise ValueError('Export output must be outside the source library.')
     if os.path.lexists(output):
         raise FileExistsError(f"Archive '{output}' already exists.")
