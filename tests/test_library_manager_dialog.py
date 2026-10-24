@@ -655,21 +655,17 @@ class TestLibraryManagerDialog(unittest.TestCase):
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
         cls = ProfileLibraryManagerDialog
         original_locale = QtCore.QLocale()
-        import FreeCAD as App
-        import FreeCADGui as Gui
-
-        prefs = App.ParamGet("User parameter:BaseApp/Preferences/General")
-        original_language = prefs.GetString("Language", "")
-        original_gui_locale = Gui.getLocale()
+        original_installed = getattr(cls, "_translator_installed", False)
+        original_translator = getattr(cls, "_translator", None)
+        if original_translator is not None:
+            app.removeTranslator(original_translator)
         dialog = None
         fresh_dialog = None
         english_dialog = None
         try:
-            # FreeCAD selection wins even when the system/default locale differs.
-            QtCore.QLocale.setDefault(QtCore.QLocale("en_US"))
-            prefs.SetString("Language", "Spanish")
-            Gui.setLocale("Spanish")
-            Gui.updateLocale()
+            cls._translator_installed = False
+            cls._translator = None
+            QtCore.QLocale.setDefault(QtCore.QLocale("es_ES"))
             dialog = cls(library_manager=self.manager)
             gc.collect()
             self.assertEqual(dialog.btn_new_lib.toolTip(), "Nueva Biblioteca")
@@ -680,20 +676,10 @@ class TestLibraryManagerDialog(unittest.TestCase):
             self.assertEqual(fresh_dialog.btn_new_lib.toolTip(), "Nueva Biblioteca")
             self.assertEqual(fresh_dialog.windowTitle(), "MaxProFrame")
 
-            # Legacy cleanup must not uninstall FreeCAD's shared translator.
-            cls.uninstall_translations()
-            dialog.close()
-            fresh_dialog.close()
-            fresh_dialog = cls(library_manager=self.manager)
-            gc.collect()
-            self.assertEqual(fresh_dialog.btn_new_lib.toolTip(), "Nueva Biblioteca")
-            self.assertEqual(fresh_dialog.windowTitle(), "MaxProFrame")
-
-            # English selection wins even on a Spanish system/default locale.
-            QtCore.QLocale.setDefault(QtCore.QLocale("es_ES"))
-            prefs.SetString("Language", "English")
-            Gui.setLocale("English")
-            Gui.updateLocale()
+            # Preserve untranslated English UI when no matching catalog is loaded.
+            app.removeTranslator(cls._translator)
+            cls._translator_installed = False
+            QtCore.QLocale.setDefault(QtCore.QLocale("en_US"))
             english_dialog = cls(library_manager=self.manager)
             self.assertEqual(english_dialog.btn_new_lib.toolTip(), "New Library")
             self.assertEqual(english_dialog.windowTitle(), "MaxProFrame")
@@ -704,10 +690,12 @@ class TestLibraryManagerDialog(unittest.TestCase):
                 fresh_dialog.close()
             if dialog is not None:
                 dialog.close()
+            translator = getattr(cls, "_translator", None)
+            if translator is not None:
+                app.removeTranslator(translator)
+            cls._translator = None
+            cls._translator_installed = False
             QtCore.QLocale.setDefault(original_locale)
-            Gui.setLocale(original_gui_locale)
-            prefs.SetString("Language", original_language)
-            Gui.updateLocale()
 
     def test_translations_and_indumatics_removal(self):
         from PySide import QtCore, QtWidgets
@@ -744,10 +732,6 @@ class TestLibraryManagerDialog(unittest.TestCase):
                 "Square": "Barra Cuadrada Maciza",
                 "Channels": "Canales",
                 "T-Slot": "Perfil con ranura en T",
-                "T-Slot 3-Slots": "Perfil con ranura en T de 3 ranuras",
-                "T-Slot 2-Slots": "Perfil con ranura en T de 2 ranuras",
-                "T-Slot 2-Slots Opp": "Perfil con ranura en T de 2 ranuras opuestas",
-                "T-Slot 1-Slot": "Perfil con ranura en T de 1 ranura",
                 "V-Slot": "Perfil con ranura en V",
                 "Custom Profile": "Perfil personalizado",
                 **{key: key for key in ("HEA", "HEB", "HEM", "IPE", "IPN", "UPE", "UPN")},

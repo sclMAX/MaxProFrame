@@ -371,28 +371,33 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         ("Lip Length", "Lip Length [mm]"),
     ]
 
-    # Legacy inspection/cleanup attributes; native translators are never stored here.
-    _translator = None
-    _translator_installed = False
+    @classmethod
+    def ensure_translations_loaded(cls):
+        """Ensures that the locale translation file from TRANSLATIONSPATH is loaded in QApplication."""
+        if getattr(cls, "_translator_installed", False):
+            return
+        cls._translator_installed = True
+        try:
+            translator = QtCore.QTranslator()
+            locale = QtCore.QLocale()
+            for prefix in ["frameforge", "FrameForge"]:
+                if translator.load(locale, prefix, "_", TRANSLATIONSPATH):
+                    QtWidgets.QApplication.installTranslator(translator)
+                    cls._translator = translator
+                    break
+        except Exception:
+            pass
 
     @classmethod
     def uninstall_translations(cls):
-        """Compatibility no-op: application translators belong to FreeCAD.
-
-        Older callers use this during dialog cleanup. Closing one consumer must
-        not remove translations used by other windows or the workbench.
-        """
-        pass
-
-    @classmethod
-    def ensure_translations_loaded(cls):
-        """Let FreeCAD own catalogs, selected language and application lifetime.
-
-        Do not cache discovery success here: an unavailable catalog can become
-        available later. A dialog must never remove application translations.
-        """
-        Gui.addLanguagePath(TRANSLATIONSPATH)
-        Gui.updateLocale()
+        """Removes the class-level translator from QApplication if installed."""
+        if getattr(cls, "_translator", None) is not None:
+            try:
+                QtWidgets.QApplication.removeTranslator(cls._translator)
+            except Exception:
+                pass
+            cls._translator = None
+        cls._translator_installed = False
 
     def __init__(self, parent=None, library_manager=None):
         super().__init__(parent)
@@ -761,10 +766,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         try:
             new_data = self.manager.get_library(lib_meta["name"])
         except Exception as e:
-            QtWidgets.QMessageBox.warning(
-                self, translate("frameforge", "Error"),
-                translate("frameforge", "Error loading library '%s': %s") % (lib_meta["name"], str(e)),
-            )
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(e))
             self._set_status(
                 translate("frameforge", "Error loading library '%s': %s") % (lib_meta["name"], str(e)),
                 is_error=True,
@@ -1443,7 +1445,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             QtWidgets.QMessageBox.warning(
                 self,
                 translate("frameforge", "Error"),
-                translate("frameforge", "Could not create library '%s': %s") % (name, str(err)),
+                str(err),
             )
             return
 
@@ -1462,10 +1464,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         try:
             meta = self.manager.import_library_zip(archive)
         except Exception as err:
-            QtWidgets.QMessageBox.warning(
-                self, translate("frameforge", "Error"),
-                translate("frameforge", "Could not import library: %s") % str(err),
-            )
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(err))
             return
         if self.refresh_libraries(select_name=meta["name"]):
             self._set_status(translate("frameforge", "Library '%s' imported successfully.") % meta["name"])
@@ -1497,10 +1496,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         try:
             self.manager.export_library_zip(name, archive)
         except Exception as err:
-            QtWidgets.QMessageBox.warning(
-                self, translate("frameforge", "Error"),
-                translate("frameforge", "Could not export library '%s': %s") % (name, str(err)),
-            )
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(err))
             return
         self._set_status(translate("frameforge", "Library '%s' exported successfully.") % name)
 
@@ -1520,7 +1516,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             QtWidgets.QMessageBox.warning(
                 self,
                 translate("frameforge", "Error"),
-                translate("frameforge", "Could not register folder library: %s") % str(err),
+                str(err),
             )
             return
 
@@ -1571,7 +1567,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 QtWidgets.QMessageBox.warning(
                     self,
                     translate("frameforge", "Error"),
-                    translate("frameforge", "Could not duplicate library '%s': %s") % (source_name, str(err)),
+                    str(err),
                 )
                 return
 
@@ -1609,10 +1605,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             try:
                 self.manager.unregister_folder_library(folder_path or name)
             except Exception as e:
-                QtWidgets.QMessageBox.warning(
-                    self, translate("frameforge", "Error"),
-                    translate("frameforge", "Could not unregister folder library '%s': %s") % (name, str(e)),
-                )
+                QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(e))
                 return
 
             self.is_dirty = False
@@ -1630,10 +1623,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 try:
                     self.manager.delete_user_library(name)
                 except Exception as e:
-                    QtWidgets.QMessageBox.warning(
-                        self, translate("frameforge", "Error"),
-                        translate("frameforge", "Could not delete library '%s': %s") % (name, str(e)),
-                    )
+                    QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(e))
                     return
 
                 self.is_dirty = False
@@ -1722,8 +1712,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         reply = QtWidgets.QMessageBox.question(
             self,
             translate("frameforge", "Delete Family"),
-            translate("frameforge", "Delete family '%s' and all its dimensions?")
-            % self._get_family_display_name(fam, self.current_lib_data.get(fam, {})),
+            translate("frameforge", "Delete family '%s' and all its dimensions?") % fam,
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         if reply == QtWidgets.QMessageBox.Yes:
@@ -1836,10 +1825,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                         translate("frameforge", "Error"),
                         translate("frameforge", "Cannot delete size with invalid asset path: %s") % str(err),
                     )
-                    self._set_status(
-                        translate("frameforge", "Cannot delete size with invalid asset path: %s") % str(err),
-                        is_error=True,
-                    )
+                    self._set_status(str(err), is_error=True)
                     return
             self._staged_deleted_assets.add(ap)
 
@@ -1960,11 +1946,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                     try:
                         resolve_and_validate_asset_path(folder_path, ap)
                     except Exception as err:
-                        QtWidgets.QMessageBox.warning(
-                            self, translate("frameforge", "Error"),
-                            translate("frameforge", "Error saving library: %s") % str(err),
-                        )
-                        self._set_status(translate("frameforge", "Error saving library: %s") % str(err), is_error=True)
+                        QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(err))
+                        self._set_status(str(err), is_error=True)
                         return
 
                 # Pre-validate all remaining asset paths before writing manifest
@@ -1980,11 +1963,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                                     try:
                                         resolve_and_validate_asset_path(folder_path, ap)
                                     except Exception as err:
-                                        QtWidgets.QMessageBox.warning(
-                                            self, translate("frameforge", "Error"),
-                                            translate("frameforge", "Error saving library: %s") % str(err),
-                                        )
-                                        self._set_status(translate("frameforge", "Error saving library: %s") % str(err), is_error=True)
+                                        QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(err))
+                                        self._set_status(str(err), is_error=True)
                                         return
 
                 self.manager.save_folder_library(
@@ -2006,10 +1986,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             self.is_dirty = False
             self._set_status(translate("frameforge", "Library '%s' saved successfully.") % lib_name)
         except Exception as e:
-            QtWidgets.QMessageBox.warning(
-                self, translate("frameforge", "Error"),
-                translate("frameforge", "Error saving library: %s") % str(e),
-            )
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Error"), str(e))
             self._set_status(translate("frameforge", "Error saving library: %s") % str(e), is_error=True)
 
     def _update_section_buttons(self):
@@ -2192,10 +2169,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 App.closeDocument(doc.Name)
             if previous_doc in App.listDocuments():
                 App.setActiveDocument(previous_doc)
-            QtWidgets.QMessageBox.warning(
-                self, translate("frameforge", "Import DXF"),
-                translate("frameforge", "Could not import DXF: %s") % str(err),
-            )
+            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Import DXF"), str(err))
 
     def _add_dxf_section(self, code):
         review = self._dxf_review
@@ -2228,10 +2202,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             # No catalog/family/dirty changes until all validation and native serialization succeed.
             asset_meta = save_section_asset(meta["folder_path"], review.sketch, name=code)
         except Exception as err:
-            QtWidgets.QMessageBox.warning(
-                review, translate("frameforge", "Import DXF"),
-                translate("frameforge", "Could not add section: %s") % str(err),
-            )
+            QtWidgets.QMessageBox.warning(review, translate("frameforge", "Import DXF"), str(err))
             return
         self._staged_new_assets.add(asset_meta["asset_path"])
         self._activate_custom_section_family()
@@ -2349,17 +2320,17 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                     Gui.activateWorkbench("SketcherWorkbench")
                 gui_doc = Gui.getDocument(session.working_doc_name) if hasattr(Gui, "getDocument") else None
                 if gui_doc is None or not hasattr(gui_doc, "setEdit"):
-                    raise RuntimeError(translate("frameforge", "Active FreeCAD GUI document not available for editing."))
+                    raise RuntimeError("Active FreeCAD GUI document not available for editing.")
                 set_edit_ok = gui_doc.setEdit(session.working_sketch_name)
                 if not set_edit_ok:
-                    raise RuntimeError(translate("frameforge", "Failed to enter edit mode for sketch."))
+                    raise RuntimeError("Failed to enter edit mode for sketch.")
                 in_edit = gui_doc.getInEdit() if hasattr(gui_doc, "getInEdit") else None
                 if (
                     in_edit is None
                     or getattr(in_edit, "Object", None) is None
                     or in_edit.Object.Name != session.working_sketch_name
                 ):
-                    raise RuntimeError(translate("frameforge", "Sketch edit mode could not be verified."))
+                    raise RuntimeError("Sketch edit mode could not be verified.")
                 entered_gui_edit = True
             except Exception as err:
                 session.close(discard_uncommitted=True)
@@ -2616,6 +2587,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 return
             self._is_closed = True
             self._cleanup_edit_session_and_staged_assets()
+            self.uninstall_translations()
             super().done(result)
         finally:
             self._close_in_progress = False
