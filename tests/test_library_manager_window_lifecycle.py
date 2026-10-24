@@ -137,35 +137,33 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
 
         # Patch message boxes during lifecycle
         self.msg_stack = ExitStack()
-        for method in ("warning", "critical", "information", "question"):
+        for method in ("warning", "critical", "information"):
             self.msg_stack.enter_context(patch.object(QtWidgets.QMessageBox, method))
+        # Closing dirty dialogs is a user decision, not an arbitrary Mock value.
+        self.question = self.msg_stack.enter_context(
+            patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Discard)
+        )
         self.addCleanup(self.msg_stack.close)
-
-        # Clean prior window reference on main window
-        if self.mw is not None:
-            try:
-                setattr(self.mw, "_frameforge_library_manager", None)
-            except Exception:
-                pass
 
         self.created_docs = []
         self.addCleanup(self._cleanup_all)
 
     def _cleanup_all(self):
-        # Close any lingering manager dialog to prevent test suite contamination
-        dlg = _find_live_manager()
-        if dlg is not None:
+        # Include hidden edit/review owners, but never touch another test's manager.
+        # Run before message patches and temporary library files are retired (LIFO).
+        self.question.return_value = QtWidgets.QMessageBox.Discard
+        for dlg in self.app.topLevelWidgets():
             try:
-                dlg.close()
-            except Exception:
-                pass
+                owned = isinstance(dlg, ProfileLibraryManagerDialog) and dlg.manager is self.manager
+            except RuntimeError:
+                continue  # Qt may already have deleted a closed dialog.
+            if owned:
+                dlg.close()  # Public close owns review/session/staged-asset cleanup.
+                self.assertFalse(_is_live(dlg), "Test-owned manager refused discard cleanup.")
+        self.app.processEvents()
+        Gui.Selection.clearSelection()
         ProfileLibraryManagerDialog.uninstall_translations()
-        if self.mw is not None:
-            try:
-                setattr(self.mw, "_frameforge_library_manager", None)
-            except Exception:
-                pass
-        for name in list(self.created_docs):
+        for name in reversed(self.created_docs):
             try:
                 if App is not None and name in App.listDocuments():
                     App.closeDocument(name)
@@ -220,6 +218,11 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
             cmd2.Activated()
 
         dialog2 = _find_live_manager()
+        live_managers = [
+            w for w in self.app.topLevelWidgets()
+            if isinstance(w, ProfileLibraryManagerDialog) and _is_live(w)
+        ]
+        self.assertEqual(live_managers, [dialog1], "Reinvoke must leave exactly one visible manager.")
         self.assertIs(dialog2, dialog1, "Re-invoking command must reuse existing live dialog instance.")
         self.assertEqual(mock_raise.call_count, 1, "Re-invoking must raise existing window.")
         self.assertEqual(mock_activate.call_count, 1, "Re-invoking must activate existing window.")
@@ -295,8 +298,29 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         self.assertFalse(dialog.isModal(), "Dialog must remain modeless during edit session.")
         self.assertIsNone(self.app.activeModalWidget(), "activeModalWidget must be None during edit session.")
 
-        # 3. Close dialog without Apply/Save (user cancels / discards by closing)
+        # Cancel must retain ownership, working state, staged bytes and counters.
+        ManageProfileLibrariesCommand().Activated()
+        source_geometry = s.GeometryCount
+        staged_bytes = Path(full_staged).read_bytes()
+        rows_before = dialog.table_sizes.rowCount()
+        self.question.reset_mock()
+        self.question.return_value = QtWidgets.QMessageBox.Cancel
         dialog.btn_close.click()
+        self.question.assert_called_once()
+        self.assertTrue(_is_live(dialog))
+        self.assertIs(getattr(self.mw, "_frameforge_library_manager", None), dialog)
+        self.assertTrue(dialog.is_dirty)
+        self.assertIs(dialog._active_edit_session, session)
+        self.assertIn(working_doc_name, App.listDocuments())
+        self.assertEqual(dialog.table_sizes.rowCount(), rows_before)
+        self.assertEqual(set(dialog._staged_new_assets), set(staged_assets))
+        self.assertEqual(Path(full_staged).read_bytes(), staged_bytes)
+
+        # 3. Explicitly discard without Apply/Save through the same close button.
+        self.question.reset_mock()
+        self.question.return_value = QtWidgets.QMessageBox.Discard
+        dialog.btn_close.click()
+        self.question.assert_called_once()
 
         # Invariants after close
         self.assertFalse(_is_live(dialog), "Dialog must not be live/visible after close.")
@@ -306,6 +330,9 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         if self.mw is not None:
             self.assertTrue(self.mw.isEnabled(), "Main window must remain enabled after close.")
 
+        self.assertIn(doc.Name, App.listDocuments(), "Source document must survive discard.")
+        self.assertIs(doc.getObject(s.Name), s)
+        self.assertEqual(s.GeometryCount, source_geometry)
         # Verify disk library catalog is unchanged
         disk_after = {
             os.path.relpath(os.path.join(r, f), self.test_root): open(os.path.join(r, f), "rb").read()
