@@ -222,6 +222,7 @@ class TestFolderSectionManagement(unittest.TestCase):
         initial_rows = self.dialog.table_sizes.rowCount()
 
         self.dialog.btn_capture_section.click()
+        self.dialog._dxf_review.btn_add.click()
 
         self.assertEqual(self.dialog.table_sizes.rowCount(), initial_rows + 1)
         row = self.dialog.table_sizes.rowCount() - 1
@@ -294,8 +295,9 @@ class TestFolderSectionManagement(unittest.TestCase):
 
         # Case A: No selection and user cancels chooser -> no row added, no asset written
         Gui.Selection.clearSelection()
-        with patch.object(QtWidgets.QInputDialog, "getItem", return_value=("", False)):
-            self.dialog.btn_capture_section.click()
+        self.dialog.btn_capture_section.click()
+        self.assertIsNone(self.dialog._dxf_review.sketch)
+        self.dialog._dxf_review.reject()
 
         self.assertEqual(self.dialog.table_sizes.rowCount(), 0)
         sections_dir = os.path.join(self.folder_lib_path, "sections")
@@ -307,8 +309,11 @@ class TestFolderSectionManagement(unittest.TestCase):
         Gui.Selection.addSelection(doc.Name, s1.Name)
         Gui.Selection.addSelection(doc.Name, s2.Name)
 
-        with patch.object(QtWidgets.QInputDialog, "getItem", return_value=(f"{doc.Name}#SketchB", True)):
-            self.dialog.btn_capture_section.click()
+        self.dialog.btn_capture_section.click()
+        review = self.dialog._dxf_review
+        self.assertIsNone(review.sketch)
+        review.combo_sketch.setCurrentIndex(review.combo_sketch.findData((doc.Name, s2.Name)))
+        review.btn_add.click()
 
         self.assertEqual(self.dialog.table_sizes.rowCount(), 1)
         # Should have captured SketchB (width 70, height 35)
@@ -348,6 +353,7 @@ class TestFolderSectionManagement(unittest.TestCase):
         sections_dir = os.path.join(self.folder_lib_path, "sections")
 
         self.dialog.btn_capture_section.click()
+        self.dialog._dxf_review.btn_add.click()
 
         self.assertEqual(self.dialog.table_sizes.rowCount(), 0)
         if os.path.exists(sections_dir):
@@ -893,6 +899,7 @@ class TestFolderSectionManagement(unittest.TestCase):
         # Injected failure during capture after workspace creation
         with patch("freecad.maxproframe.library_manager_dialog.save_section_asset", side_effect=RuntimeError("Simulated capture crash")):
             self.dialog.btn_capture_section.click()
+            self.dialog._dxf_review.btn_add.click()
 
         # Verify unrelated sentinel and existing asset are completely untouched
         self.assertTrue(os.path.isfile(existing_asset))

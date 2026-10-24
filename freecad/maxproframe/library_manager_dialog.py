@@ -2033,125 +2033,29 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             )
             return
 
-        folder_path = self.current_lib_meta["folder_path"]
-
-        self._activate_custom_section_family()
-
-        # Explicit sketch selection via Gui.Selection
-        selected_objs = []
-        if hasattr(Gui, "Selection"):
-            selected_objs = [
-                obj
-                for obj in Gui.Selection.getSelection()
-                if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject")
-            ]
-
-        chosen_sketch = None
-        if len(selected_objs) == 1:
-            chosen_sketch = selected_objs[0]
-        else:
-            # 0 or multiple sketches: collect all candidate sketches across open documents
-            candidate_options = []
-            sketch_map = {}
-            for doc in App.listDocuments().values():
-                for obj in doc.Objects:
-                    if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject"):
-                        display_name = f"{doc.Name}#{obj.Name}"
-                        candidate_options.append(display_name)
-                        sketch_map[display_name] = obj
-
-            if not candidate_options:
-                QtWidgets.QMessageBox.warning(
-                    self,
-                    translate("frameforge", "Warning"),
-                    translate("frameforge", "No sketches found in open FreeCAD documents."),
-                )
-                return
-
-            chosen_item, ok = QtWidgets.QInputDialog.getItem(
-                self,
-                translate("frameforge", "Select Section Sketch"),
-                translate("frameforge", "Choose sketch to capture:"),
-                candidate_options,
-                0,
-                False,
-            )
-            if not ok or not chosen_item:
-                return
-            chosen_sketch = sketch_map.get(chosen_item)
-
-        if chosen_sketch is None:
+        if self._is_closed or self._active_edit_session is not None:
             return
+        from freecad.maxproframe.sketch_section_dialog import SketchSectionReview
 
-        # Validate geometry via build_custom_section_face
-        from freecad.maxproframe.custom_section_geometry import build_custom_section_face
-        from freecad.maxproframe.section_library import compute_sketch_dimensions_and_weight
+        meta = self.current_lib_meta
+        material, density = self.manager.get_library_material_info(meta["name"])
+        review = SketchSectionReview(meta["name"], material, density, self._add_dxf_section)
+        review.library_root = os.path.realpath(meta["folder_path"])
+        restore_visible = self.isVisible()
+        self._dxf_review = review
 
-        try:
-            face = build_custom_section_face(chosen_sketch)
-            if not face.isValid():
-                raise ValueError("Constructed section face is invalid.")
-        except Exception as err:
-            QtWidgets.QMessageBox.warning(
-                self,
-                translate("frameforge", "Invalid Section Geometry"),
-                translate("frameforge", "The selected sketch cannot be used as a custom section: %s") % str(err),
-            )
-            return
+        def finish(*_):
+            if self._dxf_review is review:
+                self._dxf_review = None
+                if restore_visible and not self._is_closed:
+                    self.show()
+                    self.raise_()
+                review.deleteLater()
 
-        # Density for weight calculation
-        lib_name = self.current_lib_meta.get("name", "")
-        _, density = self.manager.get_library_material_info(lib_name)
-
-        try:
-            height, width, weight, area = compute_sketch_dimensions_and_weight(chosen_sketch, density)
-        except Exception as err:
-            QtWidgets.QMessageBox.warning(
-                self,
-                translate("frameforge", "Error"),
-                translate("frameforge", "Failed to compute section dimensions: %s") % str(err),
-            )
-            return
-
-        # Save autonomous asset into folder library
-        from freecad.maxproframe.section_capture import save_section_asset
-
-        try:
-            asset_meta = save_section_asset(
-                folder_path,
-                chosen_sketch,
-                name=chosen_sketch.Label or "Section",
-            )
-        except Exception as err:
-            QtWidgets.QMessageBox.warning(
-                self,
-                translate("frameforge", "Error"),
-                translate("frameforge", "Failed to save section asset: %s") % str(err),
-            )
-            return
-
-        asset_path = asset_meta["asset_path"]
-        self._staged_new_assets.add(asset_path)
-
-        # Determine unique code name
-        base_code = chosen_sketch.Label.strip() if chosen_sketch.Label else f"Custom_{width:.0f}x{height:.0f}"
-        if not base_code:
-            base_code = f"Custom_{width:.0f}x{height:.0f}"
-        existing_codes = set()
-        for r in range(self.table_sizes.rowCount()):
-            it = self.table_sizes.item(r, 0)
-            if it and it.text().strip():
-                existing_codes.add(it.text().strip())
-
-        candidate_code = base_code
-        counter = 1
-        while candidate_code in existing_codes:
-            candidate_code = f"{base_code}_{counter}"
-            counter += 1
-
-        size_entry = self._section_size_entry(asset_meta, height, width, weight)
-        self._insert_section_row(candidate_code, size_entry)
-        self._set_status(translate("frameforge", "Captured section '%s' successfully.") % candidate_code)
+        review.finished.connect(finish)
+        self.hide()
+        review.show()
+        review.move(self.pos())
 
     @staticmethod
     def _section_size_entry(asset_meta, height, width, weight, weight_format=".2f"):

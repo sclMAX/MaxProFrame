@@ -40,10 +40,11 @@ class TestDXFUnitsDialog(unittest.TestCase):
 
         root = Path(__file__).resolve().parents[1] / "freecad/maxproframe"
         sources = set()
-        for node in ast.walk(ast.parse((root / "dxf_section_dialog.py").read_text())):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "translate":
-                if len(node.args) >= 2 and all(isinstance(arg, ast.Constant) for arg in node.args[:2]):
-                    sources.add((node.args[0].value, node.args[1].value))
+        for filename in ("dxf_section_dialog.py", "sketch_section_dialog.py"):
+            for node in ast.walk(ast.parse((root / filename).read_text())):
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "translate":
+                    if len(node.args) >= 2 and all(isinstance(arg, ast.Constant) for arg in node.args[:2]):
+                        sources.add((node.args[0].value, node.args[1].value))
         for prefix in ("frameforge", "maxproframe"):
             path = root / "resources/translations" / (prefix + "_es.ts")
             entries = {
@@ -54,7 +55,11 @@ class TestDXFUnitsDialog(unittest.TestCase):
             self.assertTrue(sources)
             for key in sources:
                 self.assertTrue(entries.get(key), key)
-            translator = QtCore.QTranslator()
-            self.assertTrue(translator.load(str(path.with_suffix(".qm"))))
-            for context, source in sources:
-                self.assertEqual(translator.translate(context, source), entries[(context, source)])
+            mixed_case = {"frameforge": "FrameForge", "maxproframe": "MaxProFrame"}[prefix]
+            for alias in (prefix, mixed_case):
+                for locale in ("es", "es-ES", "es-CO", "es-AR"):
+                    translator = QtCore.QTranslator()
+                    qm = path.parent / (alias + "_" + locale + ".qm")
+                    self.assertTrue(translator.load(str(qm)), str(qm))
+                    for context, source in sources:
+                        self.assertEqual(translator.translate(context, source), entries[(context, source)], str(qm))

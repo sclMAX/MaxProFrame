@@ -718,6 +718,14 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
         <translation>Capturar sección</translation>
     </message>
     <message>
+        <source>Select a sketch</source>
+        <translation>Seleccioná un croquis</translation>
+    </message>
+    <message>
+        <source>Select a sketch in the list or click it in FreeCAD. Adding stages an independent copy; Save Changes publishes it.</source>
+        <translation>Elegí un croquis de la lista o hacé clic sobre él en FreeCAD. Al agregarlo se prepara una copia independiente; «Guardar cambios» la guarda en la biblioteca.</translation>
+    </message>
+    <message>
         <source>Edit Section</source>
         <translation>Editar sección</translation>
     </message>

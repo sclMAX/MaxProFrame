@@ -367,9 +367,10 @@ class TestLibraryDXFImport(unittest.TestCase):
             end = points[(i + 1) % 4]
             sketch.addGeometry(Part.LineSegment(App.Vector(*point, 0), App.Vector(*end, 0)), False)
         source.recompute()
-        selection = SimpleNamespace(getSelection=lambda: [sketch])
-        with patch.object(ui.Gui, "Selection", selection, create=True):
-            self.dialog.btn_capture_section.click()
+        ui.Gui.Selection.clearSelection()
+        ui.Gui.Selection.addSelection(source.Name, sketch.Name)
+        self.dialog.btn_capture_section.click()
+        self.dialog._dxf_review.btn_add.click()
         self.assertEqual(self.dialog.current_family, "Custom Profile")
         self.assertEqual(self.dialog.table_sizes.rowCount(), 1)
         self.assertEqual(self.dialog.table_sizes.currentRow(), 0)

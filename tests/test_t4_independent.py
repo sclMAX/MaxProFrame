@@ -40,6 +40,7 @@ class IndependentT4(_Fixture):
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(doc.Name, sketch.Name)
         self.dialog.btn_capture_section.click()
+        self.dialog._dxf_review.btn_add.click()
         self.dialog.close()
         self.assertEqual(before, self.snapshot())
 

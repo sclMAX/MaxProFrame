@@ -274,6 +274,7 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         # 1. Capture section
         self.assertTrue(dialog.btn_capture_section.isEnabled())
         dialog.btn_capture_section.click()
+        dialog._dxf_review.btn_add.click()
         self.assertEqual(dialog.current_family, "Custom Profile")
         self.assertEqual(dialog.table_sizes.rowCount(), 1)
         self.assertEqual(dialog.table_sizes.currentRow(), 0)
@@ -330,6 +331,7 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         self.addCleanup(dialog.close)
         dialog.refresh_libraries(select_name="ProbeLib")
         dialog.btn_capture_section.click()
+        dialog._dxf_review.btn_add.click()
         code = dialog.table_sizes.item(0, 0).text()
         dialog.btn_edit_section.click()
         session = dialog._active_edit_session
@@ -420,6 +422,7 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         self.addCleanup(dialog.close)
         dialog.refresh_libraries(select_name="ProbeLib")
         dialog.btn_capture_section.click()
+        dialog._dxf_review.btn_add.click()
         self.assertTrue(dialog.btn_edit_section.isEnabled())
 
         with patch(
@@ -454,6 +457,7 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         self.addCleanup(dialog.close)
         dialog.refresh_libraries(select_name="ProbeLib")
         dialog.btn_capture_section.click()
+        dialog._dxf_review.btn_add.click()
         self.assertTrue(dialog.btn_edit_section.isEnabled())
 
         orig_get_doc = Gui.getDocument
@@ -505,6 +509,7 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         self.addCleanup(dialog.close)
         dialog.refresh_libraries(select_name="ProbeLib")
         dialog.btn_capture_section.click()
+        dialog._dxf_review.btn_add.click()
         self.assertTrue(dialog.btn_edit_section.isEnabled())
 
         orig_get_doc = Gui.getDocument
@@ -595,6 +600,7 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         self.assertFalse(dialog.isVisible(), "Directly instantiated dialog is not visible.")
         dialog.refresh_libraries(select_name="ProbeLib")
         dialog.btn_capture_section.click()
+        dialog._dxf_review.btn_add.click()
         self.assertTrue(dialog.btn_edit_section.isEnabled())
 
         dialog.btn_edit_section.click()

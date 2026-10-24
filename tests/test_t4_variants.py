@@ -25,6 +25,7 @@ class Narrow(original.IndependentT4):
         sketch = self._create_rect_sketch(doc)
         Gui.Selection.addSelection(doc.Name, sketch.Name)
         self.dialog.btn_capture_section.click()
+        self.dialog._dxf_review.btn_add.click()
         self.dialog.btn_save.click()
         before = self.snapshot()
         self.dialog.close()
