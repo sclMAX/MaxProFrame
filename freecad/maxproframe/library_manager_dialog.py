@@ -371,33 +371,28 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         ("Lip Length", "Lip Length [mm]"),
     ]
 
-    @classmethod
-    def ensure_translations_loaded(cls):
-        """Ensures that the locale translation file from TRANSLATIONSPATH is loaded in QApplication."""
-        if getattr(cls, "_translator_installed", False):
-            return
-        cls._translator_installed = True
-        try:
-            translator = QtCore.QTranslator()
-            locale = QtCore.QLocale()
-            for prefix in ["frameforge", "FrameForge"]:
-                if translator.load(locale, prefix, "_", TRANSLATIONSPATH):
-                    QtWidgets.QApplication.installTranslator(translator)
-                    cls._translator = translator
-                    break
-        except Exception:
-            pass
+    # Legacy inspection/cleanup attributes; native translators are never stored here.
+    _translator = None
+    _translator_installed = False
 
     @classmethod
     def uninstall_translations(cls):
-        """Removes the class-level translator from QApplication if installed."""
-        if getattr(cls, "_translator", None) is not None:
-            try:
-                QtWidgets.QApplication.removeTranslator(cls._translator)
-            except Exception:
-                pass
-            cls._translator = None
-        cls._translator_installed = False
+        """Compatibility no-op: application translators belong to FreeCAD.
+
+        Older callers use this during dialog cleanup. Closing one consumer must
+        not remove translations used by other windows or the workbench.
+        """
+        pass
+
+    @classmethod
+    def ensure_translations_loaded(cls):
+        """Let FreeCAD own catalogs, selected language and application lifetime.
+
+        Do not cache discovery success here: an unavailable catalog can become
+        available later. A dialog must never remove application translations.
+        """
+        Gui.addLanguagePath(TRANSLATIONSPATH)
+        Gui.updateLocale()
 
     def __init__(self, parent=None, library_manager=None):
         super().__init__(parent)
@@ -2587,7 +2582,6 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 return
             self._is_closed = True
             self._cleanup_edit_session_and_staged_assets()
-            self.uninstall_translations()
             super().done(result)
         finally:
             self._close_in_progress = False
