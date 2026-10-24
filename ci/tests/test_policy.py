@@ -951,7 +951,7 @@ class TestDocumentationPolicy(unittest.TestCase):
     def test_workbench_icon_uses_vector_svg_not_legacy_xpm(self):
         init_gui = REPO_ROOT / "freecad" / "maxproframe" / "InitGui.py"
         content = init_gui.read_text(encoding="utf-8")
-        self.assertIn('Icon = os.path.join(ICONPATH, "metalwb.svg")', content)
+        self.assertIn("metalwb.svg", content)
         self.assertNotIn("static char * metalwb_xpm[]", content)
 
         svg_path = REPO_ROOT / "freecad" / "maxproframe" / "resources" / "icons" / "metalwb.svg"
@@ -959,6 +959,28 @@ class TestDocumentationPolicy(unittest.TestCase):
         svg_content = svg_path.read_text(encoding="utf-8")
         self.assertIn('viewBox="0 0 64 64"', svg_content)
         self.assertNotIn("icone_atelier_metalwb.svg", svg_content)
+
+        # FreeCAD executes InitGui.py with separate globals and locals dictionaries.
+        # Verify that executing InitGui.py with distinct dicts resolves MaxProFrame.Icon to svg_path.
+        import types
+        from unittest import mock
+
+        fake_fc = types.ModuleType("FreeCAD")
+        fake_fc.Qt = types.SimpleNamespace(translate=lambda ctx, txt: txt)
+        fake_gui = types.ModuleType("FreeCADGui")
+        fake_gui.Workbench = object
+        fake_gui.addLanguagePath = lambda p: None
+        fake_gui.updateLocale = lambda: None
+        registered = {}
+        fake_gui.addWorkbench = lambda wb: registered.setdefault(wb.__class__.__name__, wb)
+
+        with mock.patch.dict(sys.modules, {"FreeCAD": fake_fc, "FreeCADGui": fake_gui}):
+            g_dict = {"__builtins__": __builtins__}
+            l_dict = {}
+            exec(compile(content, str(init_gui), "exec"), g_dict, l_dict)
+
+        self.assertIn("MaxProFrame", l_dict)
+        self.assertEqual(pathlib.Path(l_dict["MaxProFrame"].Icon).resolve(), svg_path.resolve())
 
     def test_readme_and_funding_include_banner_and_sponsors(self):
         banner_path = REPO_ROOT / "docs" / "images" / "maxproframe-banner.png"
