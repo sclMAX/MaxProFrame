@@ -700,6 +700,7 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
 
         dialog = ProfileLibraryManagerDialog(parent=self.mw)
         flags = dialog.windowFlags()
+        self.assertEqual(dialog.windowType(), QtCore.Qt.Window)
         self.assertTrue(bool(flags & QtCore.Qt.WindowMaximizeButtonHint), "Dialog must have WindowMaximizeButtonHint")
         self.assertTrue(bool(flags & QtCore.Qt.WindowMinimizeButtonHint), "Dialog must have WindowMinimizeButtonHint")
         self.assertGreaterEqual(dialog.minimumWidth(), 800)

@@ -415,7 +415,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         self.setWindowTitle("MaxProFrame")
         self.setWindowFlags(
-            self.windowFlags()
+            (self.windowFlags() & ~QtCore.Qt.WindowType_Mask)
+            | QtCore.Qt.Window
             | QtCore.Qt.WindowMaximizeButtonHint
             | QtCore.Qt.WindowMinimizeButtonHint
         )
