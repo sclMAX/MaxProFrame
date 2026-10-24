@@ -138,7 +138,8 @@ class Boundary(fixture.TestFolderLibraryDuplication):
                 with self.subTest(change=change, outcome=outcome):
                     d = self.dialog()
                     if change == "delete":
-                        d.btn_del_size.click()
+                        with patch.object(ui.QtWidgets.QMessageBox, "question", return_value=ui.QtWidgets.QMessageBox.Yes):
+                            d.btn_del_size.click()
                     else:
                         d.le_norm.setText("UNSAVED")
                     self.assertTrue(d.is_dirty)

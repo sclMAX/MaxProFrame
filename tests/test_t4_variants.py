@@ -34,7 +34,7 @@ class Narrow(original.IndependentT4):
         self.install({'A': self.props(a), 'B': self.props(a)})
         self.dialog.table_sizes.selectRow(0)
         self.dialog.btn_edit_section.click()
-        self.dialog.btn_del_size.click()
+        self._confirm_delete_size()
         self.dialog.table_sizes.selectRow(0)
         self.dialog._commit_current_family_edits()
         before = copy.deepcopy(self.dialog.current_lib_data)
@@ -67,7 +67,7 @@ class Narrow(original.IndependentT4):
         docs = set(__import__('FreeCAD').listDocuments())
         self.dialog.btn_edit_section.click()
         opened = set(__import__('FreeCAD').listDocuments()) != docs
-        self.dialog.btn_del_size.click()
+        self._confirm_delete_size()
         self.dialog.btn_save.click()
         exists = os.path.isfile(os.path.join(outside, 'outside_keep.FCStd'))
         print('ESCAPE opened=%s outside_exists=%s manifest_unchanged=%s' % (opened, exists, before == self.snapshot()), flush=True)

@@ -14,8 +14,12 @@ it to an editable folder library. Library material and density determine its wei
    small, modeless review controls show the destination library and its material.
    Geometry keeps its orientation in XY, Z=0, centered by the true bounding box
    including arc extrema, with identity Placement and fully fixed constraints.
-5. Enter a non-empty, unique Custom Profile code and click **Add as Custom**.
+5. In **Profile data**, enter a non-empty, unique Custom Profile **Code** and,
+   optionally, a single-line **Description**. Click **Add as Custom**.
    This stages an autonomous asset and selects its new card; it does not publish.
+   Leading and trailing description whitespace is removed; an empty description
+   keeps the previous code-only import behavior. Saved descriptions appear on
+   Custom cards and can be found with the profile search after reloading.
 6. Click the existing **Save Changes** to publish the catalog and asset reference.
 
 Cancel at the file picker, units confirmation, or review (including code entry)

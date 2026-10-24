@@ -29,7 +29,10 @@ class TestLibraryUsability(unittest.TestCase):
                 "AL200": {"Weight": "1.2", "Description": "Ángulo de aluminio"}}},
             "Pipe": {"fillet": False, "sizes": {}}})
         self.dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(self.dialog.close)
+        def discard_on_cleanup():
+            with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Discard):
+                self.dialog.close()
+        self.addCleanup(discard_on_cleanup)
         self.dialog.refresh_libraries(select_name="Catalog")
 
     def family(self, name):
@@ -52,6 +55,53 @@ class TestLibraryUsability(unittest.TestCase):
         self.addCleanup(picker.close)
         self.assertIsInstance(picker.cb_fillet, QtWidgets.QCheckBox)
 
+    def test_header_badges_are_compact_and_indented(self):
+        self.family("Pipe")
+        self.dialog.show()
+        self.app.processEvents()
+        library, family = self.dialog.lbl_lib_banner, self.dialog.lbl_family_name
+        self.assertLess(library.width(), library.parentWidget().width() - library.x())
+        self.assertEqual(family.x() - library.x(), 16)
+        self.assertEqual(family.height(), library.height())
+        import re
+
+        border = re.search(r"border: ([^;]+)", library.styleSheet()).group(1)
+        self.assertIn(f"border: {border};", family.styleSheet())
+        self.assertIn("background", family.styleSheet())
+        self.assertIn("border", family.styleSheet())
+        self.assertEqual(family.toolTip(), family.text())
+        self.family("Square Hollow")
+        self.assertEqual(family.text(), self.dialog._get_family_display_name("Square Hollow"))
+        self.assertEqual(family.toolTip(), family.text())
+        self.dialog.combo_family.setCurrentIndex(-1)
+        self.assertTrue(family.isHidden())
+        self.assertEqual(family.text(), "")
+        self.assertEqual(family.toolTip(), "")
+
+    def test_long_badges_fit_without_changing_data(self):
+        self.family("Pipe")
+        self.dialog.resize(920, 580)
+        self.dialog.show()
+        self.app.processEvents()
+        width = self.dialog.width()
+        before = copy.deepcopy(self.dialog.current_lib_data)
+        name = "<b>Long library & material</b> " * 30
+        self.dialog._update_banner(True, name, is_folder=True, folder_path=self.folder)
+        family = self.dialog.lbl_family_name
+        family.setText(name)
+        family.setToolTip(name)
+        self.app.processEvents()
+        self.assertEqual(self.dialog.width(), width)
+        for badge in (self.dialog.lbl_lib_banner, family):
+            self.assertEqual(badge.textFormat(), QtCore.Qt.PlainText)
+            self.assertLessEqual(badge.x() + badge.width(), badge.parentWidget().width())
+            self.assertLess(badge.width(), badge.sizeHint().width())
+            self.assertIn(name, badge.toolTip())
+        self.assertIn(self.folder, self.dialog.lbl_lib_banner.toolTip())
+        self.assertIn("g/cm³", self.dialog.lbl_lib_banner.toolTip())
+        self.assertEqual(self.dialog.current_lib_data, before)
+        self.assertFalse(self.dialog.is_dirty)
+
     def test_delete_requires_real_selection(self):
         self.family("Square Hollow")
         table = self.dialog.table_sizes
@@ -60,10 +110,68 @@ class TestLibraryUsability(unittest.TestCase):
         self.assertTrue(self.dialog.btn_del_size.isEnabled())
         table.clearSelection()
         self.assertFalse(self.dialog.btn_del_size.isEnabled())
-        self.dialog._on_delete_size()
+        with patch.object(QtWidgets.QMessageBox, "question") as question:
+            self.dialog.btn_del_size.click()
+            self.dialog._on_delete_size()
+        question.assert_not_called()
         self.assertEqual(table.rowCount(), 1)
         self.family("Pipe")
         self.assertFalse(self.dialog.btn_del_size.isEnabled())
+
+    def test_delete_confirmation_no_preserves_selection_and_storage(self):
+        import html
+        for family, code in (("Square Hollow", "SH40"), ("Custom Profile", "PGC100")):
+            for response in (QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.NoButton, QtWidgets.QMessageBox.Ok):
+                with self.subTest(family=family, response=response):
+                    self.family(family)
+                    table = self.dialog.table_sizes
+                    if family == "Custom Profile":
+                        self.dialog.cards_view.card_by_code(code).click()
+                    else:
+                        table.selectRow(0)
+                    before = copy.deepcopy(self.dialog.current_lib_data)
+                    stored = copy.deepcopy(self.manager.get_library("Catalog"))
+                    with open(os.path.join(self.folder, "library.json"), "rb") as stream:
+                        manifest = stream.read()
+                    rows = [[table.item(r, c).text() if table.item(r, c) else None
+                             for c in range(table.columnCount())] for r in range(table.rowCount())]
+                    assets = set(self.dialog._staged_deleted_assets)
+                    new_assets = set(self.dialog._staged_new_assets)
+                    dirty = self.dialog.is_dirty
+                    card = self.dialog.cards_view.card_by_code(code) if family == "Custom Profile" else None
+                    with patch.object(QtWidgets.QMessageBox, "question", return_value=response) as question:
+                        self.dialog.btn_del_size.click()
+                    question.assert_called_once_with(
+                        self.dialog, translate("frameforge", "Remove Size"),
+                        "<p>" + html.escape(translate("frameforge", "Remove size '%s'?") % code) + "</p>",
+                        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                        QtWidgets.QMessageBox.No)
+                    self.assertEqual(self.dialog.current_lib_data, before)
+                    self.assertEqual(self.manager.get_library("Catalog"), stored)
+                    with open(os.path.join(self.folder, "library.json"), "rb") as stream:
+                        self.assertEqual(stream.read(), manifest)
+                    self.assertEqual([[table.item(r, c).text() if table.item(r, c) else None
+                                       for c in range(table.columnCount())] for r in range(table.rowCount())], rows)
+                    self.assertEqual(self.dialog._staged_deleted_assets, assets)
+                    self.assertEqual(self.dialog._staged_new_assets, new_assets)
+                    self.assertEqual(self.dialog.is_dirty, dirty)
+                    if card:
+                        self.assertIs(self.dialog.cards_view.card_by_code(code), card)
+
+    def test_delete_confirmation_yes_and_markup_code(self):
+        import html
+        self.family("Square Hollow")
+        code = "<b>SH40 & special</b>"
+        self.dialog.table_sizes.item(0, 0).setText(code)
+        self.dialog.table_sizes.selectRow(0)
+        with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Yes) as question:
+            self.dialog.btn_del_size.click()
+        self.assertEqual(question.call_args[0][2], "<p>" + html.escape(
+            translate("frameforge", "Remove size '%s'?") % code) + "</p>")
+        self.assertEqual(self.dialog.table_sizes.rowCount(), 0)
+        self.assertTrue(self.dialog.is_dirty)
+        self.dialog.btn_save.click()
+        self.assertEqual(self.manager.get_library("Catalog")["Square Hollow"]["sizes"], {})
 
     def test_custom_description_persists_with_metadata_and_weight(self):
         self.family("Custom Profile")
@@ -96,7 +204,10 @@ class TestLibraryUsability(unittest.TestCase):
         data_before = copy.deepcopy(self.dialog.current_lib_data)
         dirty_before = self.dialog.is_dirty
         assets_before = set(self.dialog._staged_deleted_assets)
-        self.dialog._on_delete_size()
+        with patch.object(QtWidgets.QMessageBox, "question") as question:
+            self.dialog.btn_del_size.click()
+            self.dialog._on_delete_size()
+        question.assert_not_called()
         self.assertEqual(self.dialog.table_sizes.rowCount(), before)
         self.assertEqual(self.dialog.current_lib_data, data_before)
         self.assertEqual(self.dialog.is_dirty, dirty_before)
@@ -152,7 +263,10 @@ class TestLibraryUsability(unittest.TestCase):
             self.assertFalse(button.isEnabled())
         before = copy.deepcopy(self.manager.get_library("Stock"))
         self.dialog.le_search.setText("galvanizada")
-        self.dialog._on_delete_size()
+        with patch.object(QtWidgets.QMessageBox, "question") as question:
+            self.dialog.btn_del_size.click()
+            self.dialog._on_delete_size()
+        question.assert_not_called()
         self.assertEqual(self.manager.get_library("Stock"), before)
         self.assertFalse(self.dialog.is_dirty)
 
@@ -175,6 +289,7 @@ class TestLibraryUsability(unittest.TestCase):
     def test_spanish_usability_translations_in_all_runtime_aliases(self):
         from freecad.maxproframe.ff_tools import TRANSLATIONSPATH
         messages = {
+            "Remove size '%s'?": "¿Quitar la medida '%s'?",
             "Description:": "Descripción:",
             "Weight (kg/m):": "Peso (kg/m):",
             "Read-only": "Solo lectura",

@@ -4,6 +4,24 @@
 <context>
     <name>frameforge</name>
     <message>
+        <source>Destination</source>
+        <translation>Destino</translation>
+    </message>
+    <message>
+        <source>Profile data</source>
+        <translation>Datos del perfil</translation>
+    </message>
+    <message>
+        <source>Description (optional):</source>
+        <translation>Descripción (opcional):</translation>
+    </message>
+    <message>
+        <source>Library: %s
+Material: %s (%s g/cm³)</source>
+        <translation>Biblioteca: %s
+Material: %s (%s g/cm³)</translation>
+    </message>
+    <message>
         <source>Description:</source>
         <translation>Descripción:</translation>
     </message>
@@ -288,6 +306,10 @@
         <translation>Quitar Medida</translation>
     </message>
     <message>
+        <source>Remove size '%s'?</source>
+        <translation>¿Quitar la medida '%s'?</translation>
+    </message>
+    <message>
         <source>Calculate Theoretical Weight</source>
         <translation>Calcular Peso Teórico</translation>
     </message>
@@ -310,6 +332,10 @@
     <message>
         <source>Unsaved Changes</source>
         <translation>Cambios sin guardar</translation>
+    </message>
+    <message>
+        <source>You have unsaved changes. Do you want to save them before closing?</source>
+        <translation>Tenés cambios sin guardar. ¿Querés guardarlos antes de cerrar?</translation>
     </message>
     <message>
         <source>You have unsaved changes. Do you want to save them before switching libraries?</source>

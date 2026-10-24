@@ -955,7 +955,8 @@ class TestCustomProfileCards(unittest.TestCase):
 
         # Select second card again and delete: Card_One removed, Card_Zero preserved
         self._select_card(cards_view, 1)
-        self.dialog.btn_del_size.click()
+        with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Yes):
+            self.dialog.btn_del_size.click()
 
         count_fn = getattr(cards_view, "count", None)
         card_count = count_fn() if callable(count_fn) else len(getattr(cards_view, "cards", []))

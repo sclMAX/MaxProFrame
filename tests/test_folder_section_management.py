@@ -617,6 +617,10 @@ class TestFolderSectionManagement(unittest.TestCase):
         self.assertEqual(committed_legacy.get("legacy_custom_field"), "PreserveMe")
         self.assertEqual(committed_legacy.get("legacy_numeric"), 88.5)
 
+    def _confirm_delete_size(self):
+        with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Yes):
+            self.dialog.btn_del_size.click()
+
     # --- Rule 8: S9 staged deletion defers asset removal until successful save ---
 
     def test_r8_s9_staged_deletion_defers_asset_removal_until_save(self):
@@ -640,7 +644,7 @@ class TestFolderSectionManagement(unittest.TestCase):
         self.dialog.table_sizes.selectRow(0)
 
         # Delete size row
-        self.dialog.btn_del_size.click()
+        self._confirm_delete_size()
 
         self.assertEqual(self.dialog.table_sizes.rowCount(), 0)
         # S9 INVARIANT: Asset file MUST STILL EXIST immediately after delete
@@ -678,7 +682,7 @@ class TestFolderSectionManagement(unittest.TestCase):
         self.dialog.btn_save.click()
 
         self.dialog.table_sizes.selectRow(0)
-        self.dialog.btn_del_size.click()
+        self._confirm_delete_size()
         self.assertTrue(self.dialog.is_dirty)
 
         # Discard by closing dialog or reloading
@@ -724,7 +728,7 @@ class TestFolderSectionManagement(unittest.TestCase):
 
         # Delete Variant_1 only
         self.dialog.table_sizes.selectRow(0)
-        self.dialog.btn_del_size.click()
+        self._confirm_delete_size()
         self.dialog.btn_save.click()
 
         # 1. Variant_2 still references the asset -> file must NOT be deleted!
@@ -760,7 +764,7 @@ class TestFolderSectionManagement(unittest.TestCase):
         }
         self._select_family("Custom Profile")
         self.dialog.table_sizes.selectRow(0)
-        self.dialog.btn_del_size.click()
+        self._confirm_delete_size()
 
         # 1. Simulate backend save failure
         with patch.object(self.manager, "save_folder_library", side_effect=IOError("Simulated disk error")):
@@ -840,7 +844,7 @@ class TestFolderSectionManagement(unittest.TestCase):
             )
 
             # 2. Delete + Save must refuse to delete outside target
-            self.dialog.btn_del_size.click()
+            self._confirm_delete_size()
             self.dialog.btn_save.click()
 
             # Assert outside sentinel is completely untouched

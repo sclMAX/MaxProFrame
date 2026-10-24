@@ -1,4 +1,5 @@
 import copy
+import html
 import math
 import os
 import unicodedata
@@ -76,6 +77,29 @@ def is_dark_theme(widget):
     """Detects if the current Qt palette corresponds to a dark theme."""
     bg = widget.palette().color(QtGui.QPalette.Window)
     return bg.lightness() < 128
+
+
+class _HeaderBadge(QtWidgets.QLabel):
+    """Content-sized label that can shrink without losing its full public text."""
+
+    def __init__(self):
+        super().__init__()
+        self.setTextFormat(QtCore.Qt.PlainText)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed)
+
+    def minimumSizeHint(self):
+        return QtCore.QSize(0, self.sizeHint().height())
+
+    def paintEvent(self, event):
+        # Let the stylesheet paint the rounded badge; draw only elided plain text.
+        painter = QtWidgets.QStylePainter(self)
+        option = QtWidgets.QStyleOption()
+        option.initFrom(self)
+        painter.drawPrimitive(QtWidgets.QStyle.PE_Widget, option)
+        rect = self.rect().adjusted(9, 6, -9, -6)
+        text = self.fontMetrics().elidedText(self.text(), QtCore.Qt.ElideRight, max(0, rect.width()))
+        painter.setPen(self.palette().color(QtGui.QPalette.WindowText))
+        painter.drawText(rect, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, text)
 
 
 class NewLibraryDialog(QtWidgets.QDialog):
@@ -502,12 +526,20 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         header_details_layout.setSpacing(4)
 
         # Top banner for library type (Stock read-only vs User editable)
-        self.lbl_lib_banner = QtWidgets.QLabel()
+        self.lbl_lib_banner = _HeaderBadge()
         self.lbl_lib_banner.setStyleSheet("padding: 4px; font-weight: bold; border-radius: 3px;")
         header_details_layout.addWidget(self.lbl_lib_banner)
 
-        self.lbl_family_name = QtWidgets.QLabel()
-        header_details_layout.addWidget(self.lbl_family_name)
+        self.lbl_family_name = _HeaderBadge()
+        self.lbl_family_name.setStyleSheet(
+            "background-color: palette(alternate-base); color: palette(window-text); "
+            "border: 1px solid palette(mid); padding: 5px 8px; border-radius: 4px;"
+        )
+        family_badge_row = QtWidgets.QHBoxLayout()
+        family_badge_row.setContentsMargins(16, 0, 0, 0)
+        family_badge_row.addWidget(self.lbl_family_name)
+        family_badge_row.addStretch()
+        header_details_layout.addLayout(family_badge_row)
 
         # Metadata and compact size actions
         meta_row = QtWidgets.QHBoxLayout()
@@ -678,7 +710,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         return True
 
-    def _prompt_dirty_save(self):
+    def _prompt_dirty_save(self, closing=False):
         """
         Handles unsaved changes before switching, creating, registering, or unregistering.
         Returns True if action can proceed, False if aborted/canceled or save failed.
@@ -689,18 +721,22 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         if not self.is_dirty:
             return True
 
-        try:
-            self._commit_current_family_edits()
-        except ValueError as e:
-            QtWidgets.QMessageBox.warning(self, translate("frameforge", "Warning"), str(e))
+        # Closing must leave even raw invalid card edits untouched on Cancel.
+        # Save performs its own commit and validation after the user chooses it.
+        if not closing:
+            try:
+                self._commit_current_family_edits()
+            except ValueError as e:
+                QtWidgets.QMessageBox.warning(self, translate("frameforge", "Warning"), str(e))
 
         reply = QtWidgets.QMessageBox.question(
             self,
             translate("frameforge", "Unsaved Changes"),
-            translate(
-                "frameforge",
-                "You have unsaved changes. Do you want to save them before switching libraries?",
-            ),
+            (translate("frameforge", "You have unsaved changes. Do you want to save them before closing?")
+             if closing else translate(
+                 "frameforge",
+                 "You have unsaved changes. Do you want to save them before switching libraries?",
+             )),
             QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Discard | QtWidgets.QMessageBox.Cancel,
             QtWidgets.QMessageBox.Save,
         )
@@ -821,6 +857,21 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                     "background-color: #eceff1; color: #37474f; border: 1px solid #cfd8dc; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
                 )
 
+        if is_folder:
+            border_color = "#00838f" if dark else "#80deea"
+        elif is_user:
+            border_color = "#2e7d32" if dark else "#a5d6a7"
+        else:
+            border_color = "#455a64" if dark else "#cfd8dc"
+        self.lbl_family_name.setStyleSheet(
+            "background-color: palette(alternate-base); color: palette(window-text); "
+            f"border: 1px solid {border_color}; padding: 5px 8px; border-radius: 4px;"
+        )
+        self.lbl_family_name.setFixedHeight(self.lbl_lib_banner.sizeHint().height())
+        self.lbl_lib_banner.setToolTip(
+            f"{self.lbl_lib_banner.text()}\n{self.lbl_lib_banner.toolTip()}"
+        )
+
     def _set_status(self, text, is_error=False, is_warning=False):
         dark = is_dark_theme(self)
         if is_error:
@@ -933,7 +984,10 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.btn_add_size.setEnabled(is_user and has_family and not is_custom_geom)
         self.btn_del_size.setEnabled(is_user and has_family)
         self.le_norm.setEnabled(is_user and has_family)
-        self.lbl_family_name.setText(self._get_family_display_name(family_name, fam_data))
+        display_name = self._get_family_display_name(family_name, fam_data) if has_family else ""
+        self.lbl_family_name.setText(display_name)
+        self.lbl_family_name.setToolTip(display_name)
+        self.lbl_family_name.setVisible(has_family)
 
         self._update_section_buttons()
 
@@ -1742,6 +1796,18 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         if not size_item:
             return
 
+        # Escape the whole question so user-supplied codes cannot become rich text.
+        question = translate("frameforge", "Remove size '%s'?") % size_item.text()
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            translate("frameforge", "Remove Size"),
+            "<p>" + html.escape(question) + "</p>",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No,
+        )
+        if reply != QtWidgets.QMessageBox.Yes:
+            return
+
         props = size_item.data(QtCore.Qt.UserRole)
         is_folder = bool(self.current_lib_meta.get("is_folder") and self.current_lib_meta.get("folder_path"))
         folder_path = self.current_lib_meta.get("folder_path")
@@ -2236,7 +2302,11 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
         self._staged_new_assets.add(asset_meta["asset_path"])
         self._activate_custom_section_family()
-        self._insert_section_row(code, self._section_size_entry(asset_meta, height, width, weight, ".8g"))
+        size_entry = self._section_size_entry(asset_meta, height, width, weight, ".8g")
+        description = review.le_description.text().strip()
+        if description:
+            size_entry["Description"] = description
+        self._insert_section_row(code, size_entry)
         review.accept()
 
     def _cancel_dxf_review(self):
@@ -2605,16 +2675,27 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self._cleanup_uncommitted_staged_new_assets()
 
     def done(self, result):
-        self._is_closed = True
-        self._cleanup_edit_session_and_staged_assets()
-        self.uninstall_translations()
-        super().done(result)
+        if self._is_closed or getattr(self, "_close_in_progress", False):
+            return
+        self._close_in_progress = True
+        try:
+            if not self._prompt_dirty_save(closing=True):
+                return
+            self._is_closed = True
+            self._cleanup_edit_session_and_staged_assets()
+            self.uninstall_translations()
+            super().done(result)
+        finally:
+            self._close_in_progress = False
 
     def closeEvent(self, event):
-        self._is_closed = True
-        self._cleanup_edit_session_and_staged_assets()
-        self.uninstall_translations()
-        super().closeEvent(event)
+        # QDialog's default closeEvent calls reject()/done() again. Route the
+        # window close through the same guard without re-entering Qt's path.
+        self.done(QtWidgets.QDialog.Rejected)
+        if self._is_closed:
+            event.accept()
+        else:
+            event.ignore()
 
 
 class _SectionEditGuiObserver:

@@ -290,6 +290,29 @@ def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=
     return pixmap
 
 
+class _DescriptionEdit(QtWidgets.QLineEdit):
+    """Show the beginning when idle; keep the full value in the native editor."""
+
+    def __init__(self, text):
+        super().__init__(text)
+        self.setToolTip(text)
+        self.textChanged.connect(self.setToolTip)
+
+    def paintEvent(self, event):
+        if self.hasFocus():
+            return super().paintEvent(event)
+        option = QtWidgets.QStyleOptionFrame()
+        self.initStyleOption(option)
+        painter = QtWidgets.QStylePainter(self)
+        painter.drawPrimitive(QtWidgets.QStyle.PE_PanelLineEdit, option)
+        rect = self.style().subElementRect(QtWidgets.QStyle.SE_LineEditContents, option, self)
+        margins = self.textMargins()
+        rect.adjust(margins.left() + 2, 0, -margins.right() - 2, 0)
+        text = self.fontMetrics().elidedText(self.text(), QtCore.Qt.ElideRight, max(0, rect.width()))
+        painter.setPen(self.palette().color(QtGui.QPalette.Text))
+        painter.drawText(rect, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, text)
+
+
 class CustomProfileCard(QtWidgets.QFrame):
     """Selectable card displaying section silhouette, editable code, and editable weight (kg/m)."""
 
@@ -335,7 +358,7 @@ class CustomProfileCard(QtWidgets.QFrame):
 
         description_layout = QtWidgets.QHBoxLayout()
         lbl_description = QtWidgets.QLabel(translate("frameforge", "Description:"))
-        self.description_edit = QtWidgets.QLineEdit(str(self.props.get("Description", "")))
+        self.description_edit = _DescriptionEdit(str(self.props.get("Description", "")))
         self.description_edit.setObjectName("card_description")
         description_layout.addWidget(lbl_description)
         description_layout.addWidget(self.description_edit, 1)
@@ -567,11 +590,12 @@ class CustomProfileCardsView(QtWidgets.QWidget):
         if col == 0:
             props = item.data(QtCore.Qt.UserRole)
             description = str(props.get('Description', '')) if isinstance(props, dict) else ''
-            card._updating_from_table = True
-            try:
-                card.description_edit.setText(description)
-            finally:
-                card._updating_from_table = False
+            if card.description_edit.text() != description:
+                card._updating_from_table = True
+                try:
+                    card.description_edit.setText(description)
+                finally:
+                    card._updating_from_table = False
             if card.code_edit.text() != text:
                 card._last_source = "table"
                 card._updating_from_table = True
