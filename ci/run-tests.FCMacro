@@ -120,10 +120,12 @@ try:
     log_startup("discovery-start")
 
     with open(log_path, "w", encoding="utf-8", buffering=1) as stream:
-        suite = unittest.defaultTestLoader.discover(
-            os.path.join(root, "tests"),
-            pattern="test_*.py",
+        spec = importlib.util.spec_from_file_location(
+            "ci_test_runner", os.path.join(os.path.dirname(__file__), "run_tests.py")
         )
+        test_runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(test_runner)
+        suite = test_runner.selected_suite(os.path.join(root, "tests"), os.environ.get("FF_TEST"))
         runner = unittest.TextTestRunner(stream=stream, verbosity=2)
         result = runner.run(suite)
         summary = {

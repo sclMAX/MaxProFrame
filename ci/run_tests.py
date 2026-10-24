@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import signal
 import subprocess
 import sys
@@ -25,6 +26,44 @@ def write_bounded_file(dest: pathlib.Path, text: str) -> None:
     if len(encoded) > MAX_LOG_BYTES:
         encoded = encoded[:MAX_LOG_BYTES] + b"\n... [TRUNCATED DUE TO SIZE LIMIT]\n"
     dest.write_bytes(encoded)
+
+
+def valid_test_selector(value: str) -> bool:
+    """Only a test module and optional class/method, never an import path."""
+    return re.fullmatch(r"test_[A-Za-z0-9_]+(?:\.[A-Za-z_][A-Za-z0-9_]*){0,2}", value) is not None
+
+
+def selected_suite(tests_dir, selector):
+    """Discover only the local module; resolve attributes without further imports."""
+    import importlib.util
+    import types
+    import unittest
+
+    loader = unittest.TestLoader()
+    if selector is None:
+        return loader.discover(str(tests_dir), pattern="test_*.py")
+    if not valid_test_selector(selector):
+        raise ValueError("invalid test selector")
+    module_name, _, suffix = selector.partition(".")
+    tests_dir = pathlib.Path(tests_dir).resolve()
+    module_path = tests_dir / (module_name + ".py")
+    if not module_path.is_file() or module_path.resolve().parent != tests_dir:
+        # A missing local module must be a real loader error, not an empty suite.
+        return loader.loadTestsFromName(module_name, types.ModuleType("missing_local_test"))
+    sys.path.insert(0, str(tests_dir))
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:
+        def import_error(error=exc):
+            raise error
+
+        return unittest.TestSuite([unittest.FunctionTestCase(import_error)])
+    if suffix:
+        return loader.loadTestsFromName(suffix, module)
+    return loader.loadTestsFromModule(module)
 
 
 def main() -> None:
@@ -56,7 +95,13 @@ def main() -> None:
         action="store_true",
         help="Manual stable-only GDB capture at 150s, then continue; requires gdb and timeout >160s",
     )
+    parser.add_argument(
+        "--test",
+        help="Run one dotted test_ module[.Class[.method]] from tests/ (default: full discovery)",
+    )
     args = parser.parse_args()
+    if args.test is not None and not valid_test_selector(args.test):
+        parser.error("--test must be test_module[.Class[.method]] using ASCII identifiers, without paths")
     if args.native_diagnostics and (args.target != "stable" or args.timeout <= 160):
         parser.error("--native-diagnostics requires --target stable and --timeout greater than 160")
 
@@ -140,6 +185,9 @@ def main() -> None:
         env["FF_ROOT"] = str(repo_root)
         env["FF_REPORTS"] = str(reports_dir)
         env["FF_TARGET"] = args.target
+        env.pop("FF_TEST", None)
+        if args.test is not None:
+            env["FF_TEST"] = args.test
         env.pop("FF_NATIVE_DIAGNOSTICS", None)
         if args.native_diagnostics:
             env["FF_NATIVE_DIAGNOSTICS"] = "1"

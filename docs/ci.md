@@ -35,6 +35,22 @@ python3 ci/run_tests.py \
   --target rc
 ```
 
+### Run one test for investigation
+
+Add `--test test_create_profile_confirm_gui.TestCreateProfileConfirmGui.test_snapshot_form_proxy_raises_attribute_error_on_unknown`
+to the native runner command to reproduce one method. A `test_` module name or
+`test_module.Class` selects the whole module or class. Names are relative to the
+project's `tests/` directory, without `.py`, package prefixes or filesystem paths;
+components use ASCII identifiers, with at most module, class and method.
+Empty or malformed selectors fail before launching FreeCAD or clearing reports.
+Unknown valid names produce failed unittest loader tests, never a skip or success.
+
+Without `--test`, discovery still runs the entire suite, even if `FF_TEST` was
+inherited. The wrapper forwards only an explicit selection to the existing macro
+through `FF_TEST`. Selection does not change runtime validation, timeout,
+diagnostics, failure/error handling or summary count checks. A targeted pass is
+not evidence that the full suite passes; CI continues to run full discovery.
+
 ## Policy summary
 
 | Spec | Area | Accepted Policy Rule |
