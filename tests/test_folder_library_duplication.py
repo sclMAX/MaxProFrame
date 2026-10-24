@@ -41,8 +41,8 @@ import Sketcher
 from freecad.maxproframe.custom_section_geometry import build_custom_section_face
 from freecad.maxproframe.ff_tools import translate
 from freecad.maxproframe.library_manager import (
-    LibraryManager,
     STANDARD_DENSITIES,
+    LibraryManager,
     calculate_linear_weight,
 )
 from freecad.maxproframe.library_manager_dialog import (
@@ -165,10 +165,13 @@ class TestFolderLibraryDuplication(unittest.TestCase):
         self.addCleanup(self._close_owned_documents)
         self.messages.enter_context(patch.object(QtWidgets.QMessageBox, "exec_", fail_modal))
         for method in ("warning", "critical", "information", "question"):
+
             def make_fail(m):
                 def _fail(parent, title, text, *args, **kwargs):
                     raise AssertionError(f"UNEXPECTED_MODAL_{m.upper()}: {title}: {text}")
+
                 return _fail
+
             self.messages.enter_context(patch.object(QtWidgets.QMessageBox, method, side_effect=make_fail(method)))
 
     def _close_manager_dialog(self, dialog):
@@ -217,7 +220,9 @@ class TestFolderLibraryDuplication(unittest.TestCase):
         doc.recompute()
         return p
 
-    def _publish_section_to_library(self, lib_folder, size_code, sketch, object_name="Section", asset_id=None, density=7.85):
+    def _publish_section_to_library(
+        self, lib_folder, size_code, sketch, object_name="Section", asset_id=None, density=7.85
+    ):
         sections_dir = os.path.join(lib_folder, "sections")
         os.makedirs(sections_dir, exist_ok=True)
         aid = asset_id or f"sec_{size_code.lower()}"
@@ -523,7 +528,9 @@ class TestFolderLibraryDuplication(unittest.TestCase):
         os.makedirs(dest_folder, exist_ok=True)
         reg_before = _file_hash(self.reg_path)
 
-        with patch.object(self.manager, "register_folder_library", side_effect=IOError("Simulated registry write failure")):
+        with patch.object(
+            self.manager, "register_folder_library", side_effect=IOError("Simulated registry write failure")
+        ):
             with self.assertRaises(IOError):
                 self.manager.duplicate_library(
                     "SourceFolderLib",
@@ -639,8 +646,7 @@ class TestFolderLibraryDuplication(unittest.TestCase):
         self.assertEqual(_file_hash(self.reg_path), reg_before)
 
     def test_stock_duplication_material_and_weight_preserved(self):
-        """Rule 13: Stock duplication preserves material semantics in a folder.
-        """
+        """Rule 13: Stock duplication preserves material semantics in a folder."""
         res = self.manager.duplicate_library(
             "StockSteel",
             "UserStockCopy",
@@ -685,9 +691,17 @@ class TestFolderLibraryDuplication(unittest.TestCase):
             dest_folder = os.path.join(self.test_root, "UIDuplicateDest")
             os.makedirs(dest_folder, exist_ok=True)
 
-            with patch.object(NewLibraryDialog, "get_destination", return_value=dest_folder), \
-                 patch("freecad.maxproframe.library_manager_dialog.NewLibraryDialog.exec_", return_value=QtWidgets.QDialog.Accepted), \
-                 patch("freecad.maxproframe.library_manager_dialog.NewLibraryDialog.get_values", return_value=("UIDupFolderLib", "Aluminium", 2.70, False)):
+            with (
+                patch.object(NewLibraryDialog, "get_destination", return_value=dest_folder),
+                patch(
+                    "freecad.maxproframe.library_manager_dialog.NewLibraryDialog.exec_",
+                    return_value=QtWidgets.QDialog.Accepted,
+                ),
+                patch(
+                    "freecad.maxproframe.library_manager_dialog.NewLibraryDialog.get_values",
+                    return_value=("UIDupFolderLib", "Aluminium", 2.70, False),
+                ),
+            ):
                 dialog.btn_dup_lib.click()
 
             # Dialog selects new library and updates banner
@@ -724,17 +738,24 @@ class TestFolderLibraryDuplication(unittest.TestCase):
 
             # Scenario 2: Discard permits proceeding, but canceling the unified dialog keeps edits
             dest_folder = os.path.join(self.test_root, "CancelledFolderPicker")
-            with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Discard), \
-                 patch.object(NewLibraryDialog, "exec_", return_value=QtWidgets.QDialog.Rejected):
+            with (
+                patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Discard),
+                patch.object(NewLibraryDialog, "exec_", return_value=QtWidgets.QDialog.Rejected),
+            ):
                 dialog._on_duplicate_library()
             self.assertEqual(dialog.table_sizes.item(0, 0).text(), "DirtyHeight_999")
             self.assertEqual(dialog.current_lib_meta["name"], "SourceFolderLib")
 
             # Scenario 3: User picks folder, but cancels NewLibraryDialog -> edits kept
             os.makedirs(dest_folder, exist_ok=True)
-            with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Discard), \
-                 patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=dest_folder), \
-                 patch("freecad.maxproframe.library_manager_dialog.NewLibraryDialog.exec_", return_value=QtWidgets.QDialog.Rejected):
+            with (
+                patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Discard),
+                patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value=dest_folder),
+                patch(
+                    "freecad.maxproframe.library_manager_dialog.NewLibraryDialog.exec_",
+                    return_value=QtWidgets.QDialog.Rejected,
+                ),
+            ):
                 dialog._on_duplicate_library()
             self.assertEqual(dialog.table_sizes.item(0, 0).text(), "DirtyHeight_999")
             self.assertEqual(dialog.current_lib_meta["name"], "SourceFolderLib")

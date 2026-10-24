@@ -1,10 +1,16 @@
-import copy, os, shutil, unittest
+import copy
+import os
+import shutil
+import unittest
+
 import test_t4_independent as original
-from test_folder_section_management import QtCore, ProfileLibraryManagerDialog
+from test_folder_section_management import ProfileLibraryManagerDialog, QtCore
+
+
 class Narrow(original.IndependentT4):
     def test_e1_edit_discard_and_saved_ownership(self):
-        a = self._create_published_asset('saved')
-        self.install({'A': self.props(a)})
+        a = self._create_published_asset("saved")
+        self.install({"A": self.props(a)})
         before = self.snapshot()
         self.dialog.table_sizes.selectRow(0)
         self.dialog.btn_edit_section.click()
@@ -17,8 +23,8 @@ class Narrow(original.IndependentT4):
         # A closed manager cannot start a new edit session; reopen the library.
         self.dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(self._close_manager_dialog, self.dialog)
-        self.dialog.refresh_libraries(select_name='CustomFolderLib')
-        self._select_family('Custom Profile')
+        self.dialog.refresh_libraries(select_name="CustomFolderLib")
+        self._select_family("Custom Profile")
         self.dialog.table_sizes.selectRow(0)
         self.dialog.btn_edit_section.click()
         self.dialog.btn_apply_edit.click()
@@ -28,9 +34,11 @@ class Narrow(original.IndependentT4):
         self.assertTrue(self.dialog._is_closed)
         self.assertFalse(self.dialog.isVisible())
         self.assertEqual(saved, self.snapshot())
+
     def test_e1_capture_saved_ownership(self):
         import FreeCADGui as Gui
-        doc = self._new_doc('Source')
+
+        doc = self._new_doc("Source")
         sketch = self._create_rect_sketch(doc)
         Gui.Selection.addSelection(doc.Name, sketch.Name)
         self.dialog.btn_capture_section.click()
@@ -41,9 +49,10 @@ class Narrow(original.IndependentT4):
         self.assertTrue(self.dialog._is_closed)
         self.assertFalse(self.dialog.isVisible())
         self.assertEqual(before, self.snapshot())
+
     def test_e2_removed_shared_asset(self):
-        a = self._create_published_asset('shared')
-        self.install({'A': self.props(a), 'B': self.props(a)})
+        a = self._create_published_asset("shared")
+        self.install({"A": self.props(a), "B": self.props(a)})
         self.dialog.table_sizes.selectRow(0)
         self.dialog.btn_edit_section.click()
         self._confirm_delete_size()
@@ -55,37 +64,44 @@ class Narrow(original.IndependentT4):
         self.dialog._commit_current_family_edits()
         self.assertEqual(before, self.dialog.current_lib_data)
         self.assertEqual(disk, self.snapshot())
+
     def test_e2_renamed_target_shared_asset(self):
-        a = self._create_published_asset('shared')
-        self.install({'A': self.props(a), 'B': self.props(a)})
+        a = self._create_published_asset("shared")
+        self.install({"A": self.props(a), "B": self.props(a)})
         self.dialog.table_sizes.selectRow(1)
         self.dialog.btn_edit_section.click()
-        self.dialog.table_sizes.item(1, 0).setText('RenamedB')
+        self.dialog.table_sizes.item(1, 0).setText("RenamedB")
         self.dialog._commit_current_family_edits()
-        before_a = copy.deepcopy(self.dialog.current_lib_data['Custom Profile']['sizes']['A'])
+        before_a = copy.deepcopy(self.dialog.current_lib_data["Custom Profile"]["sizes"]["A"])
         self.dialog.btn_apply_edit.click()
         self.dialog._commit_current_family_edits()
-        self.assertEqual(before_a, self.dialog.current_lib_data['Custom Profile']['sizes']['A'])
+        self.assertEqual(before_a, self.dialog.current_lib_data["Custom Profile"]["sizes"]["A"])
+
     def test_e3_e4_sections_directory_escape(self):
-        a = self._create_published_asset('outside_keep')
-        self.install({'A': self.props(a)})
-        sections = os.path.join(self.folder_lib_path, 'sections')
-        outside = os.path.join(self.test_root, 'outside')
+        a = self._create_published_asset("outside_keep")
+        self.install({"A": self.props(a)})
+        sections = os.path.join(self.folder_lib_path, "sections")
+        outside = os.path.join(self.test_root, "outside")
         shutil.move(sections, outside)
         os.symlink(outside, sections)
         before = self.snapshot()
-        outside_before = open(os.path.join(outside, 'outside_keep.FCStd'), 'rb').read()
+        outside_before = open(os.path.join(outside, "outside_keep.FCStd"), "rb").read()
         self.dialog.table_sizes.selectRow(0)
-        docs = set(__import__('FreeCAD').listDocuments())
+        docs = set(__import__("FreeCAD").listDocuments())
         self.dialog.btn_edit_section.click()
-        opened = set(__import__('FreeCAD').listDocuments()) != docs
+        opened = set(__import__("FreeCAD").listDocuments()) != docs
         self._confirm_delete_size()
         self.dialog.btn_save.click()
-        exists = os.path.isfile(os.path.join(outside, 'outside_keep.FCStd'))
-        print('ESCAPE opened=%s outside_exists=%s manifest_unchanged=%s' % (opened, exists, before == self.snapshot()), flush=True)
-        self.assertFalse(opened, 'E3: outside library asset opened')
-        self.assertTrue(exists, 'E3: outside library asset deleted')
-        self.assertEqual(outside_before, open(os.path.join(outside, 'outside_keep.FCStd'), 'rb').read())
-        self.assertEqual(before, self.snapshot(), 'E4: escaping directory changed manifest')
+        exists = os.path.isfile(os.path.join(outside, "outside_keep.FCStd"))
+        print(
+            "ESCAPE opened=%s outside_exists=%s manifest_unchanged=%s" % (opened, exists, before == self.snapshot()),
+            flush=True,
+        )
+        self.assertFalse(opened, "E3: outside library asset opened")
+        self.assertTrue(exists, "E3: outside library asset deleted")
+        self.assertEqual(outside_before, open(os.path.join(outside, "outside_keep.FCStd"), "rb").read())
+        self.assertEqual(before, self.snapshot(), "E4: escaping directory changed manifest")
+
+
 def load_tests(loader, tests, pattern):
-    return unittest.TestSuite(Narrow(n) for n in Narrow.__dict__ if n.startswith('test_'))
+    return unittest.TestSuite(Narrow(n) for n in Narrow.__dict__ if n.startswith("test_"))

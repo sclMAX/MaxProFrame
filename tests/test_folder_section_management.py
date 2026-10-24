@@ -41,8 +41,8 @@ import Sketcher
 from freecad.maxproframe.custom_section_geometry import build_custom_section_face
 from freecad.maxproframe.ff_tools import translate
 from freecad.maxproframe.library_manager import (
-    LibraryManager,
     STANDARD_DENSITIES,
+    LibraryManager,
 )
 from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 from freecad.maxproframe.section_capture import capture_section_sketch, save_section_asset
@@ -248,7 +248,8 @@ class TestFolderSectionManagement(unittest.TestCase):
         asset_doc_name = asset_doc.Name
         try:
             sketches = [
-                obj for obj in asset_doc.Objects
+                obj
+                for obj in asset_doc.Objects
                 if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject")
             ]
             self.assertTrue(len(sketches) >= 1, "Published asset must contain a SketchObject.")
@@ -386,7 +387,8 @@ class TestFolderSectionManagement(unittest.TestCase):
         working_doc_name = list(new_docs)[0]
         working_doc = App.getDocument(working_doc_name)
         working_sketches = [
-            obj for obj in working_doc.Objects
+            obj
+            for obj in working_doc.Objects
             if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject")
         ]
         self.assertTrue(len(working_sketches) >= 1, "Working document must contain a SketchObject.")
@@ -430,7 +432,8 @@ class TestFolderSectionManagement(unittest.TestCase):
 
         # Locate working sketch
         working_sketches = [
-            obj for obj in working_doc.Objects
+            obj
+            for obj in working_doc.Objects
             if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject")
         ]
         self.assertTrue(len(working_sketches) >= 1, "Working document must contain a SketchObject.")
@@ -499,7 +502,8 @@ class TestFolderSectionManagement(unittest.TestCase):
         reopened_name = reopened_doc.Name
         try:
             reopened_sketches = [
-                obj for obj in reopened_doc.Objects
+                obj
+                for obj in reopened_doc.Objects
                 if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject")
             ]
             self.assertTrue(len(reopened_sketches) >= 1, "Reopened asset must contain standalone sketch.")
@@ -843,6 +847,7 @@ class TestFolderSectionManagement(unittest.TestCase):
 
         # Direct confinement validation helper check
         from freecad.maxproframe.section_library import resolve_and_validate_asset_path
+
         for bad_path in malicious_paths:
             with self.assertRaises(ValueError):
                 resolve_and_validate_asset_path(self.folder_lib_path, bad_path)
@@ -880,7 +885,10 @@ class TestFolderSectionManagement(unittest.TestCase):
         self._select_family("Custom Profile")
 
         # Injected failure during capture after workspace creation
-        with patch("freecad.maxproframe.library_manager_dialog.save_section_asset", side_effect=RuntimeError("Simulated capture crash")):
+        with patch(
+            "freecad.maxproframe.library_manager_dialog.save_section_asset",
+            side_effect=RuntimeError("Simulated capture crash"),
+        ):
             self.dialog.btn_capture_section.click()
             self.dialog._dxf_review.btn_add.click()
 

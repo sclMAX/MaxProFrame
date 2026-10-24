@@ -219,8 +219,7 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
 
         dialog2 = _find_live_manager()
         live_managers = [
-            w for w in self.app.topLevelWidgets()
-            if isinstance(w, ProfileLibraryManagerDialog) and _is_live(w)
+            w for w in self.app.topLevelWidgets() if isinstance(w, ProfileLibraryManagerDialog) and _is_live(w)
         ]
         self.assertEqual(live_managers, [dialog1], "Reinvoke must leave exactly one visible manager.")
         self.assertIs(dialog2, dialog1, "Re-invoking command must reuse existing live dialog instance.")
@@ -720,8 +719,12 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
             cleanup.callback(dialog.close)
             flags = dialog.windowFlags()
             self.assertEqual(dialog.windowType(), QtCore.Qt.Window)
-            self.assertTrue(bool(flags & QtCore.Qt.WindowMaximizeButtonHint), "Dialog must have WindowMaximizeButtonHint")
-            self.assertTrue(bool(flags & QtCore.Qt.WindowMinimizeButtonHint), "Dialog must have WindowMinimizeButtonHint")
+            self.assertTrue(
+                bool(flags & QtCore.Qt.WindowMaximizeButtonHint), "Dialog must have WindowMaximizeButtonHint"
+            )
+            self.assertTrue(
+                bool(flags & QtCore.Qt.WindowMinimizeButtonHint), "Dialog must have WindowMinimizeButtonHint"
+            )
             self.assertGreaterEqual(dialog.minimumWidth(), 800)
             self.assertGreaterEqual(dialog.minimumHeight(), 500)
 
@@ -758,7 +761,6 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
             self.assertEqual(dialog2.windowFlags(), flags)
             self.assertEqual(dialog2.minimumSize(), dialog.minimumSize())
             dialog2.close()
-
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ Original fixture SHA256: 9deb56a431eb71cebfbcadbd902f1ea117c92c30beb61a350d12b84
 Derived from the original probes, with owned-dialog Discard made explicit.
 Discovery uses load_tests to run only the 4 independent cases.
 """
+
 import copy
 import hashlib
 import os
@@ -21,9 +22,13 @@ except ImportError:
 
 class IndependentT4(_Fixture):
     def snapshot(self):
-        return {os.path.relpath(os.path.join(root, name), self.folder_lib_path):
-                hashlib.sha256(open(os.path.join(root, name), "rb").read()).hexdigest()
-                for root, dirs, names in os.walk(self.folder_lib_path) for name in names}
+        return {
+            os.path.relpath(os.path.join(root, name), self.folder_lib_path): hashlib.sha256(
+                open(os.path.join(root, name), "rb").read()
+            ).hexdigest()
+            for root, dirs, names in os.walk(self.folder_lib_path)
+            for name in names
+        }
 
     def install(self, rows):
         self.dialog.current_lib_data["Custom Profile"]["sizes"] = copy.deepcopy(rows)
@@ -31,8 +36,14 @@ class IndependentT4(_Fixture):
         self.dialog.btn_save.click()
 
     def props(self, path):
-        return {"Height": "40", "Width": "80", "Weight": "25.12",
-                "asset_path": path, "object_name": "Section", "asset_id": "original"}
+        return {
+            "Height": "40",
+            "Width": "80",
+            "Weight": "25.12",
+            "asset_path": path,
+            "object_name": "Section",
+            "asset_id": "original",
+        }
 
     def test_s9_capture_discard_restores_files(self):
         before = self.snapshot()

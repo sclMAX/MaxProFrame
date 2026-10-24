@@ -50,6 +50,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
         from freecad.maxproframe.library_manager_dialog import QtWidgets
 
         for dialog in reversed(self.owned_dialogs):
+
             def discard_owned_changes(parent, *args, **kwargs):
                 self.assertIs(parent, dialog)
                 return QtWidgets.QMessageBox.Discard

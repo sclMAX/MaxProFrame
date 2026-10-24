@@ -1,4 +1,5 @@
 """Independent S1/S3/S6/S8/S9 probes; execute only in isolated native GUI."""
+
 import copy
 import hashlib
 import json
@@ -7,9 +8,11 @@ import shutil
 import unittest
 from contextlib import ExitStack
 from unittest.mock import patch
+
 import FreeCAD as App
 import FreeCADGui as Gui
 import test_folder_library_duplication as fixture
+
 from freecad.maxproframe import library_manager_dialog as ui
 from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
 
@@ -111,6 +114,7 @@ class Boundary(fixture.TestFolderLibraryDuplication):
             os.mkdir(dest)
             before = self.saved()
             calls = []
+
             def failing_copy(src, target, *args, **kwargs):
                 calls.append(target)
                 if len(calls) == 2:
@@ -118,15 +122,25 @@ class Boundary(fixture.TestFolderLibraryDuplication):
                         f.write(b"partial")
                     raise OSError("INJECTED_COPY")
                 return real_copy(src, target, *args, **kwargs)
+
             with self.subTest(mode=mode), ExitStack() as stack:
                 if mode == "partial":
                     stack.enter_context(patch.object(shutil, "copyfile", side_effect=failing_copy))
                 elif mode == "registry":
-                    stack.enter_context(patch.object(self.manager, "register_folder_library", side_effect=OSError("INJECTED_REGISTRY")))
+                    stack.enter_context(
+                        patch.object(self.manager, "register_folder_library", side_effect=OSError("INJECTED_REGISTRY"))
+                    )
                 else:
-                    stack.enter_context(patch("freecad.maxproframe.section_library.recalculate_custom_profile_weight", side_effect=ValueError("INJECTED_RECALC")))
+                    stack.enter_context(
+                        patch(
+                            "freecad.maxproframe.section_library.recalculate_custom_profile_weight",
+                            side_effect=ValueError("INJECTED_RECALC"),
+                        )
+                    )
                 with self.assertRaises((OSError, ValueError)):
-                    self.manager.duplicate_library("SourceFolderLib", "Rollback", target_folder_path=dest, recalculate_weights=(mode == "recalc"))
+                    self.manager.duplicate_library(
+                        "SourceFolderLib", "Rollback", target_folder_path=dest, recalculate_weights=(mode == "recalc")
+                    )
                 self.assertEqual(self.saved(), before)
                 self.assertTrue(os.path.isdir(dest))
                 self.assertEqual(tree(dest), {})
@@ -138,7 +152,9 @@ class Boundary(fixture.TestFolderLibraryDuplication):
                 with self.subTest(change=change, outcome=outcome):
                     d = self.dialog()
                     if change == "delete":
-                        with patch.object(ui.QtWidgets.QMessageBox, "question", return_value=ui.QtWidgets.QMessageBox.Yes):
+                        with patch.object(
+                            ui.QtWidgets.QMessageBox, "question", return_value=ui.QtWidgets.QMessageBox.Yes
+                        ):
                             d.btn_del_size.click()
                     else:
                         d.le_norm.setText("UNSAVED")
@@ -149,13 +165,33 @@ class Boundary(fixture.TestFolderLibraryDuplication):
                     dest = os.path.join(self.test_root, name)
                     os.mkdir(dest)
                     with ExitStack() as stack:
-                        stack.enter_context(patch.object(ui.QtWidgets.QMessageBox, "question", return_value=ui.QtWidgets.QMessageBox.Discard))
+                        stack.enter_context(
+                            patch.object(
+                                ui.QtWidgets.QMessageBox, "question", return_value=ui.QtWidgets.QMessageBox.Discard
+                            )
+                        )
                         stack.enter_context(patch.object(ui.NewLibraryDialog, "get_destination", return_value=dest))
-                        stack.enter_context(patch.object(ui.NewLibraryDialog, "exec_", return_value=ui.QtWidgets.QDialog.Rejected if outcome == "cancel" else ui.QtWidgets.QDialog.Accepted))
-                        stack.enter_context(patch.object(ui.NewLibraryDialog, "get_values", return_value=(name, "Steel", 7.85, False)))
+                        stack.enter_context(
+                            patch.object(
+                                ui.NewLibraryDialog,
+                                "exec_",
+                                return_value=(
+                                    ui.QtWidgets.QDialog.Rejected
+                                    if outcome == "cancel"
+                                    else ui.QtWidgets.QDialog.Accepted
+                                ),
+                            )
+                        )
+                        stack.enter_context(
+                            patch.object(ui.NewLibraryDialog, "get_values", return_value=(name, "Steel", 7.85, False))
+                        )
                         if outcome == "fail":
                             stack.enter_context(patch.object(ui.QtWidgets.QMessageBox, "warning"))
-                            stack.enter_context(patch.object(self.manager, "register_folder_library", side_effect=OSError("INJECTED_REGISTRY")))
+                            stack.enter_context(
+                                patch.object(
+                                    self.manager, "register_folder_library", side_effect=OSError("INJECTED_REGISTRY")
+                                )
+                            )
                         d._on_duplicate_library()
                     self.assertEqual(tree(self.source_folder), before[0])
                     if outcome == "success":
@@ -202,7 +238,14 @@ class Boundary(fixture.TestFolderLibraryDuplication):
         name = old.Name
         App.closeDocument(name)
         dest = os.path.join(self.test_root, "duplicate")
-        self.manager.duplicate_library("SourceFolderLib", "Portable", target_folder_path=dest, target_material="Aluminium", target_density=2.7, recalculate_weights=True)
+        self.manager.duplicate_library(
+            "SourceFolderLib",
+            "Portable",
+            target_folder_path=dest,
+            target_material="Aluminium",
+            target_density=2.7,
+            recalculate_weights=True,
+        )
         self.manager.unregister_folder_library(self.source_folder)
         shutil.rmtree(self.source_folder)
         self.manager.unregister_folder_library(dest)
@@ -262,10 +305,35 @@ class Boundary(fixture.TestFolderLibraryDuplication):
         self.doc_names.append(other.Name)
         line = self._create_line_path(other)
         line.Label = "UNSAVED MODEL"
+
         def snapshot():
-            return [(doc.Name, doc.FileName, doc.Label, [(o.Name, o.Label, tuple(o.State), str(o.Placement), [(c.Type, c.Value) for c in o.Constraints] if hasattr(o, "Constraints") else None, [(str(g.StartPoint), str(g.EndPoint)) for g in o.Geometry] if hasattr(o, "Geometry") else None) for o in doc.Objects]) for doc in (asset, other)]
+            return [
+                (
+                    doc.Name,
+                    doc.FileName,
+                    doc.Label,
+                    [
+                        (
+                            o.Name,
+                            o.Label,
+                            tuple(o.State),
+                            str(o.Placement),
+                            [(c.Type, c.Value) for c in o.Constraints] if hasattr(o, "Constraints") else None,
+                            (
+                                [(str(g.StartPoint), str(g.EndPoint)) for g in o.Geometry]
+                                if hasattr(o, "Geometry")
+                                else None
+                            ),
+                        )
+                        for o in doc.Objects
+                    ],
+                )
+                for doc in (asset, other)
+            ]
+
         def selection():
             return [(s.DocumentName, s.ObjectName, tuple(s.SubElementNames)) for s in Gui.Selection.getSelectionEx()]
+
         for mode, active in (("backend", asset), ("ui", other)):
             d = self.dialog() if mode == "ui" else None
             App.setActiveDocument(active.Name)
@@ -274,22 +342,43 @@ class Boundary(fixture.TestFolderLibraryDuplication):
             before = snapshot(), selection(), set(App.listDocuments()), self.saved()
             dest = os.path.join(self.test_root, mode)
             if d:
-                with patch.object(ui.NewLibraryDialog, "get_destination", return_value=dest), patch.object(ui.NewLibraryDialog, "exec_", return_value=ui.QtWidgets.QDialog.Accepted), patch.object(ui.NewLibraryDialog, "get_values", return_value=(mode, "Aluminium", 2.7, True)):
+                with (
+                    patch.object(ui.NewLibraryDialog, "get_destination", return_value=dest),
+                    patch.object(ui.NewLibraryDialog, "exec_", return_value=ui.QtWidgets.QDialog.Accepted),
+                    patch.object(ui.NewLibraryDialog, "get_values", return_value=(mode, "Aluminium", 2.7, True)),
+                ):
                     d._on_duplicate_library()
                 self.assertEqual(d.current_lib_meta["name"], mode)
             else:
-                self.manager.duplicate_library("SourceFolderLib", mode, target_folder_path=dest, target_material="Aluminium", target_density=2.7, recalculate_weights=True)
+                self.manager.duplicate_library(
+                    "SourceFolderLib",
+                    mode,
+                    target_folder_path=dest,
+                    target_material="Aluminium",
+                    target_density=2.7,
+                    recalculate_weights=True,
+                )
             self.assertEqual(snapshot(), before[0])
             self.assertEqual(selection(), before[1])
             self.assertEqual(set(App.listDocuments()), before[2])
             self.assertEqual(App.ActiveDocument.Name, active.Name)
             self.assertEqual(tree(self.source_folder), before[3][0])
-            self.assertAlmostEqual(float(self.manager.get_library(mode)["Custom Profile"]["sizes"]["Rect_100x50"]["Weight"]), 13.5, places=2)
+            self.assertAlmostEqual(
+                float(self.manager.get_library(mode)["Custom Profile"]["sizes"]["Rect_100x50"]["Weight"]),
+                13.5,
+                places=2,
+            )
             if d:
                 self._close_manager_dialog(d)
 
 
-METHODS = ("test_boundaries", "test_owned_rollback", "test_discard_duplicate", "test_edit_relocated_duplicate_offline", "test_dirty_owned_documents_selection")
+METHODS = (
+    "test_boundaries",
+    "test_owned_rollback",
+    "test_discard_duplicate",
+    "test_edit_relocated_duplicate_offline",
+    "test_dirty_owned_documents_selection",
+)
 
 
 def load_tests(loader, tests, pattern):

@@ -82,25 +82,30 @@ class TestFolderLibraryDialog(unittest.TestCase):
         self.addCleanup(self._close_manager_dialog, dialog)
         self.assertEqual(dialog.btn_import_lib.popupMode(), QtWidgets.QToolButton.InstantPopup)
         menu = dialog.btn_import_lib.menu()
-        self.assertEqual([a.text() for a in menu.actions()], [
-            translate("frameforge", "Import ZIP…"),
-            translate("frameforge", "Register Folder Library"),
-        ])
+        self.assertEqual(
+            [a.text() for a in menu.actions()],
+            [
+                translate("frameforge", "Import ZIP…"),
+                translate("frameforge", "Register Folder Library"),
+            ],
+        )
         selection = dialog.list_libraries.currentItem()
         data = copy.deepcopy(dialog.current_lib_data)
         dirty = dialog.is_dirty
+
         def registry_bytes():
             if not os.path.exists(self.reg_path):
                 return None
             with open(self.reg_path, "rb") as stream:
                 return stream.read()
+
         registry = registry_bytes()
         for index, action in enumerate(menu.actions()):
-            with self.subTest(action=action.text()), patch.object(
-                QtWidgets.QFileDialog, "getOpenFileName", return_value=("", "")
-            ) as archive, patch.object(
-                QtWidgets.QFileDialog, "getExistingDirectory", return_value=""
-            ) as folder:
+            with (
+                self.subTest(action=action.text()),
+                patch.object(QtWidgets.QFileDialog, "getOpenFileName", return_value=("", "")) as archive,
+                patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value="") as folder,
+            ):
                 action.trigger()
             self.assertEqual(archive.call_count, int(index == 0))
             self.assertEqual(folder.call_count, int(index == 1))
@@ -122,26 +127,31 @@ class TestFolderLibraryDialog(unittest.TestCase):
         self.assertEqual(dialog.current_lib_meta["name"], "Shared")
         self.assertTrue(dialog.current_lib_meta["is_folder"])
         self.assertEqual(dialog.current_lib_data["_metadata"]["density"], 0.7)
-        self.assertEqual(self.manager.get_folder_library_path("Shared"),
-                         self.manager.get_default_library_folder("Shared"))
+        self.assertEqual(
+            self.manager.get_folder_library_path("Shared"), self.manager.get_default_library_folder("Shared")
+        )
 
     def test_import_cancel_and_rejected_zip_preserve_state(self):
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(self._close_manager_dialog, dialog)
         initial = copy.deepcopy(dialog.current_lib_data)
+
         def registry_bytes():
             if not os.path.exists(self.reg_path):
                 return None
             with open(self.reg_path, "rb") as stream:
                 return stream.read()
+
         registry_before = registry_bytes()
         invalid = os.path.join(self.test_root, "invalid.zip")
         with open(invalid, "wb") as stream:
             stream.write(b"not a ZIP")
         for path in ("", invalid):
-            with self.subTest(path=path), patch.object(
-                QtWidgets.QFileDialog, "getOpenFileName", return_value=(path, "")
-            ), patch.object(QtWidgets.QMessageBox, "warning") as warning:
+            with (
+                self.subTest(path=path),
+                patch.object(QtWidgets.QFileDialog, "getOpenFileName", return_value=(path, "")),
+                patch.object(QtWidgets.QMessageBox, "warning") as warning,
+            ):
                 dialog._on_import_library()
             self.assertEqual(dialog.current_lib_data, initial)
             self.assertEqual(registry_bytes(), registry_before)
@@ -161,8 +171,10 @@ class TestFolderLibraryDialog(unittest.TestCase):
         self.assertTrue(os.path.isfile(output))
         with open(output, "rb") as stream:
             before = stream.read()
-        with patch.object(QtWidgets.QFileDialog, "getSaveFileName", return_value=(output, "")), \
-             patch.object(QtWidgets.QMessageBox, "warning") as warning:
+        with (
+            patch.object(QtWidgets.QFileDialog, "getSaveFileName", return_value=(output, "")),
+            patch.object(QtWidgets.QMessageBox, "warning") as warning,
+        ):
             dialog._on_export_library()
         warning.assert_called_once()
         with open(output, "rb") as stream:
@@ -176,27 +188,35 @@ class TestFolderLibraryDialog(unittest.TestCase):
     def test_real_save_failure_blocks_export(self):
         import hashlib
         from pathlib import Path
+
         folder = Path(self.test_root) / "source"
-        self.manager.create_folder_library(str(folder), "Boundary", data={
-            "Square": {"norm": "Original", "sizes": {}}})
+        self.manager.create_folder_library(str(folder), "Boundary", data={"Square": {"norm": "Original", "sizes": {}}})
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name="Boundary")
         dialog.le_norm.setText("Unsaved")
         self.assertTrue(dialog.is_dirty)
+
         def hashes():
-            return {str(p): hashlib.sha256(p.read_bytes()).hexdigest()
-                    for p in Path(self.test_root).rglob("*") if p.is_file()}
+            return {
+                str(p): hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in Path(self.test_root).rglob("*")
+                if p.is_file()
+            }
+
         before = hashes()
-        with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Save), \
-             patch.object(self.manager, "save_folder_library", side_effect=OSError("disk full")), \
-             patch.object(QtWidgets.QMessageBox, "warning") as warning, \
-             patch.object(QtWidgets.QFileDialog, "getSaveFileName") as picker, \
-             patch.object(self.manager, "export_library_zip") as export:
+        with (
+            patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Save),
+            patch.object(self.manager, "save_folder_library", side_effect=OSError("disk full")),
+            patch.object(QtWidgets.QMessageBox, "warning") as warning,
+            patch.object(QtWidgets.QFileDialog, "getSaveFileName") as picker,
+            patch.object(self.manager, "export_library_zip") as export,
+        ):
             dialog.btn_export_lib.click()
         warning.assert_called_once()
         warning.assert_called_once_with(
-            dialog, translate("frameforge", "Error"),
+            dialog,
+            translate("frameforge", "Error"),
             translate("frameforge", "Error saving library: %s") % "disk full",
         )
         picker.assert_not_called()
@@ -218,30 +238,36 @@ class TestFolderLibraryDialog(unittest.TestCase):
         with open(manifest, "rb") as stream:
             saved = stream.read()
         for reply in (QtWidgets.QMessageBox.Cancel, QtWidgets.QMessageBox.Discard):
-            with patch.object(QtWidgets.QMessageBox, "question", return_value=reply) as question, \
-                 patch.object(QtWidgets.QFileDialog, "getSaveFileName") as picker, \
-                 patch.object(self.manager, "export_library_zip") as export:
+            with (
+                patch.object(QtWidgets.QMessageBox, "question", return_value=reply) as question,
+                patch.object(QtWidgets.QFileDialog, "getSaveFileName") as picker,
+                patch.object(self.manager, "export_library_zip") as export,
+            ):
                 dialog._on_export_library()
-            self.assertEqual(question.call_args[0][3],
-                             QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Cancel)
+            self.assertEqual(question.call_args[0][3], QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Cancel)
             picker.assert_not_called()
             export.assert_not_called()
             self.assertTrue(dialog.is_dirty)
             self.assertEqual(dialog.current_lib_data, initial)
             with open(manifest, "rb") as stream:
                 self.assertEqual(stream.read(), saved)
-        with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Save), \
-             patch.object(dialog, "_on_save_library"), \
-             patch.object(self.manager, "export_library_zip") as export:
+        with (
+            patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Save),
+            patch.object(dialog, "_on_save_library"),
+            patch.object(self.manager, "export_library_zip") as export,
+        ):
             dialog._on_export_library()
         export.assert_not_called()
         self.assertTrue(dialog.is_dirty)
         output = os.path.join(self.test_root, "dirty.zip")
-        with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Save), \
-             patch.object(QtWidgets.QFileDialog, "getSaveFileName", return_value=(output, "")):
+        with (
+            patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Save),
+            patch.object(QtWidgets.QFileDialog, "getSaveFileName", return_value=(output, "")),
+        ):
             dialog._on_export_library()
         self.assertFalse(dialog.is_dirty)
         import zipfile
+
         with zipfile.ZipFile(output) as archive:
             data = json.loads(archive.read("library.json"))
         self.assertEqual(data["Square"]["norm"], "Unsaved")
@@ -253,8 +279,13 @@ class TestFolderLibraryDialog(unittest.TestCase):
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.addCleanup(self._close_manager_dialog, dialog)
         self.assertFalse(hasattr(dialog, "btn_new_folder_lib"))
-        buttons = (dialog.btn_new_lib, dialog.btn_del_lib, dialog.btn_import_lib,
-                   dialog.btn_dup_lib, dialog.btn_export_lib)
+        buttons = (
+            dialog.btn_new_lib,
+            dialog.btn_del_lib,
+            dialog.btn_import_lib,
+            dialog.btn_dup_lib,
+            dialog.btn_export_lib,
+        )
         header = dialog.list_libraries.parentWidget().layout().itemAt(0).layout()
         self.assertEqual([header.itemAt(i).widget() for i in range(1, 6)], list(buttons))
         for button in buttons:
@@ -264,8 +295,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
             self.assertFalse(button.icon().isNull())
         self.assertEqual(dialog.btn_import_lib.toolTip(), translate("frameforge", "Import Library"))
         self.assertEqual(dialog.btn_export_lib.toolTip(), translate("frameforge", "Export Library"))
-        self.assertNotEqual(dialog.btn_import_lib.icon().cacheKey(),
-                            dialog.btn_export_lib.icon().cacheKey())
+        self.assertNotEqual(dialog.btn_import_lib.icon().cacheKey(), dialog.btn_export_lib.icon().cacheKey())
 
     def test_r2_new_folder_library_create_flow_and_persistence(self):
         """R2: New folder library creation initializes manifest and selects library."""

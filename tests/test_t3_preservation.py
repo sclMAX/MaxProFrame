@@ -152,15 +152,18 @@ class TestT3Preservation(unittest.TestCase):
                         NewLibraryDialog,
                         "exec_",
                         return_value=(
-                            QtWidgets.QDialog.Rejected if case in ("new-name-reject", "new-picker-cancel") else QtWidgets.QDialog.Accepted
+                            QtWidgets.QDialog.Rejected
+                            if case in ("new-name-reject", "new-picker-cancel")
+                            else QtWidgets.QDialog.Accepted
                         ),
                     )
                 )
                 stack.enter_context(
                     patch.object(NewLibraryDialog, "get_values", return_value=("Created", "Steel", 7.85, False))
                 )
-                stack.enter_context(patch.object(NewLibraryDialog, "get_destination",
-                                                return_value=os.path.join(self.root, "new")))
+                stack.enter_context(
+                    patch.object(NewLibraryDialog, "get_destination", return_value=os.path.join(self.root, "new"))
+                )
                 if case == "new-collision":
                     stack.enter_context(
                         patch.object(self.manager, "create_folder_library", side_effect=FileExistsError("collision"))

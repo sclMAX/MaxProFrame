@@ -358,15 +358,17 @@ class TestRunTestsPolicy(unittest.TestCase):
         cfg_dump = self.work_dir / "startup.cfg"
         env_dump = self.work_dir / "env.json"
         argv_dump = self.work_dir / "argv.json"
-        proc = self._run_tests_host(env_overrides={
-            "FAKE_CFG_DUMP": str(cfg_dump),
-            "FAKE_ENV_DUMP": str(env_dump),
-            "FAKE_ARGV_DUMP": str(argv_dump),
-            "FAKE_SUMMARY_PATH": str(self.reports_dir / "summary.json"),
-            "FAKE_SUMMARY_CONTENT": json.dumps(
-                {"tests": 1, "failures": 0, "errors": 0, "skipped": 0, "successful": True}
-            ),
-        })
+        proc = self._run_tests_host(
+            env_overrides={
+                "FAKE_CFG_DUMP": str(cfg_dump),
+                "FAKE_ENV_DUMP": str(env_dump),
+                "FAKE_ARGV_DUMP": str(argv_dump),
+                "FAKE_SUMMARY_PATH": str(self.reports_dir / "summary.json"),
+                "FAKE_SUMMARY_CONTENT": json.dumps(
+                    {"tests": 1, "failures": 0, "errors": 0, "skipped": 0, "successful": True}
+                ),
+            }
+        )
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(proc.stdout, "run_tests: Test suite succeeded (1 tests executed).\n")
         self.assertEqual(proc.stderr, "")
@@ -380,10 +382,13 @@ class TestRunTestsPolicy(unittest.TestCase):
             self.assertEqual(group.tag, "FCParamGroup")
             self.assertEqual(group.attrib, {"Name": name})
         # Exact leaves exclude NotificationAreaEnabled and any log/severity suppression.
-        self.assertEqual([(leaf.tag, leaf.attrib, len(leaf)) for leaf in group], [
-            ("FCBool", {"Name": "NonIntrusiveNotificationsEnabled", "Value": "0"}, 0),
-            ("FCInt", {"Name": "MaxOpenNotifications", "Value": "0"}, 0),
-        ])
+        self.assertEqual(
+            [(leaf.tag, leaf.attrib, len(leaf)) for leaf in group],
+            [
+                ("FCBool", {"Name": "NonIntrusiveNotificationsEnabled", "Value": "0"}, 0),
+                ("FCInt", {"Name": "MaxOpenNotifications", "Value": "0"}, 0),
+            ],
+        )
         env = json.loads(env_dump.read_text(encoding="utf-8"))
         argv = json.loads(argv_dump.read_text(encoding="utf-8"))
         cfg = pathlib.Path(argv[argv.index("--user-cfg") + 1])

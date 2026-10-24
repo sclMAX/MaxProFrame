@@ -57,6 +57,7 @@ def selected_suite(tests_dir, selector):
     try:
         spec.loader.exec_module(module)
     except Exception as exc:
+
         def import_error(error=exc):
             raise error
 
