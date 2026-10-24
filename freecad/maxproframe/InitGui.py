@@ -15,9 +15,12 @@ class MaxProFrame(Gui.Workbench):
     MaxProFrame workbench for FreeCAD.
     """
 
+    import os as _os
+    from freecad.maxproframe.ff_tools import ICONPATH as _ICONPATH
+
     MenuText = "MaxProFrame"
     ToolTip = "Create Profiles, Miters, and Cuts from Sketches and Edges"
-    Icon = os.path.join(ICONPATH, "metalwb.svg")
+    Icon = _os.path.join(_ICONPATH, "metalwb.svg")
 
     toolbox_drawing = ["Sketcher_NewSketch", "MaxProFrame_ParametricLine"]
 
