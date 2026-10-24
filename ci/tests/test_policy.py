@@ -947,3 +947,27 @@ class TestDocumentationPolicy(unittest.TestCase):
         self.assertIn("cf430e030ddbb5b0abf93d22962f4752f3646cd9", content)
         self.assertIn("Action infrastructure only", content)
         self.assertIn("no hosted CI claim is made", content)
+
+    def test_workbench_icon_uses_vector_svg_not_legacy_xpm(self):
+        init_gui = REPO_ROOT / "freecad" / "maxproframe" / "InitGui.py"
+        content = init_gui.read_text(encoding="utf-8")
+        self.assertIn('Icon = os.path.join(ICONPATH, "metalwb.svg")', content)
+        self.assertNotIn("static char * metalwb_xpm[]", content)
+
+        svg_path = REPO_ROOT / "freecad" / "maxproframe" / "resources" / "icons" / "metalwb.svg"
+        self.assertTrue(svg_path.is_file())
+        svg_content = svg_path.read_text(encoding="utf-8")
+        self.assertIn('viewBox="0 0 64 64"', svg_content)
+        self.assertNotIn("icone_atelier_metalwb.svg", svg_content)
+
+    def test_readme_and_funding_include_banner_and_sponsors(self):
+        banner_path = REPO_ROOT / "docs" / "images" / "maxproframe-banner.png"
+        self.assertTrue(banner_path.is_file())
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("docs/images/maxproframe-banner.png", readme)
+        self.assertIn("https://ko-fi.com/sclmax", readme)
+        self.assertIn("https://cafecito.app/sclmax", readme)
+
+        funding = (REPO_ROOT / ".github" / "FUNDING.yml").read_text(encoding="utf-8")
+        self.assertIn("ko_fi: sclmax", funding)
+        self.assertIn("https://cafecito.app/sclmax", funding)

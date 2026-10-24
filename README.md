@@ -1,5 +1,7 @@
 # MaxProFrame
 
+![MaxProFrame Banner](docs/images/maxproframe-banner.png)
+
 **MaxProFrame** is an advanced FreeCAD workbench for parametric framing, structural design, weldments, and profile modeling.
 
 It enables engineers, makers, and fabricators to create structural frames, beams, and weldments (metal, aluminum extrusions, wood, and user-defined custom sections) mapped onto sketches or 3D edges, with automated joinery (miter cuts, coped joints, trim/extend), cutouts, and accurate Bill of Materials (BOM) generation.
@@ -114,8 +116,15 @@ For more details on custom libraries and architecture, see [docs/folder-librarie
 
 ## Maintainer & Authors
 
-- **Maintained by**: [sclMAX](https://github.com/sclMAX)
+- **Maintained by**: [sclMAX](https://github.com/sclMAX) (Maximiliano Basso)
 - **Repository**: [https://github.com/sclMAX/MaxProFrame](https://github.com/sclMAX/MaxProFrame)
+
+### Support & Sponsorship
+
+If **MaxProFrame** helps your workflow, you can support its ongoing development:
+
+- **International (Ko-fi)**: [https://ko-fi.com/sclmax](https://ko-fi.com/sclmax)
+- **Argentina (Cafecito)**: [https://cafecito.app/sclmax](https://cafecito.app/sclmax)
 
 ### Credits & Heritage
 
