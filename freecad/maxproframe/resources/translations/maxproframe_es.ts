@@ -877,5 +877,13 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
         <source>Cancel</source>
         <translation>Cancelar</translation>
     </message>
+    <message>
+        <source>Edit Properties</source>
+        <translation>Editar propiedades</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Guardar</translation>
+    </message>
 </context>
 </TS>

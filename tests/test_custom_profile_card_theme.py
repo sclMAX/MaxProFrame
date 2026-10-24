@@ -112,15 +112,16 @@ class TestCustomProfileCardTheme(unittest.TestCase):
         _log_checkpoint("after: card.grab")
         self.assertEqual(image.pixelColor(5, 5).name(), palette.color(background).name())
         labels = [label for label in self.card.findChildren(QtWidgets.QLabel) if label is not self.card.thumbnail_label]
-        self.assertEqual(len(labels), 3)
+        self.assertEqual(len(labels), 0)
         for label in labels:
             self.assertEqual(label.palette().color(QtGui.QPalette.WindowText).name(), palette.color(foreground).name())
         for editor in (self.card.code_edit, self.card.weight_edit):
             self.assertEqual(
-                editor.palette().color(QtGui.QPalette.Text).name(), palette.color(QtGui.QPalette.Text).name()
+                editor.palette().color(QtGui.QPalette.Text).name(),
+                palette.color(QtGui.QPalette.Text if editor is self.card.weight_edit else foreground).name()
             )
-            role = QtGui.QPalette.AlternateBase if editor.isReadOnly() else QtGui.QPalette.Base
-            self.assertEqual(editor.palette().color(QtGui.QPalette.Base).name(), palette.color(role).name())
+            self.assertTrue(editor.isReadOnly())
+            self.assertFalse(editor.hasFrame())
         self.assertEqual(
             self.card.thumbnail_label.palette().color(QtGui.QPalette.Window).name(),
             palette.color(QtGui.QPalette.Base).name(),
@@ -137,14 +138,136 @@ class TestCustomProfileCardTheme(unittest.TestCase):
                         self.card.set_editable(editable)
                         self.card.setSelected(selected)
                         self.assert_theme(palette, selected)
-                        self.assertEqual(self.card.code_edit.isReadOnly(), not editable)
-                        self.assertEqual(self.card.weight_edit.isReadOnly(), not editable)
+                        self.assertEqual(self.card.btn_edit_properties.isEnabled(), editable)
+                        self.assertTrue(self.card.code_edit.isReadOnly())
+                        self.assertTrue(self.card.weight_edit.isReadOnly())
                         self.assertEqual(self.card.code_edit.text(), "CP2")
                         self.assertEqual(self.card.weight_edit.text(), "10.31")
         self.selected.clear()
         self.card.click()
         self.assertEqual(self.selected, [2])
         _log_checkpoint("test-complete: test_light_and_dark_selected_editable_and_readonly")
+
+    def test_badge_and_edit_icon_have_subtle_palette_borders(self):
+        for dark in (False, True):
+            palette = self.apply_theme(dark)
+            # A non-blue accent proves the controls follow the theme, not a fixed color.
+            palette.setColor(QtGui.QPalette.Highlight, QtGui.QColor("#a050c0"))
+            self.app.setPalette(palette)
+            for editable in (False, True):
+                self.card.set_editable(editable)
+                for selected in (False, True):
+                    self.card.setSelected(selected)
+                    self._polish_and_layout()
+                    for widget, background, foreground in (
+                        (self.card.weight_edit, QtGui.QPalette.AlternateBase, QtGui.QPalette.Text),
+                        (self.card.btn_edit_properties, QtGui.QPalette.Button, QtGui.QPalette.ButtonText),
+                    ):
+                        with self.subTest(dark=dark, editable=editable, selected=selected,
+                                          widget=widget.objectName()):
+                            surface = palette.color(background)
+                            ink = palette.color(QtGui.QPalette.Highlight if editable else foreground)
+                            strength = 0.55 if editable else 0.3
+                            expected = QtGui.QColor(*(
+                                round(a * strength + b * (1 - strength))
+                                for a, b in zip(ink.getRgb()[:3], surface.getRgb()[:3])
+                            ))
+                            self.assertIn(f"border: 1px solid {expected.name()};", widget.styleSheet())
+                            rendered = widget.grab().toImage()
+                            self.assertEqual(rendered.pixelColor(rendered.width() // 2, 0).name(), expected.name())
+                    self.assertEqual(self.card.weight_edit._display_lines(), ["10.31 kg/m"])
+                    self.assertEqual(self.card.btn_edit_properties.size(), QtCore.QSize(28, 28))
+
+    def test_edit_icon_accent_highlight_requires_enabled_hover_or_focus(self):
+        for dark in (False, True):
+            palette = self.apply_theme(dark)
+            button = self.card.btn_edit_properties
+            self.card.set_editable(True)
+            accent = palette.color(QtGui.QPalette.Highlight).name()
+            for state in ("hover", "focus"):
+                self.assertIn(f"QToolButton:enabled:{state}", button.styleSheet())
+            self.assertIn(f"border: 1px solid {accent};", button.styleSheet())
+            self.card.set_editable(False)
+            self.assertFalse(button.isEnabled())
+            self.assertNotIn(":hover", button.styleSheet())
+            self.assertNotIn(":focus", button.styleSheet())
+
+    def test_thumbnail_badge_and_icon_replace_footer_without_covering_profile(self):
+        self._polish_and_layout()
+        preview = self.card.thumbnail_label
+        button = self.card.btn_edit_properties
+        badge = self.card.weight_edit
+        self.assertIsInstance(button, QtWidgets.QToolButton)
+        self.assertEqual(button.text(), "")
+        self.assertFalse(button.icon().isNull())
+        self.assertTrue(button.toolTip())
+        self.assertEqual(button.accessibleName(), button.toolTip())
+        self.assertGreaterEqual(button.width(), 28)
+        self.assertGreaterEqual(button.height(), 28)
+        self.assertIs(button.parentWidget(), preview)
+        self.assertIs(badge.parentWidget(), preview)
+        self.assertEqual(self.card.findChildren(QtWidgets.QPushButton), [])
+        self.assertLess(button.geometry().center().x(), preview.width() // 2)
+        self.assertLess(button.geometry().center().y(), preview.height() // 2)
+        self.assertGreater(badge.geometry().center().x(), preview.width() // 2)
+        self.assertGreater(badge.geometry().center().y(), preview.height() // 2)
+        safe = preview.contentsRect()
+        self.assertFalse(safe.intersects(button.geometry()))
+        self.assertFalse(safe.intersects(badge.geometry()))
+        self.assertGreaterEqual(safe.height(), 60)
+        self.assertEqual(self.card.layout().indexOf(button), -1)
+        self.assertEqual(self.card.layout().indexOf(badge), -1)
+        self.assertEqual(badge._display_lines(), ["10.31 kg/m"])
+        self.selected.clear()
+        QtWidgets.QApplication.sendEvent(
+            badge, QtGui.QMouseEvent(QtCore.QEvent.MouseButtonPress, QtCore.QPointF(3, 3),
+                                   QtCore.Qt.LeftButton, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
+        )
+        self.assertEqual(self.selected, [2])
+        for dark in (False, True):
+            self.apply_theme(dark)
+            self.card.setSelected(dark)
+            reports = os.environ.get("FF_REPORTS")
+            if reports:
+                self.card.grab().save(os.path.join(reports, "card-badge-dark.png" if dark else "card-badge-light.png"))
+
+    def test_data_hierarchy_elision_units_and_uniform_height(self):
+        from unittest.mock import patch
+
+        self._polish_and_layout()
+        self.assertEqual(self.card.findChildren(QtWidgets.QLabel), [self.card.thumbnail_label])
+        self.assertTrue(self.card.code_edit.font().bold())
+        self.assertGreater(self.card.code_edit.fontMetrics().height(),
+                           self.card.description_edit.fontMetrics().height())
+        self.assertGreater(self.card.description_edit.fontMetrics().height(),
+                           self.card.weight_edit.fontMetrics().height())
+        self.assertTrue(self.card.description_edit.isHidden())
+        height = self.card.sizeHint().height()
+        self.card.description_edit.setText("A description long enough to wrap over two lines " * 6)
+        self._polish_and_layout()
+        self.assertFalse(self.card.description_edit.isHidden())
+        self.assertEqual(self.card.sizeHint().height(), height)
+        lines = self.card.description_edit._display_lines()
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[-1].endswith("…"), lines)
+        self.assertGreaterEqual(self.card.description_edit.contentsRect().height(),
+                                self.card.description_edit.fontMetrics().height() * 2)
+        self.assertEqual(self.card.description_edit.toolTip(), self.card.description_edit.text())
+        title = "A very long profile code " * 8
+        self.card.code_edit.setText(title)
+        self.assertEqual(self.card.code_edit.toolTip(), title)
+        self.assertTrue(self.card.code_edit._display_lines()[0].endswith("…"))
+        with patch.object(QtWidgets, "QStylePainter") as painter:
+            self.card.weight_edit.grab()
+        self.assertEqual(painter.return_value.drawText.call_args.args[-1], "10.31 kg/m")
+        self.assertEqual(self.card.weight_edit.text(), "10.31")
+        reports = os.environ.get("FF_REPORTS")
+        if reports:
+            self.card.grab().save(os.path.join(reports, "card-hierarchy.png"))
+        self.card.description_edit.clear()
+        self._polish_and_layout()
+        self.assertTrue(self.card.description_edit.isHidden())
+        self.assertEqual(self.card.sizeHint().height(), height)
 
     def test_live_theme_change_preserves_selection_and_readonly(self):
         _log_checkpoint("test-entry: test_live_theme_change_preserves_selection_and_readonly")

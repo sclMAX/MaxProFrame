@@ -179,8 +179,9 @@ class TestLibraryUsability(unittest.TestCase):
         card.description_edit.setText("Descripción nueva")
         card.code_edit.setText("PGC101")
         card.weight_edit.setText("3.25")
-        self.assertIn(translate("frameforge", "Weight (kg/m):"),
-                      [label.text() for label in card.findChildren(QtWidgets.QLabel)])
+        self.assertEqual(card.weight_edit._display_lines(), ["3.25 kg/m"])
+        self.assertNotIn(translate("frameforge", "Weight (kg/m):"),
+                         [label.text() for label in card.findChildren(QtWidgets.QLabel)])
         self.dialog._on_save_library()
         self.dialog.refresh_libraries(select_name="Catalog")
         self.family("Custom Profile")

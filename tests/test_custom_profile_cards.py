@@ -453,17 +453,24 @@ class TestCustomProfileCards(unittest.TestCase):
             self.assertIsNone(card.findChild(QtWidgets.QLineEdit, f"card_{dim_key}"), f"Card must not have {dim_key} input.")
             self.assertIsNone(card.findChild(QtWidgets.QLabel, f"lbl_{dim_key}"), f"Card must not have {dim_key} label.")
 
-        # S2: Code and weight are editable
+        # S2: Code and weight are edited in the properties modal.
         code_edit = self._get_card_code_edit(card)
         weight_edit = self._get_card_weight_edit(card)
         self.assertIsNotNone(code_edit, "Card must provide code edit QLineEdit.")
         self.assertIsNotNone(weight_edit, "Card must provide weight edit QLineEdit.")
-        self.assertFalse(code_edit.isReadOnly(), "Code must be editable in user folder library.")
-        self.assertFalse(weight_edit.isReadOnly(), "Weight must be editable in user folder library.")
+        self.assertTrue(code_edit.isReadOnly(), "Card values are display-only; use Edit Properties.")
+        self.assertTrue(weight_edit.isReadOnly(), "Card values are display-only; use Edit Properties.")
+        self.assertTrue(card.btn_edit_properties.isEnabled())
 
-        # Edit code and weight
-        code_edit.setText("Sec_S2_Renamed")
-        weight_edit.setText("38.45")
+        # Exercise the real modal, not programmatic edits of the display widgets.
+        def edit_properties():
+            modal = QtWidgets.QApplication.activeModalWidget()
+            modal.findChild(QtWidgets.QLineEdit, "property_code").setText("Sec_S2_Renamed")
+            modal.findChild(QtWidgets.QLineEdit, "property_weight").setText("38.45")
+            modal.findChild(QtWidgets.QDialogButtonBox).button(QtWidgets.QDialogButtonBox.Save).click()
+
+        QtCore.QTimer.singleShot(0, edit_properties)
+        card.btn_edit_properties.click()
 
         # Bidirectional check: card edits immediately reflect in underlying table item model
         self.assertEqual(self.dialog.table_sizes.item(0, 0).text(), "Sec_S2_Renamed")

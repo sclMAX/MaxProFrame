@@ -3,7 +3,7 @@
 Implements S1, S2, S3, S4:
 - S1: Selecting Custom Profile shows selectable cards with vector silhouette thumbnails
       derived from stored section sketches; standard families retain their table.
-- S2: Cards display NO dimensions; code and weight (kg/m) are editable and persist through
+- S2: Cards display NO dimensions; properties are edited in a modal and persist through
       save/reload; read-only behavior for non-editable libraries; non-column metadata preserved;
       duplicate codes and nonfinite/nonpositive weights rejected without stored mutations.
 - S3: Manually entered weight persists through card edits, but applying a geometry edit
@@ -291,12 +291,33 @@ def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=
 
 
 class _DescriptionEdit(QtWidgets.QLineEdit):
-    """Show the beginning when idle; keep the full value in the native editor."""
+    """Elide display text without changing the value used by table synchronization."""
 
-    def __init__(self, text):
+    def __init__(self, text, lines=1, suffix=""):
         super().__init__(text)
-        self.setToolTip(text)
-        self.textChanged.connect(self.setToolTip)
+        self._lines = lines
+        self._suffix = suffix
+        self.setToolTip(text + suffix)
+        self.textChanged.connect(lambda value: self.setToolTip(value + self._suffix))
+
+    def _display_lines(self):
+        text = " ".join(self.text().splitlines()) + self._suffix
+        width = max(0, self.contentsRect().width() - 4)
+        metrics = self.fontMetrics()
+        if self._lines == 1:
+            return [metrics.elidedText(text, QtCore.Qt.ElideRight, width)]
+        layout = QtGui.QTextLayout(text, self.font())
+        layout.beginLayout()
+        first = layout.createLine()
+        if not first.isValid():
+            layout.endLayout()
+            return []
+        first.setLineWidth(width)
+        end = first.textLength()
+        layout.endLayout()
+        if end >= len(text):
+            return [text]
+        return [text[:end].rstrip(), metrics.elidedText(text[end:].lstrip(), QtCore.Qt.ElideRight, width)]
 
     def paintEvent(self, event):
         if self.hasFocus():
@@ -308,13 +329,15 @@ class _DescriptionEdit(QtWidgets.QLineEdit):
         rect = self.style().subElementRect(QtWidgets.QStyle.SE_LineEditContents, option, self)
         margins = self.textMargins()
         rect.adjust(margins.left() + 2, 0, -margins.right() - 2, 0)
-        text = self.fontMetrics().elidedText(self.text(), QtCore.Qt.ElideRight, max(0, rect.width()))
         painter.setPen(self.palette().color(QtGui.QPalette.Text))
-        painter.drawText(rect, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, text)
+        height = self.fontMetrics().height()
+        for index, text in enumerate(self._display_lines()):
+            line_rect = QtCore.QRect(rect.left(), rect.top() + index * height, rect.width(), height)
+            painter.drawText(line_rect, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, text)
 
 
 class CustomProfileCard(QtWidgets.QFrame):
-    """Selectable card displaying section silhouette, editable code, and editable weight (kg/m)."""
+    """Selectable, display-only card with a separate properties editor."""
 
     def __init__(self, row, code, weight, props, dialog, cards_view, parent=None):
         super().__init__(parent)
@@ -340,48 +363,68 @@ class CustomProfileCard(QtWidgets.QFrame):
         self.thumbnail_label = QtWidgets.QLabel()
         self.thumbnail_label.setObjectName("card_thumbnail")
         self.thumbnail_label.setAlignment(QtCore.Qt.AlignCenter)
-        self.thumbnail_label.setFixedHeight(100)
+        self.thumbnail_label.setFixedHeight(128)
+        self.thumbnail_label.setContentsMargins(8, 36, 8, 28)
         self.thumbnail_label.setStyleSheet("background-color: palette(base); border-radius: 4px;")
         layout.addWidget(self.thumbnail_label)
 
-        # Code row
-        code_layout = QtWidgets.QHBoxLayout()
-        code_layout.setSpacing(4)
-        lbl_code = QtWidgets.QLabel(translate("frameforge", "Code:"))
-        lbl_code.setStyleSheet("font-weight: bold; font-size: 11px;")
-        self.code_edit = QtWidgets.QLineEdit(str(code))
+        # Title and optional supporting text beneath the preview.
+        self.code_edit = _DescriptionEdit(str(code))
         self.code_edit.setObjectName("card_code")
-        self.code_edit.setToolTip(translate("frameforge", "Profile Code"))
-        code_layout.addWidget(lbl_code)
-        code_layout.addWidget(self.code_edit, 1)
-        layout.addLayout(code_layout)
+        title_font = QtGui.QFont(self.font())
+        title_font.setBold(True)
+        if title_font.pointSizeF() > 0:
+            title_font.setPointSizeF(title_font.pointSizeF() * 1.25)
+        else:
+            title_font.setPixelSize(round(title_font.pixelSize() * 1.25))
+        self.code_edit.setFont(title_font)
+        self.code_edit.setFixedHeight(self.code_edit.fontMetrics().height() + 4)
+        layout.addWidget(self.code_edit)
 
-        description_layout = QtWidgets.QHBoxLayout()
-        lbl_description = QtWidgets.QLabel(translate("frameforge", "Description:"))
-        self.description_edit = _DescriptionEdit(str(self.props.get("Description", "")))
+        # Reserve two lines even when empty so cards stay aligned.
+        description_slot = QtWidgets.QWidget()
+        description_layout = QtWidgets.QVBoxLayout(description_slot)
+        description_layout.setContentsMargins(0, 0, 0, 0)
+        self.description_edit = _DescriptionEdit(str(self.props.get("Description", "")), lines=2)
         self.description_edit.setObjectName("card_description")
-        description_layout.addWidget(lbl_description)
-        description_layout.addWidget(self.description_edit, 1)
-        layout.addLayout(description_layout)
+        description_height = self.description_edit.fontMetrics().height() * 2 + 4
+        description_slot.setFixedHeight(description_height)
+        self.description_edit.setFixedHeight(description_height)
+        description_layout.addWidget(self.description_edit)
+        self.description_edit.setVisible(bool(self.description_edit.text().strip()))
+        self.description_edit.textChanged.connect(
+            lambda text: self.description_edit.setVisible(bool(text.strip()))
+        )
+        layout.addWidget(description_slot)
 
-        # Weight row
-        weight_layout = QtWidgets.QHBoxLayout()
-        weight_layout.setSpacing(4)
-        lbl_weight = QtWidgets.QLabel(translate("frameforge", "Weight (kg/m):"))
-        lbl_weight.setStyleSheet("font-weight: bold; font-size: 11px;")
-        self.weight_edit = QtWidgets.QLineEdit(str(weight))
+        self.weight_edit = _DescriptionEdit(str(weight), suffix=" kg/m")
         self.weight_edit.setObjectName("card_weight")
-        self.weight_edit.setToolTip(translate("frameforge", "Linear Weight (kg/m)"))
-        weight_layout.addWidget(lbl_weight)
-        weight_layout.addWidget(self.weight_edit, 1)
-        for label in (lbl_code, lbl_description, lbl_weight):
-            label.setMinimumWidth(90)
-        layout.addLayout(weight_layout)
+        weight_font = QtGui.QFont(self.font())
+        if weight_font.pointSizeF() > 0:
+            weight_font.setPointSizeF(weight_font.pointSizeF() * 0.85)
+        else:
+            weight_font.setPixelSize(round(weight_font.pixelSize() * 0.85))
+        self.weight_edit.setFont(weight_font)
+        self.weight_edit.setFixedHeight(max(22, self.weight_edit.fontMetrics().height() + 8))
+        self.weight_edit.setParent(self.thumbnail_label)
+        self.weight_edit.textChanged.connect(self._position_preview_controls)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
 
         # Aliases for interface discovery
         self.le_code = self.code_edit
         self.le_weight = self.weight_edit
         self.lbl_thumbnail = self.thumbnail_label
+
+        self.btn_edit_properties = QtWidgets.QToolButton(self.thumbnail_label)
+        self.btn_edit_properties.setObjectName("card_edit_properties")
+        self.btn_edit_properties.setToolTip(translate("frameforge", "Edit Properties"))
+        self.btn_edit_properties.setAccessibleName(self.btn_edit_properties.toolTip())
+        self.btn_edit_properties.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
+        self.btn_edit_properties.setIconSize(QtCore.QSize(18, 18))
+        self.btn_edit_properties.setFocusPolicy(QtCore.Qt.StrongFocus)
+        self.btn_edit_properties.setFixedSize(28, 28)
+        self.btn_edit_properties.clicked.connect(self._edit_properties)
+        self._position_preview_controls()
 
         # Editable state based on library permissions
         is_user = bool(dialog.current_lib_meta and dialog.current_lib_meta.get("is_user"))
@@ -406,9 +449,18 @@ class CustomProfileCard(QtWidgets.QFrame):
     def _on_palette_changed(self, palette):
         # Read the application palette, not a palette already modified by card QSS.
         self._update_style()
-        self.set_editable(not self.code_edit.isReadOnly())
+
+    def _position_preview_controls(self, *_):
+        preview = self.thumbnail_label
+        self.btn_edit_properties.move(4, 4)
+        width = self.weight_edit.fontMetrics().horizontalAdvance(self.weight_edit.text() + " kg/m") + 14
+        self.weight_edit.setFixedWidth(min(width, max(1, preview.width() - 8)))
+        self.weight_edit.move(preview.width() - self.weight_edit.width() - 4,
+                              preview.height() - self.weight_edit.height() - 4)
 
     def eventFilter(self, obj, event):
+        if obj is self.thumbnail_label and event.type() == QtCore.QEvent.Resize:
+            self._position_preview_controls()
         if event.type() in (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.FocusIn):
             self.cards_view.select_card(self.row)
         return super().eventFilter(obj, event)
@@ -442,25 +494,138 @@ class CustomProfileCard(QtWidgets.QFrame):
             f"background-color: {palette.color(QtGui.QPalette.Base).name()}; border-radius: 4px;"
         )
 
+        # Retain the existing table synchronization while presenting values as text.
+        for field in (self.code_edit, self.description_edit, self.weight_edit):
+            color = palette.color(foreground)
+            if field is self.description_edit and not self._selected:
+                surface = palette.color(background)
+                color = QtGui.QColor(*(
+                    round(a * 0.8 + b * 0.2)
+                    for a, b in zip(color.getRgb()[:3], surface.getRgb()[:3])
+                ))
+            field.setStyleSheet(
+                "background: transparent; border: none; padding: 0; "
+                f"color: {color.name()};"
+            )
+        for widget, surface_role, ink_role, radius, padding in (
+            (self.weight_edit, QtGui.QPalette.AlternateBase, QtGui.QPalette.Text, 5, "2px 4px"),
+            (self.btn_edit_properties, QtGui.QPalette.Button, QtGui.QPalette.ButtonText, 4, "0"),
+        ):
+            surface = palette.color(surface_role)
+            ink = palette.color(ink_role)
+            editable = self.btn_edit_properties.isEnabled()
+            accent = palette.color(QtGui.QPalette.Highlight) if editable else ink
+            strength = 0.55 if editable else 0.3
+            outline = QtGui.QColor(*(
+                round(a * strength + b * (1 - strength))
+                for a, b in zip(accent.getRgb()[:3], surface.getRgb()[:3])
+            ))
+            style = (
+                f"background: {surface.name()}; color: {ink.name()}; "
+                f"border: 1px solid {outline.name()}; border-radius: {radius}px; padding: {padding};"
+            )
+            if widget is self.btn_edit_properties:
+                style = f"QToolButton {{ {style} }}"
+                if editable:
+                    style += (
+                        "QToolButton:enabled:hover, QToolButton:enabled:focus { "
+                        f"border: 1px solid {accent.name()}; }}"
+                    )
+            widget.setStyleSheet(style)
+        # Draw the pencil using the live palette, without a desktop icon-theme dependency.
+        pixmap = QtGui.QPixmap(18, 18)
+        pixmap.fill(QtCore.Qt.transparent)
+        painter = QtGui.QPainter(pixmap)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        painter.setPen(QtGui.QPen(palette.color(QtGui.QPalette.ButtonText), 1.5))
+        painter.drawPolygon(QtGui.QPolygonF([
+            QtCore.QPointF(4, 11), QtCore.QPointF(11, 4),
+            QtCore.QPointF(14, 7), QtCore.QPointF(7, 14), QtCore.QPointF(3, 15),
+        ]))
+        painter.drawLine(QtCore.QPointF(10, 5), QtCore.QPointF(13, 8))
+        painter.drawLine(QtCore.QPointF(4, 11), QtCore.QPointF(7, 14))
+        painter.end()
+        self.btn_edit_properties.setIcon(QtGui.QIcon(pixmap))
+        self._position_preview_controls()
+
     def set_editable(self, editable):
-        self.code_edit.setReadOnly(not editable)
-        self.weight_edit.setReadOnly(not editable)
-        self.description_edit.setReadOnly(not editable)
-        palette = QtWidgets.QApplication.palette()
-        background = QtGui.QPalette.Base if editable else QtGui.QPalette.AlternateBase
-        style = (
-            f"background-color: {palette.color(background).name()}; "
-            f"color: {palette.color(QtGui.QPalette.Text).name()}; "
-            f"border: 1px solid {palette.color(QtGui.QPalette.Mid).name()}; "
-            "border-radius: 3px; padding: 2px 4px;"
+        self.btn_edit_properties.setEnabled(bool(editable))
+        for field in (self.code_edit, self.description_edit, self.weight_edit):
+            field.setReadOnly(True)
+            field.setFrame(False)
+            field.setFocusPolicy(QtCore.Qt.NoFocus)
+        self._update_style()
+
+    def _edit_properties(self):
+        if not self.btn_edit_properties.isEnabled():
+            return
+        self.cards_view.select_card(self.row)
+        editor = QtWidgets.QDialog(self)
+        editor.setObjectName("custom_properties_dialog")
+        editor.setWindowTitle(translate("frameforge", "Edit Properties"))
+        editor.setMinimumWidth(360)
+        layout = QtWidgets.QVBoxLayout(editor)
+        form = QtWidgets.QFormLayout()
+        code = QtWidgets.QLineEdit(self.code_edit.text())
+        description = QtWidgets.QLineEdit(self.description_edit.text())
+        weight = QtWidgets.QLineEdit(self.weight_edit.text())
+        code.setObjectName("property_code")
+        description.setObjectName("property_description")
+        weight.setObjectName("property_weight")
+        form.addRow(translate("frameforge", "Code:"), code)
+        form.addRow(translate("frameforge", "Description:"), description)
+        form.addRow(translate("frameforge", "Weight (kg/m):"), weight)
+        layout.addLayout(form)
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Save | QtWidgets.QDialogButtonBox.Cancel
         )
-        self.code_edit.setStyleSheet(style)
-        self.weight_edit.setStyleSheet(style)
-        self.description_edit.setStyleSheet(style)
+        buttons.button(QtWidgets.QDialogButtonBox.Save).setText(translate("frameforge", "Save"))
+        buttons.button(QtWidgets.QDialogButtonBox.Cancel).setText(translate("frameforge", "Cancel"))
+        layout.addWidget(buttons)
+        buttons.rejected.connect(editor.reject)
+
+        def validate():
+            name = code.text().strip()
+            value = weight.text().strip()
+            error = None
+            if not name:
+                error = translate("frameforge", "Enter a non-empty size code.")
+            elif any(
+                row != self.row and self.dialog.table_sizes.item(row, 0)
+                and self.dialog.table_sizes.item(row, 0).text().strip() == name
+                for row in range(self.dialog.table_sizes.rowCount())
+            ):
+                error = translate(
+                    "frameforge", "Duplicate size codes found: %s. Each size must have a unique code."
+                ) % name
+            else:
+                try:
+                    number = float(value)
+                    if not math.isfinite(number) or number <= 0:
+                        raise ValueError(value)
+                except ValueError:
+                    error = translate(
+                        "frameforge",
+                        "Invalid weight '%s' for custom profile '%s'. Weight must be a positive finite number.",
+                    ) % (value, name)
+            if error:
+                QtWidgets.QMessageBox.warning(editor, translate("frameforge", "Edit Properties"), error)
+                return
+            editor.accept()
+
+        buttons.accepted.connect(validate)
+        if editor.exec_() == QtWidgets.QDialog.Accepted:
+            self.code_edit.setText(code.text().strip())
+            self.description_edit.setText(description.text())
+            self.weight_edit.setText(weight.text().strip())
+        editor.deleteLater()
 
     def update_thumbnail(self, pixmap):
         if pixmap is not None:
-            self.thumbnail_label.setPixmap(pixmap)
+            # Keep geometry inside the unobstructed strip between the two overlays.
+            self.thumbnail_label.setPixmap(
+                pixmap.scaled(160, 64, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
+            )
 
     def _on_code_changed(self, text):
         if getattr(self, "_initializing", False) or getattr(self, "_updating_from_table", False):

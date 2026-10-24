@@ -14,18 +14,20 @@ class TestCustomDescriptionDisplay(unittest.TestCase):
         self.card = self.dialog.cards_view.card_by_code("PGC100")
 
     def test_unfocused_description_shows_prefix_and_preserves_saved_text(self):
-        text = "Perfil C 100mm x 40mm con una descripción larga"
+        text = "Perfil C 100mm x 40mm con una descripción larga " * 3
         field = self.card.description_edit
         field.setText(text)
-        field.resize(120, 28)
+        field.setFixedWidth(120)
         field.clearFocus()
         self.assertFalse(field.hasFocus())
         with patch.object(QtWidgets, "QStylePainter") as painter:
             field.grab()
         painter.return_value.drawText.assert_called()
-        displayed = painter.return_value.drawText.call_args.args[-1]
-        self.assertTrue(displayed.startswith("Perfil C"), displayed)
-        self.assertTrue(displayed.endswith("…"), displayed)
+        lines = [call.args[-1] for call in painter.return_value.drawText.call_args_list]
+        displayed = " ".join(lines)
+        self.assertTrue(lines[0].startswith("Perfil C"), displayed)
+        self.assertTrue(lines[-1].endswith("…"), displayed)
+        self.assertLessEqual(len(lines), 2)
         self.assertNotEqual(displayed, text)
         self.assertEqual(field.text(), text)
         self.assertEqual(field.toolTip(), text)
