@@ -4,6 +4,70 @@
 <context>
     <name>frameforge</name>
     <message>
+        <source>T-Slot 3-Slots</source>
+        <translation>Perfil con ranura en T de 3 ranuras</translation>
+    </message>
+    <message>
+        <source>T-Slot 2-Slots</source>
+        <translation>Perfil con ranura en T de 2 ranuras</translation>
+    </message>
+    <message>
+        <source>T-Slot 2-Slots Opp</source>
+        <translation>Perfil con ranura en T de 2 ranuras opuestas</translation>
+    </message>
+    <message>
+        <source>T-Slot 1-Slot</source>
+        <translation>Perfil con ranura en T de 1 ranura</translation>
+    </message>
+    <message>
+        <source>Active FreeCAD GUI document not available for editing.</source>
+        <translation>El documento GUI activo de FreeCAD no está disponible para editar.</translation>
+    </message>
+    <message>
+        <source>Failed to enter edit mode for sketch.</source>
+        <translation>No se pudo entrar en el modo de edición del croquis.</translation>
+    </message>
+    <message>
+        <source>Sketch edit mode could not be verified.</source>
+        <translation>No se pudo verificar el modo de edición del croquis.</translation>
+    </message>
+    <message>
+        <source>Could not create library '%s': %s</source>
+        <translation>No se pudo crear la biblioteca '%s': %s</translation>
+    </message>
+    <message>
+        <source>Could not import library: %s</source>
+        <translation>No se pudo importar la biblioteca: %s</translation>
+    </message>
+    <message>
+        <source>Could not export library '%s': %s</source>
+        <translation>No se pudo exportar la biblioteca '%s': %s</translation>
+    </message>
+    <message>
+        <source>Could not register folder library: %s</source>
+        <translation>No se pudo registrar la biblioteca en carpeta: %s</translation>
+    </message>
+    <message>
+        <source>Could not duplicate library '%s': %s</source>
+        <translation>No se pudo duplicar la biblioteca '%s': %s</translation>
+    </message>
+    <message>
+        <source>Could not unregister folder library '%s': %s</source>
+        <translation>No se pudo quitar del registro la biblioteca en carpeta '%s': %s</translation>
+    </message>
+    <message>
+        <source>Could not delete library '%s': %s</source>
+        <translation>No se pudo eliminar la biblioteca '%s': %s</translation>
+    </message>
+    <message>
+        <source>Could not import DXF: %s</source>
+        <translation>No se pudo importar el DXF: %s</translation>
+    </message>
+    <message>
+        <source>Could not add section: %s</source>
+        <translation>No se pudo agregar la sección: %s</translation>
+    </message>
+    <message>
         <source>Destination</source>
         <translation>Destino</translation>
     </message>

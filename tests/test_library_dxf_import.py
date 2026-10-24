@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import FreeCAD as App
+import FreeCADGui as Gui
 import Part
 import Sketcher
 from PySide import QtCore, QtWidgets
@@ -29,9 +30,21 @@ class TestLibraryDXFImport(unittest.TestCase):
         )
         self.manager.create_folder_library(str(self.root / "Alu"), "Alu", material="Aluminum", density=2.7)
         self.manager.create_folder_library(str(self.root / "Other"), "Other", material="Steel", density=7.85)
+        prefs = App.ParamGet("User parameter:BaseApp/Preferences/General")
+        old_language, old_locale = prefs.GetString("Language", ""), Gui.getLocale()
+
+        def restore_language():
+            Gui.setLocale(old_locale)
+            prefs.SetString("Language", old_language)
+            Gui.updateLocale()
+
+        # Registered before dialog/Discard cleanups: restore language last.
+        self.addCleanup(restore_language)
+        prefs.SetString("Language", "Spanish")
+        Gui.setLocale("Spanish")
+        Gui.updateLocale()
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
-        self.stack.enter_context(patch.object(ui.ProfileLibraryManagerDialog, "ensure_translations_loaded"))
         self.warning = self.stack.enter_context(patch.object(QtWidgets.QMessageBox, "warning"))
         self.stack.enter_context(
             patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Discard)
@@ -161,7 +174,7 @@ class TestLibraryDXFImport(unittest.TestCase):
         with patch.object(ui, "inspect_dxf", side_effect=ValueError("Unknown DXF entity")):
             self.dialog.btn_import_dxf.click()
         self.assert_unchanged()
-        self.assertIn("Unknown DXF entity", self.warning.call_args.args[2])
+        self.assertEqual(self.warning.call_args.args[2], "No se pudo importar el DXF: Unknown DXF entity")
 
         def broken(path, doc, unit_override):
             doc.addObject("PartDesign::Feature", "Partial")
@@ -169,21 +182,21 @@ class TestLibraryDXFImport(unittest.TestCase):
 
         self.assertIsNone(self.start(importer=broken))
         self.assert_unchanged()
-        self.assertIn("Native failure", self.warning.call_args.args[2])
+        self.assertEqual(self.warning.call_args.args[2], "No se pudo importar el DXF: Native failure")
         review = self.start()
         review.le_code.setText("A")
         with patch.object(ui, "save_section_asset", side_effect=OSError("Asset failure")):
             review.btn_add.click()
         self.assertEqual(self.snapshot(), self.before)
         self.assertTrue(review.isVisible())
-        self.assertIn("Asset failure", self.warning.call_args.args[2])
+        self.assertEqual(self.warning.call_args.args[2], "No se pudo agregar la sección: Asset failure")
         review.reject()
         self.assert_unchanged()
 
     def test_viewport_failure_preserves_library_and_manager_visibility(self):
         self.gui_doc.activeView = Mock(side_effect=RuntimeError("Viewport failed"))
         self.assertIsNone(self.start())
-        self.assertEqual(self.warning.call_args.args[2], "Viewport failed")
+        self.assertEqual(self.warning.call_args.args[2], "No se pudo importar el DXF: Viewport failed")
         self.assert_unchanged()
         self.assertTrue(self.dialog.isVisible())
 
@@ -192,7 +205,7 @@ class TestLibraryDXFImport(unittest.TestCase):
         review.le_code.setText("WriteFail")
         with patch.object(ui.App, "newDocument", side_effect=OSError("Disk unavailable")):
             review.btn_add.click()
-        self.assertEqual(self.warning.call_args.args[2], "Disk unavailable")
+        self.assertEqual(self.warning.call_args.args[2], "No se pudo agregar la sección: Disk unavailable")
         self.assertEqual(self.snapshot(), self.before)
         self.assertIs(self.dialog._dxf_review, review)
         self.assertTrue(review.isVisible())
@@ -320,6 +333,8 @@ class TestLibraryDXFImport(unittest.TestCase):
         review.le_code.setText(" ")
         review.le_description.setText("Rejected description")
         review.btn_add.click()
+        self.assertEqual(self.warning.call_args.args[2],
+                         "No se pudo agregar la sección: Introduzca un código de tamaño no vacío.")
         self.assertEqual(self.snapshot(), self.before)
         self.assertIs(self.dialog._dxf_review, review)
         review.le_code.setText("A")
@@ -331,7 +346,11 @@ class TestLibraryDXFImport(unittest.TestCase):
         review.btn_add.click()
         self.assertEqual(self.snapshot(), before)
         self.assertIs(self.dialog._dxf_review, review)
-        self.assertIn("Duplicate size codes found: A", self.warning.call_args.args[2])
+        self.assertEqual(
+            self.warning.call_args.args[2],
+            "No se pudo agregar la sección: Códigos de medida duplicados encontrados: A. "
+            "Cada medida debe tener un código único.",
+        )
         review.reject()
 
     def test_repeated_import_switch_close_and_document_close_cleanup(self):
