@@ -527,15 +527,36 @@ class CustomProfileCardsView(QtWidgets.QWidget):
         self.scroll_area.setWidget(self.container_widget)
         main_layout.addWidget(self.scroll_area)
 
-    def filter_from_table(self):
+    def _columns_per_row(self):
+        vp_width = self.scroll_area.viewport().width() if hasattr(self, "scroll_area") else 0
+        if vp_width > 260:
+            # card 240px + spacing 12px = 252px; margins: 8+8=16px
+            cols = (vp_width - 16 + 12) // (240 + 12)
+            return max(1, cols)
+        return 3
+
+    def _relayout_cards(self):
+        if not hasattr(self, "grid_layout") or not hasattr(self, "dialog") or not hasattr(self.dialog, "table_sizes"):
+            return
+        columns_per_row = self._columns_per_row()
         visible = 0
         for card in self.cards:
             self.grid_layout.removeWidget(card)
             hidden = self.dialog.table_sizes.isRowHidden(card.row)
             card.setHidden(hidden)
             if not hidden:
-                self.grid_layout.addWidget(card, visible // 3, visible % 3)
+                self.grid_layout.addWidget(card, visible // columns_per_row, visible % columns_per_row)
                 visible += 1
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        cols = self._columns_per_row()
+        if getattr(self, "_current_columns_per_row", None) != cols:
+            self._current_columns_per_row = cols
+            self._relayout_cards()
+
+    def filter_from_table(self):
+        self._relayout_cards()
         self.on_table_selection_changed()
 
     def count(self):
@@ -712,7 +733,6 @@ class CustomProfileCardsView(QtWidgets.QWidget):
 
         row_count = table_sizes.rowCount()
         folder_path = dialog.current_lib_meta.get("folder_path") if dialog.current_lib_meta else None
-        columns_per_row = 3
 
         for row in range(row_count):
             size_item = table_sizes.item(row, 0)
@@ -745,11 +765,10 @@ class CustomProfileCardsView(QtWidgets.QWidget):
                 cache=self._thumbnail_cache,
             )
             card.update_thumbnail(pixmap)
-
-            r_idx = row // columns_per_row
-            c_idx = row % columns_per_row
-            self.grid_layout.addWidget(card, r_idx, c_idx)
             self.cards.append(card)
+
+        self._current_columns_per_row = self._columns_per_row()
+        self._relayout_cards()
 
         curr_row = table_sizes.currentRow()
         if 0 <= curr_row < len(self.cards):

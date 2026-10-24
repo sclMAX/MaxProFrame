@@ -971,6 +971,23 @@ class TestCustomProfileCards(unittest.TestCase):
         self.assertIn("Card_Zero", sizes, "Card_Zero must survive deletion.")
         self.assertNotIn("Card_One", sizes, "Card_One must be deleted from catalog.")
 
+    def test_cards_columns_adapt_to_available_width(self):
+        """Cards view adapts column count based on available viewport width."""
+        cards_view = self._get_cards_view()
+        self.assertIsNotNone(cards_view)
+        # Check calculation method
+        self.assertTrue(hasattr(cards_view, "_columns_per_row"), "Must have _columns_per_row method")
+        # For a narrow width (e.g. 520px), columns should be 2
+        cards_view.scroll_area.resize(520, 400)
+        cards_view.scroll_area.viewport().resize(520, 400)
+        self.assertEqual(cards_view._columns_per_row(), 2)
+
+        # For a wide width (e.g. 1100px), columns should be 4
+        cards_view.scroll_area.resize(1100, 400)
+        cards_view.scroll_area.viewport().resize(1100, 400)
+        self.assertEqual(cards_view._columns_per_row(), 4)
+
+
 
 if __name__ == "__main__":
     unittest.main()

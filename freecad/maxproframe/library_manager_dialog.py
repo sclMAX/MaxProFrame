@@ -14,7 +14,7 @@ import FreeCADGui as Gui
 
 from freecad.maxproframe.dxf_section_dialog import DXFSectionReview, DXFUnitsDialog
 from freecad.maxproframe.dxf_section_import import import_dxf_section, inspect_dxf
-from freecad.maxproframe.ff_tools import ICONPATH, PROFILEIMAGES_PATH, TRANSLATIONSPATH, add_command, translate
+from freecad.maxproframe.ff_tools import ICONPATH, PROFILEIMAGES_PATH, TRANSLATIONSPATH, add_command, get_param_group, translate
 from freecad.maxproframe.library_manager import (
     KNOWN_FAMILIES,
     STANDARD_DENSITIES,
@@ -414,9 +414,16 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self._is_closed = False
 
         self.setWindowTitle("MaxProFrame")
+        self.setWindowFlags(
+            self.windowFlags()
+            | QtCore.Qt.WindowMaximizeButtonHint
+            | QtCore.Qt.WindowMinimizeButtonHint
+        )
+        self.setMinimumSize(800, 500)
         self.resize(920, 580)
 
         self._build_ui()
+        self._restore_window_geometry()
         self.refresh_libraries()
 
     def _build_ui(self):
@@ -436,6 +443,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         # Content Splitter (Left: Libraries, Right: Details/Sizes)
         splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        self.main_splitter = splitter
         main_layout.addWidget(splitter, 1)
 
         # --- LEFT PANEL: Libraries list & actions ---
@@ -499,6 +507,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.left_splitter.addWidget(lib_widget)
         self.left_splitter.addWidget(family_widget)
         self.left_splitter.setSizes([180, 320])
+        self.left_splitter.setStretchFactor(0, 1)
+        self.left_splitter.setStretchFactor(1, 1)
         splitter.addWidget(self.left_splitter)
 
         # --- RIGHT PANEL: Families and Sizes Table ---
@@ -598,6 +608,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         splitter.addWidget(right_widget)
         splitter.setSizes([320, 640])
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
 
         # Bottom Bar: Status and Save / Close
         bottom_layout = QtWidgets.QHBoxLayout()
@@ -2607,6 +2619,35 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 self.cards_view._thumbnail_cache.clear()
         self._cleanup_uncommitted_staged_new_assets()
 
+    def _restore_window_geometry(self):
+        try:
+            param = get_param_group(writable=False)
+            geo_hex = param.GetString("LibraryManagerGeometry", "")
+            if geo_hex:
+                geo_bytes = QtCore.QByteArray.fromHex(geo_hex.encode("ascii"))
+                if not geo_bytes.isEmpty():
+                    self.restoreGeometry(geo_bytes)
+            splitter_hex = param.GetString("LibraryManagerSplitterState", "")
+            if splitter_hex and hasattr(self, "main_splitter"):
+                splitter_bytes = QtCore.QByteArray.fromHex(splitter_hex.encode("ascii"))
+                if not splitter_bytes.isEmpty():
+                    self.main_splitter.restoreState(splitter_bytes)
+        except Exception:
+            pass
+
+    def _save_window_geometry(self):
+        try:
+            geo = self.saveGeometry()
+            param = get_param_group(writable=True)
+            if geo and not geo.isEmpty():
+                param.SetString("LibraryManagerGeometry", bytes(geo.toHex()).decode("ascii"))
+            if hasattr(self, "main_splitter"):
+                sp = self.main_splitter.saveState()
+                if sp and not sp.isEmpty():
+                    param.SetString("LibraryManagerSplitterState", bytes(sp.toHex()).decode("ascii"))
+        except Exception:
+            pass
+
     def done(self, result):
         if self._is_closed or getattr(self, "_close_in_progress", False):
             return
@@ -2614,6 +2655,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         try:
             if not self._prompt_dirty_save(closing=True):
                 return
+            self._save_window_geometry()
             self._is_closed = True
             self._cleanup_edit_session_and_staged_assets()
             super().done(result)

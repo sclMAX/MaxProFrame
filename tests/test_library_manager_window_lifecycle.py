@@ -694,6 +694,33 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
 
         dialog2.close()
 
+    def test_window_flags_and_geometry_persistence(self):
+        """ProfileLibraryManagerDialog has maximize/minimize hints and persists geometry."""
+        from freecad.maxproframe.ff_tools import get_param_group
+
+        dialog = ProfileLibraryManagerDialog(parent=self.mw)
+        flags = dialog.windowFlags()
+        self.assertTrue(bool(flags & QtCore.Qt.WindowMaximizeButtonHint), "Dialog must have WindowMaximizeButtonHint")
+        self.assertTrue(bool(flags & QtCore.Qt.WindowMinimizeButtonHint), "Dialog must have WindowMinimizeButtonHint")
+        self.assertGreaterEqual(dialog.minimumWidth(), 800)
+        self.assertGreaterEqual(dialog.minimumHeight(), 500)
+
+        # Simulate resize and close
+        dialog.resize(1100, 700)
+        dialog.close()
+
+        # Check that geometry was persisted
+        param = get_param_group(writable=False)
+        stored_geo = param.GetString("LibraryManagerGeometry", "")
+        self.assertTrue(len(stored_geo) > 0, "Geometry must be saved in preferences")
+
+        # Open fresh dialog and verify restored geometry
+        dialog2 = ProfileLibraryManagerDialog(parent=self.mw)
+        self.assertEqual(dialog2.width(), 1100)
+        self.assertEqual(dialog2.height(), 700)
+        dialog2.close()
+
+
 
 if __name__ == "__main__":
     unittest.main()
