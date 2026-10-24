@@ -52,11 +52,63 @@ class TestFamilyVariantPicker(unittest.TestCase):
 
     def setUp(self):
         self.test_user_dir = tempfile.mkdtemp(prefix="ff_test_picker_user_")
+        # Cleanups run LIFO, so owned dialogs close while their files still exist.
+        self.addCleanup(shutil.rmtree, self.test_user_dir)
         self.manager = LibraryManager(user_dir=self.test_user_dir)
 
-    def tearDown(self):
-        if os.path.exists(self.test_user_dir):
-            shutil.rmtree(self.test_user_dir)
+    def _close_manager_dialog(self, dialog):
+        def discard_owned_changes(parent, *args, **kwargs):
+            self.assertIs(parent, dialog, "Cleanup must only answer its owned manager")
+            return QtWidgets.QMessageBox.Discard
+
+        with patch.object(QtWidgets.QMessageBox, "question", side_effect=discard_owned_changes):
+            self.assertTrue(dialog.close())
+
+    def test_dirty_manager_cleanup_closes_before_removing_files(self):
+        """Fixture cleanup discards unsaved edits before removing its library files."""
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
+
+        observations = []
+
+        class CleanupCase(TestFamilyVariantPicker):
+            def runTest(case):
+                case.manager.save_user_library(
+                    "CleanupLib",
+                    {
+                        "_metadata": {"name": "CleanupLib"},
+                        "Pipe": {"norm": "Standard", "fillet": False, "sizes": {}},
+                    },
+                )
+                dialog = ProfileLibraryManagerDialog(library_manager=case.manager)
+                case.addCleanup(case._close_manager_dialog, dialog)
+                dialog.refresh_libraries(select_name="CleanupLib")
+                dialog.show()
+                dialog.le_norm.setText("Unsaved cleanup edit")
+                case.assertTrue(dialog.is_dirty)
+
+                def record_close(result):
+                    observations.append(
+                        (
+                            os.path.isdir(case.test_user_dir),
+                            case.manager.get_library("CleanupLib")["Pipe"]["norm"],
+                            result,
+                        )
+                    )
+
+                dialog.finished.connect(record_close)
+                case.dialog = dialog
+
+        case = CleanupCase(methodName="runTest")
+        original_question = QtWidgets.QMessageBox.question
+        result = unittest.TestResult()
+        case.run(result)
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.failures, [])
+        self.assertEqual(result.testsRun, 1)
+        self.assertEqual(observations, [(True, "Standard", QtWidgets.QDialog.Rejected)])
+        self.assertFalse(case.dialog.isVisible())
+        self.assertFalse(os.path.exists(case.test_user_dir))
+        self.assertEqual(QtWidgets.QMessageBox.question, original_question)
 
     def test_add_family_offers_all_stock_metal_families(self):
         """Every stock Metal family is selectable, without losing existing choices."""
@@ -197,7 +249,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
         )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name="CancelLib")
 
         with patch.object(AddFamilyDialog, "exec_", return_value=QtWidgets.QDialog.Rejected):
@@ -234,7 +286,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
         )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name="DupLib")
         initial_keys = set(dialog.current_lib_data.keys())
 
@@ -277,7 +329,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
         )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name="CoexistLib")
 
         # Add plain Square Hollow
@@ -354,7 +406,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
         )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name="LegacyOccupiedLib")
 
         # Add plain variant for Square Hollow
@@ -398,7 +450,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
         )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name="DisplayNamesLib")
 
         # English check
@@ -425,7 +477,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
             self.app.installTranslator(translator)
             try:
                 es_dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-                self.addCleanup(es_dialog.close)
+                self.addCleanup(self._close_manager_dialog, es_dialog)
                 es_dialog.refresh_libraries(select_name="DisplayNamesLib")
                 es_texts = [es_dialog.list_families.item(i).text() for i in range(es_dialog.list_families.count())]
                 self.assertIn("Tubo Cuadrado Hueco (Con redondeos)", es_texts)
@@ -477,7 +529,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
         )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name="VariantCalcLib")
 
         # 1. Filleted variant has Radius1 and Radius2 visible
@@ -526,7 +578,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
         )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name="InfoCheckboxLib")
 
         self.assertFalse(hasattr(dialog, "cb_fillet"))
@@ -572,7 +624,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
             file_hash_before = hashlib.sha256(f.read()).hexdigest()
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name=lib_name)
 
         # Select Pipe
