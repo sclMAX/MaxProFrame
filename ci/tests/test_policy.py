@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 CI_DIR = REPO_ROOT / "ci"
@@ -309,6 +310,11 @@ class TestRunTestsPolicy(unittest.TestCase):
             "if argv_dump:\n"
             "    with open(argv_dump, 'w', encoding='utf-8') as f:\n"
             "        json.dump(sys.argv[1:], f)\n"
+            "cfg_dump = os.environ.get('FAKE_CFG_DUMP')\n"
+            "if cfg_dump:\n"
+            "    import pathlib\n"
+            "    cfg = pathlib.Path(sys.argv[sys.argv.index('--user-cfg') + 1])\n"
+            "    pathlib.Path(cfg_dump).write_text(cfg.read_text(encoding='utf-8'), encoding='utf-8')\n"
             "sleep_s = float(os.environ.get('FAKE_SLEEP', '0'))\n"
             "if sleep_s > 0:\n"
             "    time.sleep(sleep_s)\n"
@@ -347,6 +353,43 @@ class TestRunTestsPolicy(unittest.TestCase):
             capture_output=True,
             text=True,
         )
+
+    def test_notification_preferences_exist_at_child_launch(self):
+        cfg_dump = self.work_dir / "startup.cfg"
+        env_dump = self.work_dir / "env.json"
+        argv_dump = self.work_dir / "argv.json"
+        proc = self._run_tests_host(env_overrides={
+            "FAKE_CFG_DUMP": str(cfg_dump),
+            "FAKE_ENV_DUMP": str(env_dump),
+            "FAKE_ARGV_DUMP": str(argv_dump),
+            "FAKE_SUMMARY_PATH": str(self.reports_dir / "summary.json"),
+            "FAKE_SUMMARY_CONTENT": json.dumps(
+                {"tests": 1, "failures": 0, "errors": 0, "skipped": 0, "successful": True}
+            ),
+        })
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stdout, "run_tests: Test suite succeeded (1 tests executed).\n")
+        self.assertEqual(proc.stderr, "")
+        root = ET.fromstring(cfg_dump.read_text(encoding="utf-8"))
+        self.assertEqual(root.tag, "FCParameters")
+        self.assertEqual(root.attrib, {})
+        group = root
+        for name in ("Root", "BaseApp", "Preferences", "NotificationArea"):
+            self.assertEqual(len(group), 1)
+            group = group[0]
+            self.assertEqual(group.tag, "FCParamGroup")
+            self.assertEqual(group.attrib, {"Name": name})
+        # Exact leaves exclude NotificationAreaEnabled and any log/severity suppression.
+        self.assertEqual([(leaf.tag, leaf.attrib, len(leaf)) for leaf in group], [
+            ("FCBool", {"Name": "NonIntrusiveNotificationsEnabled", "Value": "0"}, 0),
+            ("FCInt", {"Name": "MaxOpenNotifications", "Value": "0"}, 0),
+        ])
+        env = json.loads(env_dump.read_text(encoding="utf-8"))
+        argv = json.loads(argv_dump.read_text(encoding="utf-8"))
+        cfg = pathlib.Path(argv[argv.index("--user-cfg") + 1])
+        self.assertEqual(cfg.parent, pathlib.Path(env["XDG_CONFIG_HOME"]))
+        self.assertNotEqual(cfg.parent, pathlib.Path(os.environ.get("XDG_CONFIG_HOME", ".")))
+        self.assertFalse(cfg.exists(), "Temporary profile must be cleaned after the child exits")
 
     def test_environment_isolation_and_successful_run(self):
         env_dump = self.work_dir / "env.json"
@@ -558,7 +601,9 @@ class TestRunTestsPolicy(unittest.TestCase):
 
     def test_nonzero_child_exit_propagates_failure(self):
         proc = self._run_tests_host(env_overrides={"FAKE_EXIT_CODE": "1"})
-        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(proc.stdout, "")
+        self.assertEqual(proc.stderr, "run_tests error: FreeCAD child process failed with exit code 1.\n")
 
     def test_missing_or_corrupted_summary_fails(self):
         proc = self._run_tests_host(env_overrides={"FAKE_EXIT_CODE": "0"})
@@ -589,6 +634,13 @@ class TestRunTestsPolicy(unittest.TestCase):
             }
         )
         self.assertNotEqual(proc.returncode, 0)
+
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(proc.stdout, "")
+        self.assertEqual(
+            proc.stderr,
+            "run_tests error: Test suite reported failures (2), errors (0), or successful is False.\n",
+        )
 
     def test_run_tests_rejects_stale_prepopulated_summary(self):
         """A1: Stale summary in reports dir must be purged before launch and never reused on missing child output."""

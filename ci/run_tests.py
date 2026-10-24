@@ -169,6 +169,24 @@ def main() -> None:
         isolated_profiles.mkdir()
 
         user_cfg = isolated_config / "user.cfg"
+        # Prevent popup reentry from offscreen Qt warnings, including repeated messages.
+        # Keep the notification area, Console observers and severity settings intact.
+        user_cfg.write_text(
+            """<FCParameters>
+  <FCParamGroup Name="Root">
+    <FCParamGroup Name="BaseApp">
+      <FCParamGroup Name="Preferences">
+        <FCParamGroup Name="NotificationArea">
+          <FCBool Name="NonIntrusiveNotificationsEnabled" Value="0"/>
+          <FCInt Name="MaxOpenNotifications" Value="0"/>
+        </FCParamGroup>
+      </FCParamGroup>
+    </FCParamGroup>
+  </FCParamGroup>
+</FCParameters>
+""",
+            encoding="utf-8",
+        )
 
         env = os.environ.copy()
         env.pop("DISPLAY", None)

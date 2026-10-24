@@ -547,19 +547,43 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
         self._select_profile(panel, self.folder_lib_name, "Custom Profile", "CP-HOLE1")
         panel.form_proxy.sb_length.setValue(100.0)
 
-        # Trigger queued accept
-        panel.accept(defer=True)
-        self.assertTrue(panel._accept_finalizing, "_accept_finalizing must be True while callback is queued.")
+        cancel_button = self._find_dialog_button(QtWidgets.QDialogButtonBox.Cancel)
+        if cancel_button is None:
+            cancel_button = self._find_dialog_button(QtWidgets.QDialogButtonBox.Close)
+        self.assertIsNotNone(cancel_button, "Native QDialogButtonBox Cancel / Close button must exist.")
 
-        # Immediately reject before the timer fires
-        panel.reject()
-        self.assertFalse(panel._accept_finalizing, "Reject must clear _accept_finalizing flag.")
+        finalize_results = []
+        finalize_accept = panel._finalize_accept
 
-        # Let any queued events fire
-        self._pump_events(300)
+        def record_finalization():
+            result = finalize_accept()
+            finalize_results.append(result)
+            return result
 
+        # Install the spy before scheduling so the timer captures it; keep it alive through the pump.
+        with patch.object(panel, "_finalize_accept", wraps=record_finalization) as finalize_spy:
+            self.assertTrue(panel.accept(defer=True))
+            self.assertTrue(panel._accept_finalizing, "_accept_finalizing must be True while callback is queued.")
+            finalize_spy.assert_not_called()
+            self.assertFalse(panel._reject_called)
+
+            # Cancel synchronously through the native controller before the timer fires.
+            cancel_button.click()
+            self.assertTrue(panel._reject_called, "Native Cancel / Close must call reject.")
+            self.assertFalse(panel._accept_finalizing, "Reject must clear _accept_finalizing flag.")
+            self.assertFalse(bool(Gui.Control.activeDialog()), "Cancel must close the native task dialog.")
+            finalize_spy.assert_not_called()
+
+            self._pump_events(300)
+            finalize_spy.assert_called_once_with()
+            self.assertEqual(finalize_results, [False], "Queued finalization must return cancellation.")
+
+        self.assertFalse(bool(Gui.Control.activeDialog()))
         profiles = [o for o in doc.Objects if getattr(getattr(o, "Proxy", None), "Type", None) == "Profile"]
         self.assertEqual(len(profiles), 0, "No profile should be created when reject occurs before queued callback.")
+        self.assertEqual(len(doc.Objects), 0, "Cancellation must not leave imported sketches or other objects.")
+        self.assertEqual(list(App.listDocuments().keys()), [doc.Name], "No auxiliary documents should remain open.")
+        self.assertEqual(self._snapshot_library_files(), self.initial_lib_checksums)
 
     def test_snapshot_form_proxy_raises_attribute_error_on_unknown(self):
         """Correction: _SnapshotFormProxy must raise AttributeError on unknown members."""

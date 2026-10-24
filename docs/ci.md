@@ -90,6 +90,31 @@ To resolve both issues without patching vendor AppImages:
 6. Process-group timeouts are enforced (exit code 124 on timeout), and `ci/run-tests.FCMacro` emits structured diagnostic checkpoints (`macro-entry`, `validated-version`, `discovery-start`, `completed-summary`) to `startup.log`.
 7. Test outcomes require fresh, strictly validated `summary.json` containing positive test counts, zero failures/errors, and consistent non-negative counts. Previous execution artifacts are cleared before launch to avoid stale false-green results.
 
+### Isolated notification popup preferences
+
+Before launching either runtime, the wrapper seeds only its temporary `--user-cfg`
+under `User parameter:BaseApp/Preferences/NotificationArea`:
+
+- Bool `NonIntrusiveNotificationsEnabled=false` (`FCBool`, value `0`).
+- Int `MaxOpenNotifications=0` (`FCInt`, value `0`).
+
+Both are needed: disabling nonintrusive notifications alone leaves the repeated-message
+popup branch enabled. The zero maximum blocks the popup show guard even for repeats.
+Native evidence captured a reentrant notification mutex wait when showing a popup
+produced an offscreen Qt unsupported-raise warning. This seed targets that popup path;
+it is not yet proof that native timeouts or the separate SIGSEGV are resolved.
+
+`NotificationAreaEnabled` is untouched (disabling it deletes the widget). Console
+observers, logging severity/subscriptions, warnings/errors, critical-message
+confirmations and unittest verdicts remain unchanged. No real user preferences
+are written; the isolated profile is removed after execution.
+
+Supported preference behavior is confirmed in tagged
+[1.1.4 NotificationArea.cpp](https://github.com/FreeCAD/FreeCAD/blob/1.1.4/src/Gui/NotificationArea.cpp)
+and [26.3rc2 NotificationArea.cpp](https://github.com/FreeCAD/FreeCAD/blob/26.3rc2/src/Gui/NotificationArea.cpp);
+the startup XML format follows
+[Parameter.cpp](https://github.com/FreeCAD/FreeCAD/blob/1.1.4/src/Base/Parameter.cpp).
+
 ## Timeout diagnostic evidence
 
 The macro writes evidence into the existing `--reports` directory (included in
