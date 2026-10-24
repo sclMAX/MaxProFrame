@@ -13,7 +13,7 @@
   <tag>Trim Cut</tag>
   <version>0.2.1</version>
   <date>2026-03-02</date>
-  <maintainer email="vivien.henry@inductivebrain.fr">Vivien Henry</maintainer>
+  <maintainer email="maxi.indumatics@gmail.com">sclMAX</maintainer>
   <license file="LICENSE">LGPL-3.0-only</license>
   <url type="repository" branch="main">https://github.com/sclMAX/MaxProFrame</url> 
   <url branch="main" type="repository">https://github.com/sclMAX/MaxProFrame.git</url>

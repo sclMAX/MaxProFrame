@@ -3,7 +3,7 @@ name = "maxproframe"
 version = "0.2.1"
 description = "MaxProFrame is dedicated to creating Frames, Profiles and Beams, and applying operations (miter cuts, trim cuts, custom sketch profiles, portable libraries) in FreeCAD."
 authors = [
-    {name = "Vivien HENRY", email = "vivien.henry@inductivebrain.fr"}
+    {name = "sclMAX", email = "maxi.indumatics@gmail.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.9"
