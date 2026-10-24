@@ -1,7 +1,9 @@
+import copy
 import os
 import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import FreeCAD as App
 from PySide import QtCore, QtWidgets
@@ -25,6 +27,12 @@ class TestCProfileUI(unittest.TestCase):
         cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
 
     def setUp(self):
+        question_patch = patch.object(
+            QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Discard
+        )
+        self.discard_question = question_patch.start()
+        # Registered first so LIFO cleanup closes every dialog before unpatching.
+        self.addCleanup(question_patch.stop)
         self.test_user_dir = tempfile.mkdtemp(prefix="ff_test_c_ui_user_")
         self.manager = LibraryManager(user_dir=self.test_user_dir)
         self.doc_count = 0
@@ -281,6 +289,26 @@ class TestCProfileUI(unittest.TestCase):
         dialog.combo_family.setCurrentText("C (Fillet)")
         self.assertEqual(dialog.table_sizes.horizontalHeaderItem(8).text(), "Labio [mm]")
         self.assertEqual(dialog.table_sizes.horizontalHeaderItem(5).text(), "Radio exterior [mm]")
+
+    def test_dirty_dialog_close_discards_without_changing_saved_library(self):
+        self._create_mock_library_with_c()
+        saved = copy.deepcopy(self.manager.get_library("TestCLib"))
+        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        self.addCleanup(dialog.close)
+        dialog.refresh_libraries(select_name="TestCLib")
+        dialog.combo_family.setCurrentText("C")
+        dialog.show()
+        dialog.table_sizes.item(0, 8).setText("25")
+        self.assertTrue(dialog.is_dirty)
+        self.assertTrue(dialog.isVisible())
+        self.discard_question.reset_mock()
+
+        self.assertTrue(dialog.close())
+
+        self.discard_question.assert_called_once()
+        self.assertFalse(dialog.isVisible())
+        reloaded = LibraryManager(user_dir=self.test_user_dir)
+        self.assertEqual(reloaded.get_library("TestCLib"), saved)
 
     def test_s1_catalog_save_and_reload_preserves_lip_length(self):
         """S1: Table edits to Lip Length are saved and reloaded accurately."""
