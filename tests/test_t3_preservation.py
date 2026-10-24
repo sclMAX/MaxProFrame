@@ -44,11 +44,20 @@ class TestT3Preservation(unittest.TestCase):
         self.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
         self.dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.dialog.refresh_libraries(select_name="A")
-        self.addCleanup(self.dialog.close)
         self.messages = ExitStack()
         self.addCleanup(self.messages.close)
         for method in ("warning", "critical", "information"):
             self.messages.enter_context(patch.object(QtWidgets.QMessageBox, method))
+        # LIFO: close the owned manager before message patches and files retire.
+        self.addCleanup(self._close_manager_dialog, self.dialog)
+
+    def _close_manager_dialog(self, dialog):
+        def discard_owned_changes(parent, *args, **kwargs):
+            self.assertIs(parent, dialog)
+            return QtWidgets.QMessageBox.Discard
+
+        with patch.object(QtWidgets.QMessageBox, "question", side_effect=discard_owned_changes):
+            self.assertTrue(dialog.close())
 
     def snapshot(self):
         return {

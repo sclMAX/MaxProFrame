@@ -4,6 +4,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from freecad.maxproframe.library_manager import LibraryManager
 
@@ -35,9 +36,28 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
     def setUp(self):
         self.test_user_dir = tempfile.mkdtemp(prefix="ff_test_dialog_user_")
+        self.addCleanup(shutil.rmtree, self.test_user_dir)
         self.manager = LibraryManager(user_dir=self.test_user_dir)
+        self.addCleanup(self._reset_translations)
+        self.owned_dialogs = []
+        self.addCleanup(self._close_owned_managers)
 
-    def tearDown(self):
+    def _own_manager(self, dialog):
+        self.owned_dialogs.append(dialog)
+        return dialog
+
+    def _close_owned_managers(self):
+        from freecad.maxproframe.library_manager_dialog import QtWidgets
+
+        for dialog in reversed(self.owned_dialogs):
+            def discard_owned_changes(parent, *args, **kwargs):
+                self.assertIs(parent, dialog)
+                return QtWidgets.QMessageBox.Discard
+
+            with patch.object(QtWidgets.QMessageBox, "question", side_effect=discard_owned_changes):
+                self.assertTrue(dialog.close())
+
+    def _reset_translations(self):
         from PySide import QtWidgets
 
         from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
@@ -48,9 +68,6 @@ class TestLibraryManagerDialog(unittest.TestCase):
             app.removeTranslator(tr)
         ProfileLibraryManagerDialog._translator = None
         ProfileLibraryManagerDialog._translator_installed = False
-
-        if os.path.exists(self.test_user_dir):
-            shutil.rmtree(self.test_user_dir)
 
     def test_dynamic_family_columns_and_hidden_value_preservation(self):
         from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog, QtWidgets
@@ -86,8 +103,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
                 },
             },
         )
-        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        dialog = self._own_manager(ProfileLibraryManagerDialog(library_manager=self.manager))
         dialog.refresh_libraries(select_name="Dynamic")
         for name, expected in families.items():
             with self.subTest(family=name):
@@ -133,8 +149,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
                 "sizes": {code: {"Height": "20", "Width": "20", "Thickness": "2"}},
             }
         self.manager.save_user_library("MasterDetail", data)
-        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        dialog = self._own_manager(ProfileLibraryManagerDialog(library_manager=self.manager))
         dialog.refresh_libraries(select_name="MasterDetail")
         families = dialog.list_families
         self.assertEqual(families.count(), 3)
@@ -210,8 +225,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
                 "Square Hollow": {"norm": "Original", "fillet": False, "sizes": {"S1": {"Height": "20"}}},
             },
         )
-        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        dialog = self._own_manager(ProfileLibraryManagerDialog(library_manager=self.manager))
         dialog.refresh_libraries(select_name="FamilyToolbar")
         dialog.le_norm.setText("Edited")
         dialog.table_sizes.item(0, 1).setText("99")
@@ -260,7 +274,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
         from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
 
-        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        dialog = self._own_manager(ProfileLibraryManagerDialog(library_manager=self.manager))
 
         # 1. Verify libraries populated in list
         self.assertGreater(dialog.list_libraries.count(), 0)
@@ -347,7 +361,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
             },
         }
         self.manager.save_user_library("MultiFamily", test_data)
-        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        dialog = self._own_manager(ProfileLibraryManagerDialog(library_manager=self.manager))
         dialog.refresh_libraries(select_name="MultiFamily")
 
         # Select FamilyA and edit table
@@ -388,7 +402,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
             },
         )
 
-        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        dialog = self._own_manager(ProfileLibraryManagerDialog(library_manager=self.manager))
         dialog.refresh_libraries(select_name="DupCheckLib")
 
         # Select FamilyA and edit size A2 to be A1 (duplicate code!) and modify height
@@ -434,7 +448,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
             },
         )
 
-        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        dialog = self._own_manager(ProfileLibraryManagerDialog(library_manager=self.manager))
         dialog.refresh_libraries(select_name="LibOne")
 
         # Edit LibOne
@@ -487,7 +501,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
             },
         }
         self.manager.save_user_library("AutoAlu", alu_data)
-        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        dialog = self._own_manager(ProfileLibraryManagerDialog(library_manager=self.manager))
         dialog.refresh_libraries(select_name="AutoAlu")
 
         # Verify banner displays material and density
@@ -535,7 +549,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
             },
         }
         self.manager.save_user_library("WoodTest", test_data)
-        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        dialog = self._own_manager(ProfileLibraryManagerDialog(library_manager=self.manager))
         dialog.refresh_libraries(select_name="WoodTest")
 
         # Simulate the item text from QInputDialog for Wood (Soft) and Wood (Hard)
@@ -572,7 +586,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
             },
         }
         self.manager.save_user_library("UniqueSizesLib", test_data)
-        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        dialog = self._own_manager(ProfileLibraryManagerDialog(library_manager=self.manager))
         dialog.refresh_libraries(select_name="UniqueSizesLib")
 
         # Add two sizes
@@ -614,7 +628,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
             },
         }
         self.manager.save_user_library("OrphanGuardLib", test_data)
-        dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        dialog = self._own_manager(ProfileLibraryManagerDialog(library_manager=self.manager))
         dialog.refresh_libraries(select_name="OrphanGuardLib")
 
         self.assertTrue(dialog.btn_add_size.isEnabled())
@@ -670,13 +684,13 @@ class TestLibraryManagerDialog(unittest.TestCase):
             prefs.SetString("Language", "Spanish")
             Gui.setLocale("Spanish")
             Gui.updateLocale()
-            dialog = cls(library_manager=self.manager)
+            dialog = self._own_manager(cls(library_manager=self.manager))
             gc.collect()
             self.assertEqual(dialog.btn_new_lib.toolTip(), "Nueva Biblioteca")
             self.assertEqual(dialog.windowTitle(), "MaxProFrame")
             # A second dialog proves translation still works after the loader returns
             # and garbage collection, rather than merely retaining existing labels.
-            fresh_dialog = cls(library_manager=self.manager)
+            fresh_dialog = self._own_manager(cls(library_manager=self.manager))
             self.assertEqual(fresh_dialog.btn_new_lib.toolTip(), "Nueva Biblioteca")
             self.assertEqual(fresh_dialog.windowTitle(), "MaxProFrame")
 
@@ -684,7 +698,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
             cls.uninstall_translations()
             dialog.close()
             fresh_dialog.close()
-            fresh_dialog = cls(library_manager=self.manager)
+            fresh_dialog = self._own_manager(cls(library_manager=self.manager))
             gc.collect()
             self.assertEqual(fresh_dialog.btn_new_lib.toolTip(), "Nueva Biblioteca")
             self.assertEqual(fresh_dialog.windowTitle(), "MaxProFrame")
@@ -694,7 +708,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
             prefs.SetString("Language", "English")
             Gui.setLocale("English")
             Gui.updateLocale()
-            english_dialog = cls(library_manager=self.manager)
+            english_dialog = self._own_manager(cls(library_manager=self.manager))
             self.assertEqual(english_dialog.btn_new_lib.toolTip(), "New Library")
             self.assertEqual(english_dialog.windowTitle(), "MaxProFrame")
         finally:
@@ -726,7 +740,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
         app.installTranslator(translator)
         try:
-            dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+            dialog = self._own_manager(ProfileLibraryManagerDialog(library_manager=self.manager))
             # Under Spanish translator:
             self.assertEqual(dialog.windowTitle(), "MaxProFrame")
             self.assertEqual(dialog.btn_new_lib.toolTip(), "Nueva Biblioteca")

@@ -27,6 +27,8 @@ class TestFolderLibraryDialog(unittest.TestCase):
 
     def setUp(self):
         self.test_root = tempfile.mkdtemp(prefix="ff_test_folder_dialog_")
+        # Cleanups run LIFO: close owned managers before removing their files.
+        self.addCleanup(shutil.rmtree, self.test_root)
         self.user_dir = os.path.join(self.test_root, "user")
         self.stock_dir = os.path.join(self.test_root, "stock")
         self.reg_dir = os.path.join(self.test_root, "registry")
@@ -65,15 +67,19 @@ class TestFolderLibraryDialog(unittest.TestCase):
         )
         self.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
 
-    def tearDown(self):
-        if os.path.exists(self.test_root):
-            shutil.rmtree(self.test_root)
+    def _close_manager_dialog(self, dialog):
+        def discard_owned_changes(parent, *args, **kwargs):
+            self.assertIs(parent, dialog, "Cleanup must only answer its owned manager")
+            return QtWidgets.QMessageBox.Discard
+
+        with patch.object(QtWidgets.QMessageBox, "question", side_effect=discard_owned_changes):
+            self.assertTrue(dialog.close())
 
     def test_import_menu_action_wiring_and_cancel_preserve_state(self):
         # Deterministic QAction wiring only. Mouse popup behavior is manual
         # desktop evidence, not simulated here with a nested native event loop.
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         self.assertEqual(dialog.btn_import_lib.popupMode(), QtWidgets.QToolButton.InstantPopup)
         menu = dialog.btn_import_lib.menu()
         self.assertEqual([a.text() for a in menu.actions()], [
@@ -110,7 +116,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
         self.manager.export_library_zip("Shared", archive)
         self.manager.unregister_folder_library("Shared")
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         with patch.object(QtWidgets.QFileDialog, "getOpenFileName", return_value=(archive, "")):
             dialog._on_import_library()
         self.assertEqual(dialog.current_lib_meta["name"], "Shared")
@@ -121,7 +127,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
 
     def test_import_cancel_and_rejected_zip_preserve_state(self):
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         initial = copy.deepcopy(dialog.current_lib_data)
         def registry_bytes():
             if not os.path.exists(self.reg_path):
@@ -146,7 +152,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
         folder = os.path.join(self.test_root, "exportable")
         self.manager.create_folder_library(folder, "Exportable")
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name="Exportable")
         self.assertTrue(dialog.btn_export_lib.isEnabled())
         output = os.path.join(self.test_root, "shared.zip")
@@ -174,7 +180,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
         self.manager.create_folder_library(str(folder), "Boundary", data={
             "Square": {"norm": "Original", "sizes": {}}})
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name="Boundary")
         dialog.le_norm.setText("Unsaved")
         self.assertTrue(dialog.is_dirty)
@@ -189,7 +195,10 @@ class TestFolderLibraryDialog(unittest.TestCase):
              patch.object(self.manager, "export_library_zip") as export:
             dialog.btn_export_lib.click()
         warning.assert_called_once()
-        self.assertEqual(warning.call_args[0][2], "disk full")
+        warning.assert_called_once_with(
+            dialog, translate("frameforge", "Error"),
+            translate("frameforge", "Error saving library: %s") % "disk full",
+        )
         picker.assert_not_called()
         export.assert_not_called()
         self.assertTrue(dialog.is_dirty)
@@ -200,7 +209,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
         folder = os.path.join(self.test_root, "dirty_export")
         self.manager.create_folder_library(folder, "Dirty Export")
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name="Dirty Export")
         dialog.current_lib_data["Square"] = {"norm": "Unsaved", "sizes": {}}
         dialog.is_dirty = True
@@ -242,7 +251,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
     def test_r1_header_compact_actions_and_tooltips_present(self):
         """S1: Five icon-only actions appear in the requested order."""
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         self.assertFalse(hasattr(dialog, "btn_new_folder_lib"))
         buttons = (dialog.btn_new_lib, dialog.btn_del_lib, dialog.btn_import_lib,
                    dialog.btn_dup_lib, dialog.btn_export_lib)
@@ -261,7 +270,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
     def test_r2_new_folder_library_create_flow_and_persistence(self):
         """R2: New folder library creation initializes manifest and selects library."""
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
 
         new_dir = os.path.join(self.test_root, "my_new_folder_lib")
         os.makedirs(new_dir, exist_ok=True)
@@ -307,7 +316,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
         self.manager.unregister_folder_library("Workshop Existing")
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         names = [
             dialog.list_libraries.item(i).data(QtCore.Qt.UserRole)["name"] for i in range(dialog.list_libraries.count())
         ]
@@ -324,7 +333,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
             self.assertEqual(f.read(), initial_content)
 
     def test_r4_selected_folder_tag_banner_tooltip_and_duplicate_guard(self):
-        """R4: Folder selection updates banner with path, configures delete/duplicate buttons."""
+        """R4: Compact folder banner retains details in tooltip and contextual actions."""
         folder_dir = os.path.join(self.test_root, "timber_profiles")
         self.manager.create_folder_library(
             folder_path=folder_dir,
@@ -334,17 +343,19 @@ class TestFolderLibraryDialog(unittest.TestCase):
         )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name="Timber Lib")
 
+        compact_text = f"Timber Lib | {translate('frameforge', 'Wood')}"
+        self.assertEqual(dialog.lbl_lib_banner.text(), compact_text)
         self.assertEqual(
-            dialog.lbl_lib_banner.text(),
-            translate("frameforge", "Folder Library: %s%s | Material: %s (Editable)")
-            % ("Timber Lib", f" | {folder_dir}", f"{translate('frameforge', 'Wood')} (0.7 g/cm³)"),
+            dialog.lbl_lib_banner.toolTip(),
+            f"{compact_text}\n0.7 g/cm³\n{folder_dir}",
         )
-        self.assertIn(translate("frameforge", "Wood"), dialog.lbl_lib_banner.text())
-        self.assertIn(folder_dir, dialog.lbl_lib_banner.text())
-        self.assertEqual(dialog.lbl_lib_banner.toolTip(), folder_dir)
+        current_item = dialog.list_libraries.currentItem()
+        self.assertTrue(current_item.text().startswith(translate("frameforge", "[Folder] ")))
+        self.assertEqual(current_item.data(QtCore.Qt.UserRole)["name"], "Timber Lib")
+        self.assertEqual(current_item.toolTip(), folder_dir)
 
         # Contextual Unregister tooltip on delete button
         self.assertTrue(dialog.btn_del_lib.isEnabled())
@@ -397,7 +408,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
         )
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name="Saveable Lib")
 
         dialog.le_norm.setText("ISO 10799-Folder")
@@ -431,7 +442,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
             f.write("CANARY")
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name="Unregister Me")
 
         with (
@@ -455,7 +466,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
     def test_r7_cancel_create_register_unregister_leaves_filesystem_and_state_unchanged(self):
         """R7: User cancelling folder dialogs leaves files and selection intact."""
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
 
         initial_count = dialog.list_libraries.count()
 
@@ -491,7 +502,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
             },
         )
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name="UserLib")
 
         dialog.le_norm.setText("UnsavedNormEdit")
@@ -514,7 +525,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
     def test_r9_corrupt_registry_refresh_retains_selection_and_data(self):
         """R9: Damaged registry on refresh shows error without clearing list or losing current edits."""
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
 
         initial_count = dialog.list_libraries.count()
         self.assertGreater(initial_count, 0)
@@ -544,7 +555,7 @@ class TestFolderLibraryDialog(unittest.TestCase):
         dlg.close()
 
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name="StockSteel")
 
         # Stock library invariant: cannot delete or unregister, cannot save

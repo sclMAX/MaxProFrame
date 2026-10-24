@@ -1,7 +1,8 @@
 """Independent T4 invariant probes (E1-E4).
 
 Original fixture SHA256: 9deb56a431eb71cebfbcadbd902f1ea117c92c30beb61a350d12b842e8a872c7.
-Method bodies preserved verbatim; discovery uses load_tests hook to run only the 4 independent cases.
+Derived from the original probes, with owned-dialog Discard made explicit.
+Discovery uses load_tests to run only the 4 independent cases.
 """
 import copy
 import hashlib
@@ -41,7 +42,10 @@ class IndependentT4(_Fixture):
         Gui.Selection.addSelection(doc.Name, sketch.Name)
         self.dialog.btn_capture_section.click()
         self.dialog._dxf_review.btn_add.click()
-        self.dialog.close()
+        # The generic question mock is not an intentional Discard response.
+        self._close_manager_dialog(self.dialog)
+        self.assertTrue(self.dialog._is_closed)
+        self.assertFalse(self.dialog.isVisible())
         self.assertEqual(before, self.snapshot())
 
     def test_s2_s8_removed_edit_target_cannot_replace_sibling(self):

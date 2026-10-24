@@ -1,6 +1,6 @@
 import copy, os, shutil, unittest
 import test_t4_independent as original
-from test_folder_section_management import QtCore
+from test_folder_section_management import QtCore, ProfileLibraryManagerDialog
 class Narrow(original.IndependentT4):
     def test_e1_edit_discard_and_saved_ownership(self):
         a = self._create_published_asset('saved')
@@ -9,15 +9,24 @@ class Narrow(original.IndependentT4):
         self.dialog.table_sizes.selectRow(0)
         self.dialog.btn_edit_section.click()
         self.dialog.btn_apply_edit.click()
-        self.dialog.close()
+        # Discard only this owned dialog's unsaved edit.
+        self._close_manager_dialog(self.dialog)
+        self.assertTrue(self.dialog._is_closed)
+        self.assertFalse(self.dialog.isVisible())
         self.assertEqual(before, self.snapshot())
+        # A closed manager cannot start a new edit session; reopen the library.
+        self.dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        self.addCleanup(self._close_manager_dialog, self.dialog)
         self.dialog.refresh_libraries(select_name='CustomFolderLib')
+        self._select_family('Custom Profile')
         self.dialog.table_sizes.selectRow(0)
         self.dialog.btn_edit_section.click()
         self.dialog.btn_apply_edit.click()
         self.dialog.btn_save.click()
         saved = self.snapshot()
-        self.dialog.close()
+        self._close_manager_dialog(self.dialog)
+        self.assertTrue(self.dialog._is_closed)
+        self.assertFalse(self.dialog.isVisible())
         self.assertEqual(saved, self.snapshot())
     def test_e1_capture_saved_ownership(self):
         import FreeCADGui as Gui
@@ -28,7 +37,9 @@ class Narrow(original.IndependentT4):
         self.dialog._dxf_review.btn_add.click()
         self.dialog.btn_save.click()
         before = self.snapshot()
-        self.dialog.close()
+        self._close_manager_dialog(self.dialog)
+        self.assertTrue(self.dialog._is_closed)
+        self.assertFalse(self.dialog.isVisible())
         self.assertEqual(before, self.snapshot())
     def test_e2_removed_shared_asset(self):
         a = self._create_published_asset('shared')

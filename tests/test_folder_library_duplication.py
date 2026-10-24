@@ -66,6 +66,7 @@ class TestFolderLibraryDuplication(unittest.TestCase):
 
     def setUp(self):
         self.workspace = tempfile.TemporaryDirectory(prefix="ff_test_dup_")
+        self.addCleanup(self.workspace.cleanup)
         self.test_root = self.workspace.name
         self.user_dir = os.path.join(self.test_root, "user")
         self.stock_dir = os.path.join(self.test_root, "stock")
@@ -159,6 +160,9 @@ class TestFolderLibraryDuplication(unittest.TestCase):
             raise AssertionError(f"UNEXPECTED_MODAL: {box.windowTitle()}: {box.text()}")
 
         self.messages = ExitStack()
+        self.addCleanup(self.messages.close)
+        # Run document cleanup while fail-fast message patches and files remain alive.
+        self.addCleanup(self._close_owned_documents)
         self.messages.enter_context(patch.object(QtWidgets.QMessageBox, "exec_", fail_modal))
         for method in ("warning", "critical", "information", "question"):
             def make_fail(m):
@@ -167,30 +171,20 @@ class TestFolderLibraryDuplication(unittest.TestCase):
                 return _fail
             self.messages.enter_context(patch.object(QtWidgets.QMessageBox, method, side_effect=make_fail(method)))
 
-    def tearDown(self):
-        if hasattr(Gui, "Selection"):
-            try:
-                Gui.Selection.clearSelection()
-            except Exception:
-                pass
+    def _close_manager_dialog(self, dialog):
+        def discard_owned_changes(parent, *args, **kwargs):
+            self.assertIs(parent, dialog)
+            return QtWidgets.QMessageBox.Discard
 
-        for doc_name in list(App.listDocuments().keys()):
-            try:
+        with patch.object(QtWidgets.QMessageBox, "question", side_effect=discard_owned_changes):
+            self.assertTrue(dialog.close())
+
+    def _close_owned_documents(self):
+        Gui.Selection.clearSelection()
+        for doc_name in self.doc_names:
+            if doc_name in App.listDocuments():
                 App.closeDocument(doc_name)
-            except Exception:
-                pass
         self.doc_names.clear()
-
-        if hasattr(self, "messages"):
-            try:
-                self.messages.close()
-            except Exception:
-                pass
-
-        try:
-            self.workspace.cleanup()
-        except Exception:
-            pass
 
     # --- Helper methods ---
 
@@ -701,7 +695,7 @@ class TestFolderLibraryDuplication(unittest.TestCase):
             self.assertTrue(dialog.current_lib_meta["is_folder"])
             self.assertIn("UIDupFolderLib", dialog.lbl_lib_banner.text())
         finally:
-            dialog.close()
+            self._close_manager_dialog(dialog)
 
     def test_ui_duplicate_folder_library_dirty_cancel_preserves_unsaved_edits(self):
         """Rule 15: Canceling dirty save prompt, folder picker, or NewLibraryDialog
@@ -745,7 +739,7 @@ class TestFolderLibraryDuplication(unittest.TestCase):
             self.assertEqual(dialog.table_sizes.item(0, 0).text(), "DirtyHeight_999")
             self.assertEqual(dialog.current_lib_meta["name"], "SourceFolderLib")
         finally:
-            dialog.close()
+            self._close_manager_dialog(dialog)
 
 
 def load_tests(loader, tests, pattern):

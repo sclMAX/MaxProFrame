@@ -698,28 +698,66 @@ class TestLibraryManagerWindowLifecycle(unittest.TestCase):
         """ProfileLibraryManagerDialog has maximize/minimize hints and persists geometry."""
         from freecad.maxproframe.ff_tools import get_param_group
 
-        dialog = ProfileLibraryManagerDialog(parent=self.mw)
-        flags = dialog.windowFlags()
-        self.assertEqual(dialog.windowType(), QtCore.Qt.Window)
-        self.assertTrue(bool(flags & QtCore.Qt.WindowMaximizeButtonHint), "Dialog must have WindowMaximizeButtonHint")
-        self.assertTrue(bool(flags & QtCore.Qt.WindowMinimizeButtonHint), "Dialog must have WindowMinimizeButtonHint")
-        self.assertGreaterEqual(dialog.minimumWidth(), 800)
-        self.assertGreaterEqual(dialog.minimumHeight(), 500)
+        canonical = get_param_group(writable=True)
+        keys = ("LibraryManagerGeometry", "LibraryManagerSplitterState")
+        saved = {key: value for _, key, value in canonical.GetContents() or () if key in keys}
 
-        # Simulate resize and close
-        dialog.resize(1100, 700)
-        dialog.close()
+        def restore_preferences():
+            for key in keys:
+                if key in saved:
+                    canonical.SetString(key, saved[key])
+                else:
+                    canonical.RemString(key)
 
-        # Check that geometry was persisted
-        param = get_param_group(writable=False)
-        stored_geo = param.GetString("LibraryManagerGeometry", "")
-        self.assertTrue(len(stored_geo) > 0, "Geometry must be saved in preferences")
+        with ExitStack() as cleanup:
+            # Close both dialogs before restoring preferences, including on assertion failure.
+            cleanup.callback(restore_preferences)
+            for key in keys:
+                # Explicit empty canonical values mask legacy fallback without editing it.
+                canonical.SetString(key, "")
 
-        # Open fresh dialog and verify restored geometry
-        dialog2 = ProfileLibraryManagerDialog(parent=self.mw)
-        self.assertEqual(dialog2.width(), 1100)
-        self.assertEqual(dialog2.height(), 700)
-        dialog2.close()
+            dialog = ProfileLibraryManagerDialog(parent=self.mw)
+            cleanup.callback(dialog.close)
+            flags = dialog.windowFlags()
+            self.assertEqual(dialog.windowType(), QtCore.Qt.Window)
+            self.assertTrue(bool(flags & QtCore.Qt.WindowMaximizeButtonHint), "Dialog must have WindowMaximizeButtonHint")
+            self.assertTrue(bool(flags & QtCore.Qt.WindowMinimizeButtonHint), "Dialog must have WindowMinimizeButtonHint")
+            self.assertGreaterEqual(dialog.minimumWidth(), 800)
+            self.assertGreaterEqual(dialog.minimumHeight(), 500)
+
+            screen = dialog.screen() if hasattr(dialog, "screen") else self.app.primaryScreen()
+            available = screen.availableGeometry()
+            # Native offscreen Qt has an 800x800 screen and clamps 1100x700 to
+            # 800x700 on restore. Leave 40px for borders where the minimum permits.
+            requested = QtCore.QSize(
+                max(dialog.minimumWidth(), min(1100, available.width() - 40)),
+                max(dialog.minimumHeight(), min(700, available.height() - 40)),
+            )
+            self.assertLessEqual(requested.width(), available.width())
+            self.assertLessEqual(requested.height(), available.height())
+            self.assertNotEqual(requested, dialog.size(), "Roundtrip must exercise a nondefault size")
+            dialog.resize(requested)
+            dialog.move(available.topLeft() + QtCore.QPoint(20, 20))
+            self.assertEqual(dialog.size(), requested)
+            expected_geo = bytes(dialog.saveGeometry().toHex()).decode("ascii")
+            dialog.close()
+
+            param = get_param_group(writable=False)
+            stored_geo = param.GetString("LibraryManagerGeometry", "")
+            self.assertTrue(stored_geo, "Geometry must be saved in preferences")
+            self.assertEqual(stored_geo, expected_geo)
+            self.assertEqual(canonical.GetString("LibraryManagerGeometry", ""), expected_geo)
+
+            dialog2 = ProfileLibraryManagerDialog(parent=self.mw)
+            cleanup.callback(dialog2.close)
+            restored_screen = dialog2.screen() if hasattr(dialog2, "screen") else self.app.primaryScreen()
+            self.assertEqual(restored_screen, screen)
+            self.assertEqual(restored_screen.availableGeometry(), available)
+            self.assertEqual(dialog2.size(), requested)
+            self.assertEqual(dialog2.windowType(), QtCore.Qt.Window)
+            self.assertEqual(dialog2.windowFlags(), flags)
+            self.assertEqual(dialog2.minimumSize(), dialog.minimumSize())
+            dialog2.close()
 
 
 

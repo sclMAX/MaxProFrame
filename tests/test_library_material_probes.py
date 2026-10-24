@@ -3,6 +3,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from freecad.maxproframe.library_manager import LibraryManager, STANDARD_DENSITIES
 
@@ -36,9 +37,19 @@ class MaterialProbes(unittest.TestCase):
     def dialog(self, name="Source"):
         from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(dialog.close)
+        self.addCleanup(self._close_manager_dialog, dialog)
         dialog.refresh_libraries(select_name=name)
         return dialog
+
+    def _close_manager_dialog(self, dialog):
+        from freecad.maxproframe.library_manager_dialog import QtWidgets
+
+        def discard_owned_changes(parent, *args, **kwargs):
+            self.assertIs(parent, dialog)
+            return QtWidgets.QMessageBox.Discard
+
+        with patch.object(QtWidgets.QMessageBox, "question", side_effect=discard_owned_changes):
+            self.assertTrue(dialog.close())
 
     def test_s1_s2_s3_s5_ui_and_persistence(self):
         from freecad.maxproframe.library_manager_dialog import (
@@ -48,7 +59,7 @@ class MaterialProbes(unittest.TestCase):
         self.create()
         dialog = self.dialog()
         self.assertIn(translate("frameforge", "Aluminium"), dialog.lbl_lib_banner.text())
-        self.assertIn("2.7", dialog.lbl_lib_banner.text())
+        self.assertIn("2.7 g/cm³", dialog.lbl_lib_banner.toolTip())
         self.assertFalse(hasattr(dialog, "btn_calc_weight"))
         self.assertFalse(any(
             button.text() == translate("frameforge", "Calculate Theoretical Weight")

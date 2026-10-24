@@ -56,6 +56,7 @@ class TestFolderSectionManagement(unittest.TestCase):
 
     def setUp(self):
         self.workspace = tempfile.TemporaryDirectory(prefix="ff_test_sec_mgmt_")
+        self.addCleanup(self.workspace.cleanup)
         self.test_root = self.workspace.name
         self.user_dir = os.path.join(self.test_root, "user")
         self.stock_dir = os.path.join(self.test_root, "stock")
@@ -108,47 +109,29 @@ class TestFolderSectionManagement(unittest.TestCase):
 
         # Patch QMessageBox upfront so no unexpected modal dialog blocks offscreen execution
         self.messages = ExitStack()
+        self.addCleanup(self.messages.close)
+        self.addCleanup(self._close_owned_documents)
         for method in ("warning", "critical", "information", "question"):
             self.messages.enter_context(patch.object(QtWidgets.QMessageBox, method))
 
         self.dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+        self.addCleanup(self._close_manager_dialog, self.dialog)
         self.dialog.refresh_libraries(select_name="CustomFolderLib")
 
-    def tearDown(self):
-        # 1. Close dialog while QMessageBox patches remain active
-        if hasattr(self, "dialog") and self.dialog is not None:
-            try:
-                self.dialog.close()
-            except Exception:
-                pass
+    def _close_manager_dialog(self, dialog):
+        def discard_owned_changes(parent, *args, **kwargs):
+            self.assertIs(parent, dialog)
+            return QtWidgets.QMessageBox.Discard
 
-        # 2. Clear Gui.Selection
-        if hasattr(Gui, "Selection"):
-            try:
-                Gui.Selection.clearSelection()
-            except Exception:
-                pass
+        with patch.object(QtWidgets.QMessageBox, "question", side_effect=discard_owned_changes):
+            self.assertTrue(dialog.close())
 
-        # 3. Close ALL open FreeCAD documents (including dialog-owned working documents)
-        for doc_name in list(App.listDocuments().keys()):
-            try:
+    def _close_owned_documents(self):
+        Gui.Selection.clearSelection()
+        for doc_name in self.doc_names:
+            if doc_name in App.listDocuments():
                 App.closeDocument(doc_name)
-            except Exception:
-                pass
         self.doc_names.clear()
-
-        # 4. Close message patches after dialog and documents are safely closed
-        if hasattr(self, "messages"):
-            try:
-                self.messages.close()
-            except Exception:
-                pass
-
-        # 5. Clean up workspace
-        try:
-            self.workspace.cleanup()
-        except Exception:
-            pass
 
     # --- Helper methods ---
 
@@ -691,8 +674,8 @@ class TestFolderSectionManagement(unittest.TestCase):
         self._confirm_delete_size()
         self.assertTrue(self.dialog.is_dirty)
 
-        # Discard by closing dialog or reloading
-        self.dialog.close()
+        # This action explicitly discards staged deletion, not a default mock answer.
+        self._close_manager_dialog(self.dialog)
 
         # Reopen and verify asset still exists and catalog intact
         self.assertTrue(os.path.isfile(full_asset_path), "Asset file must remain on disk after discard.")

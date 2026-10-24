@@ -36,7 +36,7 @@ class Boundary(fixture.TestFolderLibraryDuplication):
 
     def dialog(self, name="SourceFolderLib"):
         d = ui.ProfileLibraryManagerDialog(library_manager=self.manager)
-        self.addCleanup(d.close)
+        self.addCleanup(self._close_manager_dialog, d)
         self.assertTrue(d.refresh_libraries(select_name=name))
         d.combo_family.setCurrentText("Custom Profile")
         d.table_sizes.selectRow(0)
@@ -171,10 +171,11 @@ class Boundary(fixture.TestFolderLibraryDuplication):
                         self.assertEqual((d.table_sizes.rowCount(), d.le_norm.text()), widgets)
                         self.assertTrue(d.is_dirty)
                         self.assertEqual(tree(dest), {})
-                    d.close()
+                    self._close_manager_dialog(d)
 
     def profile(self, library):
         doc = App.newDocument("IndependentProject")
+        self.doc_names.append(doc.Name)
         path = self._create_line_path(doc, "Path", 100)
         App.setActiveDocument(doc.Name)
         Gui.Selection.clearSelection()
@@ -226,7 +227,7 @@ class Boundary(fixture.TestFolderLibraryDuplication):
         self.assertFalse(d.is_dirty)
         props = self.manager.get_library("Portable")["Custom Profile"]["sizes"]["Rect_100x50"]
         self.assertAlmostEqual(float(props["Weight"]), 16.2, places=2)
-        d.close()
+        self._close_manager_dialog(d)
         new, p = self.profile("Portable")
         self.assertAlmostEqual(p.Shape.Volume, 600000, places=2)
         newfile = os.path.join(self.test_root, "new.FCStd")
@@ -237,6 +238,7 @@ class Boundary(fixture.TestFolderLibraryDuplication):
         shutil.rmtree(moved)
         for path, volume in ((oldfile, 500000), (newfile, 600000)):
             doc = App.openDocument(path)
+            self.doc_names.append(doc.Name)
             doc.recompute()
             profiles = [o for o in doc.Objects if hasattr(o, "CustomProfile")]
             self.assertEqual(len(profiles), 1)
@@ -250,12 +252,14 @@ class Boundary(fixture.TestFolderLibraryDuplication):
     def test_dirty_owned_documents_selection(self):
         # S6/S8: inspect saved copy, never the unsaved user asset/model.
         asset = App.openDocument(os.path.join(self.source_folder, self.asset_rel_path))
+        self.doc_names.append(asset.Name)
         sketch = asset.getObject(self.asset_obj_name)
         index = next(i for i, c in enumerate(sketch.Constraints) if c.Type == "Distance" and abs(c.Value - 50) < 1e-6)
         sketch.setDatum(index, App.Units.Quantity("65 mm"))
         asset.recompute()
         sketch.Label = "UNSAVED ASSET"
         other = App.newDocument("OwnedModel")
+        self.doc_names.append(other.Name)
         line = self._create_line_path(other)
         line.Label = "UNSAVED MODEL"
         def snapshot():
@@ -282,7 +286,7 @@ class Boundary(fixture.TestFolderLibraryDuplication):
             self.assertEqual(tree(self.source_folder), before[3][0])
             self.assertAlmostEqual(float(self.manager.get_library(mode)["Custom Profile"]["sizes"]["Rect_100x50"]["Weight"]), 13.5, places=2)
             if d:
-                d.close()
+                self._close_manager_dialog(d)
 
 
 METHODS = ("test_boundaries", "test_owned_rollback", "test_discard_duplicate", "test_edit_relocated_duplicate_offline", "test_dirty_owned_documents_selection")
