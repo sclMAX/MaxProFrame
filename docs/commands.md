@@ -3,6 +3,7 @@
 Create Profiles separates catalog selection from placement:
 
 - **Library** chooses the catalog; its material is shown separately. **Size** becomes **Profile** for custom sections. Catalog identifiers and saved `Material` values are unchanged.
+- Custom profiles show the selected section's real silhouette, code, description (when supplied), and weight in **kg/m**. Size changes refresh this information; missing or corrupt assets show a safe placeholder. Viewing a thumbnail does not import sketches or modify the catalog, document, selection, or preview state. Standard families retain their dimensional drawings and original colors. Images fit the available width without cropping or stretching; custom silhouettes follow FreeCAD's live native foreground color.
 - **Placement** shows the selected edge count, with object/edge details in its tooltip. Selecting a whole object uses all its shape edges. Without selection, enter a positive manual length in **mm**; selection disables the manual-length input and uses the attached paths.
 - Path alignment and rotation remain in the primary panel. Expand **Advanced** in Profile Settings for naming, container preferences and **Price per metre**. Collapse it again without losing values. No currency is assumed.
 - **Apply** creates or updates the preview without closing the panel. **OK** applies the latest values and confirms; **Cancel** discards the session preview. The status reads **No preview**, **Pending changes**, or **Preview updated**. Changing fields alone does not create geometry.

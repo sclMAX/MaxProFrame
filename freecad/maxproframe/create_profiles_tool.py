@@ -19,6 +19,7 @@ from freecad.maxproframe.ff_tools import (
     move_profile_to_parent_if_supported,
     translate,
 )
+from freecad.maxproframe.custom_profile_cards import render_custom_section_thumbnail
 from freecad.maxproframe.library_manager import LibraryManager, get_canonical_family
 from freecad.maxproframe.profile import Profile, ViewProviderCustomProfile, ViewProviderProfile
 from freecad.maxproframe.section_library import get_or_import_section_sketch
@@ -60,6 +61,48 @@ class _TranslatedFamilyPresentation(QtWidgets.QStyledItemDelegate):
         return super().eventFilter(watched, event)
 
 
+class _TaskPreviewLabel(QtWidgets.QLabel):
+    """Keep original image data public; fit and optionally tint only at paint time."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._source = None
+        self.is_custom = False
+
+    def setPixmap(self, pixmap):
+        self._source = pixmap
+        self.update()
+
+    def pixmap(self):
+        return self._source
+
+    def sizeHint(self):
+        return QtCore.QSize(160, 100)
+
+    def minimumSizeHint(self):
+        return QtCore.QSize(0, 0)
+
+    def paintEvent(self, event):
+        # Let QLabel render its native styled background, not a cached palette.
+        super().paintEvent(event)
+        source = self.pixmap()
+        if source is None or source.isNull():
+            return
+        if self.is_custom:
+            source = source.copy()
+            tint = QtGui.QPainter(source)
+            tint.setCompositionMode(QtGui.QPainter.CompositionMode_SourceIn)
+            tint.fillRect(source.rect(), self.palette().color(self.foregroundRole()))
+            tint.end()
+        rect = self.contentsRect()
+        fitted = source.scaled(rect.size(), QtCore.Qt.KeepAspectRatio,
+                               QtCore.Qt.SmoothTransformation)
+        painter = QtGui.QPainter(self)
+        painter.drawPixmap(rect.x() + (rect.width() - fitted.width()) // 2,
+                           rect.y() + (rect.height() - fitted.height()) // 2, fitted)
+        painter.end()
+
+
 class BaseProfileTaskPanel(ABC):
     def __init__(self):
         self._objects = {}
@@ -69,6 +112,18 @@ class BaseProfileTaskPanel(ABC):
             load_ui_file(os.path.join(UIPATH, "create_profiles2.ui")),
         ]
 
+        # Replace before FormProxy discovers children, so no stale label survives.
+        old_image = self.form[0].label_image
+        image = _TaskPreviewLabel(old_image.parentWidget())
+        image.setObjectName(old_image.objectName())
+        image.setAlignment(old_image.alignment())
+        old_image.parentWidget().layout().replaceWidget(old_image, image)
+        old_image.hide()
+        old_image.setObjectName("")
+        old_image.deleteLater()
+        self.form[0].label_image = image
+        self._thumbnail_cache = {}
+        self._rendering_thumbnail = False
         self.form_proxy = FormProxy(self.form)
         self._configure_presentation()
 
@@ -97,6 +152,11 @@ class BaseProfileTaskPanel(ABC):
         self.material_info = QtWidgets.QLabel(first.groupBox)
         self.material_info.setWordWrap(True)
         catalog.insertWidget(1, self.material_info)
+        self.custom_info = QtWidgets.QLabel(first.groupBox)
+        self.custom_info.setTextFormat(QtCore.Qt.PlainText)
+        self.custom_info.setWordWrap(True)
+        catalog.addWidget(self.custom_info)
+        self.custom_info.hide()
         first.label_image.setMinimumHeight(0)
         first.label_image.setMaximumHeight(100)
         first.label_image.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
@@ -280,7 +340,8 @@ class BaseProfileTaskPanel(ABC):
             self._initializing = False
 
     def on_input_changed(self):
-        self.proceed()
+        if not self._rendering_thumbnail:
+            self.proceed()
 
     def _update_family_controls(self, canonical_family):
         is_c = canonical_family == "C"
@@ -438,7 +499,7 @@ class BaseProfileTaskPanel(ABC):
             self.form_proxy.sb_weight.setValue(0.0)
 
             if canonical == "Custom Profile":
-                GEOMETRY_METADATA = {"asset_path", "object_name", "asset_id", "Area", "Size"}
+                GEOMETRY_METADATA = {"asset_path", "object_name", "asset_id", "Area", "Size", "Description"}
                 for s in profile:
                     if s in GEOMETRY_METADATA:
                         continue
@@ -465,6 +526,7 @@ class BaseProfileTaskPanel(ABC):
                     sb.setValue(float(profile[s]))
 
             self.enable_signals(True)
+            self.update_image()
             self.on_input_changed()
 
     def on_cb_make_fillet_changed(self, state):
@@ -472,6 +534,8 @@ class BaseProfileTaskPanel(ABC):
         self.on_input_changed()
 
     def update_image(self):
+        if self._rendering_thumbnail:
+            return
         material = str(self.form_proxy.combo_material.currentText())
         family_key = str(self.form_proxy.combo_family.currentText())
 
@@ -491,6 +555,26 @@ class BaseProfileTaskPanel(ABC):
             else:
                 canonical_family = get_canonical_family(family_key, None)
 
+        is_custom = canonical_family == "Custom Profile"
+        self.form_proxy.label_image.is_custom = is_custom
+        self.custom_info.setVisible(is_custom)
+        if is_custom:
+            code = str(self.form_proxy.combo_size.currentText())
+            size = (family_data or {}).get("sizes", {}).get(code, {})
+            description = str(size.get("Description", ""))
+            weight = size.get("Weight", getattr(getattr(self, "profile", None), "LinearWeight", ""))
+            self.custom_info.setText("\n".join(filter(None, (code, description, "%s kg/m" % weight))))
+            self._rendering_thumbnail = True
+            try:
+                pixmap = render_custom_section_thumbnail(
+                    self.library_manager._get_registered_folder(material),
+                    size.get("asset_path"), size.get("object_name", "Section"),
+                    width=160, height=100, cache=self._thumbnail_cache)
+                self.form_proxy.label_image.setPixmap(pixmap)
+            finally:
+                self._rendering_thumbnail = False
+            return
+        self.custom_info.clear()
         img_name = canonical_family.replace(" ", "_")
         if self.form_proxy.cb_make_fillet.isChecked():
             img_name += "_Fillet"
@@ -725,7 +809,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             self.form_proxy.label_apply_status.setText(translate("frameforge", "Preview updated"))
 
     def on_input_changed(self):
-        if getattr(self, "_initializing", False):
+        if getattr(self, "_initializing", False) or self._rendering_thumbnail:
             return
         self._set_pending_state()
         self._update_placement_guidance()
@@ -1315,6 +1399,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self.form_proxy.label_attach.setToolTip(tooltip)
 
     def update_selection(self):
+        if self._rendering_thumbnail:
+            return
         selection_list = Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else []
         self.form_proxy.sb_length.setEnabled(not selection_list)
         if selection_list:
