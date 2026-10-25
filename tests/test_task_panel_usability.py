@@ -24,6 +24,17 @@ class TestTaskPanelUsability(unittest.TestCase):
         cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
     def setUp(self):
+        self.prefs = App.ParamGet("User parameter:BaseApp/Preferences/General")
+        language, locale = self.prefs.GetString("Language", ""), Gui.getLocale()
+        default = QtCore.QLocale()
+        def restore_language():
+            self.prefs.SetString("Language", language)
+            Gui.setLocale(locale)
+            Gui.updateLocale()
+            QtCore.QLocale.setDefault(default)
+        self.addCleanup(restore_language)
+        Gui.addLanguagePath(TRANSLATIONSPATH)
+        self._language("English", "en_US")
         self.temp_dir = tempfile.mkdtemp(prefix="mpf_task_panel_")
         self.env = patch.dict(os.environ, {"FRAMEFORGE_USER_PROFILES_DIR": self.temp_dir})
         self.env.start()
@@ -188,12 +199,14 @@ class TestTaskPanelUsability(unittest.TestCase):
         return ([self._object_state(obj) for obj in self.doc.Objects],
                 get_param_group().GetContents())
 
+    def _language(self, language, default):
+        self.prefs.SetString("Language", language)
+        Gui.setLocale(language)
+        Gui.updateLocale()
+        QtCore.QLocale.setDefault(QtCore.QLocale(default))
+
     def _spanish(self):
-        translator = QtCore.QTranslator()
-        self.assertTrue(translator.load(os.path.join(TRANSLATIONSPATH, "frameforge_es.qm")))
-        self.app.installTranslator(translator)
-        self.addCleanup(self.app.removeTranslator, translator)
-        return translator
+        self._language("Spanish", "es_ES")
 
     def test_s1_library_material_and_custom_profile_labels(self):
         panel = self._create()
@@ -277,7 +290,8 @@ class TestTaskPanelUsability(unittest.TestCase):
         catalog = self.manager.get_all_profiles()["Panel Library"]
         with patch.object(LibraryManager, "get_all_profiles", return_value={"Panel Library": catalog}):
             for language in ("en", "es"):
-                translator = self._spanish() if language == "es" else None
+                self._language("Spanish" if language == "es" else "English",
+                               "es_ES" if language == "es" else "en_US")
                 try:
                     panel = CreateProfileTaskPanel()
                     self.panels.append(panel)
@@ -312,8 +326,9 @@ class TestTaskPanelUsability(unittest.TestCase):
                         self.doc = App.newDocument("TaskPanelUsabilitySpanish")
                         self.addCleanup(App.closeDocument, self.doc.Name)
                 finally:
-                    if translator is not None:
-                        self.app.removeTranslator(translator)
+                    self._close_panels()
+                    self.panels.clear()
+                    self._language("English", "en_US")
 
     def test_s5_english_preview_states_and_action_guidance(self):
         panel = self._create()
@@ -332,7 +347,7 @@ class TestTaskPanelUsability(unittest.TestCase):
         self.assertEqual(self.doc.Objects, [])
 
     def test_s5_spanish_states_and_action_guidance(self):
-        translator = self._spanish()  # Keep translator alive throughout widget checks.
+        self._spanish()
         panel = self._create()
         Gui.Selection.clearSelection()
         panel.update_selection()

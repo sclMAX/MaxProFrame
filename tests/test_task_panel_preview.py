@@ -15,7 +15,7 @@ from PySide import QtCore, QtGui, QtWidgets
 from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
 from freecad.maxproframe.custom_profile_cards import render_custom_section_thumbnail
 from freecad.maxproframe.edit_profile_tool import EditProfileTaskPanel
-from freecad.maxproframe.ff_tools import PROFILEIMAGES_PATH, get_param_group
+from freecad.maxproframe.ff_tools import PROFILEIMAGES_PATH, TRANSLATIONSPATH, get_param_group
 from freecad.maxproframe.library_manager import LibraryManager
 from freecad.maxproframe.profile import Profile
 
@@ -26,6 +26,17 @@ class TestTaskPanelPreview(unittest.TestCase):
         cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
     def setUp(self):
+        self.prefs = App.ParamGet("User parameter:BaseApp/Preferences/General")
+        language, locale = self.prefs.GetString("Language", ""), Gui.getLocale()
+        default = QtCore.QLocale()
+        def restore_language():
+            self.prefs.SetString("Language", language)
+            Gui.setLocale(locale)
+            Gui.updateLocale()
+            QtCore.QLocale.setDefault(default)
+        self.addCleanup(restore_language)
+        Gui.addLanguagePath(TRANSLATIONSPATH)
+        self._language("English", "en_US")
         self.workspace = tempfile.TemporaryDirectory(prefix="mpf_panel_preview_")
         self.addCleanup(self.workspace.cleanup)
         root = self.workspace.name
@@ -75,6 +86,12 @@ class TestTaskPanelPreview(unittest.TestCase):
         Gui.Selection.clearSelection()
         self.panels = []
         self.addCleanup(self._close_panels)
+
+    def _language(self, language, default):
+        self.prefs.SetString("Language", language)
+        Gui.setLocale(language)
+        Gui.updateLocale()
+        QtCore.QLocale.setDefault(QtCore.QLocale(default))
 
     def _close_panels(self):
         for panel in self.panels:
@@ -133,6 +150,61 @@ class TestTaskPanelPreview(unittest.TestCase):
         self.assertIn(weight, text)
         self.assertIn("kg/m", text)
 
+    def test_s2_s3_uncached_refresh_with_registered_selection_observer(self):
+        path = self.doc.addObject("Part::Feature", "TwoEdges")
+        path.Shape = Part.makePolygon([App.Vector(0, 0, 0), App.Vector(100, 0, 0),
+                                       App.Vector(100, 100, 0)])
+        self.doc.recompute()
+        panel = self._panel()
+        Gui.Selection.addObserver(panel)
+        # _close_panels calls clean before documents and locale are restored.
+        for sub in ("Edge1", ""):
+            with self.subTest(selection=sub or "whole object"):
+                Gui.Selection.clearSelection()
+                if sub:
+                    Gui.Selection.addSelection(self.doc.Name, path.Name, sub)
+                else:
+                    Gui.Selection.addSelection(self.doc.Name, path.Name)
+                self.app.processEvents()
+                before = self._state(panel)
+                enabled = panel.form_proxy.sb_length.isEnabled()
+                for _ in range(2):
+                    panel._thumbnail_cache.clear()
+                    panel.update_image()
+                    self.app.processEvents()
+                    self.assertEqual(self._state(panel), before)
+                    self.assertEqual(panel.form_proxy.sb_length.isEnabled(), enabled)
+
+    def test_s1_native_language_cycle_preserves_canonical_family_and_state(self):
+        for language, default, library, unit, family in (
+                ("English", "es_ES", "Library", "Unit", "Square Hollow"),
+                ("Spanish", "en_US", "Biblioteca", "Unidad", "Tubo Cuadrado Hueco"),
+                ("English", "es_ES", "Library", "Unit", "Square Hollow")):
+            with self.subTest(language=language, default=default):
+                self._language(language, default)
+                panel = self._panel()
+                try:
+                    combo = panel.form_proxy.combo_family
+                    combo.setCurrentText("Square Hollow")
+                    self.assertEqual(panel.form[0].label_10.text(), library)
+                    self.assertEqual(panel.form[0].label_13.text(), unit)
+                    self.assertEqual(combo.currentText(), "Square Hollow")
+                    option = QtWidgets.QStyleOptionViewItem()
+                    index = combo.model().index(combo.currentIndex(), combo.modelColumn())
+                    combo.itemDelegate().initStyleOption(option, index)
+                    self.assertEqual(option.text, family)
+                    self.assertEqual(panel.form_proxy.sb_length.value(), 0)
+                    before = self._state(panel)
+                    panel.update_image()
+                    self.app.processEvents()
+                    self.assertEqual(self._state(panel), before)
+                finally:
+                    panel.reject()
+                    panel.clean()
+                    for form in panel.form:
+                        form.close()
+                    self.panels.remove(panel)
+
     def test_s2_selected_asset_and_metadata_refresh_without_import(self):
         panel = self._panel()
         self._show(panel)
@@ -162,6 +234,7 @@ class TestTaskPanelPreview(unittest.TestCase):
 
     @unittest.skipUnless(os.environ.get("FF_REPORTS"), "Optional native visual captures require FF_REPORTS")
     def test_s2_s4_s6_visual_captures(self):
+        self._language("English", "en_US")
         panel = self._panel()
         reports = os.environ["FF_REPORTS"]
         os.makedirs(reports, exist_ok=True)
@@ -174,7 +247,7 @@ class TestTaskPanelPreview(unittest.TestCase):
                 for width in (360, 600):
                     self._show(panel, width)
                     self.assertTrue(panel.form[0].grab().save(os.path.join(
-                        reports, "custom-preview-%s-%s-%s.png" % (code, theme, width)), "PNG"))
+                        reports, "custom-preview-en-%s-%s-%s.png" % (code, theme, width)), "PNG"))
                     self.assertEqual(self._state(panel), before)
 
     def test_s2_missing_and_corrupt_assets_use_existing_placeholder(self):
