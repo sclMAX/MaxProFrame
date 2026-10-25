@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtCore, QtGui
+from PySide import QtCore, QtGui, QtWidgets
 
 from freecad.maxproframe.ff_tools import (
     ICONPATH,
@@ -40,6 +40,26 @@ def load_ui_file(path):
     raise RuntimeError(f"Unable to load UI file: {path}")
 
 
+class _TranslatedFamilyPresentation(QtWidgets.QStyledItemDelegate):
+    """Translate only native painting; combo text and catalog keys stay canonical."""
+
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        option.text = translate("frameforge", option.text)
+
+    def eventFilter(self, watched, event):
+        if event.type() == QtCore.QEvent.Paint:
+            option = QtWidgets.QStyleOptionComboBox()
+            watched.initStyleOption(option)
+            option.currentText = translate("frameforge", watched.currentText())
+            painter = QtWidgets.QStylePainter(watched)
+            painter.drawComplexControl(QtWidgets.QStyle.CC_ComboBox, option)
+            painter.drawControl(QtWidgets.QStyle.CE_ComboBoxLabel, option)
+            painter.end()
+            return True
+        return super().eventFilter(watched, event)
+
+
 class BaseProfileTaskPanel(ABC):
     def __init__(self):
         self._objects = {}
@@ -50,9 +70,84 @@ class BaseProfileTaskPanel(ABC):
         ]
 
         self.form_proxy = FormProxy(self.form)
+        self._configure_presentation()
 
         self.load_data()
         # self.initialize_ui() # Must be call in Child class, AFTER openTransaction
+
+    def _configure_presentation(self):
+        """Rearrange the shared widgets without changing their identities or signals."""
+        first, second = self.form
+        second.horizontalLayout.setDirection(QtWidgets.QBoxLayout.TopToBottom)
+        second.horizontalLayout_4.setDirection(QtWidgets.QBoxLayout.TopToBottom)
+        self.family_presentation = _TranslatedFamilyPresentation(first.combo_family)
+        first.combo_family.setItemDelegate(self.family_presentation)
+        first.combo_family.installEventFilter(self.family_presentation)
+        # Keep the designer widgets (and FormProxy membership) when moving rows.
+        catalog = first.groupBox.layout()
+        rows = QtWidgets.QFormLayout()
+        for label, combo in ((first.label_10, first.combo_material),
+                             (first.label, first.combo_family),
+                             (first.label_2, first.combo_size)):
+            catalog.removeWidget(label)
+            catalog.removeWidget(combo)
+            rows.addRow(label, combo)
+        catalog.insertLayout(0, rows)
+        first.label_10.setText("Library")
+        self.material_info = QtWidgets.QLabel(first.groupBox)
+        self.material_info.setWordWrap(True)
+        catalog.insertWidget(1, self.material_info)
+        first.label_image.setMinimumHeight(0)
+        first.label_image.setMaximumHeight(100)
+        first.label_image.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+        # The metadata block no longer needs expansion spacers.
+        metadata = first.verticalLayout
+        for index in reversed(range(metadata.count())):
+            if metadata.itemAt(index).spacerItem() is not None:
+                metadata.takeAt(index)
+        first.sb_length.setSuffix(" mm")
+        first.groupBox_4.setTitle("Placement")
+        placement = first.groupBox_4.layout()
+        for widget in (second.group_anchor, second.widget_rotation):
+            second.groupBox_3.layout().removeWidget(widget)
+            placement.addRow(widget)
+
+        self.advanced_button = QtWidgets.QToolButton(second)
+        self.advanced_button.setObjectName("button_advanced")
+        self.advanced_button.setText(translate("frameforge", "Advanced"))
+        self.advanced_button.setCheckable(True)
+        self.advanced_button.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+        self.advanced_button.setArrowType(QtCore.Qt.RightArrow)
+        self.advanced_content = QtWidgets.QWidget(second)
+        advanced_layout = QtWidgets.QVBoxLayout(self.advanced_content)
+        advanced_layout.setContentsMargins(0, 0, 0, 0)
+        second.layout().removeWidget(second.groupBox_5)
+        advanced_layout.addWidget(second.groupBox_5)
+        # Transfer widgets, not the owned child layout: removeItem can delete
+        # the C++ layout immediately under PySide6.
+        price_row = QtWidgets.QFormLayout()
+        first.horizontalLayout_2.removeWidget(first.label_3)
+        first.horizontalLayout_2.removeWidget(first.sb_unitprice)
+        price_row.addRow(first.label_3, first.sb_unitprice)
+        advanced_layout.addLayout(price_row)
+        first.label_3.setText("Price per metre")
+        self.advanced_content.hide()
+        second.layout().insertWidget(1, self.advanced_button)
+        second.layout().insertWidget(2, self.advanced_content)
+        self.advanced_button.toggled.connect(self.advanced_content.setVisible)
+        self.advanced_button.toggled.connect(
+            lambda expanded: self.advanced_button.setArrowType(
+                QtCore.Qt.DownArrow if expanded else QtCore.Qt.RightArrow))
+        # UI files use the generic Dialog context; product copy uses frameforge.
+        for form in self.form:
+            form.setWindowTitle(translate("frameforge", form.windowTitle()))
+            for widget in form.findChildren(QtWidgets.QWidget):
+                for getter, setter in (("text", "setText"), ("title", "setTitle"),
+                                       ("toolTip", "setToolTip")):
+                    if hasattr(widget, getter) and hasattr(widget, setter):
+                        text = getattr(widget, getter)()
+                        if text:
+                            getattr(widget, setter)(translate("frameforge", text))
 
     def load_data(self):
         self.library_manager = LibraryManager()
@@ -242,11 +337,20 @@ class BaseProfileTaskPanel(ABC):
         else:
             self.form_proxy.combo_rotation.setCurrentText(t)
 
+    def _update_material_info(self):
+        library = str(self.form_proxy.combo_material.currentText())
+        if library in self.profiles:
+            material, _density = self.library_manager.get_library_material_info(library)
+            self.material_info.setText(translate("frameforge", "Material: %s") % material)
+        else:
+            self.material_info.setText(translate("frameforge", "Material unavailable"))
+
     def on_material_changed(self, index):
         material = str(self.form_proxy.combo_material.currentText())
 
         self.enable_signals(False)
 
+        self._update_material_info()
         self.form_proxy.combo_family.clear()
         self.form_proxy.combo_family.addItems([f for f in self.profiles[material]])
 
@@ -266,6 +370,8 @@ class BaseProfileTaskPanel(ABC):
         self._update_family_controls(canonical)
 
         is_custom = canonical == "Custom Profile"
+        self.form[0].label_2.setText(translate("frameforge", "Profile" if is_custom else "Size"))
+        self.form_proxy.combo_family.setToolTip(translate("frameforge", canonical))
 
         fillet_val = False if is_custom else bool(self.profiles.get(material, {}).get(family, {}).get("fillet", False))
         self.form_proxy.cb_make_fillet.setChecked(fillet_val)
@@ -277,8 +383,8 @@ class BaseProfileTaskPanel(ABC):
         norm_val = fam_dict.get("norm", "Custom" if is_custom else "")
         unit_val = fam_dict.get("unit", "Metric Units" if is_custom else "")
 
-        self.form_proxy.label_norm.setText(norm_val)
-        self.form_proxy.label_unit.setText(unit_val)
+        self.form_proxy.label_norm.setText(translate("frameforge", norm_val))
+        self.form_proxy.label_unit.setText(translate("frameforge", unit_val))
 
         self.form_proxy.combo_size.blockSignals(True)
         self.form_proxy.combo_size.clear()
@@ -597,6 +703,10 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             self.form_proxy.btn_apply.clicked.connect(self.apply)
         if "groupBox_apply" in self.form_proxy.members:
             self.form_proxy.groupBox_apply.setTitle(translate("frameforge", "Preview"))
+        self.action_guidance = QtWidgets.QLabel(
+            translate("frameforge", "Apply: update preview. OK: confirm. Cancel: discard."), self.form[0])
+        self.action_guidance.setWordWrap(True)
+        self.form_proxy.groupBox_apply.layout().addWidget(self.action_guidance)
         self._set_initial_state()
 
     def _set_initial_state(self):
@@ -607,17 +717,18 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def _set_pending_state(self):
         self._has_pending_changes = True
         if "label_apply_status" in self.form_proxy.members:
-            self.form_proxy.label_apply_status.setText(translate("frameforge", "Unapplied changes"))
+            self.form_proxy.label_apply_status.setText(translate("frameforge", "Pending changes"))
 
     def _set_applied_state(self):
         self._has_pending_changes = False
         if "label_apply_status" in self.form_proxy.members:
-            self.form_proxy.label_apply_status.setText(translate("frameforge", "Applied"))
+            self.form_proxy.label_apply_status.setText(translate("frameforge", "Preview updated"))
 
     def on_input_changed(self):
         if getattr(self, "_initializing", False):
             return
         self._set_pending_state()
+        self._update_placement_guidance()
 
     def open(self):
         self._session_imported_sketches = set()
@@ -982,10 +1093,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 if container:
                     container.addObject(sketch_sel.Object)
 
-                if len(sketch_sel.SubElementNames) > 0:
-                    edges = sketch_sel.SubElementNames
-                else:  # use on the whole sketch
-                    edges = [f"Edge{idx + 1}" for idx, e in enumerate(sketch_sel.Object.Shape.Edges)]
+                edges = self._selection_edges(sketch_sel)
 
                 for i, edge in enumerate(edges):
                     k = self.create_or_update_profile(sketch_sel.Object, edge, p_name)
@@ -1181,29 +1289,37 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         if not getattr(self, "_initializing", False):
             self.on_input_changed()
 
+    @staticmethod
+    def _selection_edges(selection):
+        """The same path expansion is used by creation and its placement summary."""
+        if selection.SubElementNames:
+            return selection.SubElementNames
+        shape = getattr(selection.Object, "Shape", None)
+        return [f"Edge{index + 1}" for index, _edge in enumerate(getattr(shape, "Edges", ()))]
+
+    def _update_placement_guidance(self):
+        selections = Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else []
+        details = [(selection.ObjectName, self._selection_edges(selection)) for selection in selections]
+        count = sum(len(edges) for _name, edges in details)
+        if selections:
+            source = "1 edge selected" if count == 1 else "%s edges selected"
+            text = translate("frameforge", source)
+            if count != 1:
+                text = text % count
+            tooltip = "\n".join(f"{name}: {', '.join(edges)}" for name, edges in details)
+        else:
+            text = translate("frameforge", "Define a length" if self.form_proxy.sb_length.value() <= 0
+                             else "Manual length")
+            tooltip = translate("frameforge", "Select edges or a whole object to use its edges, or enter a positive length.")
+        self.form_proxy.label_attach.setText(text)
+        self.form_proxy.label_attach.setToolTip(tooltip)
+
     def update_selection(self):
         selection_list = Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else []
-        if len(selection_list) > 0:
-            self.form_proxy.sb_length.setEnabled(False)
+        self.form_proxy.sb_length.setEnabled(not selection_list)
+        if selection_list:
             self.form_proxy.sb_length.setValue(0.0)
-
-            obj_name = ""
-            for sel in selection_list:
-                selected_obj_name = sel.ObjectName
-                subs = ""
-                for sub in sel.SubElementNames:
-                    subs += "{},".format(sub)
-
-                obj_name += selected_obj_name
-                obj_name += " / "
-                obj_name += subs
-                # obj_name += '\n'
-
-        else:
-            self.form_proxy.sb_length.setEnabled(True)
-            obj_name = "Not Attached / Define length"
-
-        self.form_proxy.label_attach.setText(obj_name)
+        self._update_placement_guidance()
 
 
 class CreateProfilesCommand:

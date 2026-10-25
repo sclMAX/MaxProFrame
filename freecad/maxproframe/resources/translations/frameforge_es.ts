@@ -3,6 +3,59 @@
 <TS version="2.1" language="es" sourcelanguage="en">
 <context>
     <name>frameforge</name>
+    <message><source>Library</source><translation>Biblioteca</translation></message>
+    <message><source>Create Profiles</source><translation>Crear perfiles</translation></message>
+    <message><source>Profile Settings</source><translation>Configuración del perfil</translation></message>
+    <message><source>Material: %s</source><translation>Material: %s</translation></message>
+    <message><source>Material unavailable</source><translation>Material no disponible</translation></message>
+    <message><source>Family</source><translation>Familia</translation></message>
+    <message><source>Size</source><translation>Tamaño</translation></message>
+    <message><source>Profile</source><translation>Perfil</translation></message>
+    <message><source>Placement</source><translation>Colocación</translation></message>
+    <message><source>Edges</source><translation>Aristas</translation></message>
+    <message><source>Length</source><translation>Longitud</translation></message>
+    <message><source>Define a length</source><translation>Definí una longitud</translation></message>
+    <message><source>Manual length</source><translation>Longitud manual</translation></message>
+    <message><source>1 edge selected</source><translation>1 arista seleccionada</translation></message>
+    <message><source>%s edges selected</source><translation>%s aristas seleccionadas</translation></message>
+    <message><source>Select edges or a whole object to use its edges, or enter a positive length.</source><translation>Seleccioná aristas o un objeto completo para usar sus aristas, o ingresá una longitud positiva.</translation></message>
+    <message><source>Pending changes</source><translation>Cambios pendientes</translation></message>
+    <message><source>Preview updated</source><translation>Previsualización actualizada</translation></message>
+    <message><source>Apply: update preview. OK: confirm. Cancel: discard.</source><translation>Aplicar: actualizar la previsualización. OK: confirmar. Cancelar: descartar.</translation></message>
+    <message><source>Advanced</source><translation>Opciones avanzadas</translation></message>
+    <message><source>Price per metre</source><translation>Precio por metro</translation></message>
+    <message><source>Norm</source><translation>Norma</translation></message>
+    <message><source>Unit</source><translation>Unidad</translation></message>
+    <message><source>Custom</source><translation>Personalizada</translation></message>
+    <message><source>Metric Units</source><translation>Unidades métricas</translation></message>
+    <message><source>Path alignment</source><translation>Alineación con la trayectoria</translation></message>
+    <message><source>Rotation (°)</source><translation>Rotación (°)</translation></message>
+    <message><source>Dimensions</source><translation>Dimensiones</translation></message>
+    <message><source>Height or Diameter</source><translation>Altura o diámetro</translation></message>
+    <message><source>Width</source><translation>Ancho</translation></message>
+    <message><source>Main Thickness</source><translation>Espesor principal</translation></message>
+    <message><source>Flange Thickness</source><translation>Espesor del ala</translation></message>
+    <message><source>Large Radius</source><translation>Radio mayor</translation></message>
+    <message><source>Small Radius</source><translation>Radio menor</translation></message>
+    <message><source>Weight (kg/m)</source><translation>Peso (kg/m)</translation></message>
+    <message><source>Profiles Options</source><translation>Opciones de perfiles</translation></message>
+    <message><source>Make Fillets</source><translation>Crear redondeos</translation></message>
+    <message><source>Pre-extend</source><translation>Extender previamente</translation></message>
+    <message><source>Mirror horizontally</source><translation>Reflejar horizontalmente</translation></message>
+    <message><source>Mirror vertically</source><translation>Reflejar verticalmente</translation></message>
+    <message><source>Combined Bevels</source><translation>Biseles combinados</translation></message>
+    <message><source>Settings</source><translation>Configuración</translation></message>
+    <message><source>In place</source><translation>En el mismo lugar</translation></message>
+    <message><source>Create a Part</source><translation>Crear una pieza</translation></message>
+    <message><source>Create a Group</source><translation>Crear un grupo</translation></message>
+    <message><source>Sketch name in profile name</source><translation>Nombre del croquis en el nombre del perfil</translation></message>
+    <message><source>Family in profile name</source><translation>Familia en el nombre del perfil</translation></message>
+    <message><source>Size in profile name</source><translation>Tamaño en el nombre del perfil</translation></message>
+    <message><source>"Profile" prefix in profile name</source><translation>Prefijo «Perfil» en el nombre del perfil</translation></message>
+    <message><source>Choose profile type</source><translation>Elegí el tipo de perfil</translation></message>
+    <message><source>Choose size</source><translation>Elegí el tamaño</translation></message>
+    <message><source>Adjust Height</source><translation>Ajustar altura</translation></message>
+    <message><source>Extend the profile by max(W, H)</source><translation>Extender el perfil según el máximo entre ancho y altura</translation></message>
     <message>
         <source>T-Slot 3-Slots</source>
         <translation>Perfil con ranura en T de 3 ranuras</translation>
