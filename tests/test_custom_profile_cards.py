@@ -111,7 +111,9 @@ class TestCustomProfileCards(unittest.TestCase):
         for method in ("warning", "critical"):
             self.messages.enter_context(patch.object(QtWidgets.QMessageBox, method, side_effect=_record_warning))
         for method in ("information", "question"):
-            self.messages.enter_context(patch.object(QtWidgets.QMessageBox, method, return_value=QtWidgets.QMessageBox.Ok))
+            self.messages.enter_context(
+                patch.object(QtWidgets.QMessageBox, method, return_value=QtWidgets.QMessageBox.Ok)
+            )
 
         self.dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
         self.dialog.refresh_libraries(select_name="CustomFolderLib")
@@ -450,8 +452,12 @@ class TestCustomProfileCards(unittest.TestCase):
 
         # S2: Cards show NO dimensions
         for dim_key in ("height", "width", "thickness", "flange_thickness", "radius1", "radius2", "lip_length"):
-            self.assertIsNone(card.findChild(QtWidgets.QLineEdit, f"card_{dim_key}"), f"Card must not have {dim_key} input.")
-            self.assertIsNone(card.findChild(QtWidgets.QLabel, f"lbl_{dim_key}"), f"Card must not have {dim_key} label.")
+            self.assertIsNone(
+                card.findChild(QtWidgets.QLineEdit, f"card_{dim_key}"), f"Card must not have {dim_key} input."
+            )
+            self.assertIsNone(
+                card.findChild(QtWidgets.QLabel, f"lbl_{dim_key}"), f"Card must not have {dim_key} label."
+            )
 
         # S2: Code and weight are edited in the properties modal.
         code_edit = self._get_card_code_edit(card)
@@ -467,7 +473,7 @@ class TestCustomProfileCards(unittest.TestCase):
             modal = QtWidgets.QApplication.activeModalWidget()
             modal.findChild(QtWidgets.QLineEdit, "property_code").setText("Sec_S2_Renamed")
             modal.findChild(QtWidgets.QLineEdit, "property_weight").setText("38.45")
-            modal.findChild(QtWidgets.QDialogButtonBox).button(QtWidgets.QDialogButtonBox.Save).click()
+            modal.findChild(QtWidgets.QDialogButtonBox).button(QtWidgets.QDialogButtonBox.Ok).click()
 
         QtCore.QTimer.singleShot(0, edit_properties)
         card.btn_edit_properties.click()
@@ -519,7 +525,9 @@ class TestCustomProfileCards(unittest.TestCase):
         self.assertIn("Sec_S2_TableEdit", reloaded_catalog2["Custom Profile"]["sizes"])
         self.assertNotIn("Sec_S2_Renamed", reloaded_catalog2["Custom Profile"]["sizes"])
         self.assertEqual(reloaded_catalog2["Custom Profile"]["sizes"]["Sec_S2_TableEdit"]["Weight"], "42.10")
-        self.assertEqual(reloaded_catalog2["Custom Profile"]["sizes"]["Sec_S2_TableEdit"]["custom_project_tag"], "Aerospace_6061")
+        self.assertEqual(
+            reloaded_catalog2["Custom Profile"]["sizes"]["Sec_S2_TableEdit"]["custom_project_tag"], "Aerospace_6061"
+        )
 
         # Read-only library check: assert widgets exist and are strictly read-only (no optional paths)
         self.dialog.current_lib_meta["is_user"] = False
@@ -688,7 +696,8 @@ class TestCustomProfileCards(unittest.TestCase):
         working_doc = App.getDocument(working_doc_name)
 
         working_sketches = [
-            obj for obj in working_doc.Objects
+            obj
+            for obj in working_doc.Objects
             if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject")
         ]
         self.assertTrue(len(working_sketches) >= 1)
@@ -762,20 +771,40 @@ class TestCustomProfileCards(unittest.TestCase):
             f.write(b"NOT_A_VALID_FREECAD_FILE_CORRUPT_HEADER_0xDEADBEEF\n")
 
         self.dialog.current_lib_data["Custom Profile"]["sizes"]["Valid_Card"] = {
-            "Height": "50.0", "Width": "50.0", "Thickness": "0.0", "Weight": "19.62",
-            "asset_path": rel_asset_valid, "object_name": "Section", "asset_id": "sec_s4_valid",
+            "Height": "50.0",
+            "Width": "50.0",
+            "Thickness": "0.0",
+            "Weight": "19.62",
+            "asset_path": rel_asset_valid,
+            "object_name": "Section",
+            "asset_id": "sec_s4_valid",
         }
         self.dialog.current_lib_data["Custom Profile"]["sizes"]["Corrupt_Card"] = {
-            "Height": "50.0", "Width": "50.0", "Thickness": "0.0", "Weight": "19.62",
-            "asset_path": corrupt_rel, "object_name": "Section", "asset_id": "sec_corrupt",
+            "Height": "50.0",
+            "Width": "50.0",
+            "Thickness": "0.0",
+            "Weight": "19.62",
+            "asset_path": corrupt_rel,
+            "object_name": "Section",
+            "asset_id": "sec_corrupt",
         }
         self.dialog.current_lib_data["Custom Profile"]["sizes"]["Missing_Asset_Card"] = {
-            "Height": "50.0", "Width": "50.0", "Thickness": "0.0", "Weight": "19.62",
-            "asset_path": "sections/non_existent_file.FCStd", "object_name": "Section", "asset_id": "sec_missing",
+            "Height": "50.0",
+            "Width": "50.0",
+            "Thickness": "0.0",
+            "Weight": "19.62",
+            "asset_path": "sections/non_existent_file.FCStd",
+            "object_name": "Section",
+            "asset_id": "sec_missing",
         }
         self.dialog.current_lib_data["Custom Profile"]["sizes"]["Traversal_Card"] = {
-            "Height": "50.0", "Width": "50.0", "Thickness": "0.0", "Weight": "19.62",
-            "asset_path": "../outside_sandbox.FCStd", "object_name": "Section", "asset_id": "sec_traversal",
+            "Height": "50.0",
+            "Width": "50.0",
+            "Thickness": "0.0",
+            "Weight": "19.62",
+            "asset_path": "../outside_sandbox.FCStd",
+            "object_name": "Section",
+            "asset_id": "sec_traversal",
         }
 
         # 2. Setup user doc and selection AFTER setup assets
@@ -830,11 +859,15 @@ class TestCustomProfileCards(unittest.TestCase):
         )
         self.assertEqual(len(user_sketch.Constraints), sketch_constr_count_pre, "Constraints count must not change.")
         self.assertEqual(getattr(user_sketch, "State", None), sketch_state_pre, "Sketch State must not change.")
-        self.assertEqual(getattr(user_sketch, "Modified", None), sketch_modified_pre, "Sketch Modified must not change.")
+        self.assertEqual(
+            getattr(user_sketch, "Modified", None), sketch_modified_pre, "Sketch Modified must not change."
+        )
 
         # File isolation: no thumbnail files written to library folder or sections
         current_lib_files = set(os.listdir(self.folder_lib_path))
-        self.assertEqual(current_lib_files, initial_lib_files, "No thumbnail files may be written to folder library root.")
+        self.assertEqual(
+            current_lib_files, initial_lib_files, "No thumbnail files may be written to folder library root."
+        )
         current_sec_files = set(os.listdir(sections_dir))
         self.assertEqual(current_sec_files, initial_sec_files, "No extra files may be written into sections directory.")
 
@@ -917,12 +950,22 @@ class TestCustomProfileCards(unittest.TestCase):
         rel_asset_1 = self._create_published_asset("sec_route_1", width=50.0, height=50.0)
         rel_asset_2 = self._create_published_asset("sec_route_2", width=70.0, height=35.0)
         self.dialog.current_lib_data["Custom Profile"]["sizes"]["Card_Zero"] = {
-            "Height": "50.0", "Width": "50.0", "Thickness": "0.0", "Weight": "19.62",
-            "asset_path": rel_asset_1, "object_name": "Section", "asset_id": "sec_route_1",
+            "Height": "50.0",
+            "Width": "50.0",
+            "Thickness": "0.0",
+            "Weight": "19.62",
+            "asset_path": rel_asset_1,
+            "object_name": "Section",
+            "asset_id": "sec_route_1",
         }
         self.dialog.current_lib_data["Custom Profile"]["sizes"]["Card_One"] = {
-            "Height": "35.0", "Width": "70.0", "Thickness": "0.0", "Weight": "19.23",
-            "asset_path": rel_asset_2, "object_name": "Section", "asset_id": "sec_route_2",
+            "Height": "35.0",
+            "Width": "70.0",
+            "Thickness": "0.0",
+            "Weight": "19.23",
+            "asset_path": rel_asset_2,
+            "object_name": "Section",
+            "asset_id": "sec_route_2",
         }
         self._select_family("Custom Profile")
         self.warnings_logged.clear()
@@ -993,7 +1036,6 @@ class TestCustomProfileCards(unittest.TestCase):
         cards_view.scroll_area.resize(1100, 400)
         cards_view.scroll_area.viewport().resize(1100, 400)
         self.assertEqual(cards_view._columns_per_row(), 4)
-
 
 
 if __name__ == "__main__":

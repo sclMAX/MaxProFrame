@@ -1,10 +1,11 @@
 """Native GUI coverage for staged custom-profile property edits."""
+
 import copy
 import unittest
 from unittest.mock import patch
 
-from PySide import QtCore, QtGui, QtWidgets
 import test_library_usability as fixtures
+from PySide import QtCore, QtGui, QtWidgets
 
 
 class TestCustomPropertiesModal(unittest.TestCase):
@@ -23,6 +24,7 @@ class TestCustomPropertiesModal(unittest.TestCase):
             except BaseException as exc:
                 self.error = exc
                 modal.reject()
+
         self.error = None
         QtCore.QTimer.singleShot(0, interact)
         self.card.btn_edit_properties.click()
@@ -30,25 +32,28 @@ class TestCustomPropertiesModal(unittest.TestCase):
             raise self.error
 
     def fields(self, modal):
-        return tuple(modal.findChild(QtWidgets.QLineEdit, name) for name in
-                     ("property_code", "property_description", "property_weight"))
+        return tuple(
+            modal.findChild(QtWidgets.QLineEdit, name)
+            for name in ("property_code", "property_description", "property_weight")
+        )
 
     def save(self, modal):
-        modal.findChild(QtWidgets.QDialogButtonBox).button(QtWidgets.QDialogButtonBox.Save).click()
+        modal.findChild(QtWidgets.QDialogButtonBox).button(QtWidgets.QDialogButtonBox.Ok).click()
 
     def test_card_is_display_only_and_modal_cancel_preserves_all_data(self):
         before = copy.deepcopy(self.dialog.current_lib_data)
         for field in (self.card.code_edit, self.card.description_edit, self.card.weight_edit):
             self.assertTrue(field.isReadOnly())
             self.assertFalse(field.hasFrame())
+
         def cancel(modal):
             code, description, weight = self.fields(modal)
-            self.assertEqual([f.text() for f in (code, description, weight)],
-                             ["PGC100", "Correa galvanizada", "2.3"])
+            self.assertEqual([f.text() for f in (code, description, weight)], ["PGC100", "Correa galvanizada", "2.3"])
             for field in (code, description, weight):
                 self.assertFalse(field.isReadOnly())
                 field.setText("changed")
             modal.findChild(QtWidgets.QDialogButtonBox).button(QtWidgets.QDialogButtonBox.Cancel).click()
+
         self.open_modal(cancel)
         self.assertEqual(self.dialog.current_lib_data, before)
         self.assertFalse(self.dialog.is_dirty)
@@ -62,6 +67,7 @@ class TestCustomPropertiesModal(unittest.TestCase):
             for field, value in zip(self.fields(modal), ("PGC101", "Updated description", "3.25")):
                 field.setText(value)
             self.save(modal)
+
         with patch.object(self.dialog, "_on_edit_section") as geometry:
             self.open_modal(edit)
         geometry.assert_not_called()
@@ -86,13 +92,19 @@ class TestCustomPropertiesModal(unittest.TestCase):
         before = copy.deepcopy(self.manager.get_library("Catalog"))
         item = self.dialog.table_sizes.item(self.card.row, 0)
         metadata = copy.deepcopy(item.data(QtCore.Qt.UserRole))
+
         def invalid(modal):
             code, description, weight = self.fields(modal)
             with patch.object(QtWidgets.QMessageBox, "warning") as warning:
-                for bad_code, bad_weight in (("", "2"), (" AL200 ", "2"),
-                                              ("NEW", "0"), ("NEW", "-1"),
-                                              ("NEW", "nan"), ("NEW", "inf"),
-                                              ("NEW", "bad")):
+                for bad_code, bad_weight in (
+                    ("", "2"),
+                    (" AL200 ", "2"),
+                    ("NEW", "0"),
+                    ("NEW", "-1"),
+                    ("NEW", "nan"),
+                    ("NEW", "inf"),
+                    ("NEW", "bad"),
+                ):
                     code.setText(bad_code)
                     description.setText("must not leak")
                     weight.setText(bad_weight)
@@ -104,6 +116,7 @@ class TestCustomPropertiesModal(unittest.TestCase):
                     self.assertFalse(self.dialog.is_dirty)
                 self.assertEqual(warning.call_count, 7)
             modal.reject()
+
         self.open_modal(invalid)
         self.assertEqual(self.manager.get_library("Catalog"), before)
 
