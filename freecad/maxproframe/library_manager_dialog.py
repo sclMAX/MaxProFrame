@@ -397,6 +397,18 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         Gui.addLanguagePath(TRANSLATIONSPATH)
         Gui.updateLocale()
 
+    @property
+    def is_dirty(self):
+        return getattr(self, "_is_dirty", False)
+
+    @is_dirty.setter
+    def is_dirty(self, value):
+        self._is_dirty = bool(value)
+        button = getattr(self, "btn_save", None)
+        if button is not None:
+            metadata = self.current_lib_meta or {}
+            button.setEnabled(self._is_dirty and bool(metadata.get("is_user")))
+
     def __init__(self, parent=None, library_manager=None):
         super().__init__(parent)
         self.ensure_translations_loaded()
@@ -409,6 +421,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self._staged_new_assets = set()
         self._active_edit_session = None
         self._profile_editor = None
+        self._previous_workbench = None
         self._dxf_review = None
         self._dxf_previous_doc = None
         self._dxf_restore_visible = False
@@ -625,6 +638,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         bottom_layout.addWidget(self.lbl_status, 1)
 
         self.btn_save = QtWidgets.QPushButton(translate("frameforge", "Save Changes"))
+        self.btn_save.setEnabled(False)
         self.btn_save.setStyleSheet(
             """
             QPushButton {
@@ -640,6 +654,11 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             }
             QPushButton:pressed {
                 background-color: #0d47a1;
+            }
+            QPushButton:disabled {
+                background-color: palette(button);
+                color: palette(mid);
+                border: 1px solid palette(mid);
             }
         """
         )
@@ -821,7 +840,6 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         self.btn_del_lib.setEnabled(is_user)
         self.btn_export_lib.setEnabled(is_user)
-        self.btn_save.setEnabled(is_user)
         self.btn_add_family.setEnabled(is_user)
 
         if is_folder:
@@ -2375,6 +2393,12 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         if Gui is not None and was_visible:
             try:
+                if hasattr(Gui, "activeWorkbench"):
+                    try:
+                        wb = Gui.activeWorkbench()
+                        self._previous_workbench = wb.name() if hasattr(wb, "name") else type(wb).__name__
+                    except Exception:
+                        self._previous_workbench = None
                 if hasattr(App, "setActiveDocument"):
                     App.setActiveDocument(session.working_doc_name)
                 if hasattr(Gui, "setActiveDocument"):
@@ -2629,6 +2653,25 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 translate("frameforge", "Section opened in FreeCAD. Edit sketch, then click 'Apply Section Edit'."),
                 is_warning=True,
             )
+        else:
+            self._restore_previous_workbench()
+            if self.is_dirty:
+                self._set_status(translate("frameforge", "Unsaved changes."), is_warning=True)
+            else:
+                self._set_status("")
+
+    def _restore_previous_workbench(self):
+        prev = getattr(self, "_previous_workbench", None)
+        self._previous_workbench = None
+        if Gui is not None and hasattr(Gui, "activateWorkbench"):
+            target = prev or "MaxProFrame"
+            try:
+                Gui.activateWorkbench(target)
+            except Exception:
+                try:
+                    Gui.activateWorkbench("MaxProFrame")
+                except Exception:
+                    pass
 
     def _cleanup_edit_session_and_staged_assets(self):
         self._cancel_dxf_review()
@@ -2636,6 +2679,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             self._profile_editor.reject()
         self._detach_sketch_edit_watcher()
         self._is_hidden_for_sketch_edit = False
+        self._restore_previous_workbench()
         if getattr(self, "_active_edit_session", None) is not None:
             try:
                 self._active_edit_session.close(discard_uncommitted=True)

@@ -38,7 +38,8 @@ class TestUnifiedCustomProfileEditor(unittest.TestCase):
             },
         }
         self.fixture._select_family("Custom Profile")
-        self.dialog.btn_save.click()
+        # Fixture seeding mutates the model directly, not through a dirty UI edit.
+        self.dialog._on_save_library()
         self.original_files = self.files()
         self.card = self.dialog.cards_view.card_by_code("A")
         self.error = None
@@ -107,6 +108,25 @@ class TestUnifiedCustomProfileEditor(unittest.TestCase):
         index = next(i for i, c in enumerate(sketch.Constraints) if c.Type == "Distance" and abs(c.Value - 40) < 0.001)
         sketch.setDatum(index, App.Units.Quantity("55 mm"))
         sketch.Document.recompute()
+
+    def test_cancel_restores_workbench_and_clears_status_message(self):
+        initial_wb = Gui.activeWorkbench().name()
+        editor, working, sketch = self.begin_geometry()
+        self.assertEqual(Gui.activeWorkbench().name(), "SketcherWorkbench")
+        editor.reject()
+        self.assertEqual(Gui.activeWorkbench().name(), initial_wb)
+        self.assertNotIn("Section opened in FreeCAD", self.dialog.lbl_status.text())
+        self.assertNotIn("Sección abierta en FreeCAD", self.dialog.lbl_status.text())
+        self.assertEqual(self.dialog.lbl_status.text(), "")
+
+    def test_accept_restores_workbench(self):
+        initial_wb = Gui.activeWorkbench().name()
+        editor, working, sketch = self.begin_geometry()
+        self.change_geometry(sketch)
+        editor.accept()
+        self.assertEqual(Gui.activeWorkbench().name(), initial_wb)
+        self.assertNotIn("Section opened in FreeCAD", self.dialog.lbl_status.text())
+        self.assertNotIn("Sección abierta en FreeCAD", self.dialog.lbl_status.text())
 
     def test_properties_only_accept_and_cancel_do_not_open_sketcher(self):
         def accept(modal):

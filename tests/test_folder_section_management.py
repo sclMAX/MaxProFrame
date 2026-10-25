@@ -671,8 +671,8 @@ class TestFolderSectionManagement(unittest.TestCase):
             "asset_id": "sec_discard_keep",
         }
         self._select_family("Custom Profile")
-        # Save initial state to disk first
-        self.dialog.btn_save.click()
+        # Persist fixture data explicitly: direct model seeding is not a dirty UI edit.
+        self.dialog._on_save_library()
 
         self.dialog.table_sizes.selectRow(0)
         self._confirm_delete_size()

@@ -174,16 +174,16 @@ class CustomProfileEditor(QtWidgets.QDialog):
             if weight.text() != self.weight.text().strip():
                 weight.setText(self.weight.text().strip())
                 self.manager._mark_dirty()
-        self._finish()
+        self._finish(is_rejection=False)
         super().accept()
 
     def reject(self):
         if self._finishing:
             return
-        self._finish()
+        self._finish(is_rejection=True)
         super().reject()
 
-    def _finish(self):
+    def _finish(self, is_rejection=False):
         self._finishing = True
         self.timer.stop()
         if self._geometry:
@@ -194,6 +194,12 @@ class CustomProfileEditor(QtWidgets.QDialog):
                 session.close(discard_uncommitted=True)
             self.manager._is_hidden_for_sketch_edit = False
             self.manager.btn_apply_edit.setEnabled(False)
+            self.manager._restore_previous_workbench()
+            if is_rejection:
+                if self.manager.is_dirty:
+                    self.manager._set_status(translate("frameforge", "Unsaved changes."), is_warning=True)
+                else:
+                    self.manager._set_status("")
             if not self.manager._is_closed:
                 self.manager.show()
                 self.manager.raise_()
