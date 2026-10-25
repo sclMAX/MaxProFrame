@@ -14,7 +14,14 @@ import FreeCADGui as Gui
 
 from freecad.maxproframe.dxf_section_dialog import DXFSectionReview, DXFUnitsDialog
 from freecad.maxproframe.dxf_section_import import import_dxf_section, inspect_dxf
-from freecad.maxproframe.ff_tools import ICONPATH, PROFILEIMAGES_PATH, TRANSLATIONSPATH, add_command, get_param_group, translate
+from freecad.maxproframe.ff_tools import (
+    ICONPATH,
+    PROFILEIMAGES_PATH,
+    TRANSLATIONSPATH,
+    add_command,
+    get_param_group,
+    translate,
+)
 from freecad.maxproframe.library_manager import (
     KNOWN_FAMILIES,
     STANDARD_DENSITIES,
@@ -148,9 +155,7 @@ class NewLibraryDialog(QtWidgets.QDialog):
 
         if default_material not in STANDARD_DENSITIES:
             density = default_density if default_density is not None else 7.85
-            self.combo_material.addItem(
-                f"{default_material} ({density} g/cm³)", (default_material, density)
-            )
+            self.combo_material.addItem(f"{default_material} ({density} g/cm³)", (default_material, density))
 
         # Preselect default material, retaining the source's explicit density.
         for i in range(self.combo_material.count()):
@@ -158,9 +163,7 @@ class NewLibraryDialog(QtWidgets.QDialog):
             if mat_key.lower() == default_material.lower():
                 if default_density is not None:
                     self.combo_material.setItemData(i, (mat_key, default_density))
-                    self.combo_material.setItemText(
-                        i, f"{translate('frameforge', mat_key)} ({default_density} g/cm³)"
-                    )
+                    self.combo_material.setItemText(i, f"{translate('frameforge', mat_key)} ({default_density} g/cm³)")
                 self.combo_material.setCurrentIndex(i)
                 break
         layout.addWidget(self.combo_material)
@@ -394,6 +397,18 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         Gui.addLanguagePath(TRANSLATIONSPATH)
         Gui.updateLocale()
 
+    @property
+    def is_dirty(self):
+        return getattr(self, "_is_dirty", False)
+
+    @is_dirty.setter
+    def is_dirty(self, value):
+        self._is_dirty = bool(value)
+        button = getattr(self, "btn_save", None)
+        if button is not None:
+            metadata = self.current_lib_meta or {}
+            button.setEnabled(self._is_dirty and bool(metadata.get("is_user")))
+
     def __init__(self, parent=None, library_manager=None):
         super().__init__(parent)
         self.ensure_translations_loaded()
@@ -405,6 +420,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self._staged_deleted_assets = set()
         self._staged_new_assets = set()
         self._active_edit_session = None
+        self._profile_editor = None
+        self._previous_workbench = None
         self._dxf_review = None
         self._dxf_previous_doc = None
         self._dxf_restore_visible = False
@@ -569,8 +586,10 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         meta_row.addWidget(self.btn_del_size)
         meta_row.addWidget(self.btn_capture_section)
         meta_row.addWidget(self.btn_import_dxf)
-        meta_row.addWidget(self.btn_edit_section)
-        meta_row.addWidget(self.btn_apply_edit)
+        # Keep legacy callers without orphan top-level widgets after removing the toolbar entries.
+        for button in (self.btn_edit_section, self.btn_apply_edit):
+            button.setParent(self)
+            button.hide()
 
         header_details_layout.addLayout(meta_row)
         header_layout.addLayout(header_details_layout, 1)
@@ -619,6 +638,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         bottom_layout.addWidget(self.lbl_status, 1)
 
         self.btn_save = QtWidgets.QPushButton(translate("frameforge", "Save Changes"))
+        self.btn_save.setEnabled(False)
         self.btn_save.setStyleSheet(
             """
             QPushButton {
@@ -634,6 +654,11 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             }
             QPushButton:pressed {
                 background-color: #0d47a1;
+            }
+            QPushButton:disabled {
+                background-color: palette(button);
+                color: palette(mid);
+                border: 1px solid palette(mid);
             }
         """
         )
@@ -740,11 +765,14 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         reply = QtWidgets.QMessageBox.question(
             self,
             translate("frameforge", "Unsaved Changes"),
-            (translate("frameforge", "You have unsaved changes. Do you want to save them before closing?")
-             if closing else translate(
-                 "frameforge",
-                 "You have unsaved changes. Do you want to save them before switching libraries?",
-             )),
+            (
+                translate("frameforge", "You have unsaved changes. Do you want to save them before closing?")
+                if closing
+                else translate(
+                    "frameforge",
+                    "You have unsaved changes. Do you want to save them before switching libraries?",
+                )
+            ),
             QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Discard | QtWidgets.QMessageBox.Cancel,
             QtWidgets.QMessageBox.Save,
         )
@@ -775,7 +803,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             new_data = self.manager.get_library(lib_meta["name"])
         except Exception as e:
             QtWidgets.QMessageBox.warning(
-                self, translate("frameforge", "Error"),
+                self,
+                translate("frameforge", "Error"),
                 translate("frameforge", "Error loading library '%s': %s") % (lib_meta["name"], str(e)),
             )
             self._set_status(
@@ -811,7 +840,6 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         self.btn_del_lib.setEnabled(is_user)
         self.btn_export_lib.setEnabled(is_user)
-        self.btn_save.setEnabled(is_user)
         self.btn_add_family.setEnabled(is_user)
 
         if is_folder:
@@ -833,7 +861,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
     def _update_banner(self, is_user, name, is_folder=False, folder_path=None):
         dark = is_dark_theme(self)
         mat, dens = self.manager.get_library_material_info(name)
-        mat_display = translate('frameforge', mat)
+        mat_display = translate("frameforge", mat)
         if is_folder:
             self.lbl_lib_banner.setText(f"{name} | {mat_display}")
             self.lbl_lib_banner.setToolTip(f"{dens} g/cm³\n{folder_path or ''}")
@@ -879,9 +907,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             f"border: 1px solid {border_color}; padding: 5px 8px; border-radius: 4px;"
         )
         self.lbl_family_name.setFixedHeight(self.lbl_lib_banner.sizeHint().height())
-        self.lbl_lib_banner.setToolTip(
-            f"{self.lbl_lib_banner.text()}\n{self.lbl_lib_banner.toolTip()}"
-        )
+        self.lbl_lib_banner.setToolTip(f"{self.lbl_lib_banner.text()}\n{self.lbl_lib_banner.toolTip()}")
 
     def _set_status(self, text, is_error=False, is_warning=False):
         dark = is_dark_theme(self)
@@ -1186,27 +1212,30 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
     @staticmethod
     def _search_key(text):
-        return ''.join(c for c in unicodedata.normalize('NFD', str(text).casefold())
-                       if not unicodedata.combining(c))
+        return "".join(c for c in unicodedata.normalize("NFD", str(text).casefold()) if not unicodedata.combining(c))
 
     def _filter_profiles(self):
-        if not hasattr(self, 'table_sizes'):
+        if not hasattr(self, "table_sizes"):
             return
         query = self._search_key(self.le_search.text().strip())
         visible = 0
         for row in range(self.table_sizes.rowCount()):
             item = self.table_sizes.item(row, 0)
             props = item.data(QtCore.Qt.UserRole) if item else {}
-            description = props.get('Description', '') if isinstance(props, dict) else ''
-            matches = not query or any(query in self._search_key(value)
-                                       for value in (item.text() if item else '', description))
+            description = props.get("Description", "") if isinstance(props, dict) else ""
+            matches = not query or any(
+                query in self._search_key(value) for value in (item.text() if item else "", description)
+            )
             self.table_sizes.setRowHidden(row, not matches)
             visible += int(matches)
         self.cards_view.filter_from_table()
         total = self.table_sizes.rowCount()
-        self.lbl_profile_count.setText(translate('frameforge', '%s of %s profiles') % (visible, total))
-        self.lbl_profiles_empty.setText(translate('frameforge', 'This family has no profiles.')
-                                        if not total else translate('frameforge', 'No matching profiles.'))
+        self.lbl_profile_count.setText(translate("frameforge", "%s of %s profiles") % (visible, total))
+        self.lbl_profiles_empty.setText(
+            translate("frameforge", "This family has no profiles.")
+            if not total
+            else translate("frameforge", "No matching profiles.")
+        )
         self.lbl_profiles_empty.setVisible(not visible)
         self._update_section_buttons()
 
@@ -1404,9 +1433,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         if not self._prompt_dirty_save():
             return
 
-        dlg = NewLibraryDialog(
-            self, title="New Library", default_material="Steel", user_dir=self.manager.user_dir
-        )
+        dlg = NewLibraryDialog(self, title="New Library", default_material="Steel", user_dir=self.manager.user_dir)
         if dlg.exec_() != QtWidgets.QDialog.Accepted:
             return
 
@@ -1476,7 +1503,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             meta = self.manager.import_library_zip(archive)
         except Exception as err:
             QtWidgets.QMessageBox.warning(
-                self, translate("frameforge", "Error"),
+                self,
+                translate("frameforge", "Error"),
                 translate("frameforge", "Could not import library: %s") % str(err),
             )
             return
@@ -1488,7 +1516,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
         if self.is_dirty:
             reply = QtWidgets.QMessageBox.question(
-                self, translate("frameforge", "Unsaved Changes"),
+                self,
+                translate("frameforge", "Unsaved Changes"),
                 translate("frameforge", "Save changes before exporting the library?"),
                 QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Cancel,
                 QtWidgets.QMessageBox.Save,
@@ -1500,8 +1529,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 return
         name = self.current_lib_meta["name"]
         archive, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, translate("frameforge", "Export Library ZIP"),
-            sanitize_library_name(name) + ".zip", "ZIP (*.zip)"
+            self, translate("frameforge", "Export Library ZIP"), sanitize_library_name(name) + ".zip", "ZIP (*.zip)"
         )
         if not archive:
             return
@@ -1511,7 +1539,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             self.manager.export_library_zip(name, archive)
         except Exception as err:
             QtWidgets.QMessageBox.warning(
-                self, translate("frameforge", "Error"),
+                self,
+                translate("frameforge", "Error"),
                 translate("frameforge", "Could not export library '%s': %s") % (name, str(err)),
             )
             return
@@ -1623,7 +1652,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 self.manager.unregister_folder_library(folder_path or name)
             except Exception as e:
                 QtWidgets.QMessageBox.warning(
-                    self, translate("frameforge", "Error"),
+                    self,
+                    translate("frameforge", "Error"),
                     translate("frameforge", "Could not unregister folder library '%s': %s") % (name, str(e)),
                 )
                 return
@@ -1644,7 +1674,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                     self.manager.delete_user_library(name)
                 except Exception as e:
                     QtWidgets.QMessageBox.warning(
-                        self, translate("frameforge", "Error"),
+                        self,
+                        translate("frameforge", "Error"),
                         translate("frameforge", "Could not delete library '%s': %s") % (name, str(e)),
                     )
                     return
@@ -1974,7 +2005,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                         resolve_and_validate_asset_path(folder_path, ap)
                     except Exception as err:
                         QtWidgets.QMessageBox.warning(
-                            self, translate("frameforge", "Error"),
+                            self,
+                            translate("frameforge", "Error"),
                             translate("frameforge", "Error saving library: %s") % str(err),
                         )
                         self._set_status(translate("frameforge", "Error saving library: %s") % str(err), is_error=True)
@@ -1994,10 +2026,14 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                                         resolve_and_validate_asset_path(folder_path, ap)
                                     except Exception as err:
                                         QtWidgets.QMessageBox.warning(
-                                            self, translate("frameforge", "Error"),
+                                            self,
+                                            translate("frameforge", "Error"),
                                             translate("frameforge", "Error saving library: %s") % str(err),
                                         )
-                                        self._set_status(translate("frameforge", "Error saving library: %s") % str(err), is_error=True)
+                                        self._set_status(
+                                            translate("frameforge", "Error saving library: %s") % str(err),
+                                            is_error=True,
+                                        )
                                         return
 
                 self.manager.save_folder_library(
@@ -2020,7 +2056,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             self._set_status(translate("frameforge", "Library '%s' saved successfully.") % lib_name)
         except Exception as e:
             QtWidgets.QMessageBox.warning(
-                self, translate("frameforge", "Error"),
+                self,
+                translate("frameforge", "Error"),
                 translate("frameforge", "Error saving library: %s") % str(e),
             )
             self._set_status(translate("frameforge", "Error saving library: %s") % str(e), is_error=True)
@@ -2032,17 +2069,17 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         canonical = get_canonical_family(self.current_family, fam_data) if self.current_family else ""
         is_custom_geom = canonical == "Custom Profile"
         has_row = self._selected_profile_row() >= 0
-        if hasattr(self, 'btn_del_size'):
+        if hasattr(self, "btn_del_size"):
             self.btn_del_size.setEnabled(is_user and has_row)
-        if hasattr(self, 'btn_del_lib'):
+        if hasattr(self, "btn_del_lib"):
             self.btn_del_lib.setEnabled(is_user and self._has_list_selection(self.list_libraries))
-        if hasattr(self, 'btn_del_family'):
+        if hasattr(self, "btn_del_family"):
             self.btn_del_family.setEnabled(is_user and self._has_list_selection(self.list_families))
 
         for name in ("btn_capture_section", "btn_import_dxf", "btn_edit_section", "btn_apply_edit"):
             button = getattr(self, name, None)
             if button is not None:
-                button.setVisible(is_custom_geom)
+                button.setVisible(is_custom_geom and name not in ("btn_edit_section", "btn_apply_edit"))
 
         if hasattr(self, "btn_add_size"):
             self.btn_add_size.setEnabled(is_user and bool(self.current_family) and not is_custom_geom)
@@ -2206,7 +2243,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             if previous_doc in App.listDocuments():
                 App.setActiveDocument(previous_doc)
             QtWidgets.QMessageBox.warning(
-                self, translate("frameforge", "Import DXF"),
+                self,
+                translate("frameforge", "Import DXF"),
                 translate("frameforge", "Could not import DXF: %s") % str(err),
             )
 
@@ -2242,7 +2280,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             asset_meta = save_section_asset(meta["folder_path"], review.sketch, name=code)
         except Exception as err:
             QtWidgets.QMessageBox.warning(
-                review, translate("frameforge", "Import DXF"),
+                review,
+                translate("frameforge", "Import DXF"),
                 translate("frameforge", "Could not add section: %s") % str(err),
             )
             return
@@ -2274,7 +2313,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self._dxf_restore_visible = False
         review.deleteLater()
 
-    def _on_edit_section(self):
+    def _on_edit_section(self, force_gui=False):
         if self._dxf_review is not None:
             self._dxf_review.raise_()
             return
@@ -2349,11 +2388,17 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             return
 
         # Attempt entering Sketcher and activating sketch edit mode in GUI only when dialog is visible
-        was_visible = bool(self.isVisible())
+        was_visible = bool(self.isVisible() or force_gui)
         entered_gui_edit = False
 
         if Gui is not None and was_visible:
             try:
+                if hasattr(Gui, "activeWorkbench"):
+                    try:
+                        wb = Gui.activeWorkbench()
+                        self._previous_workbench = wb.name() if hasattr(wb, "name") else type(wb).__name__
+                    except Exception:
+                        self._previous_workbench = None
                 if hasattr(App, "setActiveDocument"):
                     App.setActiveDocument(session.working_doc_name)
                 if hasattr(Gui, "setActiveDocument"):
@@ -2362,7 +2407,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                     Gui.activateWorkbench("SketcherWorkbench")
                 gui_doc = Gui.getDocument(session.working_doc_name) if hasattr(Gui, "getDocument") else None
                 if gui_doc is None or not hasattr(gui_doc, "setEdit"):
-                    raise RuntimeError(translate("frameforge", "Active FreeCAD GUI document not available for editing."))
+                    raise RuntimeError(
+                        translate("frameforge", "Active FreeCAD GUI document not available for editing.")
+                    )
                 set_edit_ok = gui_doc.setEdit(session.working_sketch_name)
                 if not set_edit_ok:
                     raise RuntimeError(translate("frameforge", "Failed to enter edit mode for sketch."))
@@ -2429,6 +2476,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
             # Hide library manager dialog only after confirmed edit entry
             self.hide()
+        return True
 
     def apply_section_edit(self):
         """Applies edits made to the working sketch in FreeCAD back to the library table."""
@@ -2538,6 +2586,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         self._mark_dirty()
         self._set_status(translate("frameforge", "Section edits applied. Save library to publish changes."))
+        return True
 
     def _cleanup_uncommitted_staged_new_assets(self):
         """Cleans up owned newly created/staged assets that were never committed to disk."""
@@ -2604,11 +2653,33 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
                 translate("frameforge", "Section opened in FreeCAD. Edit sketch, then click 'Apply Section Edit'."),
                 is_warning=True,
             )
+        else:
+            self._restore_previous_workbench()
+            if self.is_dirty:
+                self._set_status(translate("frameforge", "Unsaved changes."), is_warning=True)
+            else:
+                self._set_status("")
+
+    def _restore_previous_workbench(self):
+        prev = getattr(self, "_previous_workbench", None)
+        self._previous_workbench = None
+        if Gui is not None and hasattr(Gui, "activateWorkbench"):
+            target = prev or "MaxProFrame"
+            try:
+                Gui.activateWorkbench(target)
+            except Exception:
+                try:
+                    Gui.activateWorkbench("MaxProFrame")
+                except Exception:
+                    pass
 
     def _cleanup_edit_session_and_staged_assets(self):
         self._cancel_dxf_review()
+        if self._profile_editor is not None:
+            self._profile_editor.reject()
         self._detach_sketch_edit_watcher()
         self._is_hidden_for_sketch_edit = False
+        self._restore_previous_workbench()
         if getattr(self, "_active_edit_session", None) is not None:
             try:
                 self._active_edit_session.close(discard_uncommitted=True)

@@ -128,7 +128,15 @@ class TestLibraryDXFImport(unittest.TestCase):
         for family in ("My Sections", "Rectangular Hollow", "My Sections"):
             self.dialog.list_families.setCurrentRow(self.dialog.combo_family.findText(family))
             for button in actions:
-                self.assertEqual(button.isHidden(), family != "My Sections")
+                self.assertEqual(
+                    button.isHidden(),
+                    family != "My Sections"
+                    or button
+                    in (
+                        self.dialog.btn_edit_section,
+                        self.dialog.btn_apply_edit,
+                    ),
+                )
                 self.assertEqual(button.text(), "")
                 self.assertTrue(button.toolTip())
                 self.assertFalse(button.icon().isNull())
@@ -333,8 +341,9 @@ class TestLibraryDXFImport(unittest.TestCase):
         review.le_code.setText(" ")
         review.le_description.setText("Rejected description")
         review.btn_add.click()
-        self.assertEqual(self.warning.call_args.args[2],
-                         "No se pudo agregar la sección: Introduzca un código de tamaño no vacío.")
+        self.assertEqual(
+            self.warning.call_args.args[2], "No se pudo agregar la sección: Introduzca un código de tamaño no vacío."
+        )
         self.assertEqual(self.snapshot(), self.before)
         self.assertIs(self.dialog._dxf_review, review)
         review.le_code.setText("A")

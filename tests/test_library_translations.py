@@ -13,11 +13,23 @@ TRANSLATIONS = ROOT / "resources" / "translations"
 def library_sources():
     """Include literal translations and the dialog's indirect UI labels."""
     # These standard keys are translated indirectly by the family display helper.
-    sources = {("frameforge", name) for name in (
-        "T-Slot", "T-Slot 3-Slots", "T-Slot 2-Slots", "T-Slot 2-Slots Opp", "T-Slot 1-Slot",
-    )}
-    for filename in ("library_manager_dialog.py", "custom_profile_cards.py",
-                     "dxf_section_dialog.py", "sketch_section_dialog.py"):
+    sources = {
+        ("frameforge", name)
+        for name in (
+            "T-Slot",
+            "T-Slot 3-Slots",
+            "T-Slot 2-Slots",
+            "T-Slot 2-Slots Opp",
+            "T-Slot 1-Slot",
+        )
+    }
+    for filename in (
+        "library_manager_dialog.py",
+        "custom_profile_cards.py",
+        "dxf_section_dialog.py",
+        "sketch_section_dialog.py",
+        "custom_profile_editor.py",
+    ):
         tree = ast.parse((ROOT / filename).read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):

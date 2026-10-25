@@ -217,6 +217,7 @@ def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=
     saved_selection = []
     try:
         import FreeCADGui as Gui_mod
+
         if hasattr(Gui_mod, "Selection"):
             for sel in Gui_mod.Selection.getSelectionEx():
                 dname = getattr(sel, "DocumentName", None)
@@ -269,6 +270,7 @@ def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=
                 pass
         try:
             import FreeCADGui as Gui_mod
+
             if hasattr(Gui_mod, "Selection"):
                 Gui_mod.Selection.clearSelection()
                 for dname, oname, sub_names in saved_selection:
@@ -392,9 +394,7 @@ class CustomProfileCard(QtWidgets.QFrame):
         self.description_edit.setFixedHeight(description_height)
         description_layout.addWidget(self.description_edit)
         self.description_edit.setVisible(bool(self.description_edit.text().strip()))
-        self.description_edit.textChanged.connect(
-            lambda text: self.description_edit.setVisible(bool(text.strip()))
-        )
+        self.description_edit.textChanged.connect(lambda text: self.description_edit.setVisible(bool(text.strip())))
         layout.addWidget(description_slot)
 
         self.weight_edit = _DescriptionEdit(str(weight), suffix=" kg/m")
@@ -455,8 +455,9 @@ class CustomProfileCard(QtWidgets.QFrame):
         self.btn_edit_properties.move(4, 4)
         width = self.weight_edit.fontMetrics().horizontalAdvance(self.weight_edit.text() + " kg/m") + 14
         self.weight_edit.setFixedWidth(min(width, max(1, preview.width() - 8)))
-        self.weight_edit.move(preview.width() - self.weight_edit.width() - 4,
-                              preview.height() - self.weight_edit.height() - 4)
+        self.weight_edit.move(
+            preview.width() - self.weight_edit.width() - 4, preview.height() - self.weight_edit.height() - 4
+        )
 
     def eventFilter(self, obj, event):
         if obj is self.thumbnail_label and event.type() == QtCore.QEvent.Resize:
@@ -499,14 +500,10 @@ class CustomProfileCard(QtWidgets.QFrame):
             color = palette.color(foreground)
             if field is self.description_edit and not self._selected:
                 surface = palette.color(background)
-                color = QtGui.QColor(*(
-                    round(a * 0.8 + b * 0.2)
-                    for a, b in zip(color.getRgb()[:3], surface.getRgb()[:3])
-                ))
-            field.setStyleSheet(
-                "background: transparent; border: none; padding: 0; "
-                f"color: {color.name()};"
-            )
+                color = QtGui.QColor(
+                    *(round(a * 0.8 + b * 0.2) for a, b in zip(color.getRgb()[:3], surface.getRgb()[:3]))
+                )
+            field.setStyleSheet("background: transparent; border: none; padding: 0; " f"color: {color.name()};")
         for widget, surface_role, ink_role, radius, padding in (
             (self.weight_edit, QtGui.QPalette.AlternateBase, QtGui.QPalette.Text, 5, "2px 4px"),
             (self.btn_edit_properties, QtGui.QPalette.Button, QtGui.QPalette.ButtonText, 4, "0"),
@@ -516,10 +513,9 @@ class CustomProfileCard(QtWidgets.QFrame):
             editable = self.btn_edit_properties.isEnabled()
             accent = palette.color(QtGui.QPalette.Highlight) if editable else ink
             strength = 0.55 if editable else 0.3
-            outline = QtGui.QColor(*(
-                round(a * strength + b * (1 - strength))
-                for a, b in zip(accent.getRgb()[:3], surface.getRgb()[:3])
-            ))
+            outline = QtGui.QColor(
+                *(round(a * strength + b * (1 - strength)) for a, b in zip(accent.getRgb()[:3], surface.getRgb()[:3]))
+            )
             style = (
                 f"background: {surface.name()}; color: {ink.name()}; "
                 f"border: 1px solid {outline.name()}; border-radius: {radius}px; padding: {padding};"
@@ -538,10 +534,17 @@ class CustomProfileCard(QtWidgets.QFrame):
         painter = QtGui.QPainter(pixmap)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
         painter.setPen(QtGui.QPen(palette.color(QtGui.QPalette.ButtonText), 1.5))
-        painter.drawPolygon(QtGui.QPolygonF([
-            QtCore.QPointF(4, 11), QtCore.QPointF(11, 4),
-            QtCore.QPointF(14, 7), QtCore.QPointF(7, 14), QtCore.QPointF(3, 15),
-        ]))
+        painter.drawPolygon(
+            QtGui.QPolygonF(
+                [
+                    QtCore.QPointF(4, 11),
+                    QtCore.QPointF(11, 4),
+                    QtCore.QPointF(14, 7),
+                    QtCore.QPointF(7, 14),
+                    QtCore.QPointF(3, 15),
+                ]
+            )
+        )
         painter.drawLine(QtCore.QPointF(10, 5), QtCore.QPointF(13, 8))
         painter.drawLine(QtCore.QPointF(4, 11), QtCore.QPointF(7, 14))
         painter.end()
@@ -559,66 +562,14 @@ class CustomProfileCard(QtWidgets.QFrame):
     def _edit_properties(self):
         if not self.btn_edit_properties.isEnabled():
             return
+        existing = getattr(self.dialog, "_profile_editor", None)
+        if existing is not None:
+            existing.raise_()
+            return
+        from freecad.maxproframe.custom_profile_editor import CustomProfileEditor
+
         self.cards_view.select_card(self.row)
-        editor = QtWidgets.QDialog(self)
-        editor.setObjectName("custom_properties_dialog")
-        editor.setWindowTitle(translate("frameforge", "Edit Properties"))
-        editor.setMinimumWidth(360)
-        layout = QtWidgets.QVBoxLayout(editor)
-        form = QtWidgets.QFormLayout()
-        code = QtWidgets.QLineEdit(self.code_edit.text())
-        description = QtWidgets.QLineEdit(self.description_edit.text())
-        weight = QtWidgets.QLineEdit(self.weight_edit.text())
-        code.setObjectName("property_code")
-        description.setObjectName("property_description")
-        weight.setObjectName("property_weight")
-        form.addRow(translate("frameforge", "Code:"), code)
-        form.addRow(translate("frameforge", "Description:"), description)
-        form.addRow(translate("frameforge", "Weight (kg/m):"), weight)
-        layout.addLayout(form)
-        buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Save | QtWidgets.QDialogButtonBox.Cancel
-        )
-        buttons.button(QtWidgets.QDialogButtonBox.Save).setText(translate("frameforge", "Save"))
-        buttons.button(QtWidgets.QDialogButtonBox.Cancel).setText(translate("frameforge", "Cancel"))
-        layout.addWidget(buttons)
-        buttons.rejected.connect(editor.reject)
-
-        def validate():
-            name = code.text().strip()
-            value = weight.text().strip()
-            error = None
-            if not name:
-                error = translate("frameforge", "Enter a non-empty size code.")
-            elif any(
-                row != self.row and self.dialog.table_sizes.item(row, 0)
-                and self.dialog.table_sizes.item(row, 0).text().strip() == name
-                for row in range(self.dialog.table_sizes.rowCount())
-            ):
-                error = translate(
-                    "frameforge", "Duplicate size codes found: %s. Each size must have a unique code."
-                ) % name
-            else:
-                try:
-                    number = float(value)
-                    if not math.isfinite(number) or number <= 0:
-                        raise ValueError(value)
-                except ValueError:
-                    error = translate(
-                        "frameforge",
-                        "Invalid weight '%s' for custom profile '%s'. Weight must be a positive finite number.",
-                    ) % (value, name)
-            if error:
-                QtWidgets.QMessageBox.warning(editor, translate("frameforge", "Edit Properties"), error)
-                return
-            editor.accept()
-
-        buttons.accepted.connect(validate)
-        if editor.exec_() == QtWidgets.QDialog.Accepted:
-            self.code_edit.setText(code.text().strip())
-            self.description_edit.setText(description.text())
-            self.weight_edit.setText(weight.text().strip())
-        editor.deleteLater()
+        CustomProfileEditor(self.dialog, self.row).run()
 
     def update_thumbnail(self, pixmap):
         if pixmap is not None:
@@ -648,7 +599,7 @@ class CustomProfileCard(QtWidgets.QFrame):
             # Merge into the authoritative metadata, never the card's stale props.
             props = item.data(QtCore.Qt.UserRole)
             props = copy.deepcopy(props) if isinstance(props, dict) else {}
-            props['Description'] = text
+            props["Description"] = text
             item.setData(QtCore.Qt.UserRole, props)
 
     def _on_weight_changed(self, text):
@@ -775,7 +726,7 @@ class CustomProfileCardsView(QtWidgets.QWidget):
         text = item.text()
         if col == 0:
             props = item.data(QtCore.Qt.UserRole)
-            description = str(props.get('Description', '')) if isinstance(props, dict) else ''
+            description = str(props.get("Description", "")) if isinstance(props, dict) else ""
             if card.description_edit.text() != description:
                 card._updating_from_table = True
                 try:

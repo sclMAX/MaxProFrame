@@ -885,5 +885,29 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
         <source>Save</source>
         <translation>Guardar</translation>
     </message>
+    <message>
+        <source>Edit Profile</source>
+        <translation>Editar perfil</translation>
+    </message>
+    <message>
+        <source>Accept</source>
+        <translation>Aceptar</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation>OK</translation>
+    </message>
+    <message>
+        <source>Confirming geometry recalculates weight from the library material.</source>
+        <translation>Al confirmar la geometría se recalcula el peso según el material de la biblioteca.</translation>
+    </message>
+    <message>
+        <source>Discard profile edit?</source>
+        <translation>¿Descartar la edición del perfil?</translation>
+    </message>
+    <message>
+        <source>Discard the current profile edit? Earlier library changes will be kept.</source>
+        <translation>¿Descartar la edición actual del perfil? Se conservarán los cambios anteriores de la biblioteca.</translation>
+    </message>
 </context>
 </TS>

@@ -309,7 +309,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
         # Verify selected user library is editable
         self.assertTrue(dialog.btn_del_lib.isEnabled())
-        self.assertTrue(dialog.btn_save.isEnabled())
+        self.assertFalse(dialog.btn_save.isEnabled(), "A freshly loaded library has no pending edits.")
 
         # Verify family and sizes loaded
         self.assertEqual(dialog.combo_family.currentText(), "Square Hollow")
@@ -318,6 +318,7 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
         # 4. Add a size row
         dialog._on_add_size()
+        self.assertTrue(dialog.btn_save.isEnabled())
         self.assertEqual(dialog.table_sizes.rowCount(), 2)
 
         # Modify new row values
