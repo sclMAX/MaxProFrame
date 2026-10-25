@@ -80,14 +80,11 @@ except ImportError:
         return family_key
 
 
-def is_dark_theme(widget):
-    """Detects if the current Qt palette corresponds to a dark theme."""
-    bg = widget.palette().color(QtGui.QPalette.Window)
-    return bg.lightness() < 128
-
-
 class _HeaderBadge(QtWidgets.QLabel):
     """Content-sized label that can shrink without losing its full public text."""
+
+    _TEXT_INSET_X = 9
+    _TEXT_INSET_Y = 6
 
     def __init__(self):
         super().__init__()
@@ -95,18 +92,41 @@ class _HeaderBadge(QtWidgets.QLabel):
         self.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed)
 
     def minimumSizeHint(self):
-        return QtCore.QSize(0, self.sizeHint().height())
+        self.ensurePolished()
+        return QtCore.QSize(
+            0,
+            max(
+                self.fontMetrics().height() + 2 * self._TEXT_INSET_Y,
+                self.sizeHint().height(),
+            ),
+        )
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (QtCore.QEvent.FontChange, QtCore.QEvent.StyleChange):
+            self.setMinimumHeight(0)
+            self.setMaximumHeight(16777215)
+            self.setFixedHeight(self.minimumSizeHint().height())
+            self.updateGeometry()
 
     def paintEvent(self, event):
-        # Let the stylesheet paint the rounded badge; draw only elided plain text.
         painter = QtWidgets.QStylePainter(self)
         option = QtWidgets.QStyleOption()
         option.initFrom(self)
         painter.drawPrimitive(QtWidgets.QStyle.PE_Widget, option)
-        rect = self.rect().adjusted(9, 6, -9, -6)
+        rect = self.rect().adjusted(
+            self._TEXT_INSET_X, self._TEXT_INSET_Y, -self._TEXT_INSET_X, -self._TEXT_INSET_Y
+        )
         text = self.fontMetrics().elidedText(self.text(), QtCore.Qt.ElideRight, max(0, rect.width()))
-        painter.setPen(self.palette().color(QtGui.QPalette.WindowText))
-        painter.drawText(rect, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, text)
+        self.style().drawItemText(
+            painter,
+            rect,
+            QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter,
+            option.palette,
+            self.isEnabled(),
+            text,
+            self.foregroundRole(),
+        )
 
 
 class NewLibraryDialog(QtWidgets.QDialog):
@@ -139,7 +159,7 @@ class NewLibraryDialog(QtWidgets.QDialog):
                 )
             )
             lbl_info.setWordWrap(True)
-            lbl_info.setStyleSheet("color: #78909c; padding-bottom: 4px;")
+            lbl_info.setStyleSheet("padding-bottom: 4px;")
             layout.addWidget(lbl_info)
 
         # Name row
@@ -253,11 +273,6 @@ class AddFamilyDialog(QtWidgets.QDialog):
         self.lbl_preview = QtWidgets.QLabel()
         self.lbl_preview.setFixedSize(120, 60)
         self.lbl_preview.setAlignment(QtCore.Qt.AlignCenter)
-        dark = is_dark_theme(self)
-        if dark:
-            self.lbl_preview.setStyleSheet("background-color: #202428; border: 1px solid #455a64; border-radius: 4px;")
-        else:
-            self.lbl_preview.setStyleSheet("background-color: #f5f7f8; border: 1px solid #cfd8dc; border-radius: 4px;")
         preview_container.addStretch()
         preview_container.addWidget(self.lbl_preview)
         preview_container.addStretch()
@@ -467,7 +482,6 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         # --- LEFT PANEL: Libraries list & actions ---
         self.left_splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
         self.left_splitter.setHandleWidth(6)
-        self.left_splitter.setStyleSheet("QSplitter::handle:horizontal { background: palette(mid); }")
         lib_widget = QtWidgets.QWidget()
         lib_layout = QtWidgets.QVBoxLayout(lib_widget)
         lib_layout.setContentsMargins(0, 0, 0, 0)
@@ -550,18 +564,17 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         # Top banner for library type (Stock read-only vs User editable)
         self.lbl_lib_banner = _HeaderBadge()
-        self.lbl_lib_banner.setStyleSheet("padding: 4px; font-weight: bold; border-radius: 3px;")
-        header_details_layout.addWidget(self.lbl_lib_banner)
+        self.lbl_lib_banner.setStyleSheet("padding: 5px 8px; border-radius: 4px; font-weight: bold;")
 
         self.lbl_family_name = _HeaderBadge()
-        self.lbl_family_name.setStyleSheet(
-            "background-color: palette(alternate-base); color: palette(window-text); "
-            "border: 1px solid palette(mid); padding: 5px 8px; border-radius: 4px;"
-        )
+        self.lbl_family_name.setStyleSheet("padding: 5px 8px; border-radius: 4px;")
         family_badge_row = QtWidgets.QHBoxLayout()
-        family_badge_row.setContentsMargins(16, 0, 0, 0)
+        family_badge_row.setContentsMargins(0, 0, 0, 0)
+        family_badge_row.setSpacing(4)
+        family_badge_row.addWidget(self.lbl_lib_banner)
+        family_badge_row.addWidget(QtWidgets.QLabel("-"))
         family_badge_row.addWidget(self.lbl_family_name)
-        family_badge_row.addStretch()
+        family_badge_row.addStretch(1)
         header_details_layout.addLayout(family_badge_row)
 
         # Metadata and compact size actions
@@ -634,34 +647,11 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         # Bottom Bar: Status and Save / Close
         bottom_layout = QtWidgets.QHBoxLayout()
         self.lbl_status = QtWidgets.QLabel("")
-        self.lbl_status.setStyleSheet("color: #006600;")
+        self.lbl_status.setStyleSheet("font-weight: bold;")
         bottom_layout.addWidget(self.lbl_status, 1)
 
         self.btn_save = QtWidgets.QPushButton(translate("frameforge", "Save Changes"))
         self.btn_save.setEnabled(False)
-        self.btn_save.setStyleSheet(
-            """
-            QPushButton {
-                font-weight: bold;
-                background-color: #1976d2;
-                color: #ffffff;
-                border: 1px solid #1565c0;
-                border-radius: 4px;
-                padding: 6px 16px;
-            }
-            QPushButton:hover {
-                background-color: #2196f3;
-            }
-            QPushButton:pressed {
-                background-color: #0d47a1;
-            }
-            QPushButton:disabled {
-                background-color: palette(button);
-                color: palette(mid);
-                border: 1px solid palette(mid);
-            }
-        """
-        )
         self.btn_save.clicked.connect(self._on_save_library)
         self.btn_close = QtWidgets.QPushButton(translate("frameforge", "Close"))
         self.btn_close.clicked.connect(self.close)
@@ -859,65 +849,29 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self._set_status("")
 
     def _update_banner(self, is_user, name, is_folder=False, folder_path=None):
-        dark = is_dark_theme(self)
         mat, dens = self.manager.get_library_material_info(name)
         mat_display = translate("frameforge", mat)
         if is_folder:
             self.lbl_lib_banner.setText(f"{name} | {mat_display}")
             self.lbl_lib_banner.setToolTip(f"{dens} g/cm³\n{folder_path or ''}")
-            if dark:
-                self.lbl_lib_banner.setStyleSheet(
-                    "background-color: #1a333a; color: #80deea; border: 1px solid #00838f; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
-                )
-            else:
-                self.lbl_lib_banner.setStyleSheet(
-                    "background-color: #e0f7fa; color: #006064; border: 1px solid #80deea; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
-                )
         elif is_user:
             self.lbl_lib_banner.setText(f"{name} | {mat_display}")
             self.lbl_lib_banner.setToolTip(f"{dens} g/cm³")
-            if dark:
-                self.lbl_lib_banner.setStyleSheet(
-                    "background-color: #1b3824; color: #81c784; border: 1px solid #2e7d32; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
-                )
-            else:
-                self.lbl_lib_banner.setStyleSheet(
-                    "background-color: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
-                )
         else:
             self.lbl_lib_banner.setText(f"{name} | {mat_display} | {translate('frameforge', 'Read-only')}")
             self.lbl_lib_banner.setToolTip(f"{dens} g/cm³")
-            if dark:
-                self.lbl_lib_banner.setStyleSheet(
-                    "background-color: #2b3036; color: #cfd8dc; border: 1px solid #455a64; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
-                )
-            else:
-                self.lbl_lib_banner.setStyleSheet(
-                    "background-color: #eceff1; color: #37474f; border: 1px solid #cfd8dc; padding: 5px 8px; border-radius: 4px; font-weight: bold;"
-                )
-
-        if is_folder:
-            border_color = "#00838f" if dark else "#80deea"
-        elif is_user:
-            border_color = "#2e7d32" if dark else "#a5d6a7"
-        else:
-            border_color = "#455a64" if dark else "#cfd8dc"
-        self.lbl_family_name.setStyleSheet(
-            "background-color: palette(alternate-base); color: palette(window-text); "
-            f"border: 1px solid {border_color}; padding: 5px 8px; border-radius: 4px;"
+        self.lbl_lib_banner.setFixedHeight(
+            max(self.lbl_lib_banner.minimumSizeHint().height(), self.lbl_family_name.minimumSizeHint().height())
         )
-        self.lbl_family_name.setFixedHeight(self.lbl_lib_banner.sizeHint().height())
+        self.lbl_family_name.setFixedHeight(
+            max(self.lbl_lib_banner.minimumSizeHint().height(), self.lbl_family_name.minimumSizeHint().height())
+        )
         self.lbl_lib_banner.setToolTip(f"{self.lbl_lib_banner.text()}\n{self.lbl_lib_banner.toolTip()}")
 
     def _set_status(self, text, is_error=False, is_warning=False):
-        dark = is_dark_theme(self)
-        if is_error:
-            color = "#ef5350" if dark else "#c62828"
-        elif is_warning:
-            color = "#ffb74d" if dark else "#e65100"
-        else:
-            color = "#81c784" if dark else "#2e7d32"
-        self.lbl_status.setStyleSheet(f"color: {color}; font-weight: bold;")
+        # Retain severity metadata without imposing a color scheme.
+        self.lbl_status.setProperty("is_error", bool(is_error))
+        self.lbl_status.setProperty("is_warning", bool(is_warning))
         self.lbl_status.setText(text)
 
     def _get_family_display_name(self, family_key, family_data=None):
@@ -1081,16 +1035,6 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         return ""
 
     def _update_family_icon(self):
-        dark = is_dark_theme(self)
-        if dark:
-            self.lbl_family_icon.setStyleSheet(
-                "background-color: #202428; border: 1px solid #455a64; border-radius: 4px;"
-            )
-        else:
-            self.lbl_family_icon.setStyleSheet(
-                "background-color: #f5f7f8; border: 1px solid #cfd8dc; border-radius: 4px;"
-            )
-
         if not self.current_family or self.current_family not in self.current_lib_data:
             self.lbl_family_icon.clear()
             self.lbl_family_icon.setToolTip("")
