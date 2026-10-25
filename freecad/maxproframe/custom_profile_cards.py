@@ -87,14 +87,15 @@ def create_placeholder_pixmap(width=160, height=100, text=None):
     if text is None:
         text = translate("frameforge", "No Preview")
     pm = QtGui.QPixmap(width, height)
-    pm.fill(QtGui.QColor(245, 245, 245))
+    pm.fill(QtCore.Qt.transparent)
     painter = QtGui.QPainter(pm)
-    painter.setPen(QtGui.QColor(180, 180, 180))
+    # Alpha-only geometry; the receiving widget supplies the final styled ink.
+    painter.setPen(QtCore.Qt.black)
     painter.drawRect(0, 0, width - 1, height - 1)
     font = painter.font()
     font.setPointSize(9)
     painter.setFont(font)
-    painter.setPen(QtGui.QColor(120, 120, 120))
+    painter.setPen(QtCore.Qt.black)
     painter.drawText(QtCore.QRect(0, 0, width, height), QtCore.Qt.AlignCenter, text)
     painter.end()
     return pm
@@ -180,7 +181,7 @@ def render_face_silhouette(face, canvas_w=160, canvas_h=100):
     painter = QtGui.QPainter(img)
     painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
     painter.setPen(QtCore.Qt.NoPen)
-    painter.setBrush(QtGui.QBrush(QtGui.QColor(58, 117, 196)))
+    painter.setBrush(QtGui.QBrush(QtCore.Qt.black))
     painter.drawPath(transformed_path)
     painter.end()
 
@@ -292,15 +293,55 @@ def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=
     return pixmap
 
 
-class _DescriptionEdit(QtWidgets.QLineEdit):
-    """Elide display text without changing the value used by table synchronization."""
+class _DescriptionEdit(QtWidgets.QLabel):
+    """Native label with the raw-value interface used by table synchronization."""
 
-    def __init__(self, text, lines=1, suffix=""):
-        super().__init__(text)
+    textChanged = QtCore.Signal(str)
+
+    def __init__(self, text, lines=1, suffix="", has_frame=False):
+        super().__init__()
         self._lines = lines
         self._suffix = suffix
-        self.setToolTip(text + suffix)
-        self.textChanged.connect(lambda value: self.setToolTip(value + self._suffix))
+        self._raw_text = str(text)
+        self.setTextFormat(QtCore.Qt.PlainText)
+        self.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Fixed)
+        self.setText(text)
+
+    def text(self):
+        return self._raw_text
+
+    def setText(self, text):
+        text = str(text)
+        changed = text != self._raw_text
+        self._raw_text = text
+        self.setToolTip(text + self._suffix)
+        self._refresh_display()
+        if changed:
+            self.textChanged.emit(text)
+
+    def clear(self):
+        self.setText("")
+
+    def isReadOnly(self):
+        return True
+
+    def setReadOnly(self, value):
+        # Display-only in both editable and built-in libraries.
+        pass
+
+    def setFrame(self, value):
+        self.setFrameShape(QtWidgets.QFrame.NoFrame)
+
+    def hasFrame(self):
+        return False
+
+    def _refresh_display(self):
+        QtWidgets.QLabel.setText(self, "\n".join(self._display_lines()))
+
+    def resizeEvent(self, event):
+        self._refresh_display()
+        super().resizeEvent(event)
 
     def _display_lines(self):
         text = " ".join(self.text().splitlines()) + self._suffix
@@ -322,20 +363,76 @@ class _DescriptionEdit(QtWidgets.QLineEdit):
         return [text[:end].rstrip(), metrics.elidedText(text[end:].lstrip(), QtCore.Qt.ElideRight, width)]
 
     def paintEvent(self, event):
-        if self.hasFocus():
-            return super().paintEvent(event)
-        option = QtWidgets.QStyleOptionFrame()
+        self._refresh_display()
+        super().paintEvent(event)
+
+
+def _tinted_geometry(pixmap, color):
+    """Color an alpha mask at paint time, never in the asset cache."""
+    result = QtGui.QPixmap(pixmap.size())
+    result.setDevicePixelRatio(pixmap.devicePixelRatio())
+    result.fill(QtCore.Qt.transparent)
+    painter = QtGui.QPainter(result)
+    painter.drawPixmap(0, 0, pixmap)
+    painter.setCompositionMode(QtGui.QPainter.CompositionMode_SourceIn)
+    painter.fillRect(result.rect(), color)
+    painter.end()
+    return result
+
+
+class _PreviewLabel(QtWidgets.QLabel):
+    def setPixmap(self, pixmap):
+        self._geometry_pixmap = pixmap
+        self.update()
+
+    def pixmap(self):
+        return getattr(self, "_geometry_pixmap", None)
+
+    def paintEvent(self, event):
+        # QLabel paints its own effective QSS surface. Only geometry is custom.
+        super().paintEvent(event)
+        pixmap = self.pixmap()
+        if pixmap is None or pixmap.isNull():
+            return
+        painter = QtGui.QPainter(self)
+        colored = _tinted_geometry(pixmap, self.palette().color(self.foregroundRole()))
+        rect = self.contentsRect()
+        width = round(colored.width() / colored.devicePixelRatio())
+        height = round(colored.height() / colored.devicePixelRatio())
+        painter.drawPixmap(rect.x() + (rect.width() - width) // 2,
+                           rect.y() + (rect.height() - height) // 2, colored)
+        painter.end()
+
+
+class _EditButton(QtWidgets.QToolButton):
+    def __init__(self, parent):
+        super().__init__(parent)
+        mask = QtGui.QPixmap(18, 18)
+        mask.fill(QtCore.Qt.transparent)
+        painter = QtGui.QPainter(mask)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        painter.setPen(QtGui.QPen(QtCore.Qt.black, 1.5))
+        painter.drawPolygon(QtGui.QPolygonF([
+            QtCore.QPointF(4, 11), QtCore.QPointF(11, 4), QtCore.QPointF(14, 7),
+            QtCore.QPointF(7, 14), QtCore.QPointF(3, 15),
+        ]))
+        painter.drawLine(10, 5, 13, 8)
+        painter.drawLine(4, 11, 7, 14)
+        painter.end()
+        self._pencil = mask
+        self.setIcon(QtGui.QIcon(mask))
+
+    def paintEvent(self, event):
+        option = QtWidgets.QStyleOptionToolButton()
         self.initStyleOption(option)
+        pencil = _tinted_geometry(self._pencil, option.palette.color(QtGui.QPalette.ButtonText))
+        option.icon = QtGui.QIcon()
+        # The initialized style option already resolves the disabled palette group.
+        # Do not let QIcon synthesize a second, unrelated disabled tint.
+        for mode in (QtGui.QIcon.Normal, QtGui.QIcon.Disabled, QtGui.QIcon.Active, QtGui.QIcon.Selected):
+            option.icon.addPixmap(pencil, mode)
         painter = QtWidgets.QStylePainter(self)
-        painter.drawPrimitive(QtWidgets.QStyle.PE_PanelLineEdit, option)
-        rect = self.style().subElementRect(QtWidgets.QStyle.SE_LineEditContents, option, self)
-        margins = self.textMargins()
-        rect.adjust(margins.left() + 2, 0, -margins.right() - 2, 0)
-        painter.setPen(self.palette().color(QtGui.QPalette.Text))
-        height = self.fontMetrics().height()
-        for index, text in enumerate(self._display_lines()):
-            line_rect = QtCore.QRect(rect.left(), rect.top() + index * height, rect.width(), height)
-            painter.drawText(line_rect, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, text)
+        painter.drawComplexControl(QtWidgets.QStyle.CC_ToolButton, option)
 
 
 class CustomProfileCard(QtWidgets.QFrame):
@@ -362,12 +459,11 @@ class CustomProfileCard(QtWidgets.QFrame):
         layout.setSpacing(6)
 
         # Thumbnail
-        self.thumbnail_label = QtWidgets.QLabel()
+        self.thumbnail_label = _PreviewLabel()
         self.thumbnail_label.setObjectName("card_thumbnail")
         self.thumbnail_label.setAlignment(QtCore.Qt.AlignCenter)
         self.thumbnail_label.setFixedHeight(128)
         self.thumbnail_label.setContentsMargins(8, 36, 8, 28)
-        self.thumbnail_label.setStyleSheet("background-color: palette(base); border-radius: 4px;")
         layout.addWidget(self.thumbnail_label)
 
         # Title and optional supporting text beneath the preview.
@@ -384,20 +480,22 @@ class CustomProfileCard(QtWidgets.QFrame):
         layout.addWidget(self.code_edit)
 
         # Reserve two lines even when empty so cards stay aligned.
-        description_slot = QtWidgets.QWidget()
-        description_layout = QtWidgets.QVBoxLayout(description_slot)
+        self.description_slot = QtWidgets.QWidget()
+        self.description_slot.setObjectName("description_slot")
+        self.description_slot.setStyleSheet("background: transparent; border: none;")
+        description_layout = QtWidgets.QVBoxLayout(self.description_slot)
         description_layout.setContentsMargins(0, 0, 0, 0)
         self.description_edit = _DescriptionEdit(str(self.props.get("Description", "")), lines=2)
         self.description_edit.setObjectName("card_description")
         description_height = self.description_edit.fontMetrics().height() * 2 + 4
-        description_slot.setFixedHeight(description_height)
+        self.description_slot.setFixedHeight(description_height)
         self.description_edit.setFixedHeight(description_height)
         description_layout.addWidget(self.description_edit)
         self.description_edit.setVisible(bool(self.description_edit.text().strip()))
         self.description_edit.textChanged.connect(lambda text: self.description_edit.setVisible(bool(text.strip())))
-        layout.addWidget(description_slot)
+        layout.addWidget(self.description_slot)
 
-        self.weight_edit = _DescriptionEdit(str(weight), suffix=" kg/m")
+        self.weight_edit = _DescriptionEdit(str(weight), suffix=" kg/m", has_frame=True)
         self.weight_edit.setObjectName("card_weight")
         weight_font = QtGui.QFont(self.font())
         if weight_font.pointSizeF() > 0:
@@ -415,7 +513,7 @@ class CustomProfileCard(QtWidgets.QFrame):
         self.le_weight = self.weight_edit
         self.lbl_thumbnail = self.thumbnail_label
 
-        self.btn_edit_properties = QtWidgets.QToolButton(self.thumbnail_label)
+        self.btn_edit_properties = _EditButton(self.thumbnail_label)
         self.btn_edit_properties.setObjectName("card_edit_properties")
         self.btn_edit_properties.setToolTip(translate("frameforge", "Edit Properties"))
         self.btn_edit_properties.setAccessibleName(self.btn_edit_properties.toolTip())
@@ -446,8 +544,13 @@ class CustomProfileCard(QtWidgets.QFrame):
         self._initializing = False
         QtWidgets.QApplication.instance().paletteChanged.connect(self._on_palette_changed)
 
-    def _on_palette_changed(self, palette):
-        # Read the application palette, not a palette already modified by card QSS.
+    def changeEvent(self, event):
+        if event.type() == QtCore.QEvent.PaletteChange:
+            if not getattr(self, "_updating_style", False):
+                self._update_style()
+        super().changeEvent(event)
+
+    def _on_palette_changed(self, palette=None):
         self._update_style()
 
     def _position_preview_controls(self, *_):
@@ -462,13 +565,16 @@ class CustomProfileCard(QtWidgets.QFrame):
     def eventFilter(self, obj, event):
         if obj is self.thumbnail_label and event.type() == QtCore.QEvent.Resize:
             self._position_preview_controls()
-        if event.type() in (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.FocusIn):
+        if event.type() == QtCore.QEvent.MouseButtonPress and event.button() == QtCore.Qt.LeftButton:
+            # Native labels ignore presses and propagate them to their parents.
+            # Consume at the first receiver, including the card's own filter,
+            # rather than selecting again at every ancestor and mouse handler.
+            self.cards_view.select_card(self.row)
+            event.accept()
+            return True
+        if event.type() == QtCore.QEvent.FocusIn:
             self.cards_view.select_card(self.row)
         return super().eventFilter(obj, event)
-
-    def mousePressEvent(self, event):
-        self.cards_view.select_card(self.row)
-        super().mousePressEvent(event)
 
     def click(self):
         self.cards_view.select_card(self.row)
@@ -478,78 +584,20 @@ class CustomProfileCard(QtWidgets.QFrame):
         self._update_style()
 
     def _update_style(self):
-        palette = QtWidgets.QApplication.palette()
-        background = QtGui.QPalette.Highlight if self._selected else QtGui.QPalette.Window
-        foreground = QtGui.QPalette.HighlightedText if self._selected else QtGui.QPalette.WindowText
-        border = QtGui.QPalette.Highlight if self._selected else QtGui.QPalette.Mid
-        border_width = 2 if self._selected else 1
-        self.setStyleSheet(
-            "QFrame#custom_card { "
-            f"border: {border_width}px solid {palette.color(border).name()}; "
-            f"background-color: {palette.color(background).name()}; "
-            "border-radius: 6px; }"
-            "QFrame#custom_card QLabel { "
-            f"color: {palette.color(foreground).name()}; }}"
-        )
-        self.thumbnail_label.setStyleSheet(
-            f"background-color: {palette.color(QtGui.QPalette.Base).name()}; border-radius: 4px;"
-        )
+        # Never snapshot dialog/application colors into child stylesheets.
+        self.update()
 
-        # Retain the existing table synchronization while presenting values as text.
-        for field in (self.code_edit, self.description_edit, self.weight_edit):
-            color = palette.color(foreground)
-            if field is self.description_edit and not self._selected:
-                surface = palette.color(background)
-                color = QtGui.QColor(
-                    *(round(a * 0.8 + b * 0.2) for a, b in zip(color.getRgb()[:3], surface.getRgb()[:3]))
-                )
-            field.setStyleSheet("background: transparent; border: none; padding: 0; " f"color: {color.name()};")
-        for widget, surface_role, ink_role, radius, padding in (
-            (self.weight_edit, QtGui.QPalette.AlternateBase, QtGui.QPalette.Text, 5, "2px 4px"),
-            (self.btn_edit_properties, QtGui.QPalette.Button, QtGui.QPalette.ButtonText, 4, "0"),
-        ):
-            surface = palette.color(surface_role)
-            ink = palette.color(ink_role)
-            editable = self.btn_edit_properties.isEnabled()
-            accent = palette.color(QtGui.QPalette.Highlight) if editable else ink
-            strength = 0.55 if editable else 0.3
-            outline = QtGui.QColor(
-                *(round(a * strength + b * (1 - strength)) for a, b in zip(accent.getRgb()[:3], surface.getRgb()[:3]))
-            )
-            style = (
-                f"background: {surface.name()}; color: {ink.name()}; "
-                f"border: 1px solid {outline.name()}; border-radius: {radius}px; padding: {padding};"
-            )
-            if widget is self.btn_edit_properties:
-                style = f"QToolButton {{ {style} }}"
-                if editable:
-                    style += (
-                        "QToolButton:enabled:hover, QToolButton:enabled:focus { "
-                        f"border: 1px solid {accent.name()}; }}"
-                    )
-            widget.setStyleSheet(style)
-        # Draw the pencil using the live palette, without a desktop icon-theme dependency.
-        pixmap = QtGui.QPixmap(18, 18)
-        pixmap.fill(QtCore.Qt.transparent)
-        painter = QtGui.QPainter(pixmap)
-        painter.setRenderHint(QtGui.QPainter.Antialiasing)
-        painter.setPen(QtGui.QPen(palette.color(QtGui.QPalette.ButtonText), 1.5))
-        painter.drawPolygon(
-            QtGui.QPolygonF(
-                [
-                    QtCore.QPointF(4, 11),
-                    QtCore.QPointF(11, 4),
-                    QtCore.QPointF(14, 7),
-                    QtCore.QPointF(7, 14),
-                    QtCore.QPointF(3, 15),
-                ]
-            )
-        )
-        painter.drawLine(QtCore.QPointF(10, 5), QtCore.QPointF(13, 8))
-        painter.drawLine(QtCore.QPointF(4, 11), QtCore.QPointF(7, 14))
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        # Resolve the receiving widget's ink on every paint, including local
+        # FreeCAD stylesheets and live theme changes. Keep selection stronger.
+        color = QtGui.QColor(self.palette().color(self.foregroundRole()))
+        if not self._selected:
+            color.setAlphaF(color.alphaF() * 0.4)
+        painter = QtGui.QPainter(self)
+        painter.setPen(QtGui.QPen(color, 2 if self._selected else 1))
+        painter.drawRect(self.rect().adjusted(2, 2, -3, -3))
         painter.end()
-        self.btn_edit_properties.setIcon(QtGui.QIcon(pixmap))
-        self._position_preview_controls()
 
     def set_editable(self, editable):
         self.btn_edit_properties.setEnabled(bool(editable))
@@ -557,6 +605,7 @@ class CustomProfileCard(QtWidgets.QFrame):
             field.setReadOnly(True)
             field.setFrame(False)
             field.setFocusPolicy(QtCore.Qt.NoFocus)
+        self.description_slot.setStyleSheet("background: transparent; border: none;")
         self._update_style()
 
     def _edit_properties(self):
@@ -642,6 +691,12 @@ class CustomProfileCardsView(QtWidgets.QWidget):
 
         self.scroll_area.setWidget(self.container_widget)
         main_layout.addWidget(self.scroll_area)
+
+    def changeEvent(self, event):
+        if event.type() == QtCore.QEvent.PaletteChange:
+            for card in self.cards:
+                card._update_style()
+        super().changeEvent(event)
 
     def _columns_per_row(self):
         vp_width = self.scroll_area.viewport().width() if hasattr(self, "scroll_area") else 0

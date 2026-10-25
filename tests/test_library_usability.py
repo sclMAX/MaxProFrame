@@ -55,20 +55,28 @@ class TestLibraryUsability(unittest.TestCase):
         self.addCleanup(picker.close)
         self.assertIsInstance(picker.cb_fillet, QtWidgets.QCheckBox)
 
-    def test_header_badges_are_compact_and_indented(self):
+    def test_header_badges_are_compact_and_inline(self):
         self.family("Pipe")
         self.dialog.show()
         self.app.processEvents()
         library, family = self.dialog.lbl_lib_banner, self.dialog.lbl_family_name
         self.assertLess(library.width(), library.parentWidget().width() - library.x())
-        self.assertEqual(family.x() - library.x(), 16)
+        self.assertGreater(family.x(), library.geometry().right())
+        self.assertEqual(family.geometry().center().y(), library.geometry().center().y())
         self.assertEqual(family.height(), library.height())
-        import re
-
-        border = re.search(r"border: ([^;]+)", library.styleSheet()).group(1)
-        self.assertIn(f"border: {border};", family.styleSheet())
-        self.assertIn("background", family.styleSheet())
-        self.assertIn("border", family.styleSheet())
+        for badge in (library, family):
+            self.assertIsInstance(badge, QtWidgets.QLabel)
+            self.assertEqual(badge.textFormat(), QtCore.Qt.PlainText)
+            margins = badge.contentsMargins()
+            self.assertGreaterEqual(
+                badge.height(), badge.fontMetrics().height() + margins.top() + margins.bottom())
+            self.assertLessEqual(badge.width(), badge.sizeHint().width())
+            self.assertFalse(badge.grab().isNull())
+        self.assertTrue(library.text().startswith("Catalog | "))
+        self.assertIn(library.text(), library.toolTip())
+        self.assertIn(self.folder, library.toolTip())
+        self.assertIn("g/cm³", library.toolTip())
+        self.assertEqual(family.text(), self.dialog._get_family_display_name("Pipe"))
         self.assertEqual(family.toolTip(), family.text())
         self.family("Square Hollow")
         self.assertEqual(family.text(), self.dialog._get_family_display_name("Square Hollow"))
@@ -90,12 +98,18 @@ class TestLibraryUsability(unittest.TestCase):
         family = self.dialog.lbl_family_name
         family.setText(name)
         family.setToolTip(name)
+        self.app.sendEvent(self.dialog, QtCore.QEvent(QtCore.QEvent.PaletteChange))
         self.app.processEvents()
+        self.assertIn(name, self.dialog.lbl_lib_banner.text())
+        self.assertEqual(family.text(), name)
         self.assertEqual(self.dialog.width(), width)
         for badge in (self.dialog.lbl_lib_banner, family):
             self.assertEqual(badge.textFormat(), QtCore.Qt.PlainText)
             self.assertLessEqual(badge.x() + badge.width(), badge.parentWidget().width())
-            self.assertLess(badge.width(), badge.sizeHint().width())
+            self.assertLess(
+                badge.width(), badge.sizeHint().width(),
+                f"badge_text={badge.text()!r}; tooltip={badge.toolTip()!r}; expected_length={len(name)}",
+            )
             self.assertIn(name, badge.toolTip())
         self.assertIn(self.folder, self.dialog.lbl_lib_banner.toolTip())
         self.assertIn("g/cm³", self.dialog.lbl_lib_banner.toolTip())
