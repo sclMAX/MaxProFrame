@@ -49,6 +49,16 @@ class TestCustomProfileSections(unittest.TestCase):
         obj.Label = label
         return obj
 
+    def _section_point(self, profile, x, y, z):
+        # Source-space probes retain their material/hole meaning after the
+        # authorized Center/Center bbox translation, before path attachment.
+        box = profile.CustomProfile.Shape.BoundBox
+        return profile.Placement.multVec(App.Vector(
+            x - (box.XMin + box.XMax) / 2,
+            y - (box.YMin + box.YMax) / 2,
+            z,
+        ))
+
     def _create_rect_sketch(self, name, x0, y0, x1, y1):
         sk = self.doc.addObject("Sketcher::SketchObject", name)
         pts = [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]
@@ -69,7 +79,7 @@ class TestCustomProfileSections(unittest.TestCase):
         self.assertTrue(prof_single.Shape.isValid())
         expected_vol_single = 20.0 * 20.0 * 100.0
         self.assertAlmostEqual(prof_single.Shape.Volume, expected_vol_single, places=2)
-        pt_mat_single = prof_single.Placement.multVec(App.Vector(10, 10, 50))
+        pt_mat_single = self._section_point(prof_single, 10, 10, 50)
         self.assertTrue(prof_single.Shape.isInside(pt_mat_single, 0.01, False))
 
         # Control 2: Prebuilt Part.Face with hole
@@ -88,8 +98,8 @@ class TestCustomProfileSections(unittest.TestCase):
         self.assertTrue(prof_face.Shape.isValid())
         expected_vol_face = (400.0 - 100.0) * 100.0
         self.assertAlmostEqual(prof_face.Shape.Volume, expected_vol_face, places=2)
-        pt_mat_face = prof_face.Placement.multVec(App.Vector(2, 2, 50))
-        pt_hole_face = prof_face.Placement.multVec(App.Vector(10, 10, 50))
+        pt_mat_face = self._section_point(prof_face, 2, 2, 50)
+        pt_hole_face = self._section_point(prof_face, 10, 10, 50)
         self.assertTrue(prof_face.Shape.isInside(pt_mat_face, 0.01, False))
         self.assertFalse(prof_face.Shape.isInside(pt_hole_face, 0.01, False))
 
@@ -113,10 +123,10 @@ class TestCustomProfileSections(unittest.TestCase):
         expected_vol = (30.0 * 30.0 - 10.0 * 10.0) * 100.0
         self.assertAlmostEqual(prof.Shape.Volume, expected_vol, places=2)
         # Material point is inside
-        pt_mat = prof.Placement.multVec(App.Vector(5, 5, 50))
+        pt_mat = self._section_point(prof, 5, 5, 50)
         self.assertTrue(prof.Shape.isInside(pt_mat, 0.01, False))
         # Hole center point is empty
-        pt_hole = prof.Placement.multVec(App.Vector(15, 15, 50))
+        pt_hole = self._section_point(prof, 15, 15, 50)
         self.assertFalse(prof.Shape.isInside(pt_hole, 0.01, False))
         # CustomProfile link preserved
         self.assertEqual(prof.CustomProfile, sk)
@@ -193,13 +203,13 @@ class TestCustomProfileSections(unittest.TestCase):
         expected_vol = (40.0 * 40.0 - 100.0 - 100.0) * 100.0
         self.assertAlmostEqual(prof.Shape.Volume, expected_vol, places=2)
         # Hole 1 empty
-        pt_h1 = prof.Placement.multVec(App.Vector(10, 10, 50))
+        pt_h1 = self._section_point(prof, 10, 10, 50)
         self.assertFalse(prof.Shape.isInside(pt_h1, 0.01, False))
         # Hole 2 empty
-        pt_h2 = prof.Placement.multVec(App.Vector(30, 30, 50))
+        pt_h2 = self._section_point(prof, 30, 30, 50)
         self.assertFalse(prof.Shape.isInside(pt_h2, 0.01, False))
         # Material between holes
-        pt_mat_mid = prof.Placement.multVec(App.Vector(20, 20, 50))
+        pt_mat_mid = self._section_point(prof, 20, 20, 50)
         self.assertTrue(prof.Shape.isInside(pt_mat_mid, 0.01, False))
 
     # 5. Construction geometry ignored
@@ -290,7 +300,7 @@ class TestCustomProfileSections(unittest.TestCase):
         self.assertEqual(prof.getStatusString(), "Valid")
         init_vol = (900.0 - 100.0) * 100.0
         self.assertAlmostEqual(prof.Shape.Volume, init_vol, places=2)
-        pt_probe = prof.Placement.multVec(App.Vector(20, 20, 50))
+        pt_probe = self._section_point(prof, 20, 20, 50)
         # Initially pt_probe is in solid material
         self.assertTrue(prof.Shape.isInside(pt_probe, 0.01, False))
 

@@ -431,6 +431,9 @@ class Profile:
 
         W = obj.ProfileWidth
         H = obj.ProfileHeight
+        if custom_section_face is not None:
+            W = custom_section_face.BoundBox.XLength
+            H = custom_section_face.BoundBox.YLength
         pl = obj.Placement
         TW = obj.Thickness
         TF = obj.ThicknessFlange
@@ -1083,7 +1086,6 @@ class Profile:
 
         if obj.Family == "Custom Profile":
             p = custom_section_face
-            W, H = p.BoundBox.XLength, p.BoundBox.YLength
 
         if obj.Family == "V-Slot":
             if H == 20.0 and W == 20.0:
@@ -1134,6 +1136,7 @@ class Profile:
             "T-Slot 2-Slots",
             "T-Slot 2-Slots Opp",
             "T-Slot 1-Slot",
+            "Custom Profile",
         ):
             p = p.copy()
             p.translate(vec(w - p.BoundBox.XMin, h - p.BoundBox.YMin, 0))
@@ -1186,8 +1189,11 @@ class Profile:
             obj.Shape = ProfileFull
 
         elif obj.Family == "Custom Profile":
-            # The validated section already includes holes and the mirrors applied above.
-            obj.Shape = p
+            # Bake the section transform before restoring the object's placement below.
+            # Otherwise a face's translated placement is replaced by the profile placement.
+            section_transform = p.Placement.toMatrix()
+            p.Placement = App.Placement()
+            obj.Shape = p.transformGeometry(section_transform)
 
         else:
             # Anchor already applied when building wire1; mirror only
