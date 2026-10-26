@@ -23,6 +23,17 @@ def main():
     root = Path(__file__).resolve().parents[1]
     image = root.parent / IMAGES[args.version]
     if not image.is_file():
+        try:
+            git_common = subprocess.check_output(
+                ["git", "-C", str(root), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                text=True, stderr=subprocess.DEVNULL
+            ).strip()
+            candidate = Path(git_common).parent.parent / IMAGES[args.version]
+            if candidate.is_file():
+                image = candidate
+        except Exception:
+            pass
+    if not image.is_file():
         parser.error(f"AppImage not found: {image}")
     if not os.access(image, os.X_OK):
         parser.error(f"AppImage is not executable; run: chmod u+x '{image}'")
