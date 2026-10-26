@@ -85,6 +85,26 @@ Beams and profiles are mapped onto Edges or parametric lines:
 
 ![Profiles](docs/images/14-profiles-done.png)
 
+#### Circular profile alignment correction
+
+Round Bar and Pipe now use **Height (diameter)** for both section extents, even
+when the catalog omits Width or an older object has a different Width. Horizontal
+alignment is independent of vertical alignment; mirrors retain the same bounding
+box. Recomputing existing circular profiles can therefore move their section.
+
+Precisely, let `D = ProfileHeight`, `W = stored ProfileWidth`, and `ax`, `ay` be
+anchor indices (0 = left/bottom, 1 = center, 2 = right/top). The new local section
+center is `(D*(1-ax)/2, D*(1-ay)/2)`. Relative to the old geometry, only X changes:
+
+- Without horizontal mirror: `deltaX = D*(ay-ax)/2`.
+- With horizontal mirror: `deltaX = D*(2-ax-ay)/2 - W*(1-ax)`.
+
+Zero deltas leave placement unchanged. Vertical mirror does not alter these
+formulas. Attachment rotation rotates this local displacement into world space.
+Diameter, pipe wall thickness, length, stored properties and other families are
+unchanged. Both extruded and zero-length sections use the corrected alignment;
+the legacy zero-length Pipe face still represents its outer disk (not its bore).
+
 ### 3. Apply Miters and Trims
 
 - Use **End Miter** to create 45° corner joins between intersecting profiles.

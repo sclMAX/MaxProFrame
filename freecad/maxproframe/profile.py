@@ -434,6 +434,11 @@ class Profile:
         if custom_section_face is not None:
             W = custom_section_face.BoundBox.XLength
             H = custom_section_face.BoundBox.YLength
+        # Circular catalogs specify diameter as Height and may omit Width entirely.
+        # Use that actual section extent for horizontal anchors and mirror centers,
+        # without rewriting the stored (possibly legacy) ProfileWidth property.
+        if obj.Family in ("Round Bar", "Pipe"):
+            W = H
         pl = obj.Placement
         TW = obj.Thickness
         TF = obj.ThicknessFlange
@@ -1069,13 +1074,13 @@ class Profile:
             p = Part.Face(wire1)
 
         if obj.Family == "Round Bar":
-            c = vec(H / 2 + h, H / 2 + h, 0)
+            c = vec(W / 2 + w, H / 2 + h, 0)
             A1 = Part.makeCircle(H / 2, c, d, 0, 360)
             wire1 = Part.Wire([A1])
             p = Part.Face(wire1)
 
         if obj.Family == "Pipe":
-            c = vec(H / 2 + h, H / 2 + h, 0)
+            c = vec(W / 2 + w, H / 2 + h, 0)
             A1 = Part.makeCircle(H / 2, c, d, 0, 360)
             A2 = Part.makeCircle((H / 2) - TW, c, d, 0, 360)
             wire1 = Part.Wire([A1])
