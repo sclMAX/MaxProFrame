@@ -19,15 +19,35 @@ from freecad.maxproframe.ff_tools import (
     move_profile_to_parent_if_supported,
     translate,
 )
-from freecad.maxproframe.custom_profile_cards import render_custom_section_thumbnail
+from freecad.maxproframe.custom_profile_cards import custom_section_cache_key, render_custom_section_thumbnail
+from freecad.maxproframe.alignment_widget import AlignmentWidget
+from freecad.maxproframe.section_outline import build_section_face
+from freecad.maxproframe.custom_section_geometry import build_custom_section_face
 from freecad.maxproframe.library_manager import LibraryManager, get_canonical_family
 from freecad.maxproframe.profile import Profile, ViewProviderCustomProfile, ViewProviderProfile
-from freecad.maxproframe.section_library import get_or_import_section_sketch
+from freecad.maxproframe.section_library import find_existing_section_sketch, get_or_import_section_sketch
+
+
+def _bind_ui_children(form, path):
+    # Native PySideUic aliases can retain QWidgetItem wrappers after successive
+    # task dialogs. Resolve declared children by their actual QObject type/name,
+    # before any layout moves or FormProxy snapshots use those aliases.
+    from xml.etree import ElementTree
+
+    for element in ElementTree.parse(path).iter():
+        if element.tag in ("widget", "layout"):
+            kind = getattr(QtWidgets, element.get("class", ""), None)
+            name = element.get("name", "")
+            if kind is not None and name:
+                child = form.findChild(kind, name)
+                if child is not None:
+                    setattr(form, name, child)
+    return form
 
 
 def load_ui_file(path):
     if hasattr(Gui, "PySideUic") and hasattr(Gui.PySideUic, "loadUi"):
-        return Gui.PySideUic.loadUi(path)
+        return _bind_ui_children(Gui.PySideUic.loadUi(path), path)
     from PySide import QtCore, QtUiTools, QtWidgets
 
     _ = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
@@ -35,7 +55,7 @@ def load_ui_file(path):
     if f.open(QtCore.QFile.ReadOnly):
         try:
             loader = QtUiTools.QUiLoader()
-            return loader.load(f)
+            return _bind_ui_children(loader.load(f), path)
         finally:
             f.close()
     raise RuntimeError(f"Unable to load UI file: {path}")
@@ -123,6 +143,10 @@ class BaseProfileTaskPanel(ABC):
         old_image.deleteLater()
         self.form[0].label_image = image
         self._thumbnail_cache = {}
+        self._section_cache = {}
+        self._alignment_custom_face = None
+        self._alignment_geometry_key = None
+        self._preview_family = None
         self._rendering_thumbnail = False
         self.form_proxy = FormProxy(self.form)
         self._configure_presentation()
@@ -168,6 +192,9 @@ class BaseProfileTaskPanel(ABC):
         first.sb_length.setSuffix(" mm")
         first.groupBox_4.setTitle("Placement")
         placement = first.groupBox_4.layout()
+        self.alignment_widget = AlignmentWidget(first.groupBox_4)
+        placement.addRow(self.alignment_widget)
+        self.alignment_widget.anchorClicked.connect(self._on_alignment_clicked)
         for widget in (second.group_anchor, second.widget_rotation):
             second.groupBox_3.layout().removeWidget(widget)
             placement.addRow(widget)
@@ -317,7 +344,7 @@ class BaseProfileTaskPanel(ABC):
             self.form_proxy.cb_mirror_h.stateChanged.connect(self.on_input_changed)
             self.form_proxy.cb_mirror_v.stateChanged.connect(self.on_input_changed)
             self.form_proxy.cb_pre_extend.stateChanged.connect(self.on_input_changed)
-            self.form_proxy.combo_rotation.currentIndexChanged.connect(self.on_input_changed)
+            self.form_proxy.combo_rotation.currentTextChanged.connect(self.on_input_changed)
             for ax in range(3):
                 for ay in range(3):
                     getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}").clicked.connect(self.on_input_changed)
@@ -338,9 +365,77 @@ class BaseProfileTaskPanel(ABC):
             self.form_proxy.cb_prefix_profile_in_name.stateChanged.connect(self.on_input_changed)
         finally:
             self._initializing = False
+        self._refresh_alignment()
+
+    def _on_alignment_clicked(self, ax, ay):
+        self.set_anchor(ax, ay)
+        self.on_input_changed()
+
+    def _profile_target_document(self, source=None):
+        return getattr(source, "Document", None) or getattr(self, "_target_doc", None) or App.ActiveDocument
+
+    def _existing_alignment_source(self):
+        material = self.form_proxy.combo_material.currentText()
+        family = self.form_proxy.combo_family.currentText()
+        size = self.form_proxy.combo_size.currentText()
+        data = self.profiles.get(material, {}).get(family, {}).get("sizes", {}).get(size, {})
+        folder = self.library_manager._get_registered_folder(material)
+        if not folder or not data.get("asset_path"):
+            return None
+        target = getattr(self, "profile", None)
+        if target is None:
+            selections = Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else []
+            target = next((selection.Object for selection in selections if self._selection_edges(selection)), None)
+        try:
+            return find_existing_section_sketch(
+                folder, data["asset_path"], data.get("object_name", "Section"),
+                self._profile_target_document(target), data.get("asset_id", ""))
+        except (OSError, ValueError):
+            # The catalog inspector already provides the unavailable-asset state.
+            return None
+
+    def _refresh_alignment(self):
+        if getattr(self, "_initializing", False) or self._rendering_thumbnail or getattr(self, "_accept_finalizing", False):
+            return
+        parameters = {"Family": self._preview_family}
+        for prop, control in (("ProfileWidth", "sb_width"), ("ProfileHeight", "sb_height"),
+                              ("Thickness", "sb_main_thickness"), ("ThicknessFlange", "sb_flange_thickness"),
+                              ("RadiusLarge", "sb_radius1"), ("RadiusSmall", "sb_radius2"),
+                              ("LipLength", "sb_lip_length")):
+            if hasattr(self.form_proxy, control):
+                parameters[prop] = getattr(self.form_proxy, control).value()
+        parameters["MakeFillet"] = self.form_proxy.cb_make_fillet.isChecked()
+        face = self._alignment_custom_face
+        source = None
+        profile = getattr(self, "profile", None)
+        if (profile is not None and self._preview_family == "Custom Profile"
+                and self.form_proxy.combo_family.currentText() == (getattr(profile, "CatalogFamily", "") or profile.Family)
+                and self.form_proxy.combo_size.currentText() == profile.SizeName
+                and self.form_proxy.combo_material.currentText() == profile.Material):
+            source = getattr(profile, "CustomProfile", None)
+        if source is None and self._preview_family == "Custom Profile":
+            source = self._existing_alignment_source()
+        source_key = source.Shape.exportBrepToString() if source is not None else None
+        key = (tuple(sorted(parameters.items())), source_key,
+               face.exportBrepToString() if face is not None else None)
+        if key != self._alignment_geometry_key:
+            try:
+                if source is not None:
+                    face = build_custom_section_face(source)
+                section = build_section_face(parameters, custom_face=face)
+                self.alignment_widget.set_section(section)
+                self.alignment_widget.setToolTip(translate("frameforge", "Click a section bounding-box anchor. Keyboard: use the anchor controls below."))
+            except Exception as error:
+                self.alignment_widget.set_section(None)
+                self.alignment_widget.setToolTip(translate("frameforge", "No Preview") + ": " + str(error))
+            self._alignment_geometry_key = key
+        self.alignment_widget.set_state(self.get_anchor(), self.get_rotation(),
+                                        self.form_proxy.cb_mirror_h.isChecked(),
+                                        self.form_proxy.cb_mirror_v.isChecked())
 
     def on_input_changed(self):
-        if not self._rendering_thumbnail:
+        if not getattr(self, "_initializing", False) and not self._rendering_thumbnail:
+            self._refresh_alignment()
             self.proceed()
 
     def _update_family_controls(self, canonical_family):
@@ -380,6 +475,10 @@ class BaseProfileTaskPanel(ABC):
         ax = max(0, min(2, anchor_x))
         ay = max(0, min(2, anchor_y))
         getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}").setChecked(True)
+        if hasattr(self, "alignment_widget"):
+            self.alignment_widget.set_state((ax, ay), self.get_rotation(),
+                                            self.form_proxy.cb_mirror_h.isChecked(),
+                                            self.form_proxy.cb_mirror_v.isChecked())
 
     def get_rotation(self):
         """Return rotation angle in degrees (float)."""
@@ -555,6 +654,7 @@ class BaseProfileTaskPanel(ABC):
             else:
                 canonical_family = get_canonical_family(family_key, None)
 
+        self._preview_family = canonical_family
         is_custom = canonical_family == "Custom Profile"
         self.form_proxy.label_image.is_custom = is_custom
         self.custom_info.setVisible(is_custom)
@@ -566,13 +666,21 @@ class BaseProfileTaskPanel(ABC):
             self.custom_info.setText("\n".join(filter(None, (code, description, "%s kg/m" % weight))))
             self._rendering_thumbnail = True
             try:
+                folder = self.library_manager._get_registered_folder(material)
+                asset, name = size.get("asset_path"), size.get("object_name", "Section")
                 pixmap = render_custom_section_thumbnail(
-                    self.library_manager._get_registered_folder(material),
-                    size.get("asset_path"), size.get("object_name", "Section"),
-                    width=160, height=100, cache=self._thumbnail_cache)
+                    folder, asset, name, width=160, height=100,
+                    cache=self._thumbnail_cache, section_cache=self._section_cache)
+                self._alignment_custom_face = None
+                if folder and asset:
+                    try:
+                        self._alignment_custom_face = self._section_cache.get(custom_section_cache_key(folder, asset, name))
+                    except (OSError, ValueError):
+                        pass
                 self.form_proxy.label_image.setPixmap(pixmap)
             finally:
                 self._rendering_thumbnail = False
+            self._refresh_alignment()
             return
         self.custom_info.clear()
         img_name = canonical_family.replace(" ", "_")
@@ -589,6 +697,8 @@ class BaseProfileTaskPanel(ABC):
 
         self.current_image_path = img_path
         self.form_proxy.label_image.setPixmap(QtGui.QPixmap(img_path))
+        self._alignment_custom_face = None
+        self._refresh_alignment()
 
     def update_profile(self, profile):
         material_name = self.form_proxy.combo_material.currentText()
@@ -623,9 +733,7 @@ class BaseProfileTaskPanel(ABC):
             object_name = size_data.get("object_name", "Section")
             asset_id = size_data.get("asset_id", "")
             if folder_root and asset_path:
-                target_doc = (
-                    getattr(profile, "Document", None) or getattr(self, "_target_doc", None) or App.ActiveDocument
-                )
+                target_doc = self._profile_target_document(profile)
                 pre_sketch_names = {
                     o.Name
                     for o in getattr(target_doc, "Objects", [])
@@ -811,6 +919,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def on_input_changed(self):
         if getattr(self, "_initializing", False) or self._rendering_thumbnail:
             return
+        self._refresh_alignment()
         self._set_pending_state()
         self._update_placement_guidance()
 
@@ -1256,9 +1365,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             object_name = size_data.get("object_name", "Section")
             asset_id = size_data.get("asset_id", "")
             if folder_root and asset_path:
-                target_doc = (
-                    getattr(sketch, "Document", None) or getattr(self, "_target_doc", None) or App.ActiveDocument
-                )
+                target_doc = self._profile_target_document(sketch)
                 pre_sketch_names = {
                     obj.Name
                     for obj in getattr(target_doc, "Objects", [])
@@ -1279,7 +1386,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         # Create an object in current document
         obj = None
         try:
-            target_doc = getattr(sketch, "Document", None) or getattr(self, "_target_doc", None) or App.ActiveDocument
+            target_doc = self._profile_target_document(sketch)
             obj = target_doc.addObject("Part::FeaturePython", name)
             obj.addExtension("Part::AttachExtensionPython")
 

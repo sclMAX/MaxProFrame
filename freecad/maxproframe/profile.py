@@ -412,7 +412,7 @@ class Profile:
         ):
             self.execute(obj)
 
-    def execute(self, obj):
+    def execute(self, obj, *, _section_only=False):
         self.run_compatibility_migrations(obj)
         self._validate_angle_fillets(obj)
         custom_section_face = None
@@ -1145,6 +1145,12 @@ class Profile:
         ):
             p = p.copy()
             p.translate(vec(w - p.BoundBox.XMin, h - p.BoundBox.YMin, 0))
+
+        if _section_only:
+            # The 2D panel supplies a detached parameter snapshot. Return the same
+            # complete section used by extrusion (including bores), not wire1 or
+            # the legacy zero-length preview. Never attach or recompute a document.
+            return p.copy()
 
         mirror_h = getattr(obj, "MirrorH", False)
         mirror_v = getattr(obj, "MirrorV", False)

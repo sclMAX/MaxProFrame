@@ -101,14 +101,9 @@ def create_placeholder_pixmap(width=160, height=100, text=None):
     return pm
 
 
-def render_face_silhouette(face, canvas_w=160, canvas_h=100):
-    """Renders a solid 2D vector silhouette from a Part.Face using QPainterPath
-
-    with OddEvenFill to preserve outer contours and internal holes with exact proportions.
-    """
+def face_silhouette_path(face):
+    """Shared vector outline with OddEvenFill preserving all section holes."""
     wires = getattr(face, "Wires", [])
-    if not wires:
-        return create_placeholder_pixmap(canvas_w, canvas_h)
 
     # Determine 2D projection plane (XY standard, or XZ/YZ if planar)
     bbox = getattr(face, "BoundBox", None)
@@ -149,6 +144,12 @@ def render_face_silhouette(face, canvas_w=160, canvas_h=100):
         subpath.closeSubpath()
         painter_path.addPath(subpath)
 
+    return painter_path
+
+
+def render_face_silhouette(face, canvas_w=160, canvas_h=100):
+    """Render the shared vector outline without changing the thumbnail API."""
+    painter_path = face_silhouette_path(face)
     if painter_path.isEmpty():
         return create_placeholder_pixmap(canvas_w, canvas_h)
 
@@ -188,7 +189,18 @@ def render_face_silhouette(face, canvas_w=160, canvas_h=100):
     return QtGui.QPixmap.fromImage(img)
 
 
-def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=160, height=100, cache=None):
+def custom_section_cache_key(folder_path, asset_path, object_name):
+    """Keep thumbnail and detached face caches on the same validated identity."""
+    full_path = resolve_and_validate_asset_path(folder_path, asset_path)
+    try:
+        mtime = os.path.getmtime(full_path)
+    except OSError:
+        mtime = 0
+    return (os.path.realpath(folder_path), asset_path, object_name or "Section", mtime)
+
+
+def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=160, height=100, cache=None,
+                                    section_cache=None):
     """Safely renders a custom section thumbnail using an isolated temporary copy
 
     without modifying user sketches, libraries, open documents, active document, or selection.
@@ -205,12 +217,10 @@ def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=
         return create_placeholder_pixmap(width, height)
 
     try:
-        mtime = os.path.getmtime(full_path)
+        cache_key = custom_section_cache_key(folder_path, asset_path, object_name)
     except OSError:
-        mtime = 0
-
-    cache_key = (os.path.realpath(folder_path), asset_path, object_name or "Section", mtime)
-    if cache is not None and cache_key in cache:
+        return create_placeholder_pixmap(width, height)
+    if cache is not None and cache_key in cache and (section_cache is None or cache_key in section_cache):
         return cache[cache_key]
 
     active_doc = getattr(App, "ActiveDocument", None)
@@ -234,6 +244,7 @@ def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=
     temp_dir = tempfile.mkdtemp(prefix="ff_thumb_inspect_")
     doc = None
     pixmap = None
+    section = None
     try:
         temp_file = os.path.join(temp_dir, "inspect.FCStd")
         shutil.copyfile(full_path, temp_file)
@@ -252,6 +263,7 @@ def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=
                 face = build_custom_section_face(sketch)
                 if face is not None and face.isValid() and face.Area > 0:
                     pixmap = render_face_silhouette(face, width, height)
+                    section = face.copy()
     except Exception:
         pixmap = None
     finally:
@@ -289,6 +301,8 @@ def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=
 
     if cache is not None:
         cache[cache_key] = pixmap
+    if section_cache is not None:
+        section_cache[cache_key] = section
 
     return pixmap
 

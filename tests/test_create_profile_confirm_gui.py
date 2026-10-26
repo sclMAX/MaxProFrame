@@ -335,6 +335,14 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
         self.assertGreaterEqual(sz_idx, 0, f"{size} must be present in combo_size.")
         panel.form_proxy.combo_size.setCurrentIndex(sz_idx)
 
+    def _click_alignment(self, panel, ax, ay):
+        widget = panel.alignment_widget
+        point = widget.anchor_position(ax, ay)
+        for kind in (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.MouseButtonRelease):
+            self.app.sendEvent(widget, QtGui.QMouseEvent(
+                kind, point, QtCore.Qt.LeftButton, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier))
+        self.assertEqual(panel.get_anchor(), (ax, ay))
+
     # --- Tests ---
 
     def test_real_ok_click_without_apply_creates_valid_custom_profile(self):
@@ -354,7 +362,10 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
         self._select_profile(panel, self.folder_lib_name, "Custom Profile", "CP-HOLE1")
         panel.form_proxy.sb_length.setValue(100.0)
 
-        # Baseline: zero objects in target document
+        self._click_alignment(panel, 2, 0)
+        panel.form_proxy.combo_rotation.setCurrentText("37")
+        panel.form_proxy.cb_mirror_h.setChecked(True)
+        # Baseline: even clicking the silhouette must not create preview objects.
         self.assertEqual(len(doc.Objects), 0)
 
         # Find real native QDialogButtonBox Ok button
@@ -374,6 +385,9 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
         profiles = [o for o in doc.Objects if getattr(getattr(o, "Proxy", None), "Type", None) == "Profile"]
         self.assertEqual(len(profiles), 1, "Exactly one Profile object must be created.")
         prof = profiles[0]
+        self.assertEqual((str(prof.AnchorX), str(prof.AnchorY)), ("Right", "Bottom"))
+        self.assertAlmostEqual(prof.RotationAngle, 37)
+        self.assertTrue(prof.MirrorH)
 
         # 3. Valid solid with source holes
         self.assertEqual(prof.getStatusString(), "Valid")
@@ -428,6 +442,7 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
         self.assertEqual(len(profiles_after_apply), 1)
         preview_prof = profiles_after_apply[0]
         self.assertEqual(preview_prof.ViewObject.Transparency, 80)
+        self._click_alignment(panel, 0, 2)
 
         # Click real native Ok button
         ok_button = self._find_dialog_button(QtWidgets.QDialogButtonBox.Ok)
@@ -441,6 +456,7 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
         self.assertEqual(len(profiles_after_ok), 1)
         confirmed_prof = profiles_after_ok[0]
         self.assertEqual(confirmed_prof.ViewObject.Transparency, 0)
+        self.assertEqual((str(confirmed_prof.AnchorX), str(confirmed_prof.AnchorY)), ("Left", "Top"))
         self.assertTrue(confirmed_prof.Shape.isValid())
         self.assertAlmostEqual(confirmed_prof.Shape.Volume, 220000.0, delta=100.0)
 

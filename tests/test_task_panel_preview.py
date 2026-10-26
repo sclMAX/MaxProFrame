@@ -112,6 +112,248 @@ class TestTaskPanelPreview(unittest.TestCase):
             panel.form_proxy.combo_size.setCurrentText("WIDE")
         return panel
 
+    def _click_anchor(self, panel, ax, ay):
+        widget = panel.alignment_widget
+        self._show(panel)
+        point = widget.anchor_position(ax, ay)
+        for kind in (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.MouseButtonRelease):
+            event = QtGui.QMouseEvent(kind, point, QtCore.Qt.LeftButton,
+                                     QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
+            self.app.sendEvent(widget, event)
+        self.assertEqual(panel.get_anchor(), (ax, ay))
+        self.assertEqual(widget.selected_anchor, (ax, ay))
+
+    def test_alignment_create_clicks_apply_cancel_and_source_changes(self):
+        panel = self._panel()
+        panel.form_proxy.sb_length.setValue(100)
+        with patch.object(panel, "on_input_changed", wraps=panel.on_input_changed) as changed:
+            for ax in range(3):
+                for ay in range(3):
+                    count = changed.call_count
+                    self._click_anchor(panel, ax, ay)
+                    self.assertEqual(changed.call_count, count + 1)
+                    self.assertEqual(self.doc.Objects, [])
+        for ax in range(3):
+            for ay in range(3):
+                getattr(panel.form_proxy, "rb_anchor_%s_%s" % (ax, ay)).click()
+                self.assertEqual(panel.alignment_widget.selected_anchor, (ax, ay))
+        with patch.object(App, "openDocument", side_effect=AssertionError("click loaded catalog")), \
+                patch.object(Gui.Selection, "clearSelection", side_effect=AssertionError("click changed selection")):
+            self._click_anchor(panel, 2, 2)
+        panel.form_proxy.combo_rotation.setCurrentText("37")
+        panel.form_proxy.cb_mirror_h.setChecked(True)
+        panel.form_proxy.cb_mirror_v.setChecked(True)
+        self.assertEqual(panel.alignment_widget.rotation, 37)
+        self.assertEqual(panel.alignment_widget.mirrors, (True, True))
+        self.assertTrue(panel.apply())
+        obj = next(o for o in self.doc.Objects if getattr(o, "Family", None) == "Custom Profile")
+        self.assertEqual((str(obj.AnchorX), str(obj.AnchorY)), ("Right", "Top"))
+        before = obj.Shape.copy()
+        self._click_anchor(panel, 0, 1)
+        self.assertAlmostEqual(obj.Shape.common(before).Volume, before.Volume)
+        self.assertTrue(panel.apply())
+        self.assertEqual((str(obj.AnchorX), str(obj.AnchorY)), ("Left", "Center"))
+        path_before = panel.alignment_widget.section_bounds
+        panel.form_proxy.combo_size.setCurrentText("TALL")
+        self.assertNotEqual(panel.alignment_widget.section_bounds, path_before)
+        self.assertEqual(panel.get_anchor(), (0, 1))
+        panel.reject()
+        self.assertEqual(self.doc.Objects, [])
+
+    def test_alignment_edit_live_cancel_and_create_deferred_snapshot(self):
+        create = self._panel()
+        create.form_proxy.sb_length.setValue(100)
+        self._click_anchor(create, 2, 0)
+        # Mutating real controls after accept must not alter the queued snapshot.
+        with patch.object(QtCore.QTimer, "singleShot") as timer:
+            self.assertTrue(create.accept(defer=True))
+            callback = timer.call_args[0][1]
+            create.set_anchor(0, 2)
+            callback()
+        obj = next(o for o in self.doc.Objects if getattr(o, "Family", None) == "Custom Profile")
+        self.assertEqual((str(obj.AnchorX), str(obj.AnchorY)), ("Right", "Bottom"))
+        original = obj.Shape.copy()
+        edit = self._panel(obj)
+        self.assertEqual(edit.alignment_widget.selected_anchor, (2, 0))
+        with patch.object(edit, "on_input_changed", wraps=edit.on_input_changed) as changed:
+            self._click_anchor(edit, 0, 2)
+            self.assertEqual(changed.call_count, 1)
+        self.assertEqual((str(obj.AnchorX), str(obj.AnchorY)), ("Left", "Top"))
+        edit.form_proxy.combo_rotation.setCurrentText("37")
+        self.assertAlmostEqual(obj.RotationAngle, 37)
+        edit.reject()
+        obj = self.doc.getObject(obj.Name)
+        self.assertEqual((str(obj.AnchorX), str(obj.AnchorY)), ("Right", "Bottom"))
+        self.assertAlmostEqual(obj.Shape.common(original).Volume, original.Volume)
+        edit2 = self._panel(obj)
+        self._click_anchor(edit2, 1, 1)
+        self.assertTrue(edit2.accept())
+        self.assertEqual((str(obj.AnchorX), str(obj.AnchorY)), ("Center", "Center"))
+
+    def _create_resized_local_source(self, width=120, height=30):
+        first = self._panel()
+        first.form_proxy.sb_length.setValue(100)
+        self.assertTrue(first.accept(defer=False))
+        profile = next(o for o in App.ActiveDocument.Objects if getattr(o, "Family", None) == "Custom Profile")
+        source = profile.CustomProfile
+        points = [(0, 0), (width, 0), (width, height), (0, height)]
+        source.Geometry = [Part.LineSegment(App.Vector(*start, 0), App.Vector(*end, 0))
+                           for start, end in zip(points, points[1:] + points[:1])]
+        source.Document.recompute()
+        self.assertAlmostEqual(source.Shape.BoundBox.XLength, width)
+        self.assertAlmostEqual(source.Shape.BoundBox.YLength, height)
+        return profile, source
+
+    def test_alignment_create_matches_reused_locally_edited_source(self):
+        first, source = self._create_resized_local_source()
+        original_names = {o.Name for o in self.doc.Objects}
+        original_source = source.Shape.exportBrepToString()
+        files = self._files()
+        panel = self._panel()
+        panel.form_proxy.sb_length.setValue(100)
+        self.assertAlmostEqual(panel.alignment_widget.section_bounds.width(), 120)
+        self.assertAlmostEqual(panel.alignment_widget.section_bounds.height(), 30)
+        before = self._state(panel)
+        with patch.object(App, "openDocument", side_effect=AssertionError("refresh imported an asset")), \
+                patch.object(App, "newDocument", side_effect=AssertionError("refresh created document")):
+            panel._refresh_alignment()
+        self.assertEqual(self._state(panel), before)
+        self.assertEqual({o.Name for o in self.doc.Objects}, original_names)
+        self.assertTrue(panel.apply())
+        second = next(o for o in self.doc.Objects if getattr(o, "Family", None) == "Custom Profile" and o != first)
+        self.assertIs(second.CustomProfile, source)
+        self.assertAlmostEqual(second.ProfileWidth, panel.alignment_widget.section_bounds.width())
+        self.assertAlmostEqual(second.ProfileHeight, panel.alignment_widget.section_bounds.height())
+        self.assertEqual(source.Shape.exportBrepToString(), original_source)
+        self.assertEqual(self._files(), files)
+        panel.reject()
+        self.assertEqual({o.Name for o in self.doc.Objects}, original_names)
+        self.assertIs(first.CustomProfile, source)
+        self.assertEqual(source.Shape.exportBrepToString(), original_source)
+        self.assertEqual(self._files(), files)
+
+    def test_alignment_create_preserves_normalized_path_and_optional_asset_id_reuse(self):
+        import copy
+        first, source = self._create_resized_local_source()
+        source.FF_AssetId = "local-id"
+        original_names = {o.Name for o in self.doc.Objects}
+        catalog = copy.deepcopy(self.manager.get_all_profiles()["Preview Library"])
+        entry = catalog["Custom Profile"]["sizes"]["WIDE"]
+        entry["asset_path"] = "sections/./WIDE.FCStd"
+        for asset_id, reuse in ((None, True), ("local-id", True), ("different-id", False)):
+            with self.subTest(asset_id=asset_id):
+                entry["asset_id"] = asset_id
+                self.manager.save_folder_library(self.folder, catalog)
+                files = self._files()
+                panel = self._panel()
+                panel.form_proxy.sb_length.setValue(100)
+                self.assertAlmostEqual(panel.alignment_widget.section_bounds.width(), 120 if reuse else 80)
+                self.assertTrue(panel.apply())
+                second = next(o for o in self.doc.Objects if getattr(o, "Family", None) == "Custom Profile" and o != first)
+                self.assertEqual(second.CustomProfile is source, reuse)
+                self.assertAlmostEqual(second.ProfileWidth, panel.alignment_widget.section_bounds.width())
+                self.assertEqual(self._files(), files)
+                panel.reject()
+                self.assertEqual({o.Name for o in self.doc.Objects}, original_names)
+
+    def test_alignment_create_uses_selected_path_document_before_target_document(self):
+        _first, target_source = self._create_resized_local_source()
+        other = App.newDocument("SelectedSourceTarget")
+        self.addCleanup(lambda: App.closeDocument(other.Name) if other.Name in App.listDocuments() else None)
+        _other_first, selected_source = self._create_resized_local_source(140, 40)
+        path = other.addObject("Part::Feature", "Path")
+        path.Shape = Part.makeLine(App.Vector(0, 0, 0), App.Vector(0, 0, 100))
+        other.recompute()
+        App.setActiveDocument(self.doc.Name)
+        panel = self._panel()
+        panel.form_proxy.sb_length.setValue(100)
+        # No selection: the session target wins, even if ActiveDocument changes.
+        App.setActiveDocument(other.Name)
+        panel._refresh_alignment()
+        self.assertAlmostEqual(panel.alignment_widget.section_bounds.width(), 120)
+        # FreeCAD only accepts GUI selection in the active document. Keep the
+        # selected document active while the panel's captured target stays fixed.
+        Gui.Selection.addObserver(panel)
+        Gui.Selection.addSelection(other.Name, path.Name, "Edge1")
+        self.assertEqual(Gui.Selection.getSelectionEx()[0].DocumentName, other.Name)
+        self.assertAlmostEqual(panel.alignment_widget.section_bounds.width(), 140)
+        self.assertAlmostEqual(panel.alignment_widget.section_bounds.height(), 40)
+        before = self._state(panel)
+        names = tuple(o.Name for o in other.Objects)
+        source_before = selected_source.Shape.exportBrepToString()
+        panel._refresh_alignment()
+        self.assertEqual(self._state(panel), before)
+        self.assertEqual(tuple(o.Name for o in other.Objects), names)
+        self.assertEqual(selected_source.Shape.exportBrepToString(), source_before)
+        self.assertTrue(panel.apply())
+        applied = next(o for o in other.Objects if getattr(o, "Family", None) == "Custom Profile" and o != _other_first)
+        self.assertIs(applied.CustomProfile, selected_source)
+        self.assertIsNot(applied.CustomProfile, target_source)
+        self.assertAlmostEqual(applied.ProfileWidth, panel.alignment_widget.section_bounds.width())
+        panel.reject()
+
+    def test_alignment_edit_switches_custom_family_even_when_code_is_unchanged(self):
+        import copy
+        create = self._panel()
+        create.form_proxy.sb_length.setValue(100)
+        self.assertTrue(create.accept(defer=False))
+        obj = next(o for o in self.doc.Objects if getattr(o, "Family", None) == "Custom Profile")
+        catalog = copy.deepcopy(self.manager.get_all_profiles()["Preview Library"])
+        catalog["Other Custom"] = {"canonical_family": "Custom Profile", "norm": "Custom",
+                                   "unit": "mm", "sizes": {"WIDE": catalog["Custom Profile"]["sizes"]["TALL"]}}
+        self.manager.save_folder_library(self.folder, catalog)
+        edit = self._panel(obj)
+        self.assertAlmostEqual(edit.alignment_widget.section_bounds.width(), 80)
+        edit.form_proxy.combo_family.setCurrentText("Other Custom")
+        self.assertEqual(obj.CatalogFamily, "Other Custom")
+        self.assertEqual(obj.SizeName, "WIDE")
+        self.assertAlmostEqual(edit.alignment_widget.section_bounds.width(), 20)
+        self.assertAlmostEqual(edit.alignment_widget.section_bounds.height(), 80)
+        edit.reject()
+
+    def test_alignment_edit_uses_local_source_and_refreshes_holes_without_catalog(self):
+        create = self._panel()
+        create.form_proxy.sb_length.setValue(100)
+        self.assertTrue(create.accept(defer=False))
+        obj = next(o for o in self.doc.Objects if getattr(o, "Family", None) == "Custom Profile")
+        obj.Material = "Unavailable Library"
+        edit = self._panel(obj)
+        self._show(edit)
+        before_image = edit.alignment_widget.grab().toImage()
+        source = obj.CustomProfile
+        source.addGeometry(Part.Circle(App.Vector(20, 5, 0), App.Vector(0, 0, 1), 3), False)
+        self.doc.recompute()
+        source_before = source.Shape.exportBrepToString()
+        edit.update_image()
+        self.assertNotEqual(edit.alignment_widget.grab().toImage(), before_image)
+        self.assertEqual(source.Shape.exportBrepToString(), source_before)
+        self.assertGreater(edit.alignment_widget.section_bounds.width(), 0)
+        before = self._state(edit)
+        with patch.object(App, "openDocument", side_effect=AssertionError("paint loaded catalog")):
+            edit.alignment_widget.grab()
+        self.assertEqual(self._state(edit), before)
+        edit.reject()
+
+    def test_native_loader_rebinds_recycled_named_widget_aliases(self):
+        native_load = Gui.PySideUic.loadUi
+        items = []
+        def load_with_stale_aliases(path):
+            form = native_load(path)
+            if form.findChild(QtWidgets.QComboBox, "combo_family") is not None:
+                # Reproduce the native alias types observed after repeated GUI
+                # dialog destruction, while leaving the real QObject tree intact.
+                for name in ("combo_family", "groupBox_4"):
+                    item = QtWidgets.QWidgetItem(QtWidgets.QWidget())
+                    items.append(item)
+                    setattr(form, name, item)
+            return form
+        with patch.object(Gui.PySideUic, "loadUi", side_effect=load_with_stale_aliases):
+            panel = self._panel()
+        self.assertIsInstance(panel.form_proxy.combo_family, QtWidgets.QComboBox)
+        self.assertIsInstance(panel.form[0].groupBox_4, QtWidgets.QGroupBox)
+        self._click_anchor(panel, 2, 1)
+        self.assertEqual(self.doc.Objects, [])
+
     def _files(self):
         result = {}
         for directory, _, files in os.walk(self.folder):
@@ -170,7 +412,16 @@ class TestTaskPanelPreview(unittest.TestCase):
                 enabled = panel.form_proxy.sb_length.isEnabled()
                 for _ in range(2):
                     panel._thumbnail_cache.clear()
+                    # The existing thumbnail inspector restores its temporary
+                    # document/selection context. The additional 2D refresh must
+                    # consume its cached face without touching either context.
                     panel.update_image()
+                    with patch.object(Gui.Selection, "clearSelection", wraps=Gui.Selection.clearSelection) as clear, \
+                            patch.object(App, "setActiveDocument", wraps=App.setActiveDocument) as activate, \
+                            patch.object(App, "openDocument", side_effect=AssertionError("2D refresh loaded catalog")):
+                        panel._refresh_alignment()
+                        clear.assert_not_called()
+                        activate.assert_not_called()
                     self.app.processEvents()
                     self.assertEqual(self._state(panel), before)
                     self.assertEqual(panel.form_proxy.sb_length.isEnabled(), enabled)
