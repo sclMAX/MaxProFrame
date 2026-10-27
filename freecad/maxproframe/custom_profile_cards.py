@@ -199,6 +199,70 @@ def custom_section_cache_key(folder_path, asset_path, object_name):
     return (os.path.realpath(folder_path), asset_path, object_name or "Section", mtime)
 
 
+def _extract_custom_section_face_from_fcstd(fcstd_path, object_name=None):
+    """Extracts custom section face directly from an .FCStd archive without opening FreeCAD documents.
+
+    Prevents document lifecycle events (App.openDocument/closeDocument) that destabilize
+    FreeCAD TaskView and cause iterator invalidation crashes in FreeCAD 26.3 and main.
+    """
+    if not fcstd_path or not os.path.isfile(fcstd_path):
+        return None
+
+    import xml.etree.ElementTree as ET
+    import zipfile
+    import Part
+
+    try:
+        with zipfile.ZipFile(fcstd_path, "r") as archive:
+            if "Document.xml" not in archive.namelist():
+                return None
+            tree = ET.fromstring(archive.read("Document.xml"))
+            brp_file = None
+            for obj in tree.iter("Object"):
+                name = obj.get("name")
+                if object_name and name != object_name:
+                    continue
+                obj_type = obj.get("type", "")
+                if obj_type and "Sketch" not in obj_type:
+                    continue
+                for prop in obj.iter("Property"):
+                    if prop.get("name") == "Shape":
+                        part = prop.find("Part")
+                        if part is not None and part.get("file"):
+                            candidate = part.get("file")
+                            if candidate in archive.namelist():
+                                brp_file = candidate
+                                break
+                if brp_file:
+                    break
+
+            if not brp_file:
+                for item in archive.namelist():
+                    if item.endswith(".Shape.brp") and "Internal" not in item:
+                        brp_file = item
+                        break
+
+            if not brp_file:
+                return None
+
+            brp_data = archive.read(brp_file)
+
+        with tempfile.NamedTemporaryFile(suffix=".brp") as tf:
+            tf.write(brp_data)
+            tf.flush()
+            shape = Part.Shape()
+            shape.read(tf.name)
+            wires = list(shape.Wires)
+            if not wires:
+                return None
+            face = Part.makeFace(wires, "Part::FaceMakerBullseye")
+            if face is not None and face.isValid() and face.Area > 0:
+                return face
+    except Exception:
+        return None
+    return None
+
+
 def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=160, height=100, cache=None,
                                     section_cache=None):
     """Safely renders a custom section thumbnail using an isolated temporary copy
@@ -222,6 +286,16 @@ def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=
         return create_placeholder_pixmap(width, height)
     if cache is not None and cache_key in cache and (section_cache is None or cache_key in section_cache):
         return cache[cache_key]
+
+    direct_face = _extract_custom_section_face_from_fcstd(full_path, object_name)
+    if direct_face is not None:
+        pixmap = render_face_silhouette(direct_face, width, height)
+        section = direct_face.copy()
+        if cache is not None:
+            cache[cache_key] = pixmap
+        if section_cache is not None:
+            section_cache[cache_key] = section
+        return pixmap
 
     active_doc = getattr(App, "ActiveDocument", None)
     active_doc_name = active_doc.Name if active_doc else None
