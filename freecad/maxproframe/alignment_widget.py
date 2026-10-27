@@ -14,11 +14,12 @@ class AlignmentWidget(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("alignment_widget")
+        self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.setMinimumSize(160, 160)
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
         self.setAccessibleName(translate("frameforge", "Section alignment"))
         self.setToolTip(
-            translate("frameforge", "Click a section bounding-box anchor. Keyboard: use the anchor controls below.")
+            translate("frameforge", "Click a section bounding-box anchor to align profile (or use arrow keys).")
         )
         self._path = QtGui.QPainterPath()
         self._bounds = QtCore.QRectF()
@@ -101,6 +102,26 @@ class AlignmentWidget(QtWidgets.QWidget):
                 event.accept()
                 return
         super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        key = event.key()
+        ax, ay = self.selected_anchor
+        if key == QtCore.Qt.Key_Left:
+            ax = max(0, ax - 1)
+        elif key == QtCore.Qt.Key_Right:
+            ax = min(2, ax + 1)
+        elif key == QtCore.Qt.Key_Up:
+            ay = min(2, ay + 1)
+        elif key == QtCore.Qt.Key_Down:
+            ay = max(0, ay - 1)
+        else:
+            super().keyPressEvent(event)
+            return
+        if (ax, ay) != self.selected_anchor:
+            self.selected_anchor = (ax, ay)
+            self.update()
+            self.anchorClicked.emit(ax, ay)
+        event.accept()
 
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)

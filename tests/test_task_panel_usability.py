@@ -433,9 +433,13 @@ class TestTaskPanelUsability(unittest.TestCase):
             self.assertLess(
                 abs(label.mapToGlobal(QtCore.QPoint()).y() - combo.mapToGlobal(QtCore.QPoint()).y()), combo.height()
             )
-        for widget in (panel.form_proxy.group_anchor, panel.form_proxy.combo_rotation):
+        for widget in (panel.alignment_widget, panel.form_proxy.combo_rotation):
             self.assertTrue(
-                widget.isVisibleTo(panel.form[0]), "Alignment and rotation belong in the expanded primary panel"
+                widget.isVisibleTo(panel.form[0]), "Alignment widget and rotation belong in the expanded primary panel"
+            )
+        for widget in (panel.form_proxy.group_anchor, panel.form_proxy.label_image):
+            self.assertFalse(
+                widget.isVisibleTo(panel.form[0]), "Duplicate anchor group and top preview image must be hidden"
             )
         naming = panel.form_proxy.cb_sketch_in_name
         price = panel.form_proxy.sb_unitprice

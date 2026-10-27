@@ -99,3 +99,28 @@ class TestAlignmentWidget(unittest.TestCase):
                 self.assertTrue(
                     self.widget.grab().save(os.path.join(os.environ["FF_REPORTS"], "alignment-%s.png" % angle))
                 )
+
+    def test_keyboard_arrow_navigation_selects_anchors(self):
+        self.widget.set_state((1, 1))
+        clicks = []
+        self.widget.anchorClicked.connect(lambda x, y: clicks.append((x, y)))
+
+        def press(key):
+            event = QtGui.QKeyEvent(QtCore.QEvent.KeyPress, key, QtCore.Qt.NoModifier)
+            QtWidgets.QApplication.sendEvent(self.widget, event)
+
+        press(QtCore.Qt.Key_Right)
+        self.assertEqual(self.widget.selected_anchor, (2, 1))
+        self.assertEqual(clicks[-1], (2, 1))
+
+        press(QtCore.Qt.Key_Up)
+        self.assertEqual(self.widget.selected_anchor, (2, 2))
+        self.assertEqual(clicks[-1], (2, 2))
+
+        press(QtCore.Qt.Key_Left)
+        self.assertEqual(self.widget.selected_anchor, (1, 2))
+        self.assertEqual(clicks[-1], (1, 2))
+
+        press(QtCore.Qt.Key_Down)
+        self.assertEqual(self.widget.selected_anchor, (1, 1))
+        self.assertEqual(clicks[-1], (1, 1))
