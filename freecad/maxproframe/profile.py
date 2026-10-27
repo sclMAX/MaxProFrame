@@ -412,7 +412,7 @@ class Profile:
         ):
             self.execute(obj)
 
-    def execute(self, obj):
+    def execute(self, obj, *, _section_only=False):
         self.run_compatibility_migrations(obj)
         self._validate_angle_fillets(obj)
         custom_section_face = None
@@ -431,6 +431,14 @@ class Profile:
 
         W = obj.ProfileWidth
         H = obj.ProfileHeight
+        if custom_section_face is not None:
+            W = custom_section_face.BoundBox.XLength
+            H = custom_section_face.BoundBox.YLength
+        # Circular catalogs specify diameter as Height and may omit Width entirely.
+        # Use that actual section extent for horizontal anchors and mirror centers,
+        # without rewriting the stored (possibly legacy) ProfileWidth property.
+        if obj.Family in ("Round Bar", "Pipe"):
+            W = H
         pl = obj.Placement
         TW = obj.Thickness
         TF = obj.ThicknessFlange
@@ -1066,13 +1074,13 @@ class Profile:
             p = Part.Face(wire1)
 
         if obj.Family == "Round Bar":
-            c = vec(H / 2 + h, H / 2 + h, 0)
+            c = vec(W / 2 + w, H / 2 + h, 0)
             A1 = Part.makeCircle(H / 2, c, d, 0, 360)
             wire1 = Part.Wire([A1])
             p = Part.Face(wire1)
 
         if obj.Family == "Pipe":
-            c = vec(H / 2 + h, H / 2 + h, 0)
+            c = vec(W / 2 + w, H / 2 + h, 0)
             A1 = Part.makeCircle(H / 2, c, d, 0, 360)
             A2 = Part.makeCircle((H / 2) - TW, c, d, 0, 360)
             wire1 = Part.Wire([A1])
@@ -1083,7 +1091,6 @@ class Profile:
 
         if obj.Family == "Custom Profile":
             p = custom_section_face
-            W, H = p.BoundBox.XLength, p.BoundBox.YLength
 
         if obj.Family == "V-Slot":
             if H == 20.0 and W == 20.0:
@@ -1134,9 +1141,16 @@ class Profile:
             "T-Slot 2-Slots",
             "T-Slot 2-Slots Opp",
             "T-Slot 1-Slot",
+            "Custom Profile",
         ):
             p = p.copy()
             p.translate(vec(w - p.BoundBox.XMin, h - p.BoundBox.YMin, 0))
+
+        if _section_only:
+            # The 2D panel supplies a detached parameter snapshot. Return the same
+            # complete section used by extrusion (including bores), not wire1 or
+            # the legacy zero-length preview. Never attach or recompute a document.
+            return p.copy()
 
         mirror_h = getattr(obj, "MirrorH", False)
         mirror_v = getattr(obj, "MirrorV", False)
@@ -1186,8 +1200,11 @@ class Profile:
             obj.Shape = ProfileFull
 
         elif obj.Family == "Custom Profile":
-            # The validated section already includes holes and the mirrors applied above.
-            obj.Shape = p
+            # Bake the section transform before restoring the object's placement below.
+            # Otherwise a face's translated placement is replaced by the profile placement.
+            section_transform = p.Placement.toMatrix()
+            p.Placement = App.Placement()
+            obj.Shape = p.transformGeometry(section_transform)
 
         else:
             # Anchor already applied when building wire1; mirror only

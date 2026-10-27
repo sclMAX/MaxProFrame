@@ -440,12 +440,58 @@ class SectionEditSession:
             self.staged_asset_path = None
 
 
+def _section_asset_identity(library_root, asset_path, object_name, asset_id):
+    """Validate and normalize the importer's composite asset identity."""
+    if not library_root:
+        raise ValueError("Library root is required.")
+    if not asset_path:
+        raise ValueError("Asset path is required.")
+    if not object_name:
+        raise ValueError("Object name is required.")
+    canonical_root = os.path.realpath(os.path.abspath(library_root))
+    full_asset_path = resolve_and_validate_asset_path(canonical_root, asset_path)
+    if not os.path.isfile(full_asset_path):
+        raise FileNotFoundError(f"Asset file '{full_asset_path}' does not exist.")
+    return (
+        canonical_root,
+        full_asset_path,
+        os.path.normpath(asset_path).replace("\\", "/"),
+        str(asset_id) if asset_id is not None else "",
+    )
+
+
+def _find_section_sketch(target_doc, canonical_root, norm_asset_path, object_name, target_aid):
+    for obj in target_doc.Objects:
+        if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject"):
+            if (
+                getattr(obj, "FF_Provenance", None) == canonical_root
+                and getattr(obj, "FF_AssetPath", None) == norm_asset_path
+                and getattr(obj, "FF_ObjectName", None) == str(object_name)
+                and (not target_aid or getattr(obj, "FF_AssetId", None) == target_aid)
+            ):
+                return obj
+    return None
+
+
+def find_existing_section_sketch(library_root, asset_path, object_name, target_doc, asset_id=""):
+    """Observe exactly the source an import would reuse, without opening or changing documents."""
+    canonical_root, _path, norm_asset_path, target_aid = _section_asset_identity(
+        library_root, asset_path, object_name, asset_id
+    )
+    if target_doc is None:
+        target_doc = App.ActiveDocument
+    if target_doc is None:
+        raise ValueError("Target project document is missing.")
+    return _find_section_sketch(target_doc, canonical_root, norm_asset_path, object_name, target_aid)
+
+
 def get_or_import_section_sketch(library_root, asset_path, object_name, target_doc, asset_id="", profile_code=None):
     """Returns an autonomous document-local SketchObject in target_doc for the specified asset.
 
     1. Validates canonical path confinement using resolve_and_validate_asset_path.
     2. Scans target_doc for an existing SketchObject matching composite provenance:
-       (canonical_library_root, asset_id, object_name). If found, returns existing sketch.
+       (canonical_library_root, normalized asset path, exact object_name, optional asset_id).
+       If found, returns the existing sketch.
     3. If not present:
        - Checks App.listDocuments() to detect if the asset file is already open (user-owned).
        - If open, reuses the existing document without closing or mutating it.
@@ -458,41 +504,16 @@ def get_or_import_section_sketch(library_root, asset_path, object_name, target_d
        - Closes the asset document only if opened by this importer.
        - Restores the active document to target_doc.
     """
-    if not library_root:
-        raise ValueError("Library root is required.")
-    if not asset_path:
-        raise ValueError("Asset path is required.")
-    if not object_name:
-        raise ValueError("Object name is required.")
-
-    canonical_root = os.path.realpath(os.path.abspath(library_root))
-    full_asset_path = resolve_and_validate_asset_path(canonical_root, asset_path)
-    if not os.path.isfile(full_asset_path):
-        raise FileNotFoundError(f"Asset file '{full_asset_path}' does not exist.")
-
+    canonical_root, full_asset_path, norm_asset_path, target_aid = _section_asset_identity(
+        library_root, asset_path, object_name, asset_id
+    )
     if target_doc is None:
         target_doc = App.ActiveDocument
     if target_doc is None:
         raise ValueError("Target project document is missing.")
-
-    norm_asset_path = os.path.normpath(asset_path).replace("\\", "/")
-    target_aid = str(asset_id) if asset_id is not None else ""
-
-    # Check for existing document-local sketch matching composite provenance:
-    # canonical root AND selected asset path AND exact object name AND asset ID (where present)
-    for obj in target_doc.Objects:
-        if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject"):
-            p_prov = getattr(obj, "FF_Provenance", None)
-            p_aid = getattr(obj, "FF_AssetId", None)
-            p_oname = getattr(obj, "FF_ObjectName", None)
-            p_apath = getattr(obj, "FF_AssetPath", None)
-            if (
-                p_prov == canonical_root
-                and p_apath == norm_asset_path
-                and p_oname == str(object_name)
-                and (not target_aid or p_aid == target_aid)
-            ):
-                return obj
+    existing = _find_section_sketch(target_doc, canonical_root, norm_asset_path, object_name, target_aid)
+    if existing is not None:
+        return existing
 
     # Snapshot active document and GUI selection before any document operations
     active_before = App.ActiveDocument

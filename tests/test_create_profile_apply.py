@@ -205,19 +205,19 @@ class TestCreateProfileApply(unittest.TestCase):
         # Initial state on open
         self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "No preview"))
 
-        # Select edge: marks unapplied changes
+        # Select edge: marks pending changes
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
         panel.addSelection(doc.Name, path, "Edge1", None)
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Unapplied changes"))
+        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Pending changes"))
 
-        # Apply: marks applied
+        # Apply: marks preview updated
         panel.apply()
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Applied"))
+        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Preview updated"))
 
-        # Modify a field: marks unapplied changes again
+        # Modify a field: marks pending changes again
         panel.form_proxy.sb_width.setValue(80.0)
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Unapplied changes"))
+        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Pending changes"))
 
     def test_s2_accept_applies_current_values_without_prior_apply(self):
         """S2: Accept applies current form values and confirms even if Apply was never clicked."""
@@ -387,9 +387,11 @@ class TestCreateProfileApply(unittest.TestCase):
                             [
                                 (
                                     "Crear perfil" if spanish else "Create Profile",
-                                    "Seleccione aristas o defina la longitud para crear un perfil"
-                                    if spanish
-                                    else "Select Edges or set Length to create a profile",
+                                    (
+                                        "Seleccione aristas o defina la longitud para crear un perfil"
+                                        if spanish
+                                        else "Select Edges or set Length to create a profile"
+                                    ),
                                 )
                             ],
                         )
@@ -426,11 +428,11 @@ class TestCreateProfileApply(unittest.TestCase):
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
         panel.addSelection(doc.Name, path, "Edge1", None)
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Cambios sin aplicar")
+        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Cambios pendientes")
 
         # Apply -> applied state
         panel.apply()
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Cambios aplicados")
+        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Previsualización actualizada")
 
     # --- S3: Edit Profile preservation ---
 

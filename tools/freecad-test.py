@@ -2,9 +2,8 @@
 """Launch a downloaded FreeCAD AppImage with a checkout-local test profile."""
 import argparse
 import os
-from pathlib import Path
 import subprocess
-
+from pathlib import Path
 
 IMAGES = {
     "1.1.4": "FreeCAD_1.1.4-Linux-x86_64-py311.AppImage",
@@ -22,6 +21,18 @@ def main():
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     image = root.parent / IMAGES[args.version]
+    if not image.is_file():
+        try:
+            git_common = subprocess.check_output(
+                ["git", "-C", str(root), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+            candidate = Path(git_common).parent.parent / IMAGES[args.version]
+            if candidate.is_file():
+                image = candidate
+        except Exception:
+            pass
     if not image.is_file():
         parser.error(f"AppImage not found: {image}")
     if not os.access(image, os.X_OK):
@@ -57,8 +68,10 @@ def main():
     print(f"FreeCAD {args.version}: {log}", flush=True)
     command = [
         str(image),
-        "--user-cfg", str(profile / "config/user.cfg"),
-        "--system-cfg", str(profile / "config/system.cfg"),
+        "--user-cfg",
+        str(profile / "config/user.cfg"),
+        "--system-cfg",
+        str(profile / "config/system.cfg"),
         *args.files,
     ]
     with log.open("a") as output:

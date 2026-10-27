@@ -1037,6 +1037,29 @@ class TestCustomProfileCards(unittest.TestCase):
         cards_view.scroll_area.viewport().resize(1100, 400)
         self.assertEqual(cards_view._columns_per_row(), 4)
 
+    def test_extract_custom_section_face_direct_without_document_lifecycle(self):
+        """Direct .FCStd face extraction creates a valid Part.Face without triggering document open/close."""
+        from freecad.maxproframe.custom_profile_cards import (
+            _extract_custom_section_face_from_fcstd,
+            render_custom_section_thumbnail,
+        )
+
+        rel_asset = self._create_published_asset("sec_direct_test", width=100.0, height=50.0, with_hole=True)
+        full_path = os.path.join(self.folder_lib_path, rel_asset)
+
+        # 1. Direct extraction creates valid face with expected dimensions
+        face = _extract_custom_section_face_from_fcstd(full_path, "Section")
+        self.assertIsNotNone(face)
+        self.assertTrue(face.isValid())
+        self.assertAlmostEqual(face.BoundBox.XLength, 100.0)
+        self.assertAlmostEqual(face.BoundBox.YLength, 50.0)
+
+        # 2. render_custom_section_thumbnail uses direct extraction and never calls App.openDocument
+        with patch.object(App, "openDocument", side_effect=AssertionError("App.openDocument must not be called")):
+            pixmap = render_custom_section_thumbnail(self.folder_lib_path, rel_asset, "Section", width=160, height=100)
+            self.assertIsNotNone(pixmap)
+            self.assertFalse(pixmap.isNull())
+
 
 if __name__ == "__main__":
     unittest.main()

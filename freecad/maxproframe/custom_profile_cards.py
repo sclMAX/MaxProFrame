@@ -101,14 +101,9 @@ def create_placeholder_pixmap(width=160, height=100, text=None):
     return pm
 
 
-def render_face_silhouette(face, canvas_w=160, canvas_h=100):
-    """Renders a solid 2D vector silhouette from a Part.Face using QPainterPath
-
-    with OddEvenFill to preserve outer contours and internal holes with exact proportions.
-    """
+def face_silhouette_path(face):
+    """Shared vector outline with OddEvenFill preserving all section holes."""
     wires = getattr(face, "Wires", [])
-    if not wires:
-        return create_placeholder_pixmap(canvas_w, canvas_h)
 
     # Determine 2D projection plane (XY standard, or XZ/YZ if planar)
     bbox = getattr(face, "BoundBox", None)
@@ -149,6 +144,12 @@ def render_face_silhouette(face, canvas_w=160, canvas_h=100):
         subpath.closeSubpath()
         painter_path.addPath(subpath)
 
+    return painter_path
+
+
+def render_face_silhouette(face, canvas_w=160, canvas_h=100):
+    """Render the shared vector outline without changing the thumbnail API."""
+    painter_path = face_silhouette_path(face)
     if painter_path.isEmpty():
         return create_placeholder_pixmap(canvas_w, canvas_h)
 
@@ -188,7 +189,84 @@ def render_face_silhouette(face, canvas_w=160, canvas_h=100):
     return QtGui.QPixmap.fromImage(img)
 
 
-def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=160, height=100, cache=None):
+def custom_section_cache_key(folder_path, asset_path, object_name):
+    """Keep thumbnail and detached face caches on the same validated identity."""
+    full_path = resolve_and_validate_asset_path(folder_path, asset_path)
+    try:
+        mtime = os.path.getmtime(full_path)
+    except OSError:
+        mtime = 0
+    return (os.path.realpath(folder_path), asset_path, object_name or "Section", mtime)
+
+
+def _extract_custom_section_face_from_fcstd(fcstd_path, object_name=None):
+    """Extracts custom section face directly from an .FCStd archive without opening FreeCAD documents.
+
+    Prevents document lifecycle events (App.openDocument/closeDocument) that destabilize
+    FreeCAD TaskView and cause iterator invalidation crashes in FreeCAD 26.3 and main.
+    """
+    if not fcstd_path or not os.path.isfile(fcstd_path):
+        return None
+
+    import xml.etree.ElementTree as ET
+    import zipfile
+
+    import Part
+
+    try:
+        with zipfile.ZipFile(fcstd_path, "r") as archive:
+            if "Document.xml" not in archive.namelist():
+                return None
+            tree = ET.fromstring(archive.read("Document.xml"))
+            brp_file = None
+            for obj in tree.iter("Object"):
+                name = obj.get("name")
+                if object_name and name != object_name:
+                    continue
+                obj_type = obj.get("type", "")
+                if obj_type and "Sketch" not in obj_type:
+                    continue
+                for prop in obj.iter("Property"):
+                    if prop.get("name") == "Shape":
+                        part = prop.find("Part")
+                        if part is not None and part.get("file"):
+                            candidate = part.get("file")
+                            if candidate in archive.namelist():
+                                brp_file = candidate
+                                break
+                if brp_file:
+                    break
+
+            if not brp_file:
+                for item in archive.namelist():
+                    if item.endswith(".Shape.brp") and "Internal" not in item:
+                        brp_file = item
+                        break
+
+            if not brp_file:
+                return None
+
+            brp_data = archive.read(brp_file)
+
+        with tempfile.NamedTemporaryFile(suffix=".brp") as tf:
+            tf.write(brp_data)
+            tf.flush()
+            shape = Part.Shape()
+            shape.read(tf.name)
+            wires = list(shape.Wires)
+            if not wires:
+                return None
+            face = Part.makeFace(wires, "Part::FaceMakerBullseye")
+            if face is not None and face.isValid() and face.Area > 0:
+                return face
+    except Exception:
+        return None
+    return None
+
+
+def render_custom_section_thumbnail(
+    folder_path, asset_path, object_name, width=160, height=100, cache=None, section_cache=None
+):
     """Safely renders a custom section thumbnail using an isolated temporary copy
 
     without modifying user sketches, libraries, open documents, active document, or selection.
@@ -205,13 +283,21 @@ def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=
         return create_placeholder_pixmap(width, height)
 
     try:
-        mtime = os.path.getmtime(full_path)
+        cache_key = custom_section_cache_key(folder_path, asset_path, object_name)
     except OSError:
-        mtime = 0
-
-    cache_key = (os.path.realpath(folder_path), asset_path, object_name or "Section", mtime)
-    if cache is not None and cache_key in cache:
+        return create_placeholder_pixmap(width, height)
+    if cache is not None and cache_key in cache and (section_cache is None or cache_key in section_cache):
         return cache[cache_key]
+
+    direct_face = _extract_custom_section_face_from_fcstd(full_path, object_name)
+    if direct_face is not None:
+        pixmap = render_face_silhouette(direct_face, width, height)
+        section = direct_face.copy()
+        if cache is not None:
+            cache[cache_key] = pixmap
+        if section_cache is not None:
+            section_cache[cache_key] = section
+        return pixmap
 
     active_doc = getattr(App, "ActiveDocument", None)
     active_doc_name = active_doc.Name if active_doc else None
@@ -234,6 +320,7 @@ def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=
     temp_dir = tempfile.mkdtemp(prefix="ff_thumb_inspect_")
     doc = None
     pixmap = None
+    section = None
     try:
         temp_file = os.path.join(temp_dir, "inspect.FCStd")
         shutil.copyfile(full_path, temp_file)
@@ -252,6 +339,7 @@ def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=
                 face = build_custom_section_face(sketch)
                 if face is not None and face.isValid() and face.Area > 0:
                     pixmap = render_face_silhouette(face, width, height)
+                    section = face.copy()
     except Exception:
         pixmap = None
     finally:
@@ -289,6 +377,8 @@ def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=
 
     if cache is not None:
         cache[cache_key] = pixmap
+    if section_cache is not None:
+        section_cache[cache_key] = section
 
     return pixmap
 
@@ -399,8 +489,7 @@ class _PreviewLabel(QtWidgets.QLabel):
         rect = self.contentsRect()
         width = round(colored.width() / colored.devicePixelRatio())
         height = round(colored.height() / colored.devicePixelRatio())
-        painter.drawPixmap(rect.x() + (rect.width() - width) // 2,
-                           rect.y() + (rect.height() - height) // 2, colored)
+        painter.drawPixmap(rect.x() + (rect.width() - width) // 2, rect.y() + (rect.height() - height) // 2, colored)
         painter.end()
 
 
@@ -412,10 +501,17 @@ class _EditButton(QtWidgets.QToolButton):
         painter = QtGui.QPainter(mask)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
         painter.setPen(QtGui.QPen(QtCore.Qt.black, 1.5))
-        painter.drawPolygon(QtGui.QPolygonF([
-            QtCore.QPointF(4, 11), QtCore.QPointF(11, 4), QtCore.QPointF(14, 7),
-            QtCore.QPointF(7, 14), QtCore.QPointF(3, 15),
-        ]))
+        painter.drawPolygon(
+            QtGui.QPolygonF(
+                [
+                    QtCore.QPointF(4, 11),
+                    QtCore.QPointF(11, 4),
+                    QtCore.QPointF(14, 7),
+                    QtCore.QPointF(7, 14),
+                    QtCore.QPointF(3, 15),
+                ]
+            )
+        )
         painter.drawLine(10, 5, 13, 8)
         painter.drawLine(4, 11, 7, 14)
         painter.end()

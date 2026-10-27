@@ -7,6 +7,7 @@ import FreeCADGui as Gui
 from PySide import QtCore, QtGui
 
 from freecad.maxproframe.create_profiles_tool import BaseProfileTaskPanel
+from freecad.maxproframe.ff_tools import translate
 from freecad.maxproframe.library_manager import get_canonical_family
 from freecad.maxproframe.profile import ANCHOR_X, ANCHOR_Y, Profile, ViewProviderProfile
 
@@ -111,6 +112,10 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
 
         # self.form_proxy.cb_combined_bevel.setChecked()
 
+        self._update_material_info()
+        self.form[0].label_2.setText(
+            translate("frameforge", "Profile" if canonical_family == "Custom Profile" else "Size")
+        )
         self.update_image()
         self.enable_signals(True)
         self._initializing = False
