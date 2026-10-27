@@ -61,6 +61,17 @@ def load_ui_file(path):
     raise RuntimeError(f"Unable to load UI file: {path}")
 
 
+def _safe_unwrap_widget(widget_or_item):
+    """Safely unwraps a widget if it was wrapped in a QWidgetItem or similar layout item."""
+    if widget_or_item is None:
+        return None
+    if hasattr(widget_or_item, "widget") and callable(widget_or_item.widget):
+        w = widget_or_item.widget()
+        if w is not None:
+            return w
+    return widget_or_item
+
+
 def _safe_remove_layout_widget(layout, widget_or_item):
     """Safely removes a widget or layout item from layout, handling PySide QWidgetItem wrapper aliasing."""
     if layout is None or widget_or_item is None:
@@ -207,13 +218,20 @@ class BaseProfileTaskPanel(ABC):
     def _configure_presentation(self):
         """Rearrange the shared widgets without changing their identities or signals."""
         first, second = self.form
-        second.horizontalLayout.setDirection(QtWidgets.QBoxLayout.TopToBottom)
-        second.horizontalLayout_4.setDirection(QtWidgets.QBoxLayout.TopToBottom)
-        self.family_presentation = _TranslatedFamilyPresentation(first.combo_family)
-        first.combo_family.setItemDelegate(self.family_presentation)
-        first.combo_family.installEventFilter(self.family_presentation)
+        second_hl = _safe_unwrap_widget(getattr(second, "horizontalLayout", None))
+        if second_hl is not None and hasattr(second_hl, "setDirection"):
+            second_hl.setDirection(QtWidgets.QBoxLayout.TopToBottom)
+        second_hl4 = _safe_unwrap_widget(getattr(second, "horizontalLayout_4", None))
+        if second_hl4 is not None and hasattr(second_hl4, "setDirection"):
+            second_hl4.setDirection(QtWidgets.QBoxLayout.TopToBottom)
+        first_combo_fam = _safe_unwrap_widget(getattr(first, "combo_family", None))
+        self.family_presentation = _TranslatedFamilyPresentation(first_combo_fam)
+        if first_combo_fam is not None:
+            first_combo_fam.setItemDelegate(self.family_presentation)
+            first_combo_fam.installEventFilter(self.family_presentation)
         # Keep the designer widgets (and FormProxy membership) when moving rows.
-        catalog = first.groupBox.layout()
+        first_gb = _safe_unwrap_widget(getattr(first, "groupBox", None))
+        catalog = first_gb.layout() if first_gb is not None and hasattr(first_gb, "layout") else None
         rows = QtWidgets.QFormLayout()
         for label_ref, combo_ref in (
             (first.label_10, first.combo_material),
@@ -223,33 +241,143 @@ class BaseProfileTaskPanel(ABC):
             w_label = _safe_remove_layout_widget(catalog, label_ref) or label_ref
             w_combo = _safe_remove_layout_widget(catalog, combo_ref) or combo_ref
             rows.addRow(w_label, w_combo)
-        catalog.insertLayout(0, rows)
-        first.label_10.setText("Library")
-        self.material_info = QtWidgets.QLabel(first.groupBox)
+        if catalog is not None and hasattr(catalog, "insertLayout"):
+            catalog.insertLayout(0, rows)
+        first_l10 = _safe_unwrap_widget(getattr(first, "label_10", None))
+        if first_l10 is not None and hasattr(first_l10, "setText"):
+            first_l10.setText("Library")
+
+        # Reorganize metadata into a compact 2-column grid instead of a tall vertical stack.
+        parent_w = first_gb if isinstance(first_gb, QtWidgets.QWidget) else first
+        self.material_info = QtWidgets.QLabel(parent_w)
         self.material_info.setWordWrap(True)
-        catalog.insertWidget(1, self.material_info)
-        self.custom_info = QtWidgets.QLabel(first.groupBox)
+
+        self.custom_info = QtWidgets.QLabel(parent_w)
         self.custom_info.setTextFormat(QtCore.Qt.PlainText)
         self.custom_info.setWordWrap(True)
-        catalog.addWidget(self.custom_info)
         self.custom_info.hide()
-        first.label_image.setMinimumHeight(0)
-        first.label_image.setMaximumHeight(100)
-        first.label_image.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+
+        vlayout = getattr(first, "verticalLayout", None)
+        if hasattr(vlayout, "layout") and callable(vlayout.layout):
+            actual_v = vlayout.layout()
+            if actual_v is not None:
+                vlayout = actual_v
+        lbl_11 = _safe_remove_layout_widget(vlayout, getattr(first, "label_11", None))
+        lbl_norm = _safe_remove_layout_widget(vlayout, getattr(first, "label_norm", None))
+        lbl_13 = _safe_remove_layout_widget(vlayout, getattr(first, "label_13", None))
+        lbl_unit = _safe_remove_layout_widget(vlayout, getattr(first, "label_unit", None))
+
+        hlayout = getattr(first, "horizontalLayout", None)
+        if hasattr(hlayout, "layout") and callable(hlayout.layout):
+            actual_h = hlayout.layout()
+            if actual_h is not None:
+                hlayout = actual_h
+        if catalog is not None and hlayout is not None:
+            _safe_remove_layout_widget(catalog, hlayout)
+
+        meta_grid = QtWidgets.QGridLayout()
+        meta_grid.setContentsMargins(0, 4, 0, 0)
+        meta_grid.setHorizontalSpacing(12)
+        meta_grid.setVerticalSpacing(2)
+
+        meta_grid.addWidget(self.material_info, 0, 0)
+
+        norm_box = QtWidgets.QHBoxLayout()
+        norm_box.setContentsMargins(0, 0, 0, 0)
+        norm_box.setSpacing(0)
+        if lbl_11 is not None:
+            norm_box.addWidget(lbl_11)
+        self.colon_norm = QtWidgets.QLabel(":", parent_w)
+        norm_box.addWidget(self.colon_norm)
+        if lbl_norm is not None:
+            lbl_norm.setContentsMargins(4, 0, 0, 0)
+            norm_box.addWidget(lbl_norm)
+        norm_box.addStretch()
+        meta_grid.addLayout(norm_box, 0, 1)
+
+        unit_box = QtWidgets.QHBoxLayout()
+        unit_box.setContentsMargins(0, 0, 0, 0)
+        unit_box.setSpacing(0)
+        if lbl_13 is not None:
+            unit_box.addWidget(lbl_13)
+        self.colon_unit = QtWidgets.QLabel(":", parent_w)
+        unit_box.addWidget(self.colon_unit)
+        if lbl_unit is not None:
+            lbl_unit.setContentsMargins(4, 0, 0, 0)
+            unit_box.addWidget(lbl_unit)
+        unit_box.addStretch()
+        meta_grid.addLayout(unit_box, 1, 0)
+
+        meta_grid.addWidget(self.custom_info, 1, 1)
+
+        if catalog is not None and hasattr(catalog, "addLayout"):
+            catalog.addLayout(meta_grid)
+        lbl_img = _safe_unwrap_widget(getattr(first, "label_image", None))
+        if lbl_img is not None:
+            if hasattr(lbl_img, "setMinimumHeight"):
+                lbl_img.setMinimumHeight(0)
+            if hasattr(lbl_img, "setMaximumHeight"):
+                lbl_img.setMaximumHeight(100)
+            if hasattr(lbl_img, "setSizePolicy"):
+                lbl_img.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+            if hasattr(lbl_img, "hide"):
+                lbl_img.hide()
         # The metadata block no longer needs expansion spacers.
-        metadata = first.verticalLayout
-        for index in reversed(range(metadata.count())):
-            if metadata.itemAt(index).spacerItem() is not None:
-                metadata.takeAt(index)
-        first.sb_length.setSuffix(" mm")
-        first.groupBox_4.setTitle("Placement")
-        placement = first.groupBox_4.layout()
-        self.alignment_widget = AlignmentWidget(first.groupBox_4)
-        placement.addRow(self.alignment_widget)
+        metadata = getattr(first, "verticalLayout", None)
+        if hasattr(metadata, "layout") and callable(metadata.layout):
+            actual_layout = metadata.layout()
+            if actual_layout is not None:
+                metadata = actual_layout
+        if hasattr(metadata, "count"):
+            for index in reversed(range(metadata.count())):
+                if metadata.itemAt(index) is not None and metadata.itemAt(index).spacerItem() is not None:
+                    metadata.takeAt(index)
+        sb_len = _safe_unwrap_widget(getattr(first, "sb_length", None))
+        if sb_len is not None and hasattr(sb_len, "setSuffix"):
+            sb_len.setSuffix(" mm")
+        gb4 = _safe_unwrap_widget(getattr(first, "groupBox_4", None))
+        if gb4 is not None and hasattr(gb4, "setTitle"):
+            gb4.setTitle("Placement")
+        placement = gb4.layout() if gb4 is not None and hasattr(gb4, "layout") else None
+        self.alignment_widget = AlignmentWidget(gb4 if isinstance(gb4, QtWidgets.QWidget) else first)
+        if placement is not None and hasattr(placement, "addRow"):
+            placement.addRow(self.alignment_widget)
         self.alignment_widget.anchorClicked.connect(self._on_alignment_clicked)
-        for widget in (second.group_anchor, second.widget_rotation):
-            second.groupBox_3.layout().removeWidget(widget)
-            placement.addRow(widget)
+        sec_gb3 = _safe_unwrap_widget(getattr(second, "groupBox_3", None))
+        gb3_layout = sec_gb3.layout() if sec_gb3 is not None and hasattr(sec_gb3, "layout") else None
+        sec_rot = _safe_unwrap_widget(getattr(second, "widget_rotation", None))
+        if gb3_layout is not None and hasattr(gb3_layout, "removeWidget") and sec_rot is not None:
+            gb3_layout.removeWidget(sec_rot)
+        if placement is not None and hasattr(placement, "addRow") and sec_rot is not None:
+            placement.addRow(sec_rot)
+
+        # Move cross-section mirroring into Placement right below rotation
+        sec_mh = _safe_unwrap_widget(getattr(second, "cb_mirror_h", None))
+        sec_mv = _safe_unwrap_widget(getattr(second, "cb_mirror_v", None))
+        if gb3_layout is not None:
+            if sec_mh is not None:
+                _safe_remove_layout_widget(gb3_layout, sec_mh)
+            if sec_mv is not None:
+                _safe_remove_layout_widget(gb3_layout, sec_mv)
+        parent_placement = gb4 if isinstance(gb4, QtWidgets.QWidget) else first
+        mirror_row = QtWidgets.QHBoxLayout()
+        mirror_row.setContentsMargins(0, 0, 0, 0)
+        mirror_row.setSpacing(12)
+        if sec_mh is not None:
+            sec_mh.setParent(parent_placement)
+            sec_mh.setVisible(True)
+            mirror_row.addWidget(sec_mh)
+        if sec_mv is not None:
+            sec_mv.setParent(parent_placement)
+            sec_mv.setVisible(True)
+            mirror_row.addWidget(sec_mv)
+        mirror_row.addStretch()
+        if placement is not None and hasattr(placement, "addRow"):
+            placement.addRow(mirror_row)
+
+        sec_anc = _safe_unwrap_widget(getattr(second, "group_anchor", None))
+        if sec_anc is not None and hasattr(sec_anc, "hide"):
+            sec_anc.hide()
 
         self.advanced_button = QtWidgets.QToolButton(second)
         self.advanced_button.setObjectName("button_advanced")
@@ -270,6 +398,31 @@ class BaseProfileTaskPanel(ABC):
         price_row.addRow(first.label_3, first.sb_unitprice)
         advanced_layout.addLayout(price_row)
         first.label_3.setText("Price per metre")
+
+        # Move historical prototype combined-bevel option into Advanced
+        sec_bevel = _safe_unwrap_widget(getattr(second, "cb_combined_bevel", None))
+        if gb3_layout is not None and sec_bevel is not None:
+            _safe_remove_layout_widget(gb3_layout, sec_bevel)
+            advanced_layout.addWidget(sec_bevel)
+
+        # Compact remaining profile options (fillets and pre-extend) into a single row
+        sec_fillet = _safe_unwrap_widget(getattr(second, "cb_make_fillet", None))
+        sec_extend = _safe_unwrap_widget(getattr(second, "cb_pre_extend", None))
+        if gb3_layout is not None:
+            if sec_fillet is not None:
+                _safe_remove_layout_widget(gb3_layout, sec_fillet)
+            if sec_extend is not None:
+                _safe_remove_layout_widget(gb3_layout, sec_extend)
+            options_row = QtWidgets.QHBoxLayout()
+            options_row.setContentsMargins(0, 0, 0, 0)
+            options_row.setSpacing(12)
+            if sec_fillet is not None:
+                options_row.addWidget(sec_fillet)
+            if sec_extend is not None:
+                options_row.addWidget(sec_extend)
+            options_row.addStretch()
+            gb3_layout.addLayout(options_row)
+
         self.advanced_content.hide()
         second.layout().insertWidget(1, self.advanced_button)
         second.layout().insertWidget(2, self.advanced_content)
@@ -493,9 +646,7 @@ class BaseProfileTaskPanel(ABC):
                 section = build_section_face(parameters, custom_face=face)
                 self.alignment_widget.set_section(section)
                 self.alignment_widget.setToolTip(
-                    translate(
-                        "frameforge", "Click a section bounding-box anchor. Keyboard: use the anchor controls below."
-                    )
+                    translate("frameforge", "Click a section bounding-box anchor to align profile (or use arrow keys).")
                 )
             except Exception as error:
                 self.alignment_widget.set_section(None)
@@ -741,7 +892,7 @@ class BaseProfileTaskPanel(ABC):
             size = (family_data or {}).get("sizes", {}).get(code, {})
             description = str(size.get("Description", ""))
             weight = size.get("Weight", getattr(getattr(self, "profile", None), "LinearWeight", ""))
-            self.custom_info.setText("\n".join(filter(None, (code, description, "%s kg/m" % weight))))
+            self.custom_info.setText(" · ".join(filter(None, (code, description, "%s kg/m" % weight))))
             self._rendering_thumbnail = True
             try:
                 folder = self.library_manager._get_registered_folder(material)
