@@ -182,6 +182,12 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
             except Exception:
                 pass
 
+        if hasattr(self, "manager") and hasattr(self, "folder_lib_path"):
+            try:
+                self.manager.unregister_folder_library(self.folder_lib_path)
+            except Exception:
+                pass
+
         if os.path.exists(self.folder_lib_path):
             shutil.rmtree(self.folder_lib_path, ignore_errors=True)
         if os.path.exists(self.test_user_dir):
