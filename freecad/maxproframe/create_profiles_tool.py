@@ -155,14 +155,37 @@ class BaseProfileTaskPanel(ABC):
         ]
 
         # Replace before FormProxy discovers children, so no stale label survives.
-        old_image = self.form[0].label_image
-        image = _TaskPreviewLabel(old_image.parentWidget())
-        image.setObjectName(old_image.objectName())
-        image.setAlignment(old_image.alignment())
-        old_image.parentWidget().layout().replaceWidget(old_image, image)
-        old_image.hide()
-        old_image.setObjectName("")
-        old_image.deleteLater()
+        raw_image = getattr(self.form[0], "label_image", None)
+        if hasattr(raw_image, "widget") and callable(raw_image.widget):
+            actual_widget = raw_image.widget()
+            old_image = actual_widget if actual_widget is not None else raw_image
+        else:
+            old_image = raw_image
+
+        parent_widget = old_image.parentWidget() if hasattr(old_image, "parentWidget") else self.form[0]
+        image = _TaskPreviewLabel(parent_widget)
+        if hasattr(old_image, "objectName"):
+            image.setObjectName(old_image.objectName())
+        if hasattr(old_image, "alignment"):
+            image.setAlignment(old_image.alignment())
+
+        layout = getattr(self.form[0], "horizontalLayout", None)
+        if layout is None and parent_widget is not None and hasattr(parent_widget, "layout"):
+            layout = parent_widget.layout()
+
+        if layout is not None and hasattr(layout, "replaceWidget"):
+            layout.replaceWidget(old_image, image)
+        elif layout is not None and hasattr(layout, "addWidget"):
+            if hasattr(layout, "removeWidget"):
+                layout.removeWidget(old_image)
+            layout.addWidget(image)
+
+        if hasattr(old_image, "hide"):
+            old_image.hide()
+        if hasattr(old_image, "setObjectName"):
+            old_image.setObjectName("")
+        if hasattr(old_image, "deleteLater"):
+            old_image.deleteLater()
         self.form[0].label_image = image
         self._thumbnail_cache = {}
         self._section_cache = {}
