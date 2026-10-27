@@ -141,10 +141,10 @@ class TestCreateProfileApply(unittest.TestCase):
         panel.form_proxy.sb_height.setValue(60.0)
         panel.form_proxy.combo_rotation.setCurrentIndex(1)
 
-        self.assertEqual(len(doc.Objects), baseline_count, "Changing fields must not create preview geometry.")
+        self.assertEqual(len(doc.Objects), baseline_count + 1, "Setting length must generate live preview geometry.")
 
     def test_s1_changing_selection_does_not_create_preview_geometry(self):
-        """S1: Changing selection in 3D view must not create preview geometry."""
+        """S1: Changing selection in 3D view must generate live preview geometry."""
         doc = self._new_doc("DocSelection")
         App.setActiveDocument(doc.Name)
         path = self._create_line_path(doc, "Path1", length=150.0)
@@ -159,7 +159,9 @@ class TestCreateProfileApply(unittest.TestCase):
         Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
         panel.addSelection(doc.Name, path, "Edge1", None)
 
-        self.assertEqual(set(doc.Objects), baseline_objects, "Changing selection must not create preview geometry.")
+        self.assertEqual(
+            len(doc.Objects), len(baseline_objects) + 1, "Changing selection must generate live preview geometry."
+        )
 
     def test_s1_apply_validates_and_creates_preview_without_closing_or_duplicating(self):
         """S1: Apply validates settings and creates/updates preview without closing panel or duplicating profiles."""
@@ -205,19 +207,19 @@ class TestCreateProfileApply(unittest.TestCase):
         # Initial state on open
         self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "No preview"))
 
-        # Select edge: marks pending changes
+        # Select edge: marks preview updated in live preview mode
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
         panel.addSelection(doc.Name, path, "Edge1", None)
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Pending changes"))
+        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Preview updated"))
 
         # Apply: marks preview updated
         panel.apply()
         self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Preview updated"))
 
-        # Modify a field: marks pending changes again
+        # Modify a field: live updates preview
         panel.form_proxy.sb_width.setValue(80.0)
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Pending changes"))
+        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Preview updated"))
 
     def test_s2_accept_applies_current_values_without_prior_apply(self):
         """S2: Accept applies current form values and confirms even if Apply was never clicked."""
@@ -424,11 +426,11 @@ class TestCreateProfileApply(unittest.TestCase):
         self.assertEqual(panel.form_proxy.btn_apply.text(), "Aplicar")
         self.assertEqual(panel.form_proxy.label_apply_status.text(), "Sin previsualización")
 
-        # Edit input -> pending state
+        # Edit input -> applied state in live preview
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
         panel.addSelection(doc.Name, path, "Edge1", None)
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Cambios pendientes")
+        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Previsualización actualizada")
 
         # Apply -> applied state
         panel.apply()

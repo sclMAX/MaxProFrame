@@ -366,8 +366,8 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
         self._click_alignment(panel, 2, 0)
         panel.form_proxy.combo_rotation.setCurrentText("37")
         panel.form_proxy.cb_mirror_h.setChecked(True)
-        # Baseline: even clicking the silhouette must not create preview objects.
-        self.assertEqual(len(doc.Objects), 0)
+        # In live preview mode, setting length and orientation creates the live 3D preview.
+        self.assertGreater(len(doc.Objects), 0, "Live preview geometry must exist before OK confirmation.")
 
         # Find real native QDialogButtonBox Ok button
         ok_button = self._find_dialog_button(QtWidgets.QDialogButtonBox.Ok)

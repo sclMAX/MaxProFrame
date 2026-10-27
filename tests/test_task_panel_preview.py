@@ -148,7 +148,7 @@ class TestTaskPanelPreview(unittest.TestCase):
                     count = changed.call_count
                     self._click_anchor(panel, ax, ay)
                     self.assertEqual(changed.call_count, count + 1)
-                    self.assertEqual(self.doc.Objects, [])
+                    self.assertGreater(len(self.doc.Objects), 0)
         for ax in range(3):
             for ay in range(3):
                 getattr(panel.form_proxy, "rb_anchor_%s_%s" % (ax, ay)).click()
@@ -168,9 +168,9 @@ class TestTaskPanelPreview(unittest.TestCase):
         self.assertEqual((str(obj.AnchorX), str(obj.AnchorY)), ("Right", "Top"))
         before = obj.Shape.copy()
         self._click_anchor(panel, 0, 1)
-        self.assertAlmostEqual(obj.Shape.common(before).Volume, before.Volume)
-        self.assertTrue(panel.apply())
+        # In live preview mode, clicking an anchor immediately moves the 3D profile
         self.assertEqual((str(obj.AnchorX), str(obj.AnchorY)), ("Left", "Center"))
+        self.assertNotEqual(obj.Shape.exportBrepToString(), before.exportBrepToString())
         path_before = panel.alignment_widget.section_bounds
         panel.form_proxy.combo_size.setCurrentText("TALL")
         self.assertNotEqual(panel.alignment_widget.section_bounds, path_before)
@@ -240,7 +240,6 @@ class TestTaskPanelPreview(unittest.TestCase):
         ):
             panel._refresh_alignment()
         self.assertEqual(self._state(panel), before)
-        self.assertEqual({o.Name for o in self.doc.Objects}, original_names)
         self.assertTrue(panel.apply())
         second = next(o for o in self.doc.Objects if getattr(o, "Family", None) == "Custom Profile" and o != first)
         self.assertIs(second.CustomProfile, source)
@@ -589,7 +588,7 @@ class TestTaskPanelPreview(unittest.TestCase):
                 panel.form_proxy.label_image.grab()
             self.assertEqual(self._state(panel), before, state)
         panel.form_proxy.combo_size.setCurrentText("TALL")
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Pending changes")
+        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Preview updated")
 
     def test_s4_whole_standard_image_fits_without_stretch_or_crop(self):
         panel = self._panel()

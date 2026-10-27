@@ -322,6 +322,9 @@ class BaseProfileTaskPanel(ABC):
                 lbl_img.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
             if hasattr(lbl_img, "hide"):
                 lbl_img.hide()
+        gb_apply = _safe_unwrap_widget(getattr(first, "groupBox_apply", None))
+        if gb_apply is not None and hasattr(gb_apply, "hide"):
+            gb_apply.hide()
         # The metadata block no longer needs expansion spacers.
         metadata = getattr(first, "verticalLayout", None)
         if hasattr(metadata, "layout") and callable(metadata.layout):
@@ -388,16 +391,25 @@ class BaseProfileTaskPanel(ABC):
         self.advanced_content = QtWidgets.QWidget(second)
         advanced_layout = QtWidgets.QVBoxLayout(self.advanced_content)
         advanced_layout.setContentsMargins(0, 0, 0, 0)
-        second.layout().removeWidget(second.groupBox_5)
-        advanced_layout.addWidget(second.groupBox_5)
+        second_layout = second.layout() if hasattr(second, "layout") and callable(second.layout) else None
+        sec_gb5 = _safe_unwrap_widget(getattr(second, "groupBox_5", None))
+        _safe_remove_layout_widget(second_layout, getattr(second, "groupBox_5", None))
+        if sec_gb5 is not None and hasattr(advanced_layout, "addWidget"):
+            advanced_layout.addWidget(sec_gb5)
         # Transfer widgets, not the owned child layout: removeItem can delete
         # the C++ layout immediately under PySide6.
         price_row = QtWidgets.QFormLayout()
-        first.horizontalLayout_2.removeWidget(first.label_3)
-        first.horizontalLayout_2.removeWidget(first.sb_unitprice)
-        price_row.addRow(first.label_3, first.sb_unitprice)
+        hl2 = _safe_unwrap_widget(getattr(first, "horizontalLayout_2", None))
+        if hasattr(hl2, "layout") and callable(hl2.layout):
+            actual_hl2 = hl2.layout()
+            if actual_hl2 is not None:
+                hl2 = actual_hl2
+        lbl_3 = _safe_remove_layout_widget(hl2, getattr(first, "label_3", None))
+        sb_price = _safe_remove_layout_widget(hl2, getattr(first, "sb_unitprice", None))
+        price_row.addRow(lbl_3, sb_price)
         advanced_layout.addLayout(price_row)
-        first.label_3.setText("Price per metre")
+        if lbl_3 is not None and hasattr(lbl_3, "setText"):
+            lbl_3.setText("Price per metre")
 
         # Move historical prototype combined-bevel option into Advanced
         sec_bevel = _safe_unwrap_widget(getattr(second, "cb_combined_bevel", None))
@@ -1155,11 +1167,25 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             self.form_proxy.label_apply_status.setText(translate("frameforge", "Preview updated"))
 
     def on_input_changed(self):
-        if getattr(self, "_initializing", False) or self._rendering_thumbnail:
+        if (
+            getattr(self, "_initializing", False)
+            or getattr(self, "_rendering_thumbnail", False)
+            or getattr(self, "_reject_called", False)
+        ):
             return
         self._refresh_alignment()
-        self._set_pending_state()
         self._update_placement_guidance()
+        self.proceed()
+        has_sel = len(
+            self._saved_selection
+            if hasattr(self, "_saved_selection") and self._saved_selection is not None
+            else (Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else [])
+        )
+        has_len = self.form_proxy.sb_length.value() > 0
+        if has_sel or has_len:
+            self._set_applied_state()
+        else:
+            self._set_initial_state()
 
     def open(self):
         self._session_imported_sketches = set()
@@ -1299,6 +1325,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
         if getattr(self, "_accept_finalizing", False):
             return True
+        self._accept_finalizing = True
 
         if defer is None:
             defer = self._is_active_gui_dialog() and self._needs_first_custom_import()
@@ -1534,6 +1561,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             k = self.create_or_update_profile(None, None, p_name)
             seen_profiles.append(k)
 
+        removed_any = False
         for k in list(self._objects.keys()):
             o = self._objects[k]
 
@@ -1544,9 +1572,18 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 doc = getattr(o, "Document", None) or getattr(self, "_target_doc", None) or App.ActiveDocument
                 try:
                     doc.removeObject(o.Name)
+                    removed_any = True
                 except Exception:
                     pass
                 del self._objects[k]
+
+        if removed_any:
+            target_doc = getattr(self, "_target_doc", None) or App.ActiveDocument
+            if target_doc is not None and hasattr(target_doc, "recompute"):
+                try:
+                    target_doc.recompute()
+                except Exception:
+                    pass
 
         self._clean_unreferenced_session_sources()
 

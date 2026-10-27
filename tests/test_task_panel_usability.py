@@ -95,8 +95,8 @@ class TestTaskPanelUsability(unittest.TestCase):
         # with native siblings through the same polish and theme lifecycle.
         fields = (
             panel.form_proxy.label_attach,
-            panel.form_proxy.label_apply_status,
-            panel.action_guidance,
+            panel.material_info,
+            panel.form_proxy.label_norm,
             panel.form[1].label_12,
         )
         references = []
@@ -275,7 +275,10 @@ class TestTaskPanelUsability(unittest.TestCase):
             "A positive length must clear the missing-requirement instruction",
         )
         self.assertEqual(panel.form_proxy.sb_length.value(), 750)
-        self.assertEqual(self._snapshot(), before)
+        self.assertEqual(len(self.doc.Objects), 1, "Live 3D preview must be generated when length is positive")
+        self.assertEqual(self.doc.Objects[0].ProfileLength, 750)
+        panel.form_proxy.sb_length.setValue(0)
+        self.assertEqual(self._snapshot(), before, "Setting length back to 0 must clear live preview geometry")
 
     def test_s3_selection_counts_edges_not_objects_and_exposes_details(self):
         path = self.doc.addObject("Part::Feature", "ThreeEdges")
@@ -342,11 +345,10 @@ class TestTaskPanelUsability(unittest.TestCase):
                     panel.form_proxy.combo_family.setCurrentText("Square Hollow")
                     panel.form_proxy.sb_length.setValue(500)
                     self._capture_forms(panel, language, "valid-pending")
-                    self.assertEqual(self._snapshot(), before)
-                    self.assertTrue(panel.apply())
-                    before_preview = self._snapshot()
+                    preview_snapshot = self._snapshot()
+                    self.assertGreater(len(self.doc.Objects), 0)
                     self._capture_forms(panel, language, "preview")
-                    self.assertEqual(self._snapshot(), before_preview)
+                    self.assertEqual(self._snapshot(), preview_snapshot)
                     profile = next(obj for obj in self.doc.Objects if hasattr(obj, "ProfileLength"))
                     # Preserve the preview for an independent Edit session; no
                     # accept() call, preference writes or geometry auto-apply.
@@ -372,19 +374,19 @@ class TestTaskPanelUsability(unittest.TestCase):
 
     def test_s5_english_preview_states_and_action_guidance(self):
         panel = self._create()
+        self.assertTrue(
+            panel.form_proxy.groupBox_apply.isHidden(), "Apply group box must be hidden in live preview mode."
+        )
         panel.form_proxy.sb_length.setValue(500)
-        before = self._snapshot()
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Pending changes")
-        guidance = " ".join(self._labels(panel)) + " " + panel.form_proxy.btn_apply.toolTip()
-        for word in ("Apply", "OK", "Cancel"):
-            self.assertIn(word, guidance)
-        self.assertEqual(self._snapshot(), before)
-        self.assertTrue(panel.apply())
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Preview updated")
+        self.app.processEvents()
+        self.assertEqual(len(self.doc.Objects), 1, "Setting length must immediately generate live 3D preview.")
+        self.assertEqual(self.doc.Objects[0].ProfileLength, 500)
         panel.form_proxy.sb_length.setValue(600)
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Pending changes")
+        self.app.processEvents()
+        self.assertEqual(len(self.doc.Objects), 1, "Modifying length must update existing preview without duplicating.")
+        self.assertEqual(self.doc.Objects[0].ProfileLength, 600)
         self.assertTrue(panel.reject())
-        self.assertEqual(self.doc.Objects, [])
+        self.assertEqual(self.doc.Objects, [], "Reject/Cancel must roll back all preview geometry cleanly.")
 
     def test_s5_spanish_states_and_action_guidance(self):
         self._spanish()
@@ -396,28 +398,18 @@ class TestTaskPanelUsability(unittest.TestCase):
         panel.form_proxy.combo_family.setCurrentText("Custom Profile")
         self.assertEqual(panel.form[0].label_2.text(), "Perfil")
         panel.form_proxy.combo_family.setCurrentText("Square Hollow")
-        # Opening a fresh panel, rather than private state setters, tests initial state.
-        panel = CreateProfileTaskPanel()
-        self.panels.append(panel)
-        panel.open()
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Sin previsualización")
         panel.form_proxy.combo_material.setCurrentText("Panel Library")
-        panel.form_proxy.combo_family.setCurrentText("Square Hollow")
+        self.assertTrue(panel.form_proxy.groupBox_apply.isHidden())
         panel.form_proxy.sb_length.setValue(500)
-        before = self._snapshot()
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Cambios pendientes")
-        guidance = " ".join(self._labels(panel)) + " " + panel.form_proxy.btn_apply.toolTip()
-        for word in ("Aplicar", "OK", "Cancelar"):
-            self.assertIn(word, guidance)
-        self.assertEqual(self._snapshot(), before)
-        self.assertTrue(panel.apply())
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Previsualización actualizada")
-        names = [obj.Name for obj in self.doc.Objects]
+        self.app.processEvents()
+        self.assertEqual(len(self.doc.Objects), 1, "Configuración válida debe generar previsualización 3D en vivo.")
+        self.assertEqual(self.doc.Objects[0].ProfileLength, 500)
         panel.form_proxy.sb_length.setValue(600)
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Cambios pendientes")
-        self.assertEqual([obj.Name for obj in self.doc.Objects], names)
+        self.app.processEvents()
+        self.assertEqual(len(self.doc.Objects), 1, "Modificación debe actualizar el perfil existente.")
+        self.assertEqual(self.doc.Objects[0].ProfileLength, 600)
         self.assertTrue(panel.reject())
-        self.assertEqual(self.doc.Objects, [])
+        self.assertEqual(self.doc.Objects, [], "Cancelar debe descartar la previsualización limpiamente.")
 
     def test_s4_s6_compact_native_primary_controls_and_advanced_disclosure(self):
         panel = self._create()
