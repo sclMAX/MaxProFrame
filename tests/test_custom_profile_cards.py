@@ -1056,9 +1056,7 @@ class TestCustomProfileCards(unittest.TestCase):
 
         # 2. render_custom_section_thumbnail uses direct extraction and never calls App.openDocument
         with patch.object(App, "openDocument", side_effect=AssertionError("App.openDocument must not be called")):
-            pixmap = render_custom_section_thumbnail(
-                self.folder_lib_path, rel_asset, "Section", width=160, height=100
-            )
+            pixmap = render_custom_section_thumbnail(self.folder_lib_path, rel_asset, "Section", width=160, height=100)
             self.assertIsNotNone(pixmap)
             self.assertFalse(pixmap.isNull())
 

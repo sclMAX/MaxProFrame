@@ -27,11 +27,13 @@ class TestTaskPanelUsability(unittest.TestCase):
         self.prefs = App.ParamGet("User parameter:BaseApp/Preferences/General")
         language, locale = self.prefs.GetString("Language", ""), Gui.getLocale()
         default = QtCore.QLocale()
+
         def restore_language():
             self.prefs.SetString("Language", language)
             Gui.setLocale(locale)
             Gui.updateLocale()
             QtCore.QLocale.setDefault(default)
+
         self.addCleanup(restore_language)
         Gui.addLanguagePath(TRANSLATIONSPATH)
         self._language("English", "en_US")
@@ -41,19 +43,25 @@ class TestTaskPanelUsability(unittest.TestCase):
         self.addCleanup(self.env.stop)
         self.addCleanup(shutil.rmtree, self.temp_dir)
         self.manager = LibraryManager(user_dir=self.temp_dir)
-        self.manager.save_user_library("Panel Library", {
-            "_metadata": {"name": "Panel Library", "material": "Aluminium", "density": 2.7},
-            "Square Hollow": {
-                "canonical_family": "Square Hollow", "fillet": False,
-                "norm": "ISO", "unit": "mm",
-                "sizes": {"40x40x2": {"Height": "40", "Width": "40",
-                                       "Thickness": "2", "Weight": "0.8"}},
+        self.manager.save_user_library(
+            "Panel Library",
+            {
+                "_metadata": {"name": "Panel Library", "material": "Aluminium", "density": 2.7},
+                "Square Hollow": {
+                    "canonical_family": "Square Hollow",
+                    "fillet": False,
+                    "norm": "ISO",
+                    "unit": "mm",
+                    "sizes": {"40x40x2": {"Height": "40", "Width": "40", "Thickness": "2", "Weight": "0.8"}},
+                },
+                "Custom Profile": {
+                    "canonical_family": "Custom Profile",
+                    "norm": "Custom",
+                    "unit": "mm",
+                    "sizes": {"PGC100": {"Weight": "1.2"}},
+                },
             },
-            "Custom Profile": {
-                "canonical_family": "Custom Profile", "norm": "Custom", "unit": "mm",
-                "sizes": {"PGC100": {"Weight": "1.2"}},
-            },
-        })
+        )
         self.doc = App.newDocument("TaskPanelUsability")
         self.addCleanup(App.closeDocument, self.doc.Name)
         Gui.Selection.clearSelection()
@@ -85,8 +93,12 @@ class TestTaskPanelUsability(unittest.TestCase):
     def _assert_native_theme_response(self, panel):
         # WA_SetPalette can be set by FreeCAD's native QSS. Compare receivers
         # with native siblings through the same polish and theme lifecycle.
-        fields = (panel.form_proxy.label_attach, panel.form_proxy.label_apply_status,
-                  panel.action_guidance, panel.form[1].label_12)
+        fields = (
+            panel.form_proxy.label_attach,
+            panel.form_proxy.label_apply_status,
+            panel.action_guidance,
+            panel.form[1].label_12,
+        )
         references = []
         original_styles = [form.styleSheet() for form in panel.form]
         observed_ink = []
@@ -109,11 +121,9 @@ class TestTaskPanelUsability(unittest.TestCase):
                 reference.show()
                 references.append(reference)
             for dark in (False, True, False):
-                background, ink = (("#303030", "#eeeeee") if dark
-                                   else ("#eeeeee", "#202020"))
+                background, ink = ("#303030", "#eeeeee") if dark else ("#eeeeee", "#202020")
                 for form in panel.form:
-                    form.setStyleSheet("QLabel { background-color: %s; color: %s; }"
-                                       % (background, ink))
+                    form.setStyleSheet("QLabel { background-color: %s; color: %s; }" % (background, ink))
                 # Both receivers have identical ancestor QSS before re-polish.
                 for field, reference in zip(fields, references):
                     for receiver in (field, reference):
@@ -131,15 +141,17 @@ class TestTaskPanelUsability(unittest.TestCase):
                         self.assertEqual(actual, native)
                         self.assertEqual(field.grab().toImage(), reference.grab().toImage())
                         image = reference.grab().toImage()
-                        self.assertGreater(len({image.pixel(x, y)
-                                                for y in range(image.height())
-                                                for x in range(image.width())}), 1,
-                                           "Native text must render visibly, not as a blank surface")
+                        self.assertGreater(
+                            len({image.pixel(x, y) for y in range(image.height()) for x in range(image.width())}),
+                            1,
+                            "Native text must render visibly, not as a blank surface",
+                        )
+
                         def luminance(color):
                             channels = [color.redF(), color.greenF(), color.blueF()]
-                            linear = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
-                                      for v in channels]
+                            linear = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in channels]
                             return sum(v * weight for v, weight in zip(linear, (0.2126, 0.7152, 0.0722)))
+
                         light, dark_value = sorted((luminance(native), luminance(surface)), reverse=True)
                         self.assertGreaterEqual((light + 0.05) / (dark_value + 0.05), 4.5)
                 observed_ink.append(fields[0].palette().color(fields[0].foregroundRole()))
@@ -172,32 +184,55 @@ class TestTaskPanelUsability(unittest.TestCase):
                     self.app.processEvents()
                     for index, form in enumerate(panel.form):
                         name = "task-panel-%s-%s-%s-%s-%s-actual-%s.png" % (
-                            language, state, "expanded" if expanded else "collapsed",
-                            width, "primary" if index == 0 else "secondary", form.width())
+                            language,
+                            state,
+                            "expanded" if expanded else "collapsed",
+                            width,
+                            "primary" if index == 0 else "secondary",
+                            form.width(),
+                        )
                         self.assertTrue(form.grab().save(os.path.join(reports, name), "PNG"))
         finally:
             button.setChecked(was_expanded)
 
     def _labels(self, panel):
-        return [label.text() for form in panel.form
-                for label in form.findChildren(QtWidgets.QLabel)]
+        return [label.text() for form in panel.form for label in form.findChildren(QtWidgets.QLabel)]
 
     def _object_state(self, obj):
         # dumpContent is a ZIP archive with time-dependent header metadata.
         # Compare the actual public model, exact BREP and placement instead.
-        properties = ("Label", "Material", "Family", "CatalogFamily", "SizeName",
-                      "ProfileWidth", "ProfileHeight", "Thickness", "ThicknessFlange",
-                      "RadiusLarge", "RadiusSmall", "ProfileLength", "LinearWeight",
-                      "UnitPrice", "MakeFillet", "AnchorX", "AnchorY", "RotationAngle",
-                      "MirrorH", "MirrorV", "MapMode", "AttachmentSupport", "Support")
+        properties = (
+            "Label",
+            "Material",
+            "Family",
+            "CatalogFamily",
+            "SizeName",
+            "ProfileWidth",
+            "ProfileHeight",
+            "Thickness",
+            "ThicknessFlange",
+            "RadiusLarge",
+            "RadiusSmall",
+            "ProfileLength",
+            "LinearWeight",
+            "UnitPrice",
+            "MakeFillet",
+            "AnchorX",
+            "AnchorY",
+            "RotationAngle",
+            "MirrorH",
+            "MirrorV",
+            "MapMode",
+            "AttachmentSupport",
+            "Support",
+        )
         values = tuple((name, repr(getattr(obj, name))) for name in properties if hasattr(obj, name))
         shape = obj.Shape.exportBrepToString() if hasattr(obj, "Shape") else None
         placement = tuple(obj.Placement.toMatrix().A) if hasattr(obj, "Placement") else None
         return obj.Name, values, shape, placement
 
     def _snapshot(self):
-        return ([self._object_state(obj) for obj in self.doc.Objects],
-                get_param_group().GetContents())
+        return ([self._object_state(obj) for obj in self.doc.Objects], get_param_group().GetContents())
 
     def _language(self, language, default):
         self.prefs.SetString("Language", language)
@@ -212,8 +247,10 @@ class TestTaskPanelUsability(unittest.TestCase):
         panel = self._create()
         before = self._snapshot()
         self.assertEqual(panel.form[0].label_10.text(), "Library")
-        self.assertTrue(any("Aluminium" in text for text in self._labels(panel)),
-                        "Show metadata material separately from the selected library")
+        self.assertTrue(
+            any("Aluminium" in text for text in self._labels(panel)),
+            "Show metadata material separately from the selected library",
+        )
         self.assertEqual(panel.form_proxy.combo_material.currentText(), "Panel Library")
         self.assertEqual(panel.form[0].label_2.text(), "Size")
         panel.form_proxy.combo_family.setCurrentText("Custom Profile")
@@ -232,15 +269,19 @@ class TestTaskPanelUsability(unittest.TestCase):
         self.assertTrue(panel.form_proxy.sb_length.isEnabled())
         self.assertIn("mm", panel.form_proxy.sb_length.suffix())
         panel.form_proxy.sb_length.setValue(750)
-        self.assertNotEqual(panel.form_proxy.label_attach.text(), "Define a length",
-                            "A positive length must clear the missing-requirement instruction")
+        self.assertNotEqual(
+            panel.form_proxy.label_attach.text(),
+            "Define a length",
+            "A positive length must clear the missing-requirement instruction",
+        )
         self.assertEqual(panel.form_proxy.sb_length.value(), 750)
         self.assertEqual(self._snapshot(), before)
 
     def test_s3_selection_counts_edges_not_objects_and_exposes_details(self):
         path = self.doc.addObject("Part::Feature", "ThreeEdges")
-        path.Shape = Part.makePolygon([App.Vector(0, 0, 0), App.Vector(100, 0, 0),
-                                       App.Vector(100, 100, 0), App.Vector(200, 100, 0)])
+        path.Shape = Part.makePolygon(
+            [App.Vector(0, 0, 0), App.Vector(100, 0, 0), App.Vector(100, 100, 0), App.Vector(200, 100, 0)]
+        )
         self.doc.recompute()
         panel = self._create()
         before = self._snapshot()
@@ -290,8 +331,7 @@ class TestTaskPanelUsability(unittest.TestCase):
         catalog = self.manager.get_all_profiles()["Panel Library"]
         with patch.object(LibraryManager, "get_all_profiles", return_value={"Panel Library": catalog}):
             for language in ("en", "es"):
-                self._language("Spanish" if language == "es" else "English",
-                               "es_ES" if language == "es" else "en_US")
+                self._language("Spanish" if language == "es" else "English", "es_ES" if language == "es" else "en_US")
                 try:
                     panel = CreateProfileTaskPanel()
                     self.panels.append(panel)
@@ -385,19 +425,27 @@ class TestTaskPanelUsability(unittest.TestCase):
         self._show(panel)
         self.assertLess(panel.form_proxy.label_image.minimumHeight(), 160)
         # Catalog selectors occupy form rows, not six vertically stacked items.
-        for label, combo in ((panel.form[0].label_10, panel.form_proxy.combo_material),
-                             (panel.form[0].label, panel.form_proxy.combo_family),
-                             (panel.form[0].label_2, panel.form_proxy.combo_size)):
-            self.assertLess(abs(label.mapToGlobal(QtCore.QPoint()).y() -
-                                combo.mapToGlobal(QtCore.QPoint()).y()), combo.height())
+        for label, combo in (
+            (panel.form[0].label_10, panel.form_proxy.combo_material),
+            (panel.form[0].label, panel.form_proxy.combo_family),
+            (panel.form[0].label_2, panel.form_proxy.combo_size),
+        ):
+            self.assertLess(
+                abs(label.mapToGlobal(QtCore.QPoint()).y() - combo.mapToGlobal(QtCore.QPoint()).y()), combo.height()
+            )
         for widget in (panel.form_proxy.group_anchor, panel.form_proxy.combo_rotation):
-            self.assertTrue(widget.isVisibleTo(panel.form[0]),
-                            "Alignment and rotation belong in the expanded primary panel")
+            self.assertTrue(
+                widget.isVisibleTo(panel.form[0]), "Alignment and rotation belong in the expanded primary panel"
+            )
         naming = panel.form_proxy.cb_sketch_in_name
         price = panel.form_proxy.sb_unitprice
-        for widget in (naming, panel.form_proxy.cb_family_in_name,
-                       panel.form_proxy.cb_size_in_name,
-                       panel.form_proxy.cb_prefix_profile_in_name, price):
+        for widget in (
+            naming,
+            panel.form_proxy.cb_family_in_name,
+            panel.form_proxy.cb_size_in_name,
+            panel.form_proxy.cb_prefix_profile_in_name,
+            price,
+        ):
             root = widget.window()
             self.assertFalse(widget.isVisibleTo(root), "Advanced controls start collapsed")
         self.assertTrue(panel.form_proxy.groupBox_5.isAncestorOf(naming))
@@ -425,9 +473,26 @@ class TestTaskPanelUsability(unittest.TestCase):
             with self.subTest(material=material):
                 obj = self.doc.addObject("Part::FeaturePython", "Editable")
                 obj.addExtension("Part::AttachExtensionPython")
-                Profile(obj, 40, 40, 2, 0, 0, 0, 500, 0.8, 12, False,
-                        1, 1, material, "Square Hollow", "40x40x2", False,
-                        catalog_family="Square Hollow")
+                Profile(
+                    obj,
+                    40,
+                    40,
+                    2,
+                    0,
+                    0,
+                    0,
+                    500,
+                    0.8,
+                    12,
+                    False,
+                    1,
+                    1,
+                    material,
+                    "Square Hollow",
+                    "40x40x2",
+                    False,
+                    catalog_family="Square Hollow",
+                )
                 self.doc.recompute()
                 panel = EditProfileTaskPanel(obj)
                 self.panels.append(panel)
@@ -437,8 +502,7 @@ class TestTaskPanelUsability(unittest.TestCase):
                 self.assertEqual(self._snapshot(), before)
                 self.assertTrue(panel.form_proxy.groupBox_apply.isHidden())
                 self.assertFalse(panel.form_proxy.groupBox_5.isEnabled())
-                for name in ("cb_sketch_in_name", "cb_family_in_name", "cb_size_in_name",
-                             "cb_prefix_profile_in_name"):
+                for name in ("cb_sketch_in_name", "cb_family_in_name", "cb_size_in_name", "cb_prefix_profile_in_name"):
                     widget = getattr(panel.form_proxy, name)
                     self.assertTrue(panel.form_proxy.groupBox_5.isAncestorOf(widget))
                     self.assertFalse(widget.isEnabled())

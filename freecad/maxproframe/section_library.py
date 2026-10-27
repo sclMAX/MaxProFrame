@@ -452,17 +452,23 @@ def _section_asset_identity(library_root, asset_path, object_name, asset_id):
     full_asset_path = resolve_and_validate_asset_path(canonical_root, asset_path)
     if not os.path.isfile(full_asset_path):
         raise FileNotFoundError(f"Asset file '{full_asset_path}' does not exist.")
-    return (canonical_root, full_asset_path, os.path.normpath(asset_path).replace("\\", "/"),
-            str(asset_id) if asset_id is not None else "")
+    return (
+        canonical_root,
+        full_asset_path,
+        os.path.normpath(asset_path).replace("\\", "/"),
+        str(asset_id) if asset_id is not None else "",
+    )
 
 
 def _find_section_sketch(target_doc, canonical_root, norm_asset_path, object_name, target_aid):
     for obj in target_doc.Objects:
         if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject"):
-            if (getattr(obj, "FF_Provenance", None) == canonical_root
-                    and getattr(obj, "FF_AssetPath", None) == norm_asset_path
-                    and getattr(obj, "FF_ObjectName", None) == str(object_name)
-                    and (not target_aid or getattr(obj, "FF_AssetId", None) == target_aid)):
+            if (
+                getattr(obj, "FF_Provenance", None) == canonical_root
+                and getattr(obj, "FF_AssetPath", None) == norm_asset_path
+                and getattr(obj, "FF_ObjectName", None) == str(object_name)
+                and (not target_aid or getattr(obj, "FF_AssetId", None) == target_aid)
+            ):
                 return obj
     return None
 
@@ -470,7 +476,8 @@ def _find_section_sketch(target_doc, canonical_root, norm_asset_path, object_nam
 def find_existing_section_sketch(library_root, asset_path, object_name, target_doc, asset_id=""):
     """Observe exactly the source an import would reuse, without opening or changing documents."""
     canonical_root, _path, norm_asset_path, target_aid = _section_asset_identity(
-        library_root, asset_path, object_name, asset_id)
+        library_root, asset_path, object_name, asset_id
+    )
     if target_doc is None:
         target_doc = App.ActiveDocument
     if target_doc is None:
@@ -498,7 +505,8 @@ def get_or_import_section_sketch(library_root, asset_path, object_name, target_d
        - Restores the active document to target_doc.
     """
     canonical_root, full_asset_path, norm_asset_path, target_aid = _section_asset_identity(
-        library_root, asset_path, object_name, asset_id)
+        library_root, asset_path, object_name, asset_id
+    )
     if target_doc is None:
         target_doc = App.ActiveDocument
     if target_doc is None:

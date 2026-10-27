@@ -29,28 +29,32 @@ class TestTaskPanelPreview(unittest.TestCase):
         self.prefs = App.ParamGet("User parameter:BaseApp/Preferences/General")
         language, locale = self.prefs.GetString("Language", ""), Gui.getLocale()
         default = QtCore.QLocale()
+
         def restore_language():
             self.prefs.SetString("Language", language)
             Gui.setLocale(locale)
             Gui.updateLocale()
             QtCore.QLocale.setDefault(default)
+
         self.addCleanup(restore_language)
         Gui.addLanguagePath(TRANSLATIONSPATH)
         self._language("English", "en_US")
         self.workspace = tempfile.TemporaryDirectory(prefix="mpf_panel_preview_")
         self.addCleanup(self.workspace.cleanup)
         root = self.workspace.name
-        self.manager = LibraryManager(user_dir=os.path.join(root, "user"),
-                                      stock_dir=os.path.join(root, "stock"),
-                                      registry_path=os.path.join(root, "registry.json"))
+        self.manager = LibraryManager(
+            user_dir=os.path.join(root, "user"),
+            stock_dir=os.path.join(root, "stock"),
+            registry_path=os.path.join(root, "registry.json"),
+        )
         self.folder = os.path.join(root, "catalog")
         sizes = {}
-        self.manager.create_folder_library(self.folder, "Preview Library", material="Steel",
-                                          density=7.85, data={})
+        self.manager.create_folder_library(self.folder, "Preview Library", material="Steel", density=7.85, data={})
         os.makedirs(os.path.join(self.folder, "sections"), exist_ok=True)
         for code, width, height, weight, description in (
-                ("WIDE", 80, 20, "1.25", "Wide section"),
-                ("TALL", 20, 80, "2.5", "Tall section")):
+            ("WIDE", 80, 20, "1.25", "Wide section"),
+            ("TALL", 20, 80, "2.5", "Tall section"),
+        ):
             asset = App.newDocument("PreviewAsset")
             try:
                 sketch = asset.addObject("Sketcher::SketchObject", "Section")
@@ -62,22 +66,35 @@ class TestTaskPanelPreview(unittest.TestCase):
                 asset.saveAs(os.path.join(self.folder, relative))
             finally:
                 App.closeDocument(asset.Name)
-            sizes[code] = {"asset_path": relative, "object_name": "Section",
-                           "Weight": weight, "Description": description}
+            sizes[code] = {
+                "asset_path": relative,
+                "object_name": "Section",
+                "Weight": weight,
+                "Description": description,
+            }
         with open(os.path.join(self.folder, "sections", "broken.FCStd"), "wb") as stream:
             stream.write(b"not a FreeCAD archive")
-        for code, path in (("MISSING", "sections/missing.FCStd"),
-                           ("BROKEN", "sections/broken.FCStd")):
+        for code, path in (("MISSING", "sections/missing.FCStd"), ("BROKEN", "sections/broken.FCStd")):
             sizes[code] = {"asset_path": path, "object_name": "Section", "Weight": "3"}
         # Publish through the same catalog writer as the library UI.
-        self.manager.save_folder_library(self.folder, {
-            "Custom Profile": {"canonical_family": "Custom Profile", "norm": "Custom",
-                               "unit": "mm", "sizes": sizes},
-            "Square Hollow": {"canonical_family": "Square Hollow", "norm": "ISO",
-                              "unit": "mm", "fillet": False,
-                              "sizes": {"40x40x2": {"Height": "40", "Width": "40",
-                                                      "Thickness": "2", "Weight": "0.8"}}},
-        })
+        self.manager.save_folder_library(
+            self.folder,
+            {
+                "Custom Profile": {
+                    "canonical_family": "Custom Profile",
+                    "norm": "Custom",
+                    "unit": "mm",
+                    "sizes": sizes,
+                },
+                "Square Hollow": {
+                    "canonical_family": "Square Hollow",
+                    "norm": "ISO",
+                    "unit": "mm",
+                    "fillet": False,
+                    "sizes": {"40x40x2": {"Height": "40", "Width": "40", "Thickness": "2", "Weight": "0.8"}},
+                },
+            },
+        )
         factory = patch("freecad.maxproframe.create_profiles_tool.LibraryManager", return_value=self.manager)
         factory.start()
         self.addCleanup(factory.stop)
@@ -117,8 +134,7 @@ class TestTaskPanelPreview(unittest.TestCase):
         self._show(panel)
         point = widget.anchor_position(ax, ay)
         for kind in (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.MouseButtonRelease):
-            event = QtGui.QMouseEvent(kind, point, QtCore.Qt.LeftButton,
-                                     QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
+            event = QtGui.QMouseEvent(kind, point, QtCore.Qt.LeftButton, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
             self.app.sendEvent(widget, event)
         self.assertEqual(panel.get_anchor(), (ax, ay))
         self.assertEqual(widget.selected_anchor, (ax, ay))
@@ -137,8 +153,10 @@ class TestTaskPanelPreview(unittest.TestCase):
             for ay in range(3):
                 getattr(panel.form_proxy, "rb_anchor_%s_%s" % (ax, ay)).click()
                 self.assertEqual(panel.alignment_widget.selected_anchor, (ax, ay))
-        with patch.object(App, "openDocument", side_effect=AssertionError("click loaded catalog")), \
-                patch.object(Gui.Selection, "clearSelection", side_effect=AssertionError("click changed selection")):
+        with (
+            patch.object(App, "openDocument", side_effect=AssertionError("click loaded catalog")),
+            patch.object(Gui.Selection, "clearSelection", side_effect=AssertionError("click changed selection")),
+        ):
             self._click_anchor(panel, 2, 2)
         panel.form_proxy.combo_rotation.setCurrentText("37")
         panel.form_proxy.cb_mirror_h.setChecked(True)
@@ -197,8 +215,10 @@ class TestTaskPanelPreview(unittest.TestCase):
         profile = next(o for o in App.ActiveDocument.Objects if getattr(o, "Family", None) == "Custom Profile")
         source = profile.CustomProfile
         points = [(0, 0), (width, 0), (width, height), (0, height)]
-        source.Geometry = [Part.LineSegment(App.Vector(*start, 0), App.Vector(*end, 0))
-                           for start, end in zip(points, points[1:] + points[:1])]
+        source.Geometry = [
+            Part.LineSegment(App.Vector(*start, 0), App.Vector(*end, 0))
+            for start, end in zip(points, points[1:] + points[:1])
+        ]
         source.Document.recompute()
         self.assertAlmostEqual(source.Shape.BoundBox.XLength, width)
         self.assertAlmostEqual(source.Shape.BoundBox.YLength, height)
@@ -214,8 +234,10 @@ class TestTaskPanelPreview(unittest.TestCase):
         self.assertAlmostEqual(panel.alignment_widget.section_bounds.width(), 120)
         self.assertAlmostEqual(panel.alignment_widget.section_bounds.height(), 30)
         before = self._state(panel)
-        with patch.object(App, "openDocument", side_effect=AssertionError("refresh imported an asset")), \
-                patch.object(App, "newDocument", side_effect=AssertionError("refresh created document")):
+        with (
+            patch.object(App, "openDocument", side_effect=AssertionError("refresh imported an asset")),
+            patch.object(App, "newDocument", side_effect=AssertionError("refresh created document")),
+        ):
             panel._refresh_alignment()
         self.assertEqual(self._state(panel), before)
         self.assertEqual({o.Name for o in self.doc.Objects}, original_names)
@@ -234,6 +256,7 @@ class TestTaskPanelPreview(unittest.TestCase):
 
     def test_alignment_create_preserves_normalized_path_and_optional_asset_id_reuse(self):
         import copy
+
         first, source = self._create_resized_local_source()
         source.FF_AssetId = "local-id"
         original_names = {o.Name for o in self.doc.Objects}
@@ -249,7 +272,9 @@ class TestTaskPanelPreview(unittest.TestCase):
                 panel.form_proxy.sb_length.setValue(100)
                 self.assertAlmostEqual(panel.alignment_widget.section_bounds.width(), 120 if reuse else 80)
                 self.assertTrue(panel.apply())
-                second = next(o for o in self.doc.Objects if getattr(o, "Family", None) == "Custom Profile" and o != first)
+                second = next(
+                    o for o in self.doc.Objects if getattr(o, "Family", None) == "Custom Profile" and o != first
+                )
                 self.assertEqual(second.CustomProfile is source, reuse)
                 self.assertAlmostEqual(second.ProfileWidth, panel.alignment_widget.section_bounds.width())
                 self.assertEqual(self._files(), files)
@@ -294,13 +319,18 @@ class TestTaskPanelPreview(unittest.TestCase):
 
     def test_alignment_edit_switches_custom_family_even_when_code_is_unchanged(self):
         import copy
+
         create = self._panel()
         create.form_proxy.sb_length.setValue(100)
         self.assertTrue(create.accept(defer=False))
         obj = next(o for o in self.doc.Objects if getattr(o, "Family", None) == "Custom Profile")
         catalog = copy.deepcopy(self.manager.get_all_profiles()["Preview Library"])
-        catalog["Other Custom"] = {"canonical_family": "Custom Profile", "norm": "Custom",
-                                   "unit": "mm", "sizes": {"WIDE": catalog["Custom Profile"]["sizes"]["TALL"]}}
+        catalog["Other Custom"] = {
+            "canonical_family": "Custom Profile",
+            "norm": "Custom",
+            "unit": "mm",
+            "sizes": {"WIDE": catalog["Custom Profile"]["sizes"]["TALL"]},
+        }
         self.manager.save_folder_library(self.folder, catalog)
         edit = self._panel(obj)
         self.assertAlmostEqual(edit.alignment_widget.section_bounds.width(), 80)
@@ -337,6 +367,7 @@ class TestTaskPanelPreview(unittest.TestCase):
     def test_native_loader_rebinds_recycled_named_widget_aliases(self):
         native_load = Gui.PySideUic.loadUi
         items = []
+
         def load_with_stale_aliases(path):
             form = native_load(path)
             if form.findChild(QtWidgets.QComboBox, "combo_family") is not None:
@@ -347,6 +378,7 @@ class TestTaskPanelPreview(unittest.TestCase):
                     items.append(item)
                     setattr(form, name, item)
             return form
+
         with patch.object(Gui.PySideUic, "loadUi", side_effect=load_with_stale_aliases):
             panel = self._panel()
         self.assertIsInstance(panel.form_proxy.combo_family, QtWidgets.QComboBox)
@@ -364,18 +396,37 @@ class TestTaskPanelPreview(unittest.TestCase):
         return result
 
     def _state(self, panel):
-        return (App.ActiveDocument.Name, tuple(sorted(App.listDocuments())),
-                tuple((s.DocumentName, s.ObjectName, tuple(s.SubElementNames))
-                      for s in Gui.Selection.getSelectionEx()),
-                tuple((o.Name, o.Label, tuple(o.Placement.toMatrix().A),
-                       o.Shape.exportBrepToString() if hasattr(o, "Shape") else None,
-                       tuple((p, repr(getattr(o, p))) for p in
-                             ("Material", "Family", "CatalogFamily", "SizeName", "ProfileLength",
-                              "LinearWeight", "CustomProfile") if hasattr(o, p)))
-                      for o in self.doc.Objects),
-                get_param_group().GetContents(), self._files(),
-                panel.form_proxy.label_apply_status.text(),
-                panel.form_proxy.sb_length.value())
+        return (
+            App.ActiveDocument.Name,
+            tuple(sorted(App.listDocuments())),
+            tuple((s.DocumentName, s.ObjectName, tuple(s.SubElementNames)) for s in Gui.Selection.getSelectionEx()),
+            tuple(
+                (
+                    o.Name,
+                    o.Label,
+                    tuple(o.Placement.toMatrix().A),
+                    o.Shape.exportBrepToString() if hasattr(o, "Shape") else None,
+                    tuple(
+                        (p, repr(getattr(o, p)))
+                        for p in (
+                            "Material",
+                            "Family",
+                            "CatalogFamily",
+                            "SizeName",
+                            "ProfileLength",
+                            "LinearWeight",
+                            "CustomProfile",
+                        )
+                        if hasattr(o, p)
+                    ),
+                )
+                for o in self.doc.Objects
+            ),
+            get_param_group().GetContents(),
+            self._files(),
+            panel.form_proxy.label_apply_status.text(),
+            panel.form_proxy.sb_length.value(),
+        )
 
     def _show(self, panel, width=360):
         for form in panel.form:
@@ -384,9 +435,9 @@ class TestTaskPanelPreview(unittest.TestCase):
         self.app.processEvents()
 
     def _metadata(self, panel, code, description, weight):
-        text = " ".join(w.text() for form in panel.form
-                        for w in form.findChildren(QtWidgets.QLabel)
-                        if w.isVisibleTo(form))
+        text = " ".join(
+            w.text() for form in panel.form for w in form.findChildren(QtWidgets.QLabel) if w.isVisibleTo(form)
+        )
         self.assertIn(code, text)
         self.assertIn(description, text)
         self.assertIn(weight, text)
@@ -394,8 +445,7 @@ class TestTaskPanelPreview(unittest.TestCase):
 
     def test_s2_s3_uncached_refresh_with_registered_selection_observer(self):
         path = self.doc.addObject("Part::Feature", "TwoEdges")
-        path.Shape = Part.makePolygon([App.Vector(0, 0, 0), App.Vector(100, 0, 0),
-                                       App.Vector(100, 100, 0)])
+        path.Shape = Part.makePolygon([App.Vector(0, 0, 0), App.Vector(100, 0, 0), App.Vector(100, 100, 0)])
         self.doc.recompute()
         panel = self._panel()
         Gui.Selection.addObserver(panel)
@@ -416,9 +466,11 @@ class TestTaskPanelPreview(unittest.TestCase):
                     # document/selection context. The additional 2D refresh must
                     # consume its cached face without touching either context.
                     panel.update_image()
-                    with patch.object(Gui.Selection, "clearSelection", wraps=Gui.Selection.clearSelection) as clear, \
-                            patch.object(App, "setActiveDocument", wraps=App.setActiveDocument) as activate, \
-                            patch.object(App, "openDocument", side_effect=AssertionError("2D refresh loaded catalog")):
+                    with (
+                        patch.object(Gui.Selection, "clearSelection", wraps=Gui.Selection.clearSelection) as clear,
+                        patch.object(App, "setActiveDocument", wraps=App.setActiveDocument) as activate,
+                        patch.object(App, "openDocument", side_effect=AssertionError("2D refresh loaded catalog")),
+                    ):
                         panel._refresh_alignment()
                         clear.assert_not_called()
                         activate.assert_not_called()
@@ -428,9 +480,10 @@ class TestTaskPanelPreview(unittest.TestCase):
 
     def test_s1_native_language_cycle_preserves_canonical_family_and_state(self):
         for language, default, library, unit, family in (
-                ("English", "es_ES", "Library", "Unit", "Square Hollow"),
-                ("Spanish", "en_US", "Biblioteca", "Unidad", "Tubo Cuadrado Hueco"),
-                ("English", "es_ES", "Library", "Unit", "Square Hollow")):
+            ("English", "es_ES", "Library", "Unit", "Square Hollow"),
+            ("Spanish", "en_US", "Biblioteca", "Unidad", "Tubo Cuadrado Hueco"),
+            ("English", "es_ES", "Library", "Unit", "Square Hollow"),
+        ):
             with self.subTest(language=language, default=default):
                 self._language(language, default)
                 panel = self._panel()
@@ -461,15 +514,15 @@ class TestTaskPanelPreview(unittest.TestCase):
         self._show(panel)
         files = self._files()
         images = []
-        for code, description, weight in (("WIDE", "Wide section", "1.25"),
-                                           ("TALL", "Tall section", "2.5")):
+        for code, description, weight in (("WIDE", "Wide section", "1.25"), ("TALL", "Tall section", "2.5")):
             with self.subTest(code=code):
                 panel.form_proxy.combo_size.setCurrentText(code)
                 self.app.processEvents()
                 self._metadata(panel, code, description, weight)
                 pixmap = panel.form_proxy.label_image.pixmap()
-                expected = render_custom_section_thumbnail(self.folder, "sections/%s.FCStd" % code,
-                                                           "Section", pixmap.width(), pixmap.height())
+                expected = render_custom_section_thumbnail(
+                    self.folder, "sections/%s.FCStd" % code, "Section", pixmap.width(), pixmap.height()
+                )
                 self.assertEqual(pixmap.toImage(), expected.toImage())
                 images.append(pixmap.toImage())
                 self.assertEqual(self.doc.Objects, [])
@@ -492,13 +545,15 @@ class TestTaskPanelPreview(unittest.TestCase):
         for code in ("WIDE", "TALL", "MISSING", "BROKEN"):
             panel.form_proxy.combo_size.setCurrentText(code)
             before = self._state(panel)
-            for theme, surface, ink in (("light", "#eeeeee", "#204060"),
-                                        ("dark", "#303030", "#e0d090")):
+            for theme, surface, ink in (("light", "#eeeeee", "#204060"), ("dark", "#303030", "#e0d090")):
                 panel.form[0].setStyleSheet("QLabel { background-color: %s; color: %s; }" % (surface, ink))
                 for width in (360, 600):
                     self._show(panel, width)
-                    self.assertTrue(panel.form[0].grab().save(os.path.join(
-                        reports, "custom-preview-en-%s-%s-%s.png" % (code, theme, width)), "PNG"))
+                    self.assertTrue(
+                        panel.form[0]
+                        .grab()
+                        .save(os.path.join(reports, "custom-preview-en-%s-%s-%s.png" % (code, theme, width)), "PNG")
+                    )
                     self.assertEqual(self._state(panel), before)
 
     def test_s2_missing_and_corrupt_assets_use_existing_placeholder(self):
@@ -509,8 +564,9 @@ class TestTaskPanelPreview(unittest.TestCase):
                 before = self._state(panel)
                 panel.update_image()
                 pixmap = panel.form_proxy.label_image.pixmap()
-                expected = render_custom_section_thumbnail(self.folder, path, "Section",
-                                                           pixmap.width(), pixmap.height())
+                expected = render_custom_section_thumbnail(
+                    self.folder, path, "Section", pixmap.width(), pixmap.height()
+                )
                 self.assertEqual(pixmap.toImage(), expected.toImage())
                 self.assertEqual(self._state(panel), before)
 
@@ -552,12 +608,20 @@ class TestTaskPanelPreview(unittest.TestCase):
         for width in (360, 600, 360):
             self._show(panel, width)
             image = label.grab().toImage()
-            points = [(x, y) for y in range(image.height()) for x in range(image.width())
-                      if image.pixelColor(x, y) == QtGui.QColor("#c03050")]
+            points = [
+                (x, y)
+                for y in range(image.height())
+                for x in range(image.width())
+                if image.pixelColor(x, y) == QtGui.QColor("#c03050")
+            ]
             self.assertTrue(points)
             ys = [p[1] for p in points]
-            colored = [(x, y) for y in range(image.height()) for x in range(image.width())
-                       if image.pixelColor(x, y).name() in ("#c03050", "#20b040", "#3060d0")]
+            colored = [
+                (x, y)
+                for y in range(image.height())
+                for x in range(image.width())
+                if image.pixelColor(x, y).name() in ("#c03050", "#20b040", "#3060d0")
+            ]
             xs = [p[0] for p in colored]
             self.assertAlmostEqual((max(xs) - min(xs) + 1) / (max(ys) - min(ys) + 1), 4, delta=0.15)
             colors = {image.pixelColor(x, y).name() for x, y in colored}
@@ -570,8 +634,7 @@ class TestTaskPanelPreview(unittest.TestCase):
         label = panel.form_proxy.label_image
         before = self._state(panel)
         captures = []
-        for surface, ink in (("#eeeeee", "#204060"), ("#303030", "#e0d090"),
-                             ("#eeeeee", "#204060")):
+        for surface, ink in (("#eeeeee", "#204060"), ("#303030", "#e0d090"), ("#eeeeee", "#204060")):
             panel.form[0].setStyleSheet("QLabel { background-color: %s; color: %s; }" % (surface, ink))
             label.style().unpolish(label)
             label.style().polish(label)
@@ -592,9 +655,26 @@ class TestTaskPanelPreview(unittest.TestCase):
             with self.subTest(material=material):
                 obj = self.doc.addObject("Part::FeaturePython", "Editable")
                 obj.addExtension("Part::AttachExtensionPython")
-                Profile(obj, 20, 80, 0, 0, 0, 0, 500, 2.5, 0, False,
-                        1, 1, material, "Custom Profile", "TALL", False,
-                        catalog_family="Custom Profile")
+                Profile(
+                    obj,
+                    20,
+                    80,
+                    0,
+                    0,
+                    0,
+                    0,
+                    500,
+                    2.5,
+                    0,
+                    False,
+                    1,
+                    1,
+                    material,
+                    "Custom Profile",
+                    "TALL",
+                    False,
+                    catalog_family="Custom Profile",
+                )
                 self.doc.recompute()
                 panel = self._panel(obj)
                 before = self._state(panel)
@@ -607,7 +687,11 @@ class TestTaskPanelPreview(unittest.TestCase):
                 pixmap = panel.form_proxy.label_image.pixmap()
                 expected = render_custom_section_thumbnail(
                     self.folder if material == "Preview Library" else None,
-                    "sections/TALL.FCStd", "Section", pixmap.width(), pixmap.height())
+                    "sections/TALL.FCStd",
+                    "Section",
+                    pixmap.width(),
+                    pixmap.height(),
+                )
                 self.assertEqual(pixmap.toImage(), expected.toImage())
                 if material == "Preview Library":
                     self._metadata(panel, "TALL", "Tall section", "2.5")

@@ -339,8 +339,9 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
         widget = panel.alignment_widget
         point = widget.anchor_position(ax, ay)
         for kind in (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.MouseButtonRelease):
-            self.app.sendEvent(widget, QtGui.QMouseEvent(
-                kind, point, QtCore.Qt.LeftButton, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier))
+            self.app.sendEvent(
+                widget, QtGui.QMouseEvent(kind, point, QtCore.Qt.LeftButton, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
+            )
         self.assertEqual(panel.get_anchor(), (ax, ay))
 
     # --- Tests ---

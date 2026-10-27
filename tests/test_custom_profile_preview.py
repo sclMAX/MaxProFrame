@@ -38,10 +38,28 @@ class TestCustomProfilePreview(unittest.TestCase):
         obj.AttachmentSupport = (axis, ["Edge1"])
         obj.MapMode = "NormalToEdge"
         Profile(
-            obj, 20, 10, 0, 0, 0, 0, 100, 1, 0, False, 2, 1,
-            "Test", "Custom Profile", "Source", False,
-            link_sub=(axis, ("Edge1",)), custom_profile=source,
-            init_rotation=37, init_mirror_h=True, init_mirror_v=True,
+            obj,
+            20,
+            10,
+            0,
+            0,
+            0,
+            0,
+            100,
+            1,
+            0,
+            False,
+            2,
+            1,
+            "Test",
+            "Custom Profile",
+            "Source",
+            False,
+            link_sub=(axis, ("Edge1",)),
+            custom_profile=source,
+            init_rotation=37,
+            init_mirror_h=True,
+            init_mirror_v=True,
         )
         doc.recompute()
         self.assertEqual(obj.getStatusString(), "Valid")

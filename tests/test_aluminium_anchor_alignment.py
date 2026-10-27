@@ -84,16 +84,31 @@ class TestAluminiumAnchorAlignment(unittest.TestCase):
             for length in (0.0, 100.0):
                 for ax in range(3):
                     for ay in range(3):
-                        for mirror_h, mirror_v in ((False, False), (True, False),
-                                                   (False, True), (True, True)):
-                            with self.subTest(family=family, width=width, length=length,
-                                              anchor=(ax, ay), mirrors=(mirror_h, mirror_v)):
+                        for mirror_h, mirror_v in ((False, False), (True, False), (False, True), (True, True)):
+                            with self.subTest(
+                                family=family, width=width, length=length, anchor=(ax, ay), mirrors=(mirror_h, mirror_v)
+                            ):
                                 obj = self.doc.addObject("Part::FeaturePython", "Circular")
                                 obj.addExtension("Part::AttachExtensionPython")
                                 Profile(
-                                    obj, width, diameter, 2.0, 0.0, 0.0, 0.0,
-                                    length, 1.0, 1.0, False, ax, ay, "Metal", family,
-                                    "20", False, init_mirror_h=mirror_h,
+                                    obj,
+                                    width,
+                                    diameter,
+                                    2.0,
+                                    0.0,
+                                    0.0,
+                                    0.0,
+                                    length,
+                                    1.0,
+                                    1.0,
+                                    False,
+                                    ax,
+                                    ay,
+                                    "Metal",
+                                    family,
+                                    "20",
+                                    False,
+                                    init_mirror_h=mirror_h,
                                     init_mirror_v=mirror_v,
                                 )
                                 self.doc.recompute()
@@ -137,9 +152,28 @@ class TestAluminiumAnchorAlignment(unittest.TestCase):
                         obj.addExtension("Part::AttachExtensionPython")
                         obj.AttachmentSupport = (axis, ["Edge1"])
                         obj.MapMode = "NormalToEdge"
-                        Profile(obj, 0, 20, 2, 0, 0, 0, 100, 1, 1, False,
-                                ax, ay, "Metal", family, "20", False,
-                                link_sub=(axis, ("Edge1",)), init_mirror_h=mh, init_mirror_v=mv)
+                        Profile(
+                            obj,
+                            0,
+                            20,
+                            2,
+                            0,
+                            0,
+                            0,
+                            100,
+                            1,
+                            1,
+                            False,
+                            ax,
+                            ay,
+                            "Metal",
+                            family,
+                            "20",
+                            False,
+                            link_sub=(axis, ("Edge1",)),
+                            init_mirror_h=mh,
+                            init_mirror_v=mv,
+                        )
                         for angle in (0, 37, 90, 180, 270):
                             with self.subTest(family=family, anchor=(ax, ay), mirrors=(mh, mv), angle=angle):
                                 obj.RotationAngle = angle
@@ -154,7 +188,9 @@ class TestAluminiumAnchorAlignment(unittest.TestCase):
                                 self.assertAlmostEqual(box.XLength, 20, places=5)
                                 self.assertAlmostEqual(box.YLength, 20, places=5)
                                 center = obj.Placement.multVec(App.Vector(10 - 10 * ax, 10 - 10 * ay, 50))
-                                self.assertAlmostEqual(obj.Shape.Solids[0].CenterOfMass.distanceToPoint(center), 0, places=5)
+                                self.assertAlmostEqual(
+                                    obj.Shape.Solids[0].CenterOfMass.distanceToPoint(center), 0, places=5
+                                )
         self.assertEqual([v.Point for v in axis.Shape.Vertexes], before)
         self.assertEqual(axis.Placement, placement_before)
         self.assertAlmostEqual(axis.Shape.Length, length_before)

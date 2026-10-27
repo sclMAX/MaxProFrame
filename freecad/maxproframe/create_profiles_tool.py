@@ -8,6 +8,9 @@ import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtGui, QtWidgets
 
+from freecad.maxproframe.alignment_widget import AlignmentWidget
+from freecad.maxproframe.custom_profile_cards import custom_section_cache_key, render_custom_section_thumbnail
+from freecad.maxproframe.custom_section_geometry import build_custom_section_face
 from freecad.maxproframe.ff_tools import (
     ICONPATH,
     PROFILEIMAGES_PATH,
@@ -19,13 +22,10 @@ from freecad.maxproframe.ff_tools import (
     move_profile_to_parent_if_supported,
     translate,
 )
-from freecad.maxproframe.custom_profile_cards import custom_section_cache_key, render_custom_section_thumbnail
-from freecad.maxproframe.alignment_widget import AlignmentWidget
-from freecad.maxproframe.section_outline import build_section_face
-from freecad.maxproframe.custom_section_geometry import build_custom_section_face
 from freecad.maxproframe.library_manager import LibraryManager, get_canonical_family
 from freecad.maxproframe.profile import Profile, ViewProviderCustomProfile, ViewProviderProfile
 from freecad.maxproframe.section_library import find_existing_section_sketch, get_or_import_section_sketch
+from freecad.maxproframe.section_outline import build_section_face
 
 
 def _bind_ui_children(form, path):
@@ -115,11 +115,11 @@ class _TaskPreviewLabel(QtWidgets.QLabel):
             tint.fillRect(source.rect(), self.palette().color(self.foregroundRole()))
             tint.end()
         rect = self.contentsRect()
-        fitted = source.scaled(rect.size(), QtCore.Qt.KeepAspectRatio,
-                               QtCore.Qt.SmoothTransformation)
+        fitted = source.scaled(rect.size(), QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
         painter = QtGui.QPainter(self)
-        painter.drawPixmap(rect.x() + (rect.width() - fitted.width()) // 2,
-                           rect.y() + (rect.height() - fitted.height()) // 2, fitted)
+        painter.drawPixmap(
+            rect.x() + (rect.width() - fitted.width()) // 2, rect.y() + (rect.height() - fitted.height()) // 2, fitted
+        )
         painter.end()
 
 
@@ -165,9 +165,11 @@ class BaseProfileTaskPanel(ABC):
         # Keep the designer widgets (and FormProxy membership) when moving rows.
         catalog = first.groupBox.layout()
         rows = QtWidgets.QFormLayout()
-        for label, combo in ((first.label_10, first.combo_material),
-                             (first.label, first.combo_family),
-                             (first.label_2, first.combo_size)):
+        for label, combo in (
+            (first.label_10, first.combo_material),
+            (first.label, first.combo_family),
+            (first.label_2, first.combo_size),
+        ):
             catalog.removeWidget(label)
             catalog.removeWidget(combo)
             rows.addRow(label, combo)
@@ -224,13 +226,14 @@ class BaseProfileTaskPanel(ABC):
         self.advanced_button.toggled.connect(self.advanced_content.setVisible)
         self.advanced_button.toggled.connect(
             lambda expanded: self.advanced_button.setArrowType(
-                QtCore.Qt.DownArrow if expanded else QtCore.Qt.RightArrow))
+                QtCore.Qt.DownArrow if expanded else QtCore.Qt.RightArrow
+            )
+        )
         # UI files use the generic Dialog context; product copy uses frameforge.
         for form in self.form:
             form.setWindowTitle(translate("frameforge", form.windowTitle()))
             for widget in form.findChildren(QtWidgets.QWidget):
-                for getter, setter in (("text", "setText"), ("title", "setTitle"),
-                                       ("toolTip", "setToolTip")):
+                for getter, setter in (("text", "setText"), ("title", "setTitle"), ("toolTip", "setToolTip")):
                     if hasattr(widget, getter) and hasattr(widget, setter):
                         text = getattr(widget, getter)()
                         if text:
@@ -388,50 +391,72 @@ class BaseProfileTaskPanel(ABC):
             target = next((selection.Object for selection in selections if self._selection_edges(selection)), None)
         try:
             return find_existing_section_sketch(
-                folder, data["asset_path"], data.get("object_name", "Section"),
-                self._profile_target_document(target), data.get("asset_id", ""))
+                folder,
+                data["asset_path"],
+                data.get("object_name", "Section"),
+                self._profile_target_document(target),
+                data.get("asset_id", ""),
+            )
         except (OSError, ValueError):
             # The catalog inspector already provides the unavailable-asset state.
             return None
 
     def _refresh_alignment(self):
-        if getattr(self, "_initializing", False) or self._rendering_thumbnail or getattr(self, "_accept_finalizing", False):
+        if (
+            getattr(self, "_initializing", False)
+            or self._rendering_thumbnail
+            or getattr(self, "_accept_finalizing", False)
+        ):
             return
         parameters = {"Family": self._preview_family}
-        for prop, control in (("ProfileWidth", "sb_width"), ("ProfileHeight", "sb_height"),
-                              ("Thickness", "sb_main_thickness"), ("ThicknessFlange", "sb_flange_thickness"),
-                              ("RadiusLarge", "sb_radius1"), ("RadiusSmall", "sb_radius2"),
-                              ("LipLength", "sb_lip_length")):
+        for prop, control in (
+            ("ProfileWidth", "sb_width"),
+            ("ProfileHeight", "sb_height"),
+            ("Thickness", "sb_main_thickness"),
+            ("ThicknessFlange", "sb_flange_thickness"),
+            ("RadiusLarge", "sb_radius1"),
+            ("RadiusSmall", "sb_radius2"),
+            ("LipLength", "sb_lip_length"),
+        ):
             if hasattr(self.form_proxy, control):
                 parameters[prop] = getattr(self.form_proxy, control).value()
         parameters["MakeFillet"] = self.form_proxy.cb_make_fillet.isChecked()
         face = self._alignment_custom_face
         source = None
         profile = getattr(self, "profile", None)
-        if (profile is not None and self._preview_family == "Custom Profile"
-                and self.form_proxy.combo_family.currentText() == (getattr(profile, "CatalogFamily", "") or profile.Family)
-                and self.form_proxy.combo_size.currentText() == profile.SizeName
-                and self.form_proxy.combo_material.currentText() == profile.Material):
+        if (
+            profile is not None
+            and self._preview_family == "Custom Profile"
+            and self.form_proxy.combo_family.currentText() == (getattr(profile, "CatalogFamily", "") or profile.Family)
+            and self.form_proxy.combo_size.currentText() == profile.SizeName
+            and self.form_proxy.combo_material.currentText() == profile.Material
+        ):
             source = getattr(profile, "CustomProfile", None)
         if source is None and self._preview_family == "Custom Profile":
             source = self._existing_alignment_source()
         source_key = source.Shape.exportBrepToString() if source is not None else None
-        key = (tuple(sorted(parameters.items())), source_key,
-               face.exportBrepToString() if face is not None else None)
+        key = (tuple(sorted(parameters.items())), source_key, face.exportBrepToString() if face is not None else None)
         if key != self._alignment_geometry_key:
             try:
                 if source is not None:
                     face = build_custom_section_face(source)
                 section = build_section_face(parameters, custom_face=face)
                 self.alignment_widget.set_section(section)
-                self.alignment_widget.setToolTip(translate("frameforge", "Click a section bounding-box anchor. Keyboard: use the anchor controls below."))
+                self.alignment_widget.setToolTip(
+                    translate(
+                        "frameforge", "Click a section bounding-box anchor. Keyboard: use the anchor controls below."
+                    )
+                )
             except Exception as error:
                 self.alignment_widget.set_section(None)
                 self.alignment_widget.setToolTip(translate("frameforge", "No Preview") + ": " + str(error))
             self._alignment_geometry_key = key
-        self.alignment_widget.set_state(self.get_anchor(), self.get_rotation(),
-                                        self.form_proxy.cb_mirror_h.isChecked(),
-                                        self.form_proxy.cb_mirror_v.isChecked())
+        self.alignment_widget.set_state(
+            self.get_anchor(),
+            self.get_rotation(),
+            self.form_proxy.cb_mirror_h.isChecked(),
+            self.form_proxy.cb_mirror_v.isChecked(),
+        )
 
     def on_input_changed(self):
         if not getattr(self, "_initializing", False) and not self._rendering_thumbnail:
@@ -476,9 +501,12 @@ class BaseProfileTaskPanel(ABC):
         ay = max(0, min(2, anchor_y))
         getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}").setChecked(True)
         if hasattr(self, "alignment_widget"):
-            self.alignment_widget.set_state((ax, ay), self.get_rotation(),
-                                            self.form_proxy.cb_mirror_h.isChecked(),
-                                            self.form_proxy.cb_mirror_v.isChecked())
+            self.alignment_widget.set_state(
+                (ax, ay),
+                self.get_rotation(),
+                self.form_proxy.cb_mirror_h.isChecked(),
+                self.form_proxy.cb_mirror_v.isChecked(),
+            )
 
     def get_rotation(self):
         """Return rotation angle in degrees (float)."""
@@ -669,12 +697,20 @@ class BaseProfileTaskPanel(ABC):
                 folder = self.library_manager._get_registered_folder(material)
                 asset, name = size.get("asset_path"), size.get("object_name", "Section")
                 pixmap = render_custom_section_thumbnail(
-                    folder, asset, name, width=160, height=100,
-                    cache=self._thumbnail_cache, section_cache=self._section_cache)
+                    folder,
+                    asset,
+                    name,
+                    width=160,
+                    height=100,
+                    cache=self._thumbnail_cache,
+                    section_cache=self._section_cache,
+                )
                 self._alignment_custom_face = None
                 if folder and asset:
                     try:
-                        self._alignment_custom_face = self._section_cache.get(custom_section_cache_key(folder, asset, name))
+                        self._alignment_custom_face = self._section_cache.get(
+                            custom_section_cache_key(folder, asset, name)
+                        )
                     except (OSError, ValueError):
                         pass
                 self.form_proxy.label_image.setPixmap(pixmap)
@@ -896,7 +932,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         if "groupBox_apply" in self.form_proxy.members:
             self.form_proxy.groupBox_apply.setTitle(translate("frameforge", "Preview"))
         self.action_guidance = QtWidgets.QLabel(
-            translate("frameforge", "Apply: update preview. OK: confirm. Cancel: discard."), self.form[0])
+            translate("frameforge", "Apply: update preview. OK: confirm. Cancel: discard."), self.form[0]
+        )
         self.action_guidance.setWordWrap(True)
         self.form_proxy.groupBox_apply.layout().addWidget(self.action_guidance)
         self._set_initial_state()
@@ -1499,9 +1536,12 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 text = text % count
             tooltip = "\n".join(f"{name}: {', '.join(edges)}" for name, edges in details)
         else:
-            text = translate("frameforge", "Define a length" if self.form_proxy.sb_length.value() <= 0
-                             else "Manual length")
-            tooltip = translate("frameforge", "Select edges or a whole object to use its edges, or enter a positive length.")
+            text = translate(
+                "frameforge", "Define a length" if self.form_proxy.sb_length.value() <= 0 else "Manual length"
+            )
+            tooltip = translate(
+                "frameforge", "Select edges or a whole object to use its edges, or enter a positive length."
+            )
         self.form_proxy.label_attach.setText(text)
         self.form_proxy.label_attach.setToolTip(tooltip)
 

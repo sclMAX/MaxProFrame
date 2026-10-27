@@ -17,11 +17,13 @@ class AlignmentWidget(QtWidgets.QWidget):
         self.setMinimumSize(160, 160)
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
         self.setAccessibleName(translate("frameforge", "Section alignment"))
-        self.setToolTip(translate("frameforge", "Click a section bounding-box anchor. Keyboard: use the anchor controls below."))
+        self.setToolTip(
+            translate("frameforge", "Click a section bounding-box anchor. Keyboard: use the anchor controls below.")
+        )
         self._path = QtGui.QPainterPath()
         self._bounds = QtCore.QRectF()
         self.selected_anchor = (1, 1)
-        self.rotation = 0.
+        self.rotation = 0.0
         self.mirrors = (False, False)
 
     def sizeHint(self):
@@ -40,9 +42,9 @@ class AlignmentWidget(QtWidgets.QWidget):
             self._bounds = QtCore.QRectF()
         self.update()
 
-    def set_state(self, anchor, rotation=0., mirror_h=False, mirror_v=False):
+    def set_state(self, anchor, rotation=0.0, mirror_h=False, mirror_v=False):
         self.selected_anchor = tuple(anchor)
-        self.rotation = float(rotation) if math.isfinite(float(rotation)) else 0.
+        self.rotation = float(rotation) if math.isfinite(float(rotation)) else 0.0
         self.mirrors = (bool(mirror_h), bool(mirror_v))
         self.update()
 
@@ -50,10 +52,12 @@ class AlignmentWidget(QtWidgets.QWidget):
         center = self._bounds.center()
         rotation = QtGui.QTransform().rotate(self.rotation)
         rotated = rotation.mapRect(self._bounds)
-        scale = min(max(1, self.width() - 32) / max(rotated.width(), 1e-6),
-                    max(1, self.height() - 32) / max(rotated.height(), 1e-6))
+        scale = min(
+            max(1, self.width() - 32) / max(rotated.width(), 1e-6),
+            max(1, self.height() - 32) / max(rotated.height(), 1e-6),
+        )
         transform = QtGui.QTransform()
-        transform.translate(self.width() / 2., self.height() / 2.)
+        transform.translate(self.width() / 2.0, self.height() / 2.0)
         transform.scale(scale, -scale)
         transform.rotate(self.rotation)
         transform.translate(-center.x(), -center.y())
@@ -75,9 +79,12 @@ class AlignmentWidget(QtWidgets.QWidget):
             return None
         # Model mirrors the section about its bbox center AFTER anchor translation.
         # Thus MirrorH/V change the silhouette, not the local bbox anchor IDs.
-        return self._view_transform().map(QtCore.QPointF(
-            self._bounds.left() + self._bounds.width() * ax / 2.,
-            self._bounds.top() + self._bounds.height() * ay / 2.))
+        return self._view_transform().map(
+            QtCore.QPointF(
+                self._bounds.left() + self._bounds.width() * ax / 2.0,
+                self._bounds.top() + self._bounds.height() * ay / 2.0,
+            )
+        )
 
     def mousePressEvent(self, event):
         if event.button() == QtCore.Qt.LeftButton and not self._bounds.isEmpty():

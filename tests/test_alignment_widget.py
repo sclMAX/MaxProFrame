@@ -24,8 +24,9 @@ class TestAlignmentWidget(unittest.TestCase):
         self.widget = AlignmentWidget()
         self.addCleanup(self.widget.close)
         self.widget.resize(280, 240)
-        outer = Part.makePolygon([App.Vector(x, y, 0) for x, y in
-                                  ((37, -23), (77, -23), (77, -3), (37, -3), (37, -23))])
+        outer = Part.makePolygon(
+            [App.Vector(x, y, 0) for x, y in ((37, -23), (77, -23), (77, -3), (37, -3), (37, -23))]
+        )
         hole = Part.Wire([Part.makeCircle(3, App.Vector(47, -13, 0))])
         self.face = Part.makeFace([outer, hole], "Part::FaceMakerBullseye")
         self.before = self.face.exportBrepToString()
@@ -42,16 +43,15 @@ class TestAlignmentWidget(unittest.TestCase):
                 for ax in range(3):
                     for ay in range(3):
                         point = self.widget.anchor_position(ax, ay)
-                        _Mouse.mouseClick(self.widget, QtCore.Qt.LeftButton,
-                                               QtCore.Qt.NoModifier, point.toPoint())
+                        _Mouse.mouseClick(self.widget, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, point.toPoint())
                         self.assertEqual(clicks[-1], (ax, ay))
                         self.assertEqual(self.widget.selected_anchor, (ax, ay))
         self.assertEqual(len(clicks), 180)
         selected = self.widget.anchor_position(2, 2).toPoint()
-        self.assertEqual(self.widget.grab().toImage().pixelColor(selected),
-                         self.widget.palette().color(QtGui.QPalette.Highlight))
-        _Mouse.mouseClick(self.widget, QtCore.Qt.LeftButton,
-                               QtCore.Qt.NoModifier, QtCore.QPoint(1, 1))
+        self.assertEqual(
+            self.widget.grab().toImage().pixelColor(selected), self.widget.palette().color(QtGui.QPalette.Highlight)
+        )
+        _Mouse.mouseClick(self.widget, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, QtCore.QPoint(1, 1))
         self.assertEqual(len(clicks), 180)
         self.assertEqual(self.face.exportBrepToString(), self.before)
 
@@ -80,12 +80,15 @@ class TestAlignmentWidget(unittest.TestCase):
 
     def test_paint_click_resize_do_not_load_geometry_or_mutate_documents(self):
         documents = tuple(App.listDocuments())
-        with patch.object(App, "newDocument", side_effect=AssertionError("document creation")), \
-                patch.object(App, "openDocument", side_effect=AssertionError("catalog loading")):
+        with (
+            patch.object(App, "newDocument", side_effect=AssertionError("document creation")),
+            patch.object(App, "openDocument", side_effect=AssertionError("catalog loading")),
+        ):
             self.widget.resize(360, 220)
             self.widget.grab()
-            _Mouse.mouseClick(self.widget, QtCore.Qt.LeftButton,
-                                   QtCore.Qt.NoModifier, self.widget.anchor_position(2, 2).toPoint())
+            _Mouse.mouseClick(
+                self.widget, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, self.widget.anchor_position(2, 2).toPoint()
+            )
         self.assertEqual(tuple(App.listDocuments()), documents)
         self.widget.set_section(None)
         self.assertIsNone(self.widget.anchor_position(0, 0))
@@ -93,5 +96,6 @@ class TestAlignmentWidget(unittest.TestCase):
             self.widget.set_section(self.face)
             for angle in (0, 37, 90):
                 self.widget.set_state((2, 0), angle, True, False)
-                self.assertTrue(self.widget.grab().save(os.path.join(
-                    os.environ["FF_REPORTS"], "alignment-%s.png" % angle)))
+                self.assertTrue(
+                    self.widget.grab().save(os.path.join(os.environ["FF_REPORTS"], "alignment-%s.png" % angle))
+                )

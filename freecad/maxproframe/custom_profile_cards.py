@@ -210,6 +210,7 @@ def _extract_custom_section_face_from_fcstd(fcstd_path, object_name=None):
 
     import xml.etree.ElementTree as ET
     import zipfile
+
     import Part
 
     try:
@@ -263,8 +264,9 @@ def _extract_custom_section_face_from_fcstd(fcstd_path, object_name=None):
     return None
 
 
-def render_custom_section_thumbnail(folder_path, asset_path, object_name, width=160, height=100, cache=None,
-                                    section_cache=None):
+def render_custom_section_thumbnail(
+    folder_path, asset_path, object_name, width=160, height=100, cache=None, section_cache=None
+):
     """Safely renders a custom section thumbnail using an isolated temporary copy
 
     without modifying user sketches, libraries, open documents, active document, or selection.
@@ -487,8 +489,7 @@ class _PreviewLabel(QtWidgets.QLabel):
         rect = self.contentsRect()
         width = round(colored.width() / colored.devicePixelRatio())
         height = round(colored.height() / colored.devicePixelRatio())
-        painter.drawPixmap(rect.x() + (rect.width() - width) // 2,
-                           rect.y() + (rect.height() - height) // 2, colored)
+        painter.drawPixmap(rect.x() + (rect.width() - width) // 2, rect.y() + (rect.height() - height) // 2, colored)
         painter.end()
 
 
@@ -500,10 +501,17 @@ class _EditButton(QtWidgets.QToolButton):
         painter = QtGui.QPainter(mask)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
         painter.setPen(QtGui.QPen(QtCore.Qt.black, 1.5))
-        painter.drawPolygon(QtGui.QPolygonF([
-            QtCore.QPointF(4, 11), QtCore.QPointF(11, 4), QtCore.QPointF(14, 7),
-            QtCore.QPointF(7, 14), QtCore.QPointF(3, 15),
-        ]))
+        painter.drawPolygon(
+            QtGui.QPolygonF(
+                [
+                    QtCore.QPointF(4, 11),
+                    QtCore.QPointF(11, 4),
+                    QtCore.QPointF(14, 7),
+                    QtCore.QPointF(7, 14),
+                    QtCore.QPointF(3, 15),
+                ]
+            )
+        )
         painter.drawLine(10, 5, 13, 8)
         painter.drawLine(4, 11, 7, 14)
         painter.end()

@@ -387,9 +387,11 @@ class TestCreateProfileApply(unittest.TestCase):
                             [
                                 (
                                     "Crear perfil" if spanish else "Create Profile",
-                                    "Seleccione aristas o defina la longitud para crear un perfil"
-                                    if spanish
-                                    else "Select Edges or set Length to create a profile",
+                                    (
+                                        "Seleccione aristas o defina la longitud para crear un perfil"
+                                        if spanish
+                                        else "Select Edges or set Length to create a profile"
+                                    ),
                                 )
                             ],
                         )
