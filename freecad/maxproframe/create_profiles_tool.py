@@ -107,7 +107,8 @@ class _TaskPreviewLabel(QtWidgets.QLabel):
     """Keep original image data public; fit and optionally tint only at paint time."""
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        widget_parent = parent if isinstance(parent, QtWidgets.QWidget) else None
+        super().__init__(widget_parent)
         self._source = None
         self.is_custom = False
 
@@ -162,8 +163,12 @@ class BaseProfileTaskPanel(ABC):
         else:
             old_image = raw_image
 
-        parent_widget = old_image.parentWidget() if hasattr(old_image, "parentWidget") else self.form[0]
-        image = _TaskPreviewLabel(parent_widget)
+        parent_widget = (
+            old_image.parentWidget()
+            if hasattr(old_image, "parentWidget") and isinstance(old_image, QtWidgets.QWidget)
+            else self.form[0]
+        )
+        image = _TaskPreviewLabel(parent_widget if isinstance(parent_widget, QtWidgets.QWidget) else self.form[0])
         if hasattr(old_image, "objectName"):
             image.setObjectName(old_image.objectName())
         if hasattr(old_image, "alignment"):
