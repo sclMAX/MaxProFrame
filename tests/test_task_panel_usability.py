@@ -433,9 +433,15 @@ class TestTaskPanelUsability(unittest.TestCase):
             self.assertLess(
                 abs(label.mapToGlobal(QtCore.QPoint()).y() - combo.mapToGlobal(QtCore.QPoint()).y()), combo.height()
             )
-        for widget in (panel.alignment_widget, panel.form_proxy.combo_rotation):
+        for widget in (
+            panel.alignment_widget,
+            panel.form_proxy.combo_rotation,
+            panel.form_proxy.cb_mirror_h,
+            panel.form_proxy.cb_mirror_v,
+        ):
             self.assertTrue(
-                widget.isVisibleTo(panel.form[0]), "Alignment widget and rotation belong in the expanded primary panel"
+                widget.isVisibleTo(panel.form[0]),
+                "Alignment widget, rotation and mirrors belong in the expanded primary placement panel",
             )
         for widget in (panel.form_proxy.group_anchor, panel.form_proxy.label_image):
             self.assertFalse(
@@ -449,6 +455,7 @@ class TestTaskPanelUsability(unittest.TestCase):
             panel.form_proxy.cb_size_in_name,
             panel.form_proxy.cb_prefix_profile_in_name,
             price,
+            panel.form_proxy.cb_combined_bevel,
         ):
             root = widget.window()
             self.assertFalse(widget.isVisibleTo(root), "Advanced controls start collapsed")

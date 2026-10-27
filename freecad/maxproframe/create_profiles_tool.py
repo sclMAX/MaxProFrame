@@ -344,13 +344,37 @@ class BaseProfileTaskPanel(ABC):
             placement.addRow(self.alignment_widget)
         self.alignment_widget.anchorClicked.connect(self._on_alignment_clicked)
         sec_gb3 = _safe_unwrap_widget(getattr(second, "groupBox_3", None))
+        gb3_layout = sec_gb3.layout() if sec_gb3 is not None and hasattr(sec_gb3, "layout") else None
         sec_rot = _safe_unwrap_widget(getattr(second, "widget_rotation", None))
-        if sec_gb3 is not None and hasattr(sec_gb3, "layout"):
-            gb3_layout = sec_gb3.layout()
-            if gb3_layout is not None and hasattr(gb3_layout, "removeWidget") and sec_rot is not None:
-                gb3_layout.removeWidget(sec_rot)
+        if gb3_layout is not None and hasattr(gb3_layout, "removeWidget") and sec_rot is not None:
+            gb3_layout.removeWidget(sec_rot)
         if placement is not None and hasattr(placement, "addRow") and sec_rot is not None:
             placement.addRow(sec_rot)
+
+        # Move cross-section mirroring into Placement right below rotation
+        sec_mh = _safe_unwrap_widget(getattr(second, "cb_mirror_h", None))
+        sec_mv = _safe_unwrap_widget(getattr(second, "cb_mirror_v", None))
+        if gb3_layout is not None:
+            if sec_mh is not None:
+                _safe_remove_layout_widget(gb3_layout, sec_mh)
+            if sec_mv is not None:
+                _safe_remove_layout_widget(gb3_layout, sec_mv)
+        parent_placement = gb4 if isinstance(gb4, QtWidgets.QWidget) else first
+        mirror_row = QtWidgets.QHBoxLayout()
+        mirror_row.setContentsMargins(0, 0, 0, 0)
+        mirror_row.setSpacing(12)
+        if sec_mh is not None:
+            sec_mh.setParent(parent_placement)
+            sec_mh.setVisible(True)
+            mirror_row.addWidget(sec_mh)
+        if sec_mv is not None:
+            sec_mv.setParent(parent_placement)
+            sec_mv.setVisible(True)
+            mirror_row.addWidget(sec_mv)
+        mirror_row.addStretch()
+        if placement is not None and hasattr(placement, "addRow"):
+            placement.addRow(mirror_row)
+
         sec_anc = _safe_unwrap_widget(getattr(second, "group_anchor", None))
         if sec_anc is not None and hasattr(sec_anc, "hide"):
             sec_anc.hide()
@@ -374,6 +398,31 @@ class BaseProfileTaskPanel(ABC):
         price_row.addRow(first.label_3, first.sb_unitprice)
         advanced_layout.addLayout(price_row)
         first.label_3.setText("Price per metre")
+
+        # Move historical prototype combined-bevel option into Advanced
+        sec_bevel = _safe_unwrap_widget(getattr(second, "cb_combined_bevel", None))
+        if gb3_layout is not None and sec_bevel is not None:
+            _safe_remove_layout_widget(gb3_layout, sec_bevel)
+            advanced_layout.addWidget(sec_bevel)
+
+        # Compact remaining profile options (fillets and pre-extend) into a single row
+        sec_fillet = _safe_unwrap_widget(getattr(second, "cb_make_fillet", None))
+        sec_extend = _safe_unwrap_widget(getattr(second, "cb_pre_extend", None))
+        if gb3_layout is not None:
+            if sec_fillet is not None:
+                _safe_remove_layout_widget(gb3_layout, sec_fillet)
+            if sec_extend is not None:
+                _safe_remove_layout_widget(gb3_layout, sec_extend)
+            options_row = QtWidgets.QHBoxLayout()
+            options_row.setContentsMargins(0, 0, 0, 0)
+            options_row.setSpacing(12)
+            if sec_fillet is not None:
+                options_row.addWidget(sec_fillet)
+            if sec_extend is not None:
+                options_row.addWidget(sec_extend)
+            options_row.addStretch()
+            gb3_layout.addLayout(options_row)
+
         self.advanced_content.hide()
         second.layout().insertWidget(1, self.advanced_button)
         second.layout().insertWidget(2, self.advanced_content)
@@ -597,9 +646,7 @@ class BaseProfileTaskPanel(ABC):
                 section = build_section_face(parameters, custom_face=face)
                 self.alignment_widget.set_section(section)
                 self.alignment_widget.setToolTip(
-                    translate(
-                        "frameforge", "Click a section bounding-box anchor to align profile (or use arrow keys)."
-                    )
+                    translate("frameforge", "Click a section bounding-box anchor to align profile (or use arrow keys).")
                 )
             except Exception as error:
                 self.alignment_widget.set_section(None)
