@@ -61,6 +61,28 @@ def load_ui_file(path):
     raise RuntimeError(f"Unable to load UI file: {path}")
 
 
+def _safe_remove_layout_widget(layout, widget_or_item):
+    """Safely removes a widget or layout item from layout, handling PySide QWidgetItem wrapper aliasing."""
+    if layout is None or widget_or_item is None:
+        return None
+    widget = widget_or_item
+    if hasattr(widget_or_item, "widget") and callable(widget_or_item.widget):
+        w = widget_or_item.widget()
+        if w is not None:
+            widget = w
+    if hasattr(layout, "removeItem") and isinstance(widget_or_item, QtWidgets.QLayoutItem):
+        try:
+            layout.removeItem(widget_or_item)
+        except Exception:
+            pass
+    elif hasattr(layout, "removeWidget") and isinstance(widget, QtWidgets.QWidget):
+        try:
+            layout.removeWidget(widget)
+        except Exception:
+            pass
+    return widget
+
+
 class _TranslatedFamilyPresentation(QtWidgets.QStyledItemDelegate):
     """Translate only native painting; combo text and catalog keys stay canonical."""
 
@@ -165,14 +187,14 @@ class BaseProfileTaskPanel(ABC):
         # Keep the designer widgets (and FormProxy membership) when moving rows.
         catalog = first.groupBox.layout()
         rows = QtWidgets.QFormLayout()
-        for label, combo in (
+        for label_ref, combo_ref in (
             (first.label_10, first.combo_material),
             (first.label, first.combo_family),
             (first.label_2, first.combo_size),
         ):
-            catalog.removeWidget(label)
-            catalog.removeWidget(combo)
-            rows.addRow(label, combo)
+            w_label = _safe_remove_layout_widget(catalog, label_ref) or label_ref
+            w_combo = _safe_remove_layout_widget(catalog, combo_ref) or combo_ref
+            rows.addRow(w_label, w_combo)
         catalog.insertLayout(0, rows)
         first.label_10.setText("Library")
         self.material_info = QtWidgets.QLabel(first.groupBox)
