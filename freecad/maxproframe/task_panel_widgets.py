@@ -199,25 +199,6 @@ class SectionHeaderButton(QtWidgets.QToolButton):
         self.setArrowType(QtCore.Qt.DownArrow if expanded else QtCore.Qt.RightArrow)
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.setCursor(QtCore.Qt.PointingHandCursor)
-        self.setStyleSheet(
-            """
-            QToolButton {
-                font-weight: bold;
-                font-size: 11px;
-                padding: 4px 6px;
-                border: 1px solid palette(mid);
-                border-radius: 3px;
-                background: palette(button);
-                text-align: left;
-            }
-            QToolButton:hover {
-                background: palette(light);
-            }
-            QToolButton:checked {
-                background: palette(button);
-            }
-            """
-        )
         self.toggled.connect(self._on_toggled)
         if target_widget is not None:
             target_widget.setVisible(expanded)
@@ -293,21 +274,18 @@ class EdgeItemWidget(QtWidgets.QWidget):
         layout.setSpacing(6)
 
         self.lbl_name = QtWidgets.QLabel(f"• {display_name}", self)
-        self.lbl_name.setStyleSheet("font-size: 11px;")
         layout.addWidget(self.lbl_name, 1)
 
         self.lbl_badge = QtWidgets.QLabel("Rot: 0°", self)
-        self.lbl_badge.setStyleSheet(
-            "font-size: 10px; font-weight: bold; background: palette(mid); "
-            "color: palette(bright-text); padding: 1px 5px; border-radius: 2px;"
-        )
+        f_badge = self.lbl_badge.font()
+        f_badge.setBold(True)
+        self.lbl_badge.setFont(f_badge)
         layout.addWidget(self.lbl_badge)
 
         self.btn_remove = QtWidgets.QToolButton(self)
         self.btn_remove.setText("×")
         self.btn_remove.setToolTip(translate("frameforge", "Remove edge"))
         self.btn_remove.setFixedSize(18, 18)
-        self.btn_remove.setStyleSheet("font-size: 12px; font-weight: bold; border: none; padding: 0;")
         self.btn_remove.clicked.connect(lambda: self.removeClicked.emit(self.edge_key))
         layout.addWidget(self.btn_remove)
 
@@ -339,14 +317,15 @@ class EdgeListWidget(QtWidgets.QWidget):
         tb_layout = QtWidgets.QHBoxLayout()
         tb_layout.setContentsMargins(0, 0, 0, 0)
         self.lbl_title = QtWidgets.QLabel(translate("frameforge", "Selected edges:"), self)
-        self.lbl_title.setStyleSheet("font-size: 11px; font-weight: bold;")
+        f_title = self.lbl_title.font()
+        f_title.setBold(True)
+        self.lbl_title.setFont(f_title)
         tb_layout.addWidget(self.lbl_title)
         tb_layout.addStretch()
 
         self.btn_reset = QtWidgets.QToolButton(self)
         self.btn_reset.setText(translate("frameforge", "Reset to global"))
         self.btn_reset.setToolTip(translate("frameforge", "Reset selected edge placement to global values"))
-        self.btn_reset.setStyleSheet("font-size: 10px;")
         self.btn_reset.clicked.connect(self.resetRequested.emit)
         tb_layout.addWidget(self.btn_reset)
         layout.addLayout(tb_layout)
@@ -354,10 +333,6 @@ class EdgeListWidget(QtWidgets.QWidget):
         # List widget
         self.list_widget = QtWidgets.QListWidget(self)
         self.list_widget.setMaximumHeight(115)
-        self.list_widget.setStyleSheet(
-            "QListWidget { border: 1px solid palette(mid); border-radius: 3px; } "
-            "QListWidget::item:selected { background: palette(highlight); color: palette(highlighted-text); }"
-        )
         self.list_widget.currentItemChanged.connect(self._on_item_changed)
         layout.addWidget(self.list_widget)
 

@@ -362,9 +362,9 @@ class BaseProfileTaskPanel(ABC):
         self.label_profile_name = QtWidgets.QLabel(parent_placement)
         self.label_profile_name.setObjectName("label_profile_name")
         self.label_profile_name.setAlignment(QtCore.Qt.AlignCenter)
-        self.label_profile_name.setStyleSheet(
-            "font-weight: bold; font-size: 11px; padding: 2px 4px; background: palette(mid); border-radius: 3px;"
-        )
+        f_pname = self.label_profile_name.font()
+        f_pname.setBold(True)
+        self.label_profile_name.setFont(f_pname)
         if hasattr(first, "combo_size"):
             self.label_profile_name.setText(f"{translate('frameforge', 'Profile')}: {first.combo_size.currentText()}")
         if placement is not None and hasattr(placement, "addRow"):
@@ -415,40 +415,56 @@ class BaseProfileTaskPanel(ABC):
         self.btn_pre_extend.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
         self.btn_pre_extend.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
 
-        toggle_style = """
-        QToolButton {
-            padding: 3px 6px;
-            font-size: 11px;
-            border: 1px solid palette(mid);
-            border-radius: 3px;
-        }
-        QToolButton:checked {
-            background-color: palette(highlight);
-            color: palette(highlighted-text);
-            font-weight: bold;
-            border-color: palette(highlight);
-        }
-        """
-        self.btn_mirror_h.setStyleSheet(toggle_style)
-        self.btn_mirror_v.setStyleSheet(toggle_style)
-        self.btn_pre_extend.setStyleSheet(toggle_style)
+        def _sync_btn_mh(checked):
+            if sec_mh is not None and sec_mh.isChecked() != checked:
+                sec_mh.setChecked(checked)
 
+        def _sync_sec_mh(checked):
+            if self.btn_mirror_h.isChecked() != checked:
+                self.btn_mirror_h.setChecked(checked)
+
+        def _sync_btn_mv(checked):
+            if sec_mv is not None and sec_mv.isChecked() != checked:
+                sec_mv.setChecked(checked)
+
+        def _sync_sec_mv(checked):
+            if self.btn_mirror_v.isChecked() != checked:
+                self.btn_mirror_v.setChecked(checked)
+
+        def _sync_btn_pe(checked):
+            if sec_extend is not None and sec_extend.isChecked() != checked:
+                sec_extend.setChecked(checked)
+
+        def _sync_sec_pe(checked):
+            if self.btn_pre_extend.isChecked() != checked:
+                self.btn_pre_extend.setChecked(checked)
+
+        self.btn_mirror_h.toggled.connect(_sync_btn_mh)
         if sec_mh is not None:
-            sec_mh.hide()
-            self.btn_mirror_h.toggled.connect(sec_mh.setChecked)
-            sec_mh.toggled.connect(self.btn_mirror_h.setChecked)
+            sec_mh.setParent(parent_placement)
+            sec_mh.setFixedSize(0, 0)
+            sec_mh.setVisible(True)
+            sec_mh.toggled.connect(_sync_sec_mh)
+
+        self.btn_mirror_v.toggled.connect(_sync_btn_mv)
         if sec_mv is not None:
-            sec_mv.hide()
-            self.btn_mirror_v.toggled.connect(sec_mv.setChecked)
-            sec_mv.toggled.connect(self.btn_mirror_v.setChecked)
+            sec_mv.setParent(parent_placement)
+            sec_mv.setFixedSize(0, 0)
+            sec_mv.setVisible(True)
+            sec_mv.toggled.connect(_sync_sec_mv)
+
+        self.btn_pre_extend.toggled.connect(_sync_btn_pe)
         if sec_extend is not None:
             sec_extend.hide()
-            self.btn_pre_extend.toggled.connect(sec_extend.setChecked)
-            sec_extend.toggled.connect(self.btn_pre_extend.setChecked)
+            sec_extend.toggled.connect(_sync_sec_pe)
 
         mirror_row = QtWidgets.QHBoxLayout()
         mirror_row.setContentsMargins(0, 4, 0, 0)
         mirror_row.setSpacing(6)
+        if sec_mh is not None:
+            mirror_row.addWidget(sec_mh)
+        if sec_mv is not None:
+            mirror_row.addWidget(sec_mv)
         mirror_row.addWidget(self.btn_mirror_h)
         mirror_row.addWidget(self.btn_mirror_v)
         mirror_row.addWidget(self.btn_pre_extend)
@@ -542,16 +558,10 @@ class BaseProfileTaskPanel(ABC):
         self.form_proxy.combo_rotation.blockSignals(not enable)
         if hasattr(self, "btn_mirror_h"):
             self.btn_mirror_h.blockSignals(not enable)
-            if enable:
-                self.btn_mirror_h.setChecked(self.form_proxy.cb_mirror_h.isChecked())
         if hasattr(self, "btn_mirror_v"):
             self.btn_mirror_v.blockSignals(not enable)
-            if enable:
-                self.btn_mirror_v.setChecked(self.form_proxy.cb_mirror_v.isChecked())
         if hasattr(self, "btn_pre_extend"):
             self.btn_pre_extend.blockSignals(not enable)
-            if enable and hasattr(self.form_proxy, "cb_pre_extend"):
-                self.btn_pre_extend.setChecked(self.form_proxy.cb_pre_extend.isChecked())
         for ax in range(3):
             for ay in range(3):
                 getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}").blockSignals(not enable)
@@ -658,6 +668,12 @@ class BaseProfileTaskPanel(ABC):
             self.form_proxy.cb_prefix_profile_in_name.stateChanged.connect(self.on_input_changed)
         finally:
             self._initializing = False
+        if hasattr(self, "btn_mirror_h"):
+            self.btn_mirror_h.setChecked(self.form_proxy.cb_mirror_h.isChecked())
+        if hasattr(self, "btn_mirror_v"):
+            self.btn_mirror_v.setChecked(self.form_proxy.cb_mirror_v.isChecked())
+        if hasattr(self, "btn_pre_extend") and hasattr(self.form_proxy, "cb_pre_extend"):
+            self.btn_pre_extend.setChecked(self.form_proxy.cb_pre_extend.isChecked())
         self._refresh_alignment()
 
     def _on_alignment_clicked(self, ax, ay):
@@ -1270,21 +1286,21 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
             self.notice_uniform = QtWidgets.QFrame(gb4)
             self.notice_uniform.setObjectName("notice_uniform")
-            self.notice_uniform.setStyleSheet(
-                "QFrame { background: rgba(42, 111, 201, 0.12); border: 1px dashed palette(highlight); "
-                "border-radius: 3px; padding: 4px; }"
-            )
+            self.notice_uniform.setFrameShape(QtWidgets.QFrame.StyledPanel)
+            self.notice_uniform.setFrameShadow(QtWidgets.QFrame.Sunken)
             notice_layout = QtWidgets.QVBoxLayout(self.notice_uniform)
             notice_layout.setContentsMargins(6, 6, 6, 6)
             notice_layout.setSpacing(2)
 
             self.label_uniform_count = QtWidgets.QLabel(self.notice_uniform)
             self.label_uniform_count.setObjectName("label_uniform_count")
-            self.label_uniform_count.setStyleSheet("font-weight: bold; font-size: 11px;")
+            font_cnt = self.label_uniform_count.font()
+            font_cnt.setBold(True)
+            self.label_uniform_count.setFont(font_cnt)
             self.label_uniform_count.setText(translate("frameforge", "🎯 0 edges selected"))
 
             self.label_uniform_note = QtWidgets.QLabel(self.notice_uniform)
-            self.label_uniform_note.setStyleSheet("font-size: 10px; color: palette(mid);")
+            self.label_uniform_note.setObjectName("label_uniform_note")
             self.label_uniform_note.setWordWrap(True)
             self.label_uniform_note.setText(
                 translate("frameforge", "Placement properties will apply uniformly to all edges.")

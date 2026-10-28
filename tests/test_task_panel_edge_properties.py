@@ -41,6 +41,10 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
     def tearDown(self):
         for panel in self.panels:
             try:
+                panel.reject()
+            except Exception:
+                pass
+            try:
                 panel.clean()
             except Exception:
                 pass
@@ -49,8 +53,19 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
                     f.close()
                 except Exception:
                     pass
+        if hasattr(Gui, "Selection"):
+            try:
+                Gui.Selection.clearSelection()
+            except Exception:
+                pass
         for doc_name in self.created_docs:
             try:
+                doc = App.getDocument(doc_name) if hasattr(App, "getDocument") else None
+                if doc:
+                    try:
+                        doc.abortTransaction()
+                    except Exception:
+                        pass
                 App.closeDocument(doc_name)
             except Exception:
                 pass
