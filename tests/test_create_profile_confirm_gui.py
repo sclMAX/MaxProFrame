@@ -133,6 +133,7 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
                 Gui.Control.closeDialog()
             except Exception:
                 pass
+        self._pump_events(100)
 
         # Clean tracked panels
         for panel in list(self.panels):
@@ -300,10 +301,24 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
 
     def _find_dialog_button(self, button_role):
         """Finds standard button in QDialogButtonBox child of Gui MainWindow."""
+        # Prefer visible button boxes and visible buttons
         for box in Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox):
-            btn = box.button(button_role)
-            if btn is not None:
-                return btn
+            try:
+                if not box.isVisible():
+                    continue
+                btn = box.button(button_role)
+                if btn is not None and btn.isVisible():
+                    return btn
+            except Exception:
+                continue
+        # Fallback if visibility filtering in offscreen returned none
+        for box in Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox):
+            try:
+                btn = box.button(button_role)
+                if btn is not None:
+                    return btn
+            except Exception:
+                continue
         return None
 
     def _dismiss_active_modals(self):
