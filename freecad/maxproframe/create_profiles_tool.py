@@ -26,6 +26,17 @@ from freecad.maxproframe.library_manager import LibraryManager, get_canonical_fa
 from freecad.maxproframe.profile import Profile, ViewProviderCustomProfile, ViewProviderProfile
 from freecad.maxproframe.section_library import find_existing_section_sketch, get_or_import_section_sketch
 from freecad.maxproframe.section_outline import build_section_face
+from freecad.maxproframe.task_panel_widgets import (
+    EdgeListWidget,
+    ModeSwitchWidget,
+    SectionHeaderButton,
+    create_advanced_icon,
+    create_mirror_h_icon,
+    create_mirror_v_icon,
+    create_placement_icon,
+    create_pre_extend_icon,
+    create_profile_section_icon,
+)
 
 
 def _bind_ui_children(form, path):
@@ -346,35 +357,83 @@ class BaseProfileTaskPanel(ABC):
         if placement is not None and hasattr(placement, "addRow"):
             placement.addRow(self.alignment_widget)
         self.alignment_widget.anchorClicked.connect(self._on_alignment_clicked)
+
+        parent_placement = gb4 if isinstance(gb4, QtWidgets.QWidget) else first
+        self.label_profile_name = QtWidgets.QLabel(parent_placement)
+        self.label_profile_name.setObjectName("label_profile_name")
+        self.label_profile_name.setAlignment(QtCore.Qt.AlignCenter)
+        f_pname = self.label_profile_name.font()
+        f_pname.setBold(True)
+        self.label_profile_name.setFont(f_pname)
+        if hasattr(first, "combo_size"):
+            self.label_profile_name.setText(f"{translate('frameforge', 'Profile')}: {first.combo_size.currentText()}")
+        if placement is not None and hasattr(placement, "addRow"):
+            placement.addRow(self.label_profile_name)
+
         sec_gb3 = _safe_unwrap_widget(getattr(second, "groupBox_3", None))
         gb3_layout = sec_gb3.layout() if sec_gb3 is not None and hasattr(sec_gb3, "layout") else None
         sec_rot = _safe_unwrap_widget(getattr(second, "widget_rotation", None))
-        if gb3_layout is not None and hasattr(gb3_layout, "removeWidget") and sec_rot is not None:
-            gb3_layout.removeWidget(sec_rot)
-        if placement is not None and hasattr(placement, "addRow") and sec_rot is not None:
-            placement.addRow(sec_rot)
+        if isinstance(sec_rot, QtWidgets.QWidget):
+            _safe_remove_layout_widget(gb3_layout, sec_rot)
+            if placement is not None and hasattr(placement, "addRow"):
+                placement.addRow(sec_rot)
 
-        # Move cross-section mirroring into Placement right below rotation
+        # Leave legacy checkboxes in second, hidden without cross-form reparenting
         sec_mh = _safe_unwrap_widget(getattr(second, "cb_mirror_h", None))
         sec_mv = _safe_unwrap_widget(getattr(second, "cb_mirror_v", None))
-        if gb3_layout is not None:
-            if sec_mh is not None:
-                _safe_remove_layout_widget(gb3_layout, sec_mh)
-            if sec_mv is not None:
-                _safe_remove_layout_widget(gb3_layout, sec_mv)
-        parent_placement = gb4 if isinstance(gb4, QtWidgets.QWidget) else first
+        sec_extend = _safe_unwrap_widget(getattr(second, "cb_pre_extend", None))
+        if sec_mh is not None and hasattr(sec_mh, "hide"):
+            sec_mh.hide()
+        if sec_mv is not None and hasattr(sec_mv, "hide"):
+            sec_mv.hide()
+        if sec_extend is not None and hasattr(sec_extend, "hide"):
+            sec_extend.hide()
+
+        self.btn_mirror_h = QtWidgets.QToolButton(parent_placement)
+        self.btn_mirror_h.setObjectName("btn_mirror_h")
+        self.btn_mirror_h.setText(f" {translate('frameforge', 'Mirror H')}")
+        self.btn_mirror_h.setIcon(create_mirror_h_icon())
+        self.btn_mirror_h.setCheckable(True)
+        self.btn_mirror_h.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+        self.btn_mirror_h.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+
+        self.btn_mirror_v = QtWidgets.QToolButton(parent_placement)
+        self.btn_mirror_v.setObjectName("btn_mirror_v")
+        self.btn_mirror_v.setText(f" {translate('frameforge', 'Mirror V')}")
+        self.btn_mirror_v.setIcon(create_mirror_v_icon())
+        self.btn_mirror_v.setCheckable(True)
+        self.btn_mirror_v.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+        self.btn_mirror_v.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+
+        self.btn_pre_extend = QtWidgets.QToolButton(parent_placement)
+        self.btn_pre_extend.setObjectName("btn_pre_extend")
+        self.btn_pre_extend.setText(f" {translate('frameforge', 'Extend')}")
+        self.btn_pre_extend.setIcon(create_pre_extend_icon())
+        self.btn_pre_extend.setCheckable(True)
+        self.btn_pre_extend.setChecked(False)
+        self.btn_pre_extend.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+        self.btn_pre_extend.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+
+        # QToolButton uses toggled; alias stateChanged so legacy checkbox callers connect seamlessly
+        self.btn_mirror_h.stateChanged = self.btn_mirror_h.toggled
+        self.btn_mirror_v.stateChanged = self.btn_mirror_v.toggled
+        self.btn_pre_extend.stateChanged = self.btn_pre_extend.toggled
+
+        # Bind to form[0] so FormProxy and visibility contracts resolve to placement toggle buttons
+        first.cb_mirror_h = self.btn_mirror_h
+        first.cb_mirror_v = self.btn_mirror_v
+        first.cb_pre_extend = self.btn_pre_extend
+        self.form_proxy.members["cb_mirror_h"] = first
+        self.form_proxy.members["cb_mirror_v"] = first
+        self.form_proxy.members["cb_pre_extend"] = first
+
         mirror_row = QtWidgets.QHBoxLayout()
-        mirror_row.setContentsMargins(0, 0, 0, 0)
-        mirror_row.setSpacing(12)
-        if sec_mh is not None:
-            sec_mh.setParent(parent_placement)
-            sec_mh.setVisible(True)
-            mirror_row.addWidget(sec_mh)
-        if sec_mv is not None:
-            sec_mv.setParent(parent_placement)
-            sec_mv.setVisible(True)
-            mirror_row.addWidget(sec_mv)
-        mirror_row.addStretch()
+        mirror_row.setContentsMargins(0, 4, 0, 0)
+        mirror_row.setSpacing(6)
+        mirror_row.addWidget(self.btn_mirror_h)
+        mirror_row.addWidget(self.btn_mirror_v)
+        mirror_row.addWidget(self.btn_pre_extend)
+
         if placement is not None and hasattr(placement, "addRow"):
             placement.addRow(mirror_row)
 
@@ -382,13 +441,16 @@ class BaseProfileTaskPanel(ABC):
         if sec_anc is not None and hasattr(sec_anc, "hide"):
             sec_anc.hide()
 
-        self.advanced_button = QtWidgets.QToolButton(second)
+        self.advanced_button = SectionHeaderButton(
+            translate("frameforge", "Advanced options"),
+            create_advanced_icon(),
+            target_widget=None,
+            parent=second,
+            expanded=False,
+        )
         self.advanced_button.setObjectName("button_advanced")
-        self.advanced_button.setText(translate("frameforge", "Advanced"))
-        self.advanced_button.setCheckable(True)
-        self.advanced_button.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
-        self.advanced_button.setArrowType(QtCore.Qt.RightArrow)
         self.advanced_content = QtWidgets.QWidget(second)
+        self.advanced_button.target_widget = self.advanced_content
         advanced_layout = QtWidgets.QVBoxLayout(self.advanced_content)
         advanced_layout.setContentsMargins(0, 0, 0, 0)
         second_layout = second.layout() if hasattr(second, "layout") and callable(second.layout) else None
@@ -417,33 +479,15 @@ class BaseProfileTaskPanel(ABC):
             _safe_remove_layout_widget(gb3_layout, sec_bevel)
             advanced_layout.addWidget(sec_bevel)
 
-        # Compact remaining profile options (fillets and pre-extend) into a single row
+        # Compact remaining profile options (fillets) into gb3_layout
         sec_fillet = _safe_unwrap_widget(getattr(second, "cb_make_fillet", None))
-        sec_extend = _safe_unwrap_widget(getattr(second, "cb_pre_extend", None))
-        if gb3_layout is not None:
-            if sec_fillet is not None:
-                _safe_remove_layout_widget(gb3_layout, sec_fillet)
-            if sec_extend is not None:
-                _safe_remove_layout_widget(gb3_layout, sec_extend)
-            options_row = QtWidgets.QHBoxLayout()
-            options_row.setContentsMargins(0, 0, 0, 0)
-            options_row.setSpacing(12)
-            if sec_fillet is not None:
-                options_row.addWidget(sec_fillet)
-            if sec_extend is not None:
-                options_row.addWidget(sec_extend)
-            options_row.addStretch()
-            gb3_layout.addLayout(options_row)
+        if gb3_layout is not None and sec_fillet is not None:
+            _safe_remove_layout_widget(gb3_layout, sec_fillet)
+            gb3_layout.addWidget(sec_fillet)
 
         self.advanced_content.hide()
         second.layout().insertWidget(1, self.advanced_button)
         second.layout().insertWidget(2, self.advanced_content)
-        self.advanced_button.toggled.connect(self.advanced_content.setVisible)
-        self.advanced_button.toggled.connect(
-            lambda expanded: self.advanced_button.setArrowType(
-                QtCore.Qt.DownArrow if expanded else QtCore.Qt.RightArrow
-            )
-        )
         # UI files use the generic Dialog context; product copy uses frameforge.
         for form in self.form:
             form.setWindowTitle(translate("frameforge", form.windowTitle()))
@@ -477,6 +521,12 @@ class BaseProfileTaskPanel(ABC):
         self.form_proxy.cb_mirror_h.blockSignals(not enable)
         self.form_proxy.cb_mirror_v.blockSignals(not enable)
         self.form_proxy.combo_rotation.blockSignals(not enable)
+        if hasattr(self, "btn_mirror_h"):
+            self.btn_mirror_h.blockSignals(not enable)
+        if hasattr(self, "btn_mirror_v"):
+            self.btn_mirror_v.blockSignals(not enable)
+        if hasattr(self, "btn_pre_extend"):
+            self.btn_pre_extend.blockSignals(not enable)
         for ax in range(3):
             for ay in range(3):
                 getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}").blockSignals(not enable)
@@ -583,6 +633,12 @@ class BaseProfileTaskPanel(ABC):
             self.form_proxy.cb_prefix_profile_in_name.stateChanged.connect(self.on_input_changed)
         finally:
             self._initializing = False
+        if hasattr(self, "btn_mirror_h"):
+            self.btn_mirror_h.setChecked(self.form_proxy.cb_mirror_h.isChecked())
+        if hasattr(self, "btn_mirror_v"):
+            self.btn_mirror_v.setChecked(self.form_proxy.cb_mirror_v.isChecked())
+        if hasattr(self, "btn_pre_extend") and hasattr(self.form_proxy, "cb_pre_extend"):
+            self.btn_pre_extend.setChecked(self.form_proxy.cb_pre_extend.isChecked())
         self._refresh_alignment()
 
     def _on_alignment_clicked(self, ax, ay):
@@ -866,6 +922,10 @@ class BaseProfileTaskPanel(ABC):
                     sb.setValue(float(profile[s]))
 
             self.enable_signals(True)
+            if hasattr(self, "label_profile_name") and self.label_profile_name is not None:
+                self.label_profile_name.setText(
+                    f"{translate('frameforge', 'Profile')}: {self.form_proxy.combo_size.currentText()}"
+                )
             self.update_image()
             self.on_input_changed()
 
@@ -1007,6 +1067,20 @@ class BaseProfileTaskPanel(ABC):
         if canonical_family == "C" and hasattr(self.form_proxy, "sb_lip_length"):
             kwargs["init_lip_length"] = self.form_proxy.sb_lip_length.value()
 
+        props = self._get_properties_for_edge(None, None) if hasattr(self, "_get_properties_for_edge") else {}
+        edge_key = None
+        for k, o in getattr(self, "_objects", {}).items():
+            if o == profile:
+                edge_key = k
+                break
+        if edge_key is not None and hasattr(self, "_get_properties_for_edge"):
+            props = self._get_properties_for_edge(edge_key[0], edge_key[1])
+
+        kwargs["init_mirror_h"] = props.get("mirror_h", self.form_proxy.cb_mirror_h.isChecked())
+        kwargs["init_mirror_v"] = props.get("mirror_v", self.form_proxy.cb_mirror_v.isChecked())
+        kwargs["init_rotation"] = props.get("rotation", self.get_rotation())
+        ax, ay = props.get("anchor", self.get_anchor())
+
         profile.Proxy.set_properties(
             profile,
             self.form_proxy.sb_width.value(),
@@ -1018,8 +1092,9 @@ class BaseProfileTaskPanel(ABC):
             self.form_proxy.sb_length.value(),
             self.form_proxy.sb_weight.value(),
             self.form_proxy.sb_unitprice.value(),
-            self.form_proxy.cb_make_fillet.isChecked(),  # and self.form_proxy.family.currentText() not in ["Flat Sections", "Square", "Round Bar"],
-            *self.get_anchor(),
+            self.form_proxy.cb_make_fillet.isChecked(),
+            ax,
+            ay,
             material_name,
             canonical_family,
             self.form_proxy.combo_size.currentText(),
@@ -1069,6 +1144,12 @@ class _SnapshotWidget:
 
     def setEnabled(self, *args, **kwargs):
         pass
+
+    def setToolTip(self, *args, **kwargs):
+        pass
+
+    def toolTip(self):
+        return ""
 
 
 class _SnapshotFormProxy:
@@ -1122,6 +1203,18 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self._saved_rotation = None
         self._saved_selection = None
         self._saved_form_proxy = None
+        self._excluded_edges = set()
+        self._edge_properties = {}
+        self._global_edge_properties = {
+            "rotation": 0.0,
+            "anchor": (1, 1),
+            "mirror_h": False,
+            "mirror_v": False,
+            "pre_extend": False,
+        }
+        self._active_edge_key = None
+        self._is_per_edge_mode = False
+        self._updating_controls = False
         super().__init__()
 
     @property
@@ -1149,7 +1242,161 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         )
         self.action_guidance.setWordWrap(True)
         self.form_proxy.groupBox_apply.layout().addWidget(self.action_guidance)
+
+        gb4 = _safe_unwrap_widget(getattr(self.form[0], "groupBox_4", None))
+        placement = gb4.layout() if gb4 is not None and hasattr(gb4, "layout") else None
+        if placement is not None and hasattr(placement, "insertRow") and not hasattr(self, "mode_switch"):
+            self.mode_switch = ModeSwitchWidget(gb4)
+            self.mode_switch.setObjectName("mode_switch")
+
+            self.notice_uniform = QtWidgets.QFrame(gb4)
+            self.notice_uniform.setObjectName("notice_uniform")
+            self.notice_uniform.setFrameShape(QtWidgets.QFrame.StyledPanel)
+            self.notice_uniform.setFrameShadow(QtWidgets.QFrame.Sunken)
+            notice_layout = QtWidgets.QVBoxLayout(self.notice_uniform)
+            notice_layout.setContentsMargins(6, 6, 6, 6)
+            notice_layout.setSpacing(2)
+
+            self.label_uniform_count = QtWidgets.QLabel(self.notice_uniform)
+            self.label_uniform_count.setObjectName("label_uniform_count")
+            font_cnt = self.label_uniform_count.font()
+            font_cnt.setBold(True)
+            self.label_uniform_count.setFont(font_cnt)
+            self.label_uniform_count.setText(translate("frameforge", "🎯 0 edges selected"))
+
+            self.label_uniform_note = QtWidgets.QLabel(self.notice_uniform)
+            self.label_uniform_note.setObjectName("label_uniform_note")
+            self.label_uniform_note.setWordWrap(True)
+            self.label_uniform_note.setText(
+                translate("frameforge", "Placement properties will apply uniformly to all edges.")
+            )
+
+            notice_layout.addWidget(self.label_uniform_count)
+            notice_layout.addWidget(self.label_uniform_note)
+
+            self.edge_list_widget = EdgeListWidget(gb4)
+            self.edge_list_widget.setObjectName("edge_list_widget")
+            self.edge_list_widget.hide()
+
+            placement.insertRow(0, self.mode_switch)
+            placement.insertRow(1, self.notice_uniform)
+            placement.insertRow(2, self.edge_list_widget)
+
+            self.mode_switch.modeChanged.connect(self._on_mode_changed)
+            self.edge_list_widget.edgeSelected.connect(self._on_edge_selected)
+            self.edge_list_widget.edgeRemoved.connect(self._on_edge_removed)
+            self.edge_list_widget.resetRequested.connect(self._on_reset_edge_requested)
+
         self._set_initial_state()
+
+    def _save_controls_to_global(self):
+        self._global_edge_properties = {
+            "rotation": self.get_rotation(),
+            "anchor": self.get_anchor(),
+            "mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
+            "mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
+            "pre_extend": self.form_proxy.cb_pre_extend.isChecked(),
+        }
+
+    def _load_edge_properties_to_controls(self, edge_key):
+        if not edge_key or edge_key not in self._edge_properties:
+            return
+        props = self._edge_properties[edge_key]
+        self._updating_controls = True
+        try:
+            self.set_rotation(props.get("rotation", 0.0))
+            ax, ay = props.get("anchor", (1, 1))
+            self.set_anchor(ax, ay)
+            self.form_proxy.cb_mirror_h.setChecked(props.get("mirror_h", False))
+            self.form_proxy.cb_mirror_v.setChecked(props.get("mirror_v", False))
+            self.form_proxy.cb_pre_extend.setChecked(props.get("pre_extend", True))
+        finally:
+            self._updating_controls = False
+
+    def _on_mode_changed(self, per_edge):
+        self._is_per_edge_mode = per_edge
+        if per_edge:
+            if hasattr(self, "notice_uniform"):
+                self.notice_uniform.hide()
+            if hasattr(self, "edge_list_widget"):
+                self.edge_list_widget.show()
+                sel_key = self.edge_list_widget.get_selected_edge()
+                if not sel_key and self._edge_properties:
+                    sel_key = next(iter(self._edge_properties.keys()))
+                    self.edge_list_widget.select_edge(sel_key)
+                if sel_key:
+                    self._active_edge_key = sel_key
+                    self._load_edge_properties_to_controls(sel_key)
+        else:
+            if hasattr(self, "edge_list_widget"):
+                self.edge_list_widget.hide()
+            if hasattr(self, "notice_uniform"):
+                self.notice_uniform.show()
+            self._save_controls_to_global()
+            for key in self._edge_properties:
+                self._edge_properties[key] = dict(self._global_edge_properties)
+            self.proceed()
+
+    def _on_edge_selected(self, edge_key):
+        self._active_edge_key = edge_key
+        self._load_edge_properties_to_controls(edge_key)
+
+    def _on_reset_edge_requested(self):
+        if getattr(self, "_active_edge_key", None):
+            self._edge_properties[self._active_edge_key] = dict(self._global_edge_properties)
+            self._load_edge_properties_to_controls(self._active_edge_key)
+            if self._active_edge_key in self._objects:
+                self.update_profile(self._objects[self._active_edge_key])
+            if hasattr(self, "edge_list_widget"):
+                self.edge_list_widget.update_edge_badge(
+                    self._active_edge_key,
+                    self._global_edge_properties["rotation"],
+                    self._global_edge_properties["mirror_h"],
+                    self._global_edge_properties["mirror_v"],
+                )
+
+    def _on_edge_removed(self, edge_key):
+        if hasattr(self, "_excluded_edges"):
+            self._excluded_edges.add(edge_key)
+        if edge_key in self._edge_properties:
+            del self._edge_properties[edge_key]
+        if edge_key in self._objects:
+            o = self._objects.pop(edge_key)
+            doc = getattr(o, "Document", None) or getattr(self, "_target_doc", None) or App.ActiveDocument
+            if doc and hasattr(doc, "removeObject") and hasattr(o, "Name"):
+                try:
+                    doc.removeObject(o.Name)
+                except Exception:
+                    pass
+        if hasattr(self, "edge_list_widget"):
+            edges_list = [
+                (k, f"{k[1]} ({getattr(k[0], 'Label', 'Sketch') if k[0] else 'Sketch'})") for k in self._edge_properties
+            ]
+            self.edge_list_widget.set_edges(edges_list)
+        if hasattr(self, "label_uniform_count"):
+            self.label_uniform_count.setText(
+                f"🎯 {len(self._edge_properties)} " + translate("frameforge", "edges selected in 3D view")
+            )
+
+    def _get_properties_for_edge(self, sketch, edge):
+        if not getattr(self, "_is_per_edge_mode", False):
+            return {
+                "rotation": self.get_rotation(),
+                "anchor": self.get_anchor(),
+                "mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
+                "mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
+                "pre_extend": self.form_proxy.cb_pre_extend.isChecked(),
+            }
+        key = (sketch, edge)
+        if hasattr(self, "_edge_properties") and key in self._edge_properties:
+            return self._edge_properties[key]
+        return {
+            "rotation": self.get_rotation(),
+            "anchor": self.get_anchor(),
+            "mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
+            "mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
+            "pre_extend": self.form_proxy.cb_pre_extend.isChecked(),
+        }
 
     def _set_initial_state(self):
         self._has_pending_changes = False
@@ -1171,11 +1418,36 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             getattr(self, "_initializing", False)
             or getattr(self, "_rendering_thumbnail", False)
             or getattr(self, "_reject_called", False)
+            or getattr(self, "_updating_controls", False)
         ):
             return
         self._refresh_alignment()
         self._update_placement_guidance()
-        self.proceed()
+
+        if getattr(self, "_is_per_edge_mode", False) and getattr(self, "_active_edge_key", None):
+            key = self._active_edge_key
+            self._edge_properties[key] = {
+                "rotation": self.get_rotation(),
+                "anchor": self.get_anchor(),
+                "mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
+                "mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
+                "pre_extend": self.form_proxy.cb_pre_extend.isChecked(),
+            }
+            if hasattr(self, "edge_list_widget"):
+                self.edge_list_widget.update_edge_badge(
+                    key,
+                    self.get_rotation(),
+                    self.form_proxy.cb_mirror_h.isChecked(),
+                    self.form_proxy.cb_mirror_v.isChecked(),
+                )
+            if key in self._objects:
+                self.update_profile(self._objects[key])
+        else:
+            self._save_controls_to_global()
+            for key in self._edge_properties:
+                self._edge_properties[key] = dict(self._global_edge_properties)
+            self.proceed()
+
         has_sel = len(
             self._saved_selection
             if hasattr(self, "_saved_selection") and self._saved_selection is not None
@@ -1554,6 +1826,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 edges = self._selection_edges(sketch_sel)
 
                 for i, edge in enumerate(edges):
+                    if (sketch_sel.Object, edge) in getattr(self, "_excluded_edges", ()):
+                        continue
                     k = self.create_or_update_profile(sketch_sel.Object, edge, p_name)
                     seen_profiles.append(k)
 
@@ -1688,16 +1962,17 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             else:
                 link_sub = None
 
+            props = self._get_properties_for_edge(sketch, edge)
             init_offset = 0.0
-            if self.form_proxy.cb_pre_extend.isChecked():
+            if props.get("pre_extend", self.form_proxy.cb_pre_extend.isChecked()):
                 init_offset = max(self.form_proxy.sb_width.value(), self.form_proxy.sb_height.value())
 
             obj.MapPathParameter = 1
 
             kwargs = {
-                "init_mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
-                "init_mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
-                "init_rotation": self.get_rotation(),
+                "init_mirror_h": props.get("mirror_h", self.form_proxy.cb_mirror_h.isChecked()),
+                "init_mirror_v": props.get("mirror_v", self.form_proxy.cb_mirror_v.isChecked()),
+                "init_rotation": props.get("rotation", self.get_rotation()),
                 "init_offset_a": init_offset,
                 "init_offset_b": init_offset,
                 "catalog_family": selected_family,
@@ -1707,6 +1982,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             if canonical_family == "C" and hasattr(self.form_proxy, "sb_lip_length"):
                 kwargs["init_lip_length"] = self.form_proxy.sb_lip_length.value()
 
+            anchor_x, anchor_y = props.get("anchor", self.get_anchor())
             Profile(
                 obj,
                 self.form_proxy.sb_width.value(),
@@ -1719,7 +1995,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 self.form_proxy.sb_weight.value(),
                 self.form_proxy.sb_unitprice.value(),
                 self.form_proxy.cb_make_fillet.isChecked(),  # and self.form_proxy.family.currentText() not in ["Flat Sections", "Square", "Round Bar"],
-                *self.get_anchor(),
+                anchor_x,
+                anchor_y,
                 material_name,
                 canonical_family,
                 self.form_proxy.combo_size.currentText(),
@@ -1764,7 +2041,11 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         return [f"Edge{index + 1}" for index, _edge in enumerate(getattr(shape, "Edges", ()))]
 
     def _update_placement_guidance(self):
-        selections = Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else []
+        selections = (
+            getattr(self, "_saved_selection", None)
+            if getattr(self, "_saved_selection", None) is not None
+            else (Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else [])
+        )
         details = [(selection.ObjectName, self._selection_edges(selection)) for selection in selections]
         count = sum(len(edges) for _name, edges in details)
         if selections:
@@ -1780,8 +2061,44 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             tooltip = translate(
                 "frameforge", "Select edges or a whole object to use its edges, or enter a positive length."
             )
-        self.form_proxy.label_attach.setText(text)
-        self.form_proxy.label_attach.setToolTip(tooltip)
+        lbl = getattr(self.form_proxy, "label_attach", None)
+        if hasattr(lbl, "widget") and callable(lbl.widget):
+            lbl = lbl.widget()
+        if lbl is not None and hasattr(lbl, "setText"):
+            lbl.setText(text)
+        if lbl is not None and hasattr(lbl, "setToolTip"):
+            lbl.setToolTip(tooltip)
+
+        edges_list = []
+        for selection in selections:
+            obj = getattr(selection, "Object", None)
+            obj_label = getattr(obj, "Label", getattr(selection, "ObjectName", "Object"))
+            for edge_name in self._selection_edges(selection):
+                key = (obj, edge_name)
+                if hasattr(self, "_excluded_edges") and key in self._excluded_edges:
+                    continue
+                display_name = f"{edge_name} ({obj_label})"
+                edges_list.append((key, display_name))
+                if key not in self._edge_properties:
+                    self._edge_properties[key] = {
+                        "rotation": self.get_rotation(),
+                        "anchor": self.get_anchor(),
+                        "mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
+                        "mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
+                        "pre_extend": self.form_proxy.cb_pre_extend.isChecked(),
+                    }
+
+        valid_keys = {k for k, _ in edges_list}
+        for k in list(self._edge_properties.keys()):
+            if k not in valid_keys:
+                del self._edge_properties[k]
+
+        if hasattr(self, "edge_list_widget"):
+            self.edge_list_widget.set_edges(edges_list)
+        if hasattr(self, "label_uniform_count"):
+            self.label_uniform_count.setText(
+                f"🎯 {len(edges_list)} " + translate("frameforge", "edges selected in 3D view")
+            )
 
     def update_selection(self):
         if self._rendering_thumbnail:

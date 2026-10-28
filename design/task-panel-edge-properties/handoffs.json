@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "chosen": "01-master-detail-hybrid.html",
+  "handoffs": {
+    "01-master-detail-hybrid.html": {
+      "status": "implemented",
+      "queued": false,
+      "sentAt": "2026-10-28T09:31:46.346Z",
+      "startedAt": "2026-10-28T09:31:53.578Z",
+      "implementedAt": "2026-10-28T10:09:50.419Z",
+      "note": "Master-Detail Híbrido implementado con modo dual, lista de aristas, secciones colapsables y botones on/off con iconos vectoriales."
+    }
+  }
+}

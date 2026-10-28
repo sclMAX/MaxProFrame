@@ -118,6 +118,12 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
         )
         self.update_image()
         self.enable_signals(True)
+        if hasattr(self, "btn_mirror_h"):
+            self.btn_mirror_h.setChecked(self.form_proxy.cb_mirror_h.isChecked())
+        if hasattr(self, "btn_mirror_v"):
+            self.btn_mirror_v.setChecked(self.form_proxy.cb_mirror_v.isChecked())
+        if hasattr(self, "btn_pre_extend") and hasattr(self.form_proxy, "cb_pre_extend"):
+            self.btn_pre_extend.setChecked(self.form_proxy.cb_pre_extend.isChecked())
         self._initializing = False
 
     def open(self):

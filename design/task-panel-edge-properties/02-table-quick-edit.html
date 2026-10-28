@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Dirección 2: Tabla de Edición Rápida con Panel Completo</title>
+  <style>
+    :root {
+      --fc-bg-window: #2b2b2b;
+      --fc-bg-surface: #333333;
+      --fc-bg-input: #222222;
+      --fc-bg-input-hover: #282828;
+      --fc-bg-selection: #2a6fc9;
+      --fc-bg-selection-hover: #3882e3;
+      --fc-bg-canvas: #1c1c1c;
+      --fc-border-subtle: #3e3e3e;
+      --fc-border-medium: #4a4a4a;
+      --fc-border-focus: #2a6fc9;
+      --fc-text-primary: #e0e0e0;
+      --fc-text-secondary: #9e9e9e;
+      --fc-text-dim: #6e6e6e;
+      --fc-text-link: #4fa3ff;
+      --fc-badge-bg: #3a3a3a;
+      --fc-badge-text: #d0d0d0;
+      --fc-btn-bg: #3a3a3a;
+      --fc-btn-hover: #454545;
+      --fc-btn-active: #252525;
+      --fc-danger: #d94343;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 380px;
+      margin: 0 auto;
+      background: var(--fc-bg-window);
+      color: var(--fc-text-primary);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Cantarell", "Ubuntu", sans-serif;
+      font-size: 12px;
+      padding: 10px;
+      user-select: none;
+    }
+
+    .task-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 6px 10px 6px;
+      border-bottom: 1px solid var(--fc-border-subtle);
+      margin-bottom: 8px;
+    }
+    .task-title { font-size: 13px; font-weight: 600; }
+    .task-actions { display: flex; gap: 6px; }
+    .fc-btn {
+      background: var(--fc-btn-bg);
+      border: 1px solid var(--fc-border-medium);
+      color: var(--fc-text-primary);
+      padding: 3px 10px;
+      border-radius: 3px;
+      font-size: 11px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 24px;
+    }
+    .fc-btn:hover { background: var(--fc-btn-hover); }
+    .fc-btn-primary {
+      background: var(--fc-bg-selection);
+      border-color: var(--fc-bg-selection-hover);
+      color: #fff;
+      font-weight: 600;
+    }
+    .btn-sm { height: 20px; padding: 1px 6px; font-size: 10px; }
+
+    .fc-groupbox {
+      border: 1px solid var(--fc-border-medium);
+      border-radius: 4px;
+      padding: 10px 8px 8px 8px;
+      position: relative;
+      margin-top: 12px;
+      background: var(--fc-bg-surface);
+    }
+    .fc-groupbox-title {
+      position: absolute;
+      top: -8px;
+      left: 10px;
+      background: var(--fc-bg-surface);
+      padding: 0 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--fc-text-primary);
+    }
+
+    .fc-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .fc-label { font-size: 11px; color: var(--fc-text-primary); }
+    .fc-input {
+      background: var(--fc-bg-input);
+      border: 1px solid var(--fc-border-medium);
+      color: var(--fc-text-primary);
+      padding: 3px 6px;
+      border-radius: 2px;
+      font-size: 11px;
+      height: 24px;
+      font-family: inherit;
+    }
+    .fc-input:focus { border-color: var(--fc-border-focus); outline: none; }
+
+    .spinbox-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      width: 170px;
+    }
+    .spinbox-wrap input { width: 100%; text-align: right; padding-right: 22px; }
+    .spinbox-buttons {
+      position: absolute;
+      right: 1px; top: 1px; bottom: 1px;
+      width: 18px;
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid var(--fc-border-medium);
+      background: #2b2b2b;
+    }
+    .spin-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8px;
+      color: var(--fc-text-secondary);
+      cursor: pointer;
+    }
+    .spin-btn:hover { background: #383838; color: #fff; }
+
+    .profile-meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 8px;
+      font-size: 11px;
+      padding: 6px 8px;
+      background: var(--fc-bg-input);
+      border: 1px solid var(--fc-border-subtle);
+      border-radius: 3px;
+      margin-top: 6px;
+      margin-bottom: 4px;
+    }
+    .meta-item { display: flex; justify-content: space-between; }
+    .meta-label { color: var(--fc-text-secondary); }
+    .meta-val { font-weight: 600; color: var(--fc-text-primary); }
+
+    /* Interactive Table */
+    .table-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 4px;
+      margin-bottom: 6px;
+    }
+    .edge-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      background: var(--fc-bg-input);
+      border: 1px solid var(--fc-border-medium);
+      border-radius: 3px;
+      margin-bottom: 8px;
+    }
+    .edge-table th {
+      background: #262626;
+      color: var(--fc-text-secondary);
+      text-align: left;
+      padding: 5px 6px;
+      font-weight: 600;
+      border-bottom: 1px solid var(--fc-border-subtle);
+      font-size: 10px;
+    }
+    .edge-table td {
+      padding: 4px 6px;
+      border-bottom: 1px solid var(--fc-border-subtle);
+      vertical-align: middle;
+    }
+    .edge-table tr:last-child td { border-bottom: none; }
+    .edge-table tr.active-row td {
+      background: rgba(42, 111, 201, 0.22);
+    }
+    .edge-table tr:hover:not(.active-row) td {
+      background: var(--fc-bg-input-hover);
+    }
+    .table-select {
+      background: #1c1c1c;
+      border: 1px solid var(--fc-border-medium);
+      color: var(--fc-text-primary);
+      font-size: 11px;
+      padding: 1px 4px;
+      border-radius: 2px;
+      height: 20px;
+    }
+    .table-check-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      margin-right: 6px;
+      cursor: pointer;
+    }
+    .row-delete-btn {
+      color: var(--fc-text-dim);
+      cursor: pointer;
+      font-size: 12px;
+      padding: 0 4px;
+    }
+    .row-delete-btn:hover { color: var(--fc-danger); }
+
+    /* 2D Placement Drawing Widget */
+    .placement-canvas-wrap {
+      background: var(--fc-bg-canvas);
+      border: 1px solid var(--fc-border-subtle);
+      border-radius: 3px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 8px 0;
+      margin-bottom: 8px;
+    }
+    svg.profile-2d {
+      width: 220px;
+      height: 130px;
+      overflow: visible;
+    }
+    .dot-anchor {
+      cursor: pointer;
+      fill: #ffffff;
+      stroke: #1c1c1c;
+      stroke-width: 2;
+      transition: fill 0.15s, transform 0.15s;
+    }
+    .dot-anchor:hover { fill: #ffcc00; transform: scale(1.3); }
+    .dot-anchor.selected {
+      fill: var(--fc-bg-selection);
+      stroke: #ffffff;
+      stroke-width: 2.5;
+    }
+
+    .anchor-guide-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+    .anchor-guide-title {
+      font-weight: 600;
+      color: var(--fc-text-link);
+    }
+
+    /* Section Accordion: Configuración del perfil */
+    .section-accordion-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #383838;
+      border: 1px solid var(--fc-border-medium);
+      border-radius: 3px;
+      padding: 6px 10px;
+      margin-top: 14px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .section-accordion-header:hover { background: #404040; }
+    .accordion-title-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .fc-icon-f {
+      background: #d63636;
+      color: #fff;
+      font-weight: 900;
+      font-size: 10px;
+      width: 16px;
+      height: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 2px;
+      font-family: serif;
+    }
+    .chevron { font-size: 10px; color: var(--fc-text-secondary); transition: transform 0.2s; }
+    .checkbox-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 4px;
+      margin-bottom: 6px;
+      font-size: 11px;
+    }
+    .checkbox-row label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+
+    .advanced-subpanel {
+      margin-top: 8px;
+      padding: 8px;
+      background: var(--fc-bg-input);
+      border: 1px solid var(--fc-border-subtle);
+      border-radius: 3px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="task-header">
+    <div class="task-title">Crear Perfil</div>
+    <div class="task-actions">
+      <button class="fc-btn fc-btn-primary">OK</button>
+      <button class="fc-btn">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- PANEL 1: Perfil -->
+  <div class="fc-groupbox">
+    <span class="fc-groupbox-title">Perfil</span>
+
+    <div class="fc-row" style="margin-top: 4px;">
+      <span class="fc-label">Biblioteca</span>
+      <select class="fc-input" style="width: 220px;">
+        <option>Steel - Acero Estructural (IRAM)</option>
+        <option>Aluminum - Perfiles de Aluminio</option>
+        <option>Custom - Mis Perfiles</option>
+      </select>
+    </div>
+
+    <div class="fc-row">
+      <span class="fc-label">Familia</span>
+      <select class="fc-input" style="width: 220px;">
+        <option>Perfil C con labios (PGC)</option>
+        <option>Perfil U comercial (PNU)</option>
+        <option>Tubo Cuadrado (SHS)</option>
+      </select>
+    </div>
+
+    <div class="fc-row">
+      <span class="fc-label">Tamaño</span>
+      <select class="fc-input" style="width: 220px;">
+        <option>PGC 100 x 50 x 15 x 2.0</option>
+        <option>PGC 150 x 50 x 15 x 2.0</option>
+      </select>
+    </div>
+
+    <div class="profile-meta-grid">
+      <div class="meta-item"><span class="meta-label">Material:</span> <span class="meta-val">Acero F24</span></div>
+      <div class="meta-item"><span class="meta-label">Norma:</span> <span class="meta-val">IRAM-IAS U500-205</span></div>
+      <div class="meta-item"><span class="meta-label">Unidad:</span> <span class="meta-val">Milímetros</span></div>
+      <div class="meta-item"><span class="meta-label">Peso:</span> <span class="meta-val">3,45 kg/m</span></div>
+    </div>
+  </div>
+
+  <!-- PANEL 1: Colocación con Tabla de Edición Directa -->
+  <div class="fc-groupbox">
+    <span class="fc-groupbox-title">Colocación & Aristas</span>
+
+    <div class="table-toolbar">
+      <span style="font-size: 11px; color: var(--fc-text-secondary); font-weight: 500;">
+        Lista de aristas (<span id="count-edges">4</span>)
+      </span>
+      <div style="display: flex; gap: 4px;">
+        <button class="fc-btn btn-sm" id="btn-add-table">+ Agregar 3D</button>
+        <button class="fc-btn btn-sm" id="btn-clear-table">Limpiar</button>
+      </div>
+    </div>
+
+    <!-- Quick Edit Table -->
+    <table class="edge-table" id="edge-table">
+      <thead>
+        <tr>
+          <th style="width: 22%;">Arista</th>
+          <th style="width: 32%;">Giro</th>
+          <th style="width: 36%;">Espejos</th>
+          <th style="width: 10%; text-align: center;">×</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-edges">
+        <tr class="active-row" data-id="e1">
+          <td><strong>Edge1</strong></td>
+          <td>
+            <select class="table-select" data-prop="rot">
+              <option value="0" selected>0°</option>
+              <option value="90">90°</option>
+              <option value="180">180°</option>
+              <option value="270">270°</option>
+            </select>
+          </td>
+          <td>
+            <label class="table-check-label"><input type="checkbox" data-prop="mh"> H</label>
+            <label class="table-check-label"><input type="checkbox" data-prop="mv"> V</label>
+          </td>
+          <td style="text-align: center;"><span class="row-delete-btn" data-del="e1">×</span></td>
+        </tr>
+        <tr data-id="e2">
+          <td><strong>Edge2</strong></td>
+          <td>
+            <select class="table-select" data-prop="rot">
+              <option value="0">0°</option>
+              <option value="90" selected>90°</option>
+              <option value="180">180°</option>
+              <option value="270">270°</option>
+            </select>
+          </td>
+          <td>
+            <label class="table-check-label"><input type="checkbox" data-prop="mh"> H</label>
+            <label class="table-check-label"><input type="checkbox" data-prop="mv"> V</label>
+          </td>
+          <td style="text-align: center;"><span class="row-delete-btn" data-del="e2">×</span></td>
+        </tr>
+        <tr data-id="e3">
+          <td><strong>Edge3</strong></td>
+          <td>
+            <select class="table-select" data-prop="rot">
+              <option value="0">0°</option>
+              <option value="90">90°</option>
+              <option value="180" selected>180°</option>
+              <option value="270">270°</option>
+            </select>
+          </td>
+          <td>
+            <label class="table-check-label"><input type="checkbox" data-prop="mh" checked> H</label>
+            <label class="table-check-label"><input type="checkbox" data-prop="mv"> V</label>
+          </td>
+          <td style="text-align: center;"><span class="row-delete-btn" data-del="e3">×</span></td>
+        </tr>
+        <tr data-id="e4">
+          <td><strong>Edge4</strong></td>
+          <td>
+            <select class="table-select" data-prop="rot">
+              <option value="0">0°</option>
+              <option value="90">90°</option>
+              <option value="180">180°</option>
+              <option value="270" selected>270°</option>
+            </select>
+          </td>
+          <td>
+            <label class="table-check-label"><input type="checkbox" data-prop="mh"> H</label>
+            <label class="table-check-label"><input type="checkbox" data-prop="mv" checked> V</label>
+          </td>
+          <td style="text-align: center;"><span class="row-delete-btn" data-del="e4">×</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Sincronización de Anclaje 2D -->
+    <div class="anchor-guide-bar">
+      <span>Punto de anclaje para <span class="anchor-guide-title" id="active-edge-title">Edge1</span>:</span>
+      <button class="fc-btn" style="height: 18px; font-size: 10px; padding: 0 6px;" id="btn-copy-anchor">Aplicar a todas</button>
+    </div>
+
+    <div class="placement-canvas-wrap">
+      <svg class="profile-2d" id="svg-profile" viewBox="0 0 200 130">
+        <path d="M 120 15 L 60 15 L 60 115 L 120 115 L 120 100 L 75 100 L 75 30 L 120 30 Z"
+              fill="#2c2c2c" stroke="#e0e0e0" stroke-width="2.5" stroke-linejoin="round" />
+
+        <circle class="dot-anchor" data-pos="0,2" cx="60" cy="15" r="5" />
+        <circle class="dot-anchor" data-pos="1,2" cx="90" cy="15" r="5" />
+        <circle class="dot-anchor" data-pos="2,2" cx="120" cy="15" r="5" />
+
+        <circle class="dot-anchor" data-pos="0,1" cx="60" cy="65" r="5" />
+        <circle class="dot-anchor selected" data-pos="1,1" cx="88" cy="65" r="6" />
+        <circle class="dot-anchor" data-pos="2,1" cx="120" cy="65" r="5" />
+
+        <circle class="dot-anchor" data-pos="0,0" cx="60" cy="115" r="5" />
+        <circle class="dot-anchor" data-pos="1,0" cx="90" cy="115" r="5" />
+        <circle class="dot-anchor" data-pos="2,0" cx="120" cy="115" r="5" />
+      </svg>
+    </div>
+  </div>
+
+  <!-- PANEL 2: Configuración del perfil (Image#2 Completa) -->
+  <div class="section-accordion-header" id="header-config">
+    <div class="accordion-title-left">
+      <span class="fc-icon-f">F</span>
+      <span>Configuración del perfil</span>
+    </div>
+    <span class="chevron" id="chevron-config">▲</span>
+  </div>
+
+  <div id="body-config">
+    <div class="fc-groupbox">
+      <span class="fc-groupbox-title">Dimensiones</span>
+
+      <div class="fc-row" style="margin-top: 4px;">
+        <span class="fc-label">Altura o diámetro</span>
+        <div class="spinbox-wrap">
+          <input class="fc-input" type="text" value="100,0">
+          <div class="spinbox-buttons"><span class="spin-btn">▲</span><span class="spin-btn">▼</span></div>
+        </div>
+      </div>
+
+      <div class="fc-row">
+        <span class="fc-label">Ancho</span>
+        <div class="spinbox-wrap">
+          <input class="fc-input" type="text" value="40,0">
+          <div class="spinbox-buttons"><span class="spin-btn">▲</span><span class="spin-btn">▼</span></div>
+        </div>
+      </div>
+
+      <div class="fc-row">
+        <span class="fc-label">Espesor principal</span>
+        <div class="spinbox-wrap">
+          <input class="fc-input" type="text" value="0,00">
+          <div class="spinbox-buttons"><span class="spin-btn">▲</span><span class="spin-btn">▼</span></div>
+        </div>
+      </div>
+
+      <div class="fc-row">
+        <span class="fc-label">Espesor del ala</span>
+        <div class="spinbox-wrap">
+          <input class="fc-input" type="text" value="0,0">
+          <div class="spinbox-buttons"><span class="spin-btn">▲</span><span class="spin-btn">▼</span></div>
+        </div>
+      </div>
+
+      <div class="fc-row">
+        <span class="fc-label">Radio mayor</span>
+        <div class="spinbox-wrap">
+          <input class="fc-input" type="text" value="0,0">
+          <div class="spinbox-buttons"><span class="spin-btn">▲</span><span class="spin-btn">▼</span></div>
+        </div>
+      </div>
+
+      <div class="fc-row">
+        <span class="fc-label">Radio menor</span>
+        <div class="spinbox-wrap">
+          <input class="fc-input" type="text" value="0,0">
+          <div class="spinbox-buttons"><span class="spin-btn">▲</span><span class="spin-btn">▼</span></div>
+        </div>
+      </div>
+
+      <div class="fc-row">
+        <span class="fc-label">Peso (kg/m)</span>
+        <div class="spinbox-wrap">
+          <input class="fc-input" type="text" value="2,37">
+          <div class="spinbox-buttons"><span class="spin-btn">▲</span><span class="spin-btn">▼</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fc-groupbox">
+      <span class="fc-groupbox-title">Opciones de perfiles</span>
+
+      <div class="checkbox-row" style="margin-top: 6px;">
+        <label><input type="checkbox"> Crear redondeos</label>
+        <label><input type="checkbox" checked> Extender previamente</label>
+      </div>
+
+      <div style="margin-top: 8px;">
+        <button class="fc-btn" id="btn-toggle-advanced">
+          <span id="chevron-adv">▸</span> Opciones avanzadas
+        </button>
+      </div>
+
+      <div class="advanced-subpanel" id="advanced-panel">
+        <div style="font-size: 11px; font-weight: 600; margin-bottom: 6px; color: var(--fc-text-secondary);">Destino de los perfiles</div>
+        <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px; margin-bottom: 8px;">
+          <label><input type="radio" name="opt_dest2" checked> En su lugar</label>
+          <label><input type="radio" name="opt_dest2"> Crear una Pieza (Part)</label>
+          <label><input type="radio" name="opt_dest2"> Crear un Grupo</label>
+        </div>
+        <label style="font-size: 11px; display: flex; align-items: center; gap: 5px;">
+          <input type="checkbox"> Biselados combinados
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tableEdges = {
+      'e1': { name: 'Edge1', rot: '0', mh: false, mv: false, anchor: '1,1' },
+      'e2': { name: 'Edge2', rot: '90', mh: false, mv: false, anchor: '1,1' },
+      'e3': { name: 'Edge3', rot: '180', mh: true, mv: false, anchor: '1,1' },
+      'e4': { name: 'Edge4', rot: '270', mh: false, mv: true, anchor: '1,1' }
+    };
+
+    let activeRowId = 'e1';
+
+    const tbody = document.getElementById('tbody-edges');
+    const activeTitle = document.getElementById('active-edge-title');
+    const dots = document.querySelectorAll('.dot-anchor');
+    const btnAddTable = document.getElementById('btn-add-table');
+    const btnClearTable = document.getElementById('btn-clear-table');
+    const countLabel = document.getElementById('count-edges');
+    const btnCopyAnchor = document.getElementById('btn-copy-anchor');
+
+    // Accordion Config
+    const headerConfig = document.getElementById('header-config');
+    const bodyConfig = document.getElementById('body-config');
+    const chevronConfig = document.getElementById('chevron-config');
+    headerConfig.addEventListener('click', () => {
+      const isClosed = bodyConfig.style.display === 'none';
+      bodyConfig.style.display = isClosed ? 'block' : 'none';
+      chevronConfig.textContent = isClosed ? '▲' : '▼';
+    });
+
+    const btnAdv = document.getElementById('btn-toggle-advanced');
+    const advPanel = document.getElementById('advanced-panel');
+    const chevronAdv = document.getElementById('chevron-adv');
+    btnAdv.addEventListener('click', () => {
+      const isClosed = advPanel.style.display === 'none' || !advPanel.style.display;
+      advPanel.style.display = isClosed ? 'block' : 'none';
+      chevronAdv.textContent = isClosed ? '▾' : '▸';
+    });
+
+    function syncAnchorView() {
+      const item = tableEdges[activeRowId];
+      if (!item) return;
+      activeTitle.textContent = item.name;
+      dots.forEach(d => {
+        d.classList.toggle('selected', d.dataset.pos === item.anchor);
+      });
+    }
+
+    tbody.addEventListener('click', (e) => {
+      const del = e.target.closest('[data-del]');
+      if (del) {
+        const id = del.dataset.del;
+        delete tableEdges[id];
+        del.closest('tr').remove();
+        updateCount();
+        if (activeRowId === id) {
+          activeRowId = Object.keys(tableEdges)[0];
+          const firstRow = tbody.querySelector('tr');
+          if (firstRow) firstRow.classList.add('active-row');
+          syncAnchorView();
+        }
+        return;
+      }
+
+      const tr = e.target.closest('tr');
+      if (!tr) return;
+      document.querySelectorAll('#tbody-edges tr').forEach(r => r.classList.remove('active-row'));
+      tr.classList.add('active-row');
+      activeRowId = tr.dataset.id;
+      syncAnchorView();
+    });
+
+    tbody.addEventListener('change', (e) => {
+      const tr = e.target.closest('tr');
+      if (!tr) return;
+      const id = tr.dataset.id;
+      if (!tableEdges[id]) return;
+
+      const prop = e.target.dataset.prop;
+      if (prop === 'rot') {
+        tableEdges[id].rot = e.target.value;
+      } else if (prop === 'mh') {
+        tableEdges[id].mh = e.target.checked;
+      } else if (prop === 'mv') {
+        tableEdges[id].mv = e.target.checked;
+      }
+    });
+
+    dots.forEach(dot => {
+      dot.addEventListener('click', () => {
+        if (tableEdges[activeRowId]) {
+          tableEdges[activeRowId].anchor = dot.dataset.pos;
+          syncAnchorView();
+        }
+      });
+    });
+
+    btnCopyAnchor.addEventListener('click', () => {
+      const currentAnchor = tableEdges[activeRowId]?.anchor || '1,1';
+      Object.keys(tableEdges).forEach(k => {
+        tableEdges[k].anchor = currentAnchor;
+      });
+      syncAnchorView();
+    });
+
+    let newIdx = 5;
+    btnAddTable.addEventListener('click', () => {
+      const newId = `e${newIdx}`;
+      const newName = `Edge${newIdx}`;
+      tableEdges[newId] = { name: newName, rot: '0', mh: false, mv: false, anchor: '1,1' };
+
+      const tr = document.createElement('tr');
+      tr.dataset.id = newId;
+      tr.innerHTML = `
+        <td><strong>${newName}</strong></td>
+        <td>
+          <select class="table-select" data-prop="rot">
+            <option value="0" selected>0°</option>
+            <option value="90">90°</option>
+            <option value="180">180°</option>
+            <option value="270">270°</option>
+          </select>
+        </td>
+        <td>
+          <label class="table-check-label"><input type="checkbox" data-prop="mh"> H</label>
+          <label class="table-check-label"><input type="checkbox" data-prop="mv"> V</label>
+        </td>
+        <td style="text-align: center;"><span class="row-delete-btn" data-del="${newId}">×</span></td>
+      `;
+      tbody.appendChild(tr);
+      newIdx++;
+      updateCount();
+
+      document.querySelectorAll('#tbody-edges tr').forEach(r => r.classList.remove('active-row'));
+      tr.classList.add('active-row');
+      activeRowId = newId;
+      syncAnchorView();
+    });
+
+    btnClearTable.addEventListener('click', () => {
+      Object.keys(tableEdges).forEach(k => delete tableEdges[k]);
+      tbody.innerHTML = '';
+      updateCount();
+      activeTitle.textContent = '(Ninguna)';
+    });
+
+    function updateCount() {
+      countLabel.textContent = Object.keys(tableEdges).length;
+    }
+
+    syncAnchorView();
+  </script>
+</body>
+</html>

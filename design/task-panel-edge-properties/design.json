@@ -1,0 +1,27 @@
+{
+  "title": "TaskPanel: Panel Completo con Selector de Biblioteca, Aristas y Dimensiones",
+  "brief": "Panel completo de FreeCAD MaxProFrame integrando selector de Biblioteca, Familia, Tamaño, Metadatos, gestión de aristas individuales (combinando Master-Detail y Edición Rápida) y el bloque colapsable 'Configuración del perfil' (Dimensiones, Opciones de perfiles y Opciones avanzadas).",
+  "artboards": [
+    {
+      "file": "01-master-detail-hybrid.html",
+      "title": "Master-Detail Híbrido",
+      "tradeoff": "Modo dual (Uniforme vs Individual): en modo individual ofrece lista scrolleable de aristas con badges de rotación y panel reactivo abajo para anclaje 2D, giro y espejos. Panel completo con dimensiones colapsables.",
+      "width": 380,
+      "height": 1180
+    },
+    {
+      "file": "02-table-quick-edit.html",
+      "title": "Tabla de Edición Rápida",
+      "tradeoff": "Máxima agilidad en lote: tabla compacta donde cada fila permite cambiar rotación (0/90/180/270) y espejos H/V directamente sin navegar, sincronizada con el anclaje 2D.",
+      "width": 380,
+      "height": 1150
+    },
+    {
+      "file": "03-segmented-cards.html",
+      "title": "Pestañas con Giros Rápidos 90°",
+      "tradeoff": "Selector de aristas superior en pestañas con botones directos de un clic para giros estándar de 90° (0°, 90°, 180°, 270°) y ángulo libre, agilizando el flujo en marcos estructurales.",
+      "width": 380,
+      "height": 1160
+    }
+  ]
+}

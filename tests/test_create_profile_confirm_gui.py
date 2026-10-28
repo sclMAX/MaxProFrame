@@ -133,6 +133,7 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
                 Gui.Control.closeDialog()
             except Exception:
                 pass
+        self._pump_events(100)
 
         # Clean tracked panels
         for panel in list(self.panels):
@@ -299,11 +300,26 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
         return result
 
     def _find_dialog_button(self, button_role):
-        """Finds standard button in QDialogButtonBox child of Gui MainWindow."""
-        for box in Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox):
-            btn = box.button(button_role)
-            if btn is not None:
-                return btn
+        """Finds standard button in QDialogButtonBox child of Task View dock or MainWindow."""
+        mw = Gui.getMainWindow()
+        # 1. Target the Task View dock widget directly where the active dialog button box lives
+        for dock in mw.findChildren(QtWidgets.QDockWidget):
+            if dock.objectName() == "Tasks" or "task" in dock.objectName().lower():
+                for box in dock.findChildren(QtWidgets.QDialogButtonBox):
+                    try:
+                        btn = box.button(button_role)
+                        if btn is not None:
+                            return btn
+                    except Exception:
+                        continue
+        # 2. Fallback to MainWindow search if dock is not found
+        for box in mw.findChildren(QtWidgets.QDialogButtonBox):
+            try:
+                btn = box.button(button_role)
+                if btn is not None:
+                    return btn
+            except Exception:
+                continue
         return None
 
     def _dismiss_active_modals(self):

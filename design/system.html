@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>FreeCAD TaskPanel Design System</title>
+  <style>
+    :root {
+      --fc-bg-window: #2b2b2b;
+      --fc-bg-surface: #333333;
+      --fc-bg-input: #222222;
+      --fc-bg-input-hover: #282828;
+      --fc-bg-selection: #2a6fc9;
+      --fc-bg-selection-hover: #3882e3;
+      --fc-bg-canvas: #1c1c1c;
+      --fc-border-subtle: #3e3e3e;
+      --fc-border-medium: #4a4a4a;
+      --fc-border-focus: #2a6fc9;
+      --fc-text-primary: #e0e0e0;
+      --fc-text-secondary: #9e9e9e;
+      --fc-text-dim: #6e6e6e;
+      --fc-text-link: #4fa3ff;
+      --fc-badge-bg: #3a3a3a;
+      --fc-badge-text: #d0d0d0;
+      --fc-btn-bg: #3a3a3a;
+      --fc-btn-hover: #454545;
+      --fc-btn-active: #252525;
+      --fc-danger: #c93b3b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 1440px;
+      margin: 0 auto;
+      padding: 32px 40px;
+      background: var(--fc-bg-window);
+      color: var(--fc-text-primary);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Cantarell", "Ubuntu", sans-serif;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    header {
+      border-bottom: 1px solid var(--fc-border-medium);
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+    }
+    h1 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+    p.lead { color: var(--fc-text-secondary); font-size: 13px; }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      margin-bottom: 32px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    .card {
+      background: var(--fc-bg-surface);
+      border: 1px solid var(--fc-border-medium);
+      border-radius: 4px;
+      padding: 16px;
+    }
+    .card h2 {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--fc-text-secondary);
+      border-bottom: 1px solid var(--fc-border-subtle);
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+    }
+
+    .swatches {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    .swatch {
+      border: 1px solid var(--fc-border-subtle);
+      border-radius: 3px;
+      overflow: hidden;
+      background: var(--fc-bg-surface);
+    }
+    .swatch-color { height: 44px; }
+    .swatch-info { padding: 6px; font-size: 11px; }
+    .swatch-name { font-weight: 600; color: var(--fc-text-primary); }
+    .swatch-hex { color: var(--fc-text-secondary); font-family: ui-monospace, monospace; font-size: 10px; }
+
+    /* FreeCAD Qt Component Previews */
+    .fc-groupbox {
+      border: 1px solid var(--fc-border-medium);
+      border-radius: 3px;
+      padding: 12px 10px 10px 10px;
+      position: relative;
+      margin-top: 14px;
+      background: var(--fc-bg-surface);
+    }
+    .fc-groupbox-title {
+      position: absolute;
+      top: -8px;
+      left: 10px;
+      background: var(--fc-bg-surface);
+      padding: 0 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--fc-text-primary);
+    }
+
+    .fc-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .fc-label {
+      font-size: 12px;
+      color: var(--fc-text-primary);
+    }
+    .fc-input {
+      background: var(--fc-bg-input);
+      border: 1px solid var(--fc-border-medium);
+      color: var(--fc-text-primary);
+      padding: 3px 6px;
+      border-radius: 2px;
+      font-size: 12px;
+      height: 24px;
+      font-family: inherit;
+    }
+    .fc-input:focus {
+      border-color: var(--fc-border-focus);
+      outline: none;
+    }
+    .fc-btn {
+      background: var(--fc-btn-bg);
+      border: 1px solid var(--fc-border-medium);
+      color: var(--fc-text-primary);
+      padding: 3px 10px;
+      border-radius: 3px;
+      font-size: 11px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 24px;
+    }
+    .fc-btn:hover { background: var(--fc-btn-hover); }
+    .fc-btn-primary {
+      background: var(--fc-bg-selection);
+      border-color: var(--fc-bg-selection-hover);
+      color: #fff;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      background: var(--fc-badge-bg);
+      color: var(--fc-badge-text);
+      font-size: 10px;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>FreeCAD MaxProFrame Design Tokens & Components</h1>
+    <p class="lead">Design system tokens for FreeCAD Qt dark theme task panels and dialogs.</p>
+  </header>
+
+  <div class="grid-2">
+    <!-- Color Swatches -->
+    <div class="card">
+      <h2>Color Tokens</h2>
+      <div class="swatches">
+        <div class="swatch">
+          <div class="swatch-color" style="background: #2b2b2b;"></div>
+          <div class="swatch-info"><div class="swatch-name">Window BG</div><div class="swatch-hex">#2b2b2b</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: #333333;"></div>
+          <div class="swatch-info"><div class="swatch-name">Surface BG</div><div class="swatch-hex">#333333</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: #222222;"></div>
+          <div class="swatch-info"><div class="swatch-name">Input BG</div><div class="swatch-hex">#222222</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: #1c1c1c;"></div>
+          <div class="swatch-info"><div class="swatch-name">Canvas BG</div><div class="swatch-hex">#1c1c1c</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: #2a6fc9;"></div>
+          <div class="swatch-info"><div class="swatch-name">Selection</div><div class="swatch-hex">#2a6fc9</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: #3e3e3e;"></div>
+          <div class="swatch-info"><div class="swatch-name">Border Subtle</div><div class="swatch-hex">#3e3e3e</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: #e0e0e0;"></div>
+          <div class="swatch-info"><div class="swatch-name">Text Primary</div><div class="swatch-hex">#e0e0e0</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: #9e9e9e;"></div>
+          <div class="swatch-info"><div class="swatch-name">Text Dim</div><div class="swatch-hex">#9e9e9e</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- UI Controls Sample -->
+    <div class="card">
+      <h2>Standard FreeCAD Controls</h2>
+      <div class="fc-groupbox">
+        <span class="fc-groupbox-title">Colocación</span>
+        <div class="fc-row" style="margin-top: 6px;">
+          <span class="fc-label">Longitud</span>
+          <input class="fc-input" type="text" value="1000,0 mm" style="width: 140px; text-align: right;">
+        </div>
+        <div class="fc-row">
+          <span class="fc-label">Rotación</span>
+          <select class="fc-input" style="width: 140px;">
+            <option>0°</option>
+            <option>90°</option>
+            <option>180°</option>
+            <option>270°</option>
+          </select>
+        </div>
+        <div class="fc-row" style="justify-content: flex-start; gap: 12px; margin-top: 10px;">
+          <label style="display: flex; align-items: center; gap: 5px; font-size: 11px;">
+            <input type="checkbox"> Reflejar horizontal
+          </label>
+          <label style="display: flex; align-items: center; gap: 5px; font-size: 11px;">
+            <input type="checkbox"> Reflejar vertical
+          </label>
+        </div>
+        <div style="margin-top: 12px; display: flex; gap: 8px;">
+          <button class="fc-btn fc-btn-primary">+ Agregar Arista</button>
+          <button class="fc-btn">Quitar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
