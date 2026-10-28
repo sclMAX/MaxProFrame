@@ -2068,8 +2068,13 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             tooltip = translate(
                 "frameforge", "Select edges or a whole object to use its edges, or enter a positive length."
             )
-        self.form_proxy.label_attach.setText(text)
-        self.form_proxy.label_attach.setToolTip(tooltip)
+        lbl = getattr(self.form_proxy, "label_attach", None)
+        if hasattr(lbl, "widget") and callable(lbl.widget):
+            lbl = lbl.widget()
+        if lbl is not None and hasattr(lbl, "setText"):
+            lbl.setText(text)
+        if lbl is not None and hasattr(lbl, "setToolTip"):
+            lbl.setToolTip(tooltip)
 
         edges_list = []
         for selection in selections:

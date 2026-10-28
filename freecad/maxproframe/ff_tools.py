@@ -142,4 +142,9 @@ class FormProxy(object):
         if name not in self.members:
             raise ValueError(f"{name} not a member of one of the forms")
 
-        return getattr(self.members[name], name)
+        val = getattr(self.members[name], name)
+        if hasattr(val, "widget") and callable(val.widget):
+            real_w = val.widget()
+            if real_w is not None:
+                return real_w
+        return val
