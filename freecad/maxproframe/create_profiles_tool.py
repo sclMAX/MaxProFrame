@@ -373,27 +373,20 @@ class BaseProfileTaskPanel(ABC):
         sec_gb3 = _safe_unwrap_widget(getattr(second, "groupBox_3", None))
         gb3_layout = sec_gb3.layout() if sec_gb3 is not None and hasattr(sec_gb3, "layout") else None
         sec_rot = _safe_unwrap_widget(getattr(second, "widget_rotation", None))
-        if gb3_layout is not None and hasattr(gb3_layout, "removeWidget") and sec_rot is not None:
-            gb3_layout.removeWidget(sec_rot)
-        if placement is not None and hasattr(placement, "addRow") and sec_rot is not None:
-            placement.addRow(sec_rot)
+        if isinstance(sec_rot, QtWidgets.QWidget):
+            _safe_remove_layout_widget(gb3_layout, sec_rot)
+            if placement is not None and hasattr(placement, "addRow"):
+                placement.addRow(sec_rot)
 
         # Leave legacy checkboxes in second, hidden without cross-form reparenting
         sec_mh = _safe_unwrap_widget(getattr(second, "cb_mirror_h", None))
         sec_mv = _safe_unwrap_widget(getattr(second, "cb_mirror_v", None))
         sec_extend = _safe_unwrap_widget(getattr(second, "cb_pre_extend", None))
-        if gb3_layout is not None:
-            if sec_mh is not None:
-                _safe_remove_layout_widget(gb3_layout, sec_mh)
-            if sec_mv is not None:
-                _safe_remove_layout_widget(gb3_layout, sec_mv)
-            if sec_extend is not None:
-                _safe_remove_layout_widget(gb3_layout, sec_extend)
-        if sec_mh is not None:
+        if sec_mh is not None and hasattr(sec_mh, "hide"):
             sec_mh.hide()
-        if sec_mv is not None:
+        if sec_mv is not None and hasattr(sec_mv, "hide"):
             sec_mv.hide()
-        if sec_extend is not None:
+        if sec_extend is not None and hasattr(sec_extend, "hide"):
             sec_extend.hide()
 
         self.btn_mirror_h = QtWidgets.QToolButton(parent_placement)

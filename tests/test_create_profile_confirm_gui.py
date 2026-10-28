@@ -300,19 +300,20 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
         return result
 
     def _find_dialog_button(self, button_role):
-        """Finds standard button in QDialogButtonBox child of Gui MainWindow."""
-        # Prefer visible button boxes and visible buttons
-        for box in Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox):
-            try:
-                if not box.isVisible():
-                    continue
-                btn = box.button(button_role)
-                if btn is not None and btn.isVisible():
-                    return btn
-            except Exception:
-                continue
-        # Fallback if visibility filtering in offscreen returned none
-        for box in Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox):
+        """Finds standard button in QDialogButtonBox child of Task View dock or MainWindow."""
+        mw = Gui.getMainWindow()
+        # 1. Target the Task View dock widget directly where the active dialog button box lives
+        for dock in mw.findChildren(QtWidgets.QDockWidget):
+            if dock.objectName() == "Tasks" or "task" in dock.objectName().lower():
+                for box in dock.findChildren(QtWidgets.QDialogButtonBox):
+                    try:
+                        btn = box.button(button_role)
+                        if btn is not None:
+                            return btn
+                    except Exception:
+                        continue
+        # 2. Fallback to MainWindow search if dock is not found
+        for box in mw.findChildren(QtWidgets.QDialogButtonBox):
             try:
                 btn = box.button(button_role)
                 if btn is not None:
