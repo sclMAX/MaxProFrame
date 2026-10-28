@@ -20,6 +20,7 @@ class _PreferencesProxy:
     Transparent parameter group proxy that delegates to MaxProFrame preferences
     with per-key fallback to legacy Frameforge preferences, and writes to MaxProFrame.
     """
+
     def __init__(self, canonical, legacy):
         self._canonical = canonical
         self._legacy = legacy
@@ -109,18 +110,17 @@ def add_command(name, cmd_obj):
 
     Gui.addCommand(name, cmd_obj)
     if name.startswith("MaxProFrame_"):
-        legacy_name = "FrameForge_" + name[len("MaxProFrame_"):]
+        legacy_name = "FrameForge_" + name[len("MaxProFrame_") :]
         try:
             Gui.addCommand(legacy_name, cmd_obj)
         except Exception:
             pass
     elif name.startswith("FrameForge_"):
-        canonical_name = "MaxProFrame_" + name[len("FrameForge_"):]
+        canonical_name = "MaxProFrame_" + name[len("FrameForge_") :]
         try:
             Gui.addCommand(canonical_name, cmd_obj)
         except Exception:
             pass
-
 
 
 def move_profile_to_parent_if_supported(obj, parent):
