@@ -13,6 +13,7 @@ from PySide import QtCore, QtGui, QtWidgets
 
 from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
 from freecad.maxproframe.edit_profile_tool import EditProfileTaskPanel
+from freecad.maxproframe.ff_tools import get_param_group
 from freecad.maxproframe.library_manager import LibraryManager
 from freecad.maxproframe.profile import Profile
 
@@ -58,6 +59,13 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
                 Gui.Selection.clearSelection()
             except Exception:
                 pass
+        try:
+            param = get_param_group(writable=True)
+            param.RemBool("Default Pre Extend")
+            param.RemBool("Default Mirror Horizontally")
+            param.RemBool("Default Mirror Vertically")
+        except Exception:
+            pass
         for doc_name in self.created_docs:
             try:
                 doc = App.getDocument(doc_name) if hasattr(App, "getDocument") else None
@@ -76,6 +84,7 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.doc_count += 1
         name = f"{prefix}_{self.doc_count}_{id(self)}"
         doc = App.newDocument(name)
+        App.setActiveDocument(name)
         self.created_docs.append(name)
         return doc
 
@@ -98,19 +107,16 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         panel = CreateProfileTaskPanel()
         self.panels.append(panel)
         panel.open()
-        panel.initialize_ui()
-        for f in panel.form:
-            f.show()
 
         # Profile and Placement sections are visible
-        self.assertTrue(panel.form[0].groupBox.isVisible())
-        self.assertTrue(panel.form[0].groupBox_4.isVisible())
+        self.assertTrue(panel.form[0].groupBox.isVisibleTo(panel.form[0]))
+        self.assertTrue(panel.form[0].groupBox_4.isVisibleTo(panel.form[0]))
 
         # Advanced options header starts collapsed by default
         self.assertFalse(panel.advanced_button.isChecked())
-        self.assertFalse(panel.advanced_content.isVisible())
+        self.assertFalse(panel.advanced_content.isVisibleTo(panel.form[1]))
         panel.advanced_button.setChecked(True)
-        self.assertTrue(panel.advanced_content.isVisible())
+        self.assertTrue(panel.advanced_content.isVisibleTo(panel.form[1]))
 
         # Profile name label displays current size
         self.assertTrue(hasattr(panel, "label_profile_name"))
@@ -123,7 +129,6 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         panel = CreateProfileTaskPanel()
         self.panels.append(panel)
         panel.open()
-        panel.initialize_ui()
 
         # Button exists, checkable, and has icon
         self.assertTrue(panel.btn_mirror_h.isCheckable())
@@ -163,9 +168,6 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         panel = CreateProfileTaskPanel()
         self.panels.append(panel)
         panel.open()
-        panel.initialize_ui()
-        for f in panel.form:
-            f.show()
 
         # Simulate selection of rectangle (4 edges)
         panel._saved_selection = [
@@ -179,21 +181,21 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
 
         # Default is Uniform mode
         self.assertFalse(panel.mode_switch.is_per_edge())
-        self.assertTrue(panel.notice_uniform.isVisible())
-        self.assertFalse(panel.edge_list_widget.isVisible())
+        self.assertTrue(panel.notice_uniform.isVisibleTo(panel.form[0]))
+        self.assertFalse(panel.edge_list_widget.isVisibleTo(panel.form[0]))
         self.assertIn("4", panel.label_uniform_count.text())
 
         # Switch to Individual mode
         panel.mode_switch.set_per_edge(True)
         self.assertTrue(panel.mode_switch.is_per_edge())
-        self.assertFalse(panel.notice_uniform.isVisible())
-        self.assertTrue(panel.edge_list_widget.isVisible())
+        self.assertFalse(panel.notice_uniform.isVisibleTo(panel.form[0]))
+        self.assertTrue(panel.edge_list_widget.isVisibleTo(panel.form[0]))
 
         # Switch back to Uniform mode
         panel.mode_switch.set_per_edge(False)
         self.assertFalse(panel.mode_switch.is_per_edge())
-        self.assertTrue(panel.notice_uniform.isVisible())
-        self.assertFalse(panel.edge_list_widget.isVisible())
+        self.assertTrue(panel.notice_uniform.isVisibleTo(panel.form[0]))
+        self.assertFalse(panel.edge_list_widget.isVisibleTo(panel.form[0]))
 
     def test_s3_per_edge_property_editing_and_badges(self):
         """S3: In Individual mode, modifying rotation/mirrors modifies only the active edge and updates its badge."""
@@ -203,7 +205,6 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         panel = CreateProfileTaskPanel()
         self.panels.append(panel)
         panel.open()
-        panel.initialize_ui()
 
         # Select 2 edges
         e1_key = (sk, "Edge1")
@@ -257,7 +258,6 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         panel = CreateProfileTaskPanel()
         self.panels.append(panel)
         panel.open()
-        panel.initialize_ui()
 
         e1_key = (sk, "Edge1")
         panel._saved_selection = [
@@ -292,7 +292,6 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         panel = CreateProfileTaskPanel()
         self.panels.append(panel)
         panel.open()
-        panel.initialize_ui()
 
         e1_key = (sk, "Edge1")
         e2_key = (sk, "Edge2")

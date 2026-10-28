@@ -378,7 +378,7 @@ class BaseProfileTaskPanel(ABC):
         if placement is not None and hasattr(placement, "addRow") and sec_rot is not None:
             placement.addRow(sec_rot)
 
-        # Move cross-section mirroring into Placement right below rotation
+        # Leave legacy checkboxes in second, hidden without cross-form reparenting
         sec_mh = _safe_unwrap_widget(getattr(second, "cb_mirror_h", None))
         sec_mv = _safe_unwrap_widget(getattr(second, "cb_mirror_v", None))
         sec_extend = _safe_unwrap_widget(getattr(second, "cb_pre_extend", None))
@@ -389,6 +389,12 @@ class BaseProfileTaskPanel(ABC):
                 _safe_remove_layout_widget(gb3_layout, sec_mv)
             if sec_extend is not None:
                 _safe_remove_layout_widget(gb3_layout, sec_extend)
+        if sec_mh is not None:
+            sec_mh.hide()
+        if sec_mv is not None:
+            sec_mv.hide()
+        if sec_extend is not None:
+            sec_extend.hide()
 
         self.btn_mirror_h = QtWidgets.QToolButton(parent_placement)
         self.btn_mirror_h.setObjectName("btn_mirror_h")
@@ -411,60 +417,26 @@ class BaseProfileTaskPanel(ABC):
         self.btn_pre_extend.setText(f" {translate('frameforge', 'Extend')}")
         self.btn_pre_extend.setIcon(create_pre_extend_icon())
         self.btn_pre_extend.setCheckable(True)
-        self.btn_pre_extend.setChecked(True)
+        self.btn_pre_extend.setChecked(False)
         self.btn_pre_extend.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
         self.btn_pre_extend.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
 
-        def _sync_btn_mh(checked):
-            if sec_mh is not None and sec_mh.isChecked() != checked:
-                sec_mh.setChecked(checked)
+        # QToolButton uses toggled; alias stateChanged so legacy checkbox callers connect seamlessly
+        self.btn_mirror_h.stateChanged = self.btn_mirror_h.toggled
+        self.btn_mirror_v.stateChanged = self.btn_mirror_v.toggled
+        self.btn_pre_extend.stateChanged = self.btn_pre_extend.toggled
 
-        def _sync_sec_mh(checked):
-            if self.btn_mirror_h.isChecked() != checked:
-                self.btn_mirror_h.setChecked(checked)
-
-        def _sync_btn_mv(checked):
-            if sec_mv is not None and sec_mv.isChecked() != checked:
-                sec_mv.setChecked(checked)
-
-        def _sync_sec_mv(checked):
-            if self.btn_mirror_v.isChecked() != checked:
-                self.btn_mirror_v.setChecked(checked)
-
-        def _sync_btn_pe(checked):
-            if sec_extend is not None and sec_extend.isChecked() != checked:
-                sec_extend.setChecked(checked)
-
-        def _sync_sec_pe(checked):
-            if self.btn_pre_extend.isChecked() != checked:
-                self.btn_pre_extend.setChecked(checked)
-
-        self.btn_mirror_h.toggled.connect(_sync_btn_mh)
-        if sec_mh is not None:
-            sec_mh.setParent(parent_placement)
-            sec_mh.setFixedSize(0, 0)
-            sec_mh.setVisible(True)
-            sec_mh.toggled.connect(_sync_sec_mh)
-
-        self.btn_mirror_v.toggled.connect(_sync_btn_mv)
-        if sec_mv is not None:
-            sec_mv.setParent(parent_placement)
-            sec_mv.setFixedSize(0, 0)
-            sec_mv.setVisible(True)
-            sec_mv.toggled.connect(_sync_sec_mv)
-
-        self.btn_pre_extend.toggled.connect(_sync_btn_pe)
-        if sec_extend is not None:
-            sec_extend.hide()
-            sec_extend.toggled.connect(_sync_sec_pe)
+        # Bind to form[0] so FormProxy and visibility contracts resolve to placement toggle buttons
+        first.cb_mirror_h = self.btn_mirror_h
+        first.cb_mirror_v = self.btn_mirror_v
+        first.cb_pre_extend = self.btn_pre_extend
+        self.form_proxy.members["cb_mirror_h"] = first
+        self.form_proxy.members["cb_mirror_v"] = first
+        self.form_proxy.members["cb_pre_extend"] = first
 
         mirror_row = QtWidgets.QHBoxLayout()
         mirror_row.setContentsMargins(0, 4, 0, 0)
         mirror_row.setSpacing(6)
-        if sec_mh is not None:
-            mirror_row.addWidget(sec_mh)
-        if sec_mv is not None:
-            mirror_row.addWidget(sec_mv)
         mirror_row.addWidget(self.btn_mirror_h)
         mirror_row.addWidget(self.btn_mirror_v)
         mirror_row.addWidget(self.btn_pre_extend)
@@ -1245,7 +1217,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             "anchor": (1, 1),
             "mirror_h": False,
             "mirror_v": False,
-            "pre_extend": True,
+            "pre_extend": False,
         }
         self._active_edge_key = None
         self._is_per_edge_mode = False
@@ -1280,7 +1252,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
         gb4 = _safe_unwrap_widget(getattr(self.form[0], "groupBox_4", None))
         placement = gb4.layout() if gb4 is not None and hasattr(gb4, "layout") else None
-        if placement is not None and hasattr(placement, "insertRow"):
+        if placement is not None and hasattr(placement, "insertRow") and not hasattr(self, "mode_switch"):
             self.mode_switch = ModeSwitchWidget(gb4)
             self.mode_switch.setObjectName("mode_switch")
 
