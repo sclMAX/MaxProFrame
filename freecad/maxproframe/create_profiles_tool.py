@@ -258,19 +258,6 @@ class BaseProfileTaskPanel(ABC):
         if first_l10 is not None and hasattr(first_l10, "setText"):
             first_l10.setText("Library")
 
-        first_layout = first.layout() if hasattr(first, "layout") and callable(first.layout) else None
-        if first_layout is not None and first_gb is not None:
-            self.header_profile = SectionHeaderButton(
-                translate("frameforge", "Profile"),
-                create_profile_section_icon(),
-                target_widget=first_gb,
-                parent=first,
-                expanded=True,
-            )
-            self.header_profile.setObjectName("header_profile")
-            idx_gb = first_layout.indexOf(first_gb)
-            first_layout.insertWidget(idx_gb, self.header_profile)
-
         # Reorganize metadata into a compact 2-column grid instead of a tall vertical stack.
         parent_w = first_gb if isinstance(first_gb, QtWidgets.QWidget) else first
         self.material_info = QtWidgets.QLabel(parent_w)
@@ -365,17 +352,6 @@ class BaseProfileTaskPanel(ABC):
         gb4 = _safe_unwrap_widget(getattr(first, "groupBox_4", None))
         if gb4 is not None and hasattr(gb4, "setTitle"):
             gb4.setTitle("Placement")
-        if first_layout is not None and gb4 is not None:
-            self.header_placement = SectionHeaderButton(
-                translate("frameforge", "Placement"),
-                create_placement_icon(),
-                target_widget=gb4,
-                parent=first,
-                expanded=True,
-            )
-            self.header_placement.setObjectName("header_placement")
-            idx_gb4 = first_layout.indexOf(gb4)
-            first_layout.insertWidget(idx_gb4, self.header_placement)
         placement = gb4.layout() if gb4 is not None and hasattr(gb4, "layout") else None
         self.alignment_widget = AlignmentWidget(gb4 if isinstance(gb4, QtWidgets.QWidget) else first)
         if placement is not None and hasattr(placement, "addRow"):
@@ -1422,6 +1398,14 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             )
 
     def _get_properties_for_edge(self, sketch, edge):
+        if not getattr(self, "_is_per_edge_mode", False):
+            return {
+                "rotation": self.get_rotation(),
+                "anchor": self.get_anchor(),
+                "mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
+                "mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
+                "pre_extend": self.form_proxy.cb_pre_extend.isChecked(),
+            }
         key = (sketch, edge)
         if hasattr(self, "_edge_properties") and key in self._edge_properties:
             return self._edge_properties[key]

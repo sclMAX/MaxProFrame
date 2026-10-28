@@ -78,7 +78,7 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         return sk
 
     def test_s1_collapsible_sections_and_profile_name(self):
-        """S1: Profile, Placement, and Advanced are collapsible sections; Advanced is collapsed by default."""
+        """S1: Profile, Placement, and Advanced sections; Advanced is collapsible and collapsed by default."""
         doc = self._new_doc("DocS1")
         panel = CreateProfileTaskPanel()
         self.panels.append(panel)
@@ -87,20 +87,8 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         for f in panel.form:
             f.show()
 
-        # Profile header collapses and expands groupBox
-        self.assertTrue(panel.header_profile.isChecked())
+        # Profile and Placement sections are visible
         self.assertTrue(panel.form[0].groupBox.isVisible())
-        panel.header_profile.setChecked(False)
-        self.assertFalse(panel.form[0].groupBox.isVisible())
-        panel.header_profile.setChecked(True)
-        self.assertTrue(panel.form[0].groupBox.isVisible())
-
-        # Placement header collapses and expands groupBox_4
-        self.assertTrue(panel.header_placement.isChecked())
-        self.assertTrue(panel.form[0].groupBox_4.isVisible())
-        panel.header_placement.setChecked(False)
-        self.assertFalse(panel.form[0].groupBox_4.isVisible())
-        panel.header_placement.setChecked(True)
         self.assertTrue(panel.form[0].groupBox_4.isVisible())
 
         # Advanced options header starts collapsed by default
@@ -360,9 +348,8 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.panels.append(edit_panel)
         edit_panel.initialize_ui()
 
-        # Check that headers exist and toggle buttons reflect profile state
-        self.assertTrue(hasattr(edit_panel, "header_profile"))
-        self.assertTrue(hasattr(edit_panel, "header_placement"))
+        # Check that advanced section exists and toggle buttons reflect profile state
+        self.assertTrue(hasattr(edit_panel, "advanced_button"))
         self.assertTrue(hasattr(edit_panel, "btn_mirror_h"))
         self.assertTrue(edit_panel.btn_mirror_h.isChecked())
         self.assertFalse(edit_panel.btn_mirror_v.isChecked())
