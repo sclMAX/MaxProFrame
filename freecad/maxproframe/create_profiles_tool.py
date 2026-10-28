@@ -390,9 +390,7 @@ class BaseProfileTaskPanel(ABC):
             "font-weight: bold; font-size: 11px; padding: 2px 4px; background: palette(mid); border-radius: 3px;"
         )
         if hasattr(first, "combo_size"):
-            self.label_profile_name.setText(
-                f"{translate('frameforge', 'Profile')}: {first.combo_size.currentText()}"
-            )
+            self.label_profile_name.setText(f"{translate('frameforge', 'Profile')}: {first.combo_size.currentText()}")
         if placement is not None and hasattr(placement, "addRow"):
             placement.addRow(self.label_profile_name)
 
@@ -1415,8 +1413,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                     pass
         if hasattr(self, "edge_list_widget"):
             edges_list = [
-                (k, f"{k[1]} ({getattr(k[0], 'Label', 'Sketch') if k[0] else 'Sketch'})")
-                for k in self._edge_properties
+                (k, f"{k[1]} ({getattr(k[0], 'Label', 'Sketch') if k[0] else 'Sketch'})") for k in self._edge_properties
             ]
             self.edge_list_widget.set_edges(edges_list)
         if hasattr(self, "label_uniform_count"):

@@ -165,7 +165,13 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
             f.show()
 
         # Simulate selection of rectangle (4 edges)
-        panel._saved_selection = [type("SelEx", (), {"Object": sk, "ObjectName": sk.Name, "SubElementNames": ["Edge1", "Edge2", "Edge3", "Edge4"]})()]
+        panel._saved_selection = [
+            type(
+                "SelEx",
+                (),
+                {"Object": sk, "ObjectName": sk.Name, "SubElementNames": ["Edge1", "Edge2", "Edge3", "Edge4"]},
+            )()
+        ]
         panel.update_selection()
 
         # Default is Uniform mode
@@ -199,7 +205,9 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         # Select 2 edges
         e1_key = (sk, "Edge1")
         e2_key = (sk, "Edge2")
-        panel._saved_selection = [type("SelEx", (), {"Object": sk, "ObjectName": sk.Name, "SubElementNames": ["Edge1", "Edge2"]})()]
+        panel._saved_selection = [
+            type("SelEx", (), {"Object": sk, "ObjectName": sk.Name, "SubElementNames": ["Edge1", "Edge2"]})()
+        ]
         panel.update_selection()
         panel.proceed()
 
@@ -249,7 +257,9 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         panel.initialize_ui()
 
         e1_key = (sk, "Edge1")
-        panel._saved_selection = [type("SelEx", (), {"Object": sk, "ObjectName": sk.Name, "SubElementNames": ["Edge1"]})()]
+        panel._saved_selection = [
+            type("SelEx", (), {"Object": sk, "ObjectName": sk.Name, "SubElementNames": ["Edge1"]})()
+        ]
         panel.update_selection()
         panel.proceed()
 
@@ -283,7 +293,9 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
 
         e1_key = (sk, "Edge1")
         e2_key = (sk, "Edge2")
-        panel._saved_selection = [type("SelEx", (), {"Object": sk, "ObjectName": sk.Name, "SubElementNames": ["Edge1", "Edge2"]})()]
+        panel._saved_selection = [
+            type("SelEx", (), {"Object": sk, "ObjectName": sk.Name, "SubElementNames": ["Edge1", "Edge2"]})()
+        ]
         panel.update_selection()
         panel.proceed()
 

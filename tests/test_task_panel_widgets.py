@@ -1,5 +1,6 @@
 import os
 import unittest
+
 from PySide import QtCore, QtGui, QtWidgets
 
 from freecad.maxproframe.task_panel_widgets import (
