@@ -124,6 +124,7 @@ class IndependentCards(unittest.TestCase):
         enter(d, "B", "code_edit", "B-renamed")
         _log_checkpoint('after: enter(d, "B", "code_edit", "B-renamed")')
         self.assertEqual(d.table_sizes.item(d.table_sizes.currentRow(), 0).text(), "B-renamed")
+        W.QApplication.processEvents()
         _log_checkpoint("before: d.btn_edit_section.click()")
         d.btn_edit_section.click()
         _log_checkpoint("after: d.btn_edit_section.click()")
