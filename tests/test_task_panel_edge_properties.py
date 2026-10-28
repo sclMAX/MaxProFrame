@@ -272,7 +272,7 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertFalse(panel._edge_properties[e1_key]["mirror_v"])
 
     def test_s3_edge_removal(self):
-        """S3: Clicking remove on an edge removes it from properties and removes its preview object."""
+        """S3: Clicking remove on an edge removes it from properties and removes its preview object, remaining absent on subsequent input changes."""
         doc = self._new_doc("DocRemoveEdge")
         sk = self._create_rectangle_sketch(doc)
 
@@ -298,6 +298,19 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertNotIn(e2_key, panel._objects)
         self.assertNotIn(e2_key, panel._edge_properties)
         self.assertIsNone(doc.getObject(prof_e2_name))
+
+        # Subsequent input change must NOT resurrect the removed edge (Finding R3-001)
+        panel.set_rotation(45.0)
+        panel.on_input_changed()
+
+        self.assertNotIn(e2_key, panel._objects)
+        self.assertNotIn(e2_key, panel._edge_properties)
+        self.assertIsNone(doc.getObject(prof_e2_name))
+        remaining_keys = [
+            panel.edge_list_widget.list_widget.item(i).data(QtCore.Qt.UserRole)
+            for i in range(panel.edge_list_widget.list_widget.count())
+        ]
+        self.assertNotIn(e2_key, remaining_keys)
 
     def test_s5_edit_profile_task_panel_compatibility(self):
         """S5: EditProfileTaskPanel continues to initialize and operate cleanly with collapsible headers and toggle buttons."""

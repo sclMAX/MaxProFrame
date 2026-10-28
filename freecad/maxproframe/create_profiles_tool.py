@@ -1248,6 +1248,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self._saved_rotation = None
         self._saved_selection = None
         self._saved_form_proxy = None
+        self._excluded_edges = set()
         self._edge_properties = {}
         self._global_edge_properties = {
             "rotation": 0.0,
@@ -1400,6 +1401,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 )
 
     def _on_edge_removed(self, edge_key):
+        if hasattr(self, "_excluded_edges"):
+            self._excluded_edges.add(edge_key)
         if edge_key in self._edge_properties:
             del self._edge_properties[edge_key]
         if edge_key in self._objects:
@@ -1861,6 +1864,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 edges = self._selection_edges(sketch_sel)
 
                 for i, edge in enumerate(edges):
+                    if (sketch_sel.Object, edge) in getattr(self, "_excluded_edges", ()):
+                        continue
                     k = self.create_or_update_profile(sketch_sel.Object, edge, p_name)
                     seen_profiles.append(k)
 
@@ -2103,6 +2108,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             obj_label = getattr(obj, "Label", getattr(selection, "ObjectName", "Object"))
             for edge_name in self._selection_edges(selection):
                 key = (obj, edge_name)
+                if hasattr(self, "_excluded_edges") and key in self._excluded_edges:
+                    continue
                 display_name = f"{edge_name} ({obj_label})"
                 edges_list.append((key, display_name))
                 if key not in self._edge_properties:
