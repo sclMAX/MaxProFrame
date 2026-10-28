@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Dirección 1: Master-Detail Híbrido con Panel Completo</title>
+  <style>
+    :root {
+      --fc-bg-window: #2b2b2b;
+      --fc-bg-surface: #333333;
+      --fc-bg-input: #222222;
+      --fc-bg-input-hover: #282828;
+      --fc-bg-selection: #2a6fc9;
+      --fc-bg-selection-hover: #3882e3;
+      --fc-bg-canvas: #1c1c1c;
+      --fc-border-subtle: #3e3e3e;
+      --fc-border-medium: #4a4a4a;
+      --fc-border-focus: #2a6fc9;
+      --fc-text-primary: #e0e0e0;
+      --fc-text-secondary: #9e9e9e;
+      --fc-text-dim: #6e6e6e;
+      --fc-text-link: #4fa3ff;
+      --fc-badge-bg: #3a3a3a;
+      --fc-badge-text: #d0d0d0;
+      --fc-btn-bg: #3a3a3a;
+      --fc-btn-hover: #454545;
+      --fc-btn-active: #252525;
+      --fc-danger: #d94343;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 380px;
+      margin: 0 auto;
+      background: var(--fc-bg-window);
+      color: var(--fc-text-primary);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Cantarell", "Ubuntu", sans-serif;
+      font-size: 12px;
+      padding: 10px;
+      user-select: none;
+    }
+
+    /* FreeCAD Header / TaskDialog Actions */
+    .task-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 6px 10px 6px;
+      border-bottom: 1px solid var(--fc-border-subtle);
+      margin-bottom: 8px;
+    }
+    .task-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--fc-text-primary);
+    }
+    .task-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .fc-btn {
+      background: var(--fc-btn-bg);
+      border: 1px solid var(--fc-border-medium);
+      color: var(--fc-text-primary);
+      padding: 3px 10px;
+      border-radius: 3px;
+      font-size: 11px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 24px;
+    }
+    .fc-btn:hover { background: var(--fc-btn-hover); }
+    .fc-btn-primary {
+      background: var(--fc-bg-selection);
+      border-color: var(--fc-bg-selection-hover);
+      color: #fff;
+      font-weight: 600;
+    }
+    .btn-sm {
+      height: 20px;
+      padding: 1px 6px;
+      font-size: 10px;
+    }
+
+    /* GroupBoxes */
+    .fc-groupbox {
+      border: 1px solid var(--fc-border-medium);
+      border-radius: 4px;
+      padding: 10px 8px 8px 8px;
+      position: relative;
+      margin-top: 12px;
+      background: var(--fc-bg-surface);
+    }
+    .fc-groupbox-title {
+      position: absolute;
+      top: -8px;
+      left: 10px;
+      background: var(--fc-bg-surface);
+      padding: 0 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--fc-text-primary);
+    }
+
+    /* Form Rows */
+    .fc-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .fc-label {
+      font-size: 11px;
+      color: var(--fc-text-primary);
+    }
+    .fc-input {
+      background: var(--fc-bg-input);
+      border: 1px solid var(--fc-border-medium);
+      color: var(--fc-text-primary);
+      padding: 3px 6px;
+      border-radius: 2px;
+      font-size: 11px;
+      height: 24px;
+      font-family: inherit;
+    }
+    .fc-input:focus {
+      border-color: var(--fc-border-focus);
+      outline: none;
+    }
+
+    .spinbox-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      width: 170px;
+    }
+    .spinbox-wrap input {
+      width: 100%;
+      text-align: right;
+      padding-right: 22px;
+    }
+    .spinbox-buttons {
+      position: absolute;
+      right: 1px;
+      top: 1px;
+      bottom: 1px;
+      width: 18px;
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid var(--fc-border-medium);
+      background: #2b2b2b;
+    }
+    .spin-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8px;
+      color: var(--fc-text-secondary);
+      cursor: pointer;
+    }
+    .spin-btn:hover { background: #383838; color: #fff; }
+
+    /* Metadata Block */
+    .profile-meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 8px;
+      font-size: 11px;
+      padding: 6px 8px;
+      background: var(--fc-bg-input);
+      border: 1px solid var(--fc-border-subtle);
+      border-radius: 3px;
+      margin-top: 6px;
+      margin-bottom: 4px;
+    }
+    .meta-item { display: flex; justify-content: space-between; }
+    .meta-label { color: var(--fc-text-secondary); }
+    .meta-val { font-weight: 600; color: var(--fc-text-primary); }
+
+    /* Mode Switch */
+    .mode-switch {
+      display: flex;
+      background: var(--fc-bg-input);
+      border: 1px solid var(--fc-border-medium);
+      border-radius: 3px;
+      padding: 2px;
+      margin-top: 4px;
+      margin-bottom: 8px;
+    }
+    .mode-tab {
+      flex: 1;
+      text-align: center;
+      padding: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--fc-text-secondary);
+      cursor: pointer;
+      border-radius: 2px;
+      transition: all 0.15s;
+    }
+    .mode-tab.active {
+      background: var(--fc-bg-selection);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    /* Edge List in Colocación */
+    .edge-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .edge-list-container {
+      background: var(--fc-bg-input);
+      border: 1px solid var(--fc-border-medium);
+      border-radius: 3px;
+      max-height: 115px;
+      overflow-y: auto;
+      margin-bottom: 8px;
+    }
+    .edge-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--fc-border-subtle);
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .edge-item:last-child { border-bottom: none; }
+    .edge-item:hover { background: var(--fc-bg-input-hover); }
+    .edge-item.active {
+      background: var(--fc-bg-selection);
+      color: #ffffff;
+    }
+    .edge-item-badge {
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 2px;
+      background: rgba(0, 0, 0, 0.3);
+      color: #fff;
+    }
+    .edge-item-remove {
+      color: var(--fc-text-dim);
+      cursor: pointer;
+      padding: 0 4px;
+    }
+    .edge-item-remove:hover { color: var(--fc-danger); }
+    .edge-item.active .edge-item-remove { color: #fff; }
+
+    .selected-edge-banner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(42, 111, 201, 0.15);
+      border-left: 3px solid var(--fc-bg-selection);
+      padding: 4px 8px;
+      margin-bottom: 8px;
+      border-radius: 0 3px 3px 0;
+    }
+    .selected-edge-text {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--fc-text-link);
+    }
+    .btn-reset-edge {
+      font-size: 10px;
+      color: var(--fc-text-secondary);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    /* 2D Placement Drawing Widget */
+    .placement-canvas-wrap {
+      background: var(--fc-bg-canvas);
+      border: 1px solid var(--fc-border-subtle);
+      border-radius: 3px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 8px 0;
+      margin-bottom: 8px;
+    }
+    svg.profile-2d {
+      width: 220px;
+      height: 130px;
+      overflow: visible;
+    }
+    .dot-anchor {
+      cursor: pointer;
+      fill: #ffffff;
+      stroke: #1c1c1c;
+      stroke-width: 2;
+      transition: fill 0.15s, transform 0.15s;
+    }
+    .dot-anchor:hover {
+      fill: #ffcc00;
+      transform: scale(1.3);
+    }
+    .dot-anchor.selected {
+      fill: var(--fc-bg-selection);
+      stroke: #ffffff;
+      stroke-width: 2.5;
+    }
+
+    .checkbox-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 4px;
+      margin-bottom: 6px;
+      font-size: 11px;
+    }
+    .checkbox-row label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+
+    /* Collapsible Second Section Header: Configuración del perfil (Image#2) */
+    .section-accordion-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #383838;
+      border: 1px solid var(--fc-border-medium);
+      border-radius: 3px;
+      padding: 6px 10px;
+      margin-top: 14px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .section-accordion-header:hover { background: #404040; }
+    .accordion-title-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .fc-icon-f {
+      background: #d63636;
+      color: #fff;
+      font-weight: 900;
+      font-size: 10px;
+      width: 16px;
+      height: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 2px;
+      font-family: serif;
+    }
+    .chevron {
+      font-size: 10px;
+      color: var(--fc-text-secondary);
+      transition: transform 0.2s;
+    }
+    .header-icon {
+      width: 16px;
+      height: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--fc-text-link);
+    }
+    .profile-canvas-footer {
+      text-align: center;
+      margin-top: 4px;
+      margin-bottom: 8px;
+      padding: 3px 6px;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--fc-text-primary);
+      letter-spacing: 0.3px;
+      border: 1px solid var(--fc-border-subtle);
+    }
+
+    /* Toggle Buttons (On/Off) with icon */
+    .placement-toggles-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .fc-toggle-btn {
+      flex: 1;
+      height: 28px;
+      background: var(--fc-btn-bg);
+      border: 1px solid var(--fc-border-medium);
+      color: var(--fc-text-secondary);
+      border-radius: 3px;
+      padding: 0 6px;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      user-select: none;
+      transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+    }
+    .fc-toggle-btn:hover {
+      background: var(--fc-btn-hover);
+      color: var(--fc-text-primary);
+      border-color: #555555;
+    }
+    .fc-toggle-btn.active {
+      background: var(--fc-bg-selection);
+      border-color: var(--fc-bg-selection-hover);
+      color: #ffffff;
+      font-weight: 600;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+    .fc-toggle-btn .toggle-icon {
+      flex-shrink: 0;
+    }
+    .fc-toggle-btn.active .toggle-icon {
+      color: #ffffff;
+    }
+
+    /* Advanced Options Collapsible */
+    .advanced-subpanel {
+      margin-top: 8px;
+      padding: 8px;
+      background: var(--fc-bg-input);
+      border: 1px solid var(--fc-border-subtle);
+      border-radius: 3px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Dialog Action Buttons -->
+  <div class="task-header">
+    <div class="task-title">Crear Perfil</div>
+    <div class="task-actions">
+      <button class="fc-btn fc-btn-primary" id="btn-ok">OK</button>
+      <button class="fc-btn" id="btn-cancel">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- PANEL 1 - PARTE SUPERIOR: Perfil (Colapsable con icono) -->
+  <div class="section-accordion-header" id="header-profile">
+    <div class="accordion-title-left">
+      <span class="header-icon">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M2 2h12v3h-4v6h4v3H2v-3h4V5H2V2z"/>
+        </svg>
+      </span>
+      <span>Perfil</span>
+    </div>
+    <span class="chevron" id="chevron-profile">▲</span>
+  </div>
+
+  <div id="body-profile" class="fc-groupbox" style="margin-top: 4px;">
+    
+    <!-- 1. Biblioteca (Library) -->
+    <div class="fc-row" style="margin-top: 4px;">
+      <span class="fc-label">Biblioteca</span>
+      <select class="fc-input" id="sel-library" style="width: 220px;">
+        <option>Steel - Acero Estructural (IRAM)</option>
+        <option>Aluminum - Perfiles de Aluminio</option>
+        <option>Custom - Mis Perfiles</option>
+      </select>
+    </div>
+
+    <!-- 2. Familia (Family) -->
+    <div class="fc-row">
+      <span class="fc-label">Familia</span>
+      <select class="fc-input" id="sel-family" style="width: 220px;">
+        <option>Perfil C con labios (PGC)</option>
+        <option>Perfil U comercial (PNU)</option>
+        <option>Tubo Cuadrado (SHS)</option>
+        <option>Tubo Rectangular (RHS)</option>
+      </select>
+    </div>
+
+    <!-- 3. Tamaño (Size) -->
+    <div class="fc-row">
+      <span class="fc-label">Tamaño</span>
+      <select class="fc-input" id="sel-size" style="width: 220px;">
+        <option>PGC 100 x 50 x 15 x 2.0</option>
+        <option>PGC 150 x 50 x 15 x 2.0</option>
+        <option>PGC 200 x 50 x 15 x 2.5</option>
+      </select>
+    </div>
+
+    <!-- 4. Metadatos Compactos (2 columnas) -->
+    <div class="profile-meta-grid">
+      <div class="meta-item"><span class="meta-label">Material:</span> <span class="meta-val">Acero F24</span></div>
+      <div class="meta-item"><span class="meta-label">Norma:</span> <span class="meta-val">IRAM-IAS U500-205</span></div>
+      <div class="meta-item"><span class="meta-label">Unidad:</span> <span class="meta-val">Milímetros</span></div>
+      <div class="meta-item"><span class="meta-label">Peso:</span> <span class="meta-val">3,45 kg/m</span></div>
+    </div>
+  </div>
+
+  <!-- PANEL 1 - PARTE MEDIA: Colocación & Aristas (Colapsable con icono) -->
+  <div class="section-accordion-header" id="header-placement">
+    <div class="accordion-title-left">
+      <span class="header-icon">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="8" cy="8" r="6"/>
+          <path d="M8 2v3 M8 11v3 M2 8h3 M11 8h3"/>
+        </svg>
+      </span>
+      <span>Colocación</span>
+    </div>
+    <span class="chevron" id="chevron-placement">▲</span>
+  </div>
+
+  <div id="body-placement" class="fc-groupbox" style="margin-top: 4px;">
+
+    <!-- Selector de Modo: Global vs Por Arista -->
+    <div class="mode-switch">
+      <div class="mode-tab" id="tab-global">❖ Todas (Uniforme)</div>
+      <div class="mode-tab active" id="tab-per-edge">⚡ Por Arista (Individual)</div>
+    </div>
+
+    <!-- Leyenda de Aristas en Modo Todos (Uniforme) -->
+    <div id="section-global-notice" style="display: none; background: rgba(42, 111, 201, 0.1); border: 1px dashed var(--fc-border-focus); border-radius: 3px; padding: 8px 10px; margin-bottom: 8px; font-size: 11px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span>🎯 <strong id="global-edge-count">4 aristas</strong> seleccionadas en la vista 3D</span>
+        <button class="fc-btn btn-sm" id="btn-add-global">+ Agregar 3D</button>
+      </div>
+      <div style="color: var(--fc-text-secondary); font-size: 10px; margin-top: 4px;">
+        Las propiedades de colocación (rotación, anclaje y espejos) se aplicarán de forma uniforme a todas las aristas.
+      </div>
+    </div>
+
+    <!-- Sección de aristas (Modo Por Arista) -->
+    <div id="section-edges">
+      <div class="edge-toolbar">
+        <span style="font-size: 11px; color: var(--fc-text-secondary); font-weight: 500;">
+          Aristas asignadas (<span id="edge-count">4</span>)
+        </span>
+        <div style="display: flex; gap: 4px;">
+          <button class="fc-btn btn-sm" id="btn-add-edge" title="Agregar aristas de la vista 3D">+ Agregar 3D</button>
+          <button class="fc-btn btn-sm" id="btn-clear-edges">Limpiar</button>
+        </div>
+      </div>
+
+      <!-- Edge List -->
+      <div class="edge-list-container" id="edge-list">
+        <div class="edge-item active" data-id="e1">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span>• Arista 1 (Edge1)</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span class="edge-item-badge" id="badge-e1">Rot: 0°</span>
+            <span class="edge-item-remove" data-remove="e1" title="Quitar arista">×</span>
+          </div>
+        </div>
+        <div class="edge-item" data-id="e2">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span>• Arista 2 (Edge2)</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span class="edge-item-badge" id="badge-e2">Rot: 90°</span>
+            <span class="edge-item-remove" data-remove="e2" title="Quitar arista">×</span>
+          </div>
+        </div>
+        <div class="edge-item" data-id="e3">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span>• Arista 3 (Edge3)</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span class="edge-item-badge" id="badge-e3">Rot: 180°</span>
+            <span class="edge-item-remove" data-remove="e3" title="Quitar arista">×</span>
+          </div>
+        </div>
+        <div class="edge-item" data-id="e4">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span>• Arista 4 (Edge4)</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span class="edge-item-badge" id="badge-e4">Rot: 270°</span>
+            <span class="edge-item-remove" data-remove="e4" title="Quitar arista">×</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Banner de Arista Seleccionada -->
+      <div class="selected-edge-banner">
+        <span class="selected-edge-text" id="target-label">Editando: Arista 1 (Edge1)</span>
+        <span class="btn-reset-edge" id="btn-reset-edge" title="Restablecer propiedades">Restablecer a global</span>
+      </div>
+    </div>
+
+    <!-- Longitud fija manual (en caso de no usar aristas 3D) -->
+    <div class="fc-row" id="row-manual-length" style="display: none;">
+      <span class="fc-label">Longitud</span>
+      <div class="spinbox-wrap">
+        <input class="fc-input" type="text" value="0,0 mm">
+        <div class="spinbox-buttons"><span class="spin-btn">▲</span><span class="spin-btn">▼</span></div>
+      </div>
+    </div>
+
+    <!-- 2D Profile Anchor Drawing Widget -->
+    <div class="placement-canvas-wrap">
+      <svg class="profile-2d" id="svg-profile" viewBox="0 0 200 130">
+        <path id="profile-path" style="transform-origin: 90px 65px; transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);"
+              d="M 120 15 L 60 15 L 60 115 L 120 115 L 120 100 L 75 100 L 75 30 L 120 30 Z"
+              fill="#2c2c2c" stroke="#e0e0e0" stroke-width="2.5" stroke-linejoin="round" />
+
+        <circle class="dot-anchor" data-pos="0,2" cx="60" cy="15" r="5" />
+        <circle class="dot-anchor" data-pos="1,2" cx="90" cy="15" r="5" />
+        <circle class="dot-anchor" data-pos="2,2" cx="120" cy="15" r="5" />
+
+        <circle class="dot-anchor" data-pos="0,1" cx="60" cy="65" r="5" />
+        <circle class="dot-anchor selected" data-pos="1,1" cx="88" cy="65" r="6" />
+        <circle class="dot-anchor" data-pos="2,1" cx="120" cy="65" r="5" />
+
+        <circle class="dot-anchor" data-pos="0,0" cx="60" cy="115" r="5" />
+        <circle class="dot-anchor" data-pos="1,0" cx="90" cy="115" r="5" />
+        <circle class="dot-anchor" data-pos="2,0" cx="120" cy="115" r="5" />
+      </svg>
+    </div>
+
+    <!-- Nombre del Perfil debajo del visor 2D -->
+    <div class="profile-canvas-footer" id="profile-name-tag">
+      Perfil: PGC 100 x 50 x 15 x 2.0
+    </div>
+
+    <!-- Rotación -->
+    <div class="fc-row">
+      <span class="fc-label">Rotación (°)</span>
+      <select class="fc-input" id="sel-rotation" style="width: 170px;">
+        <option value="0">0</option>
+        <option value="45">45</option>
+        <option value="90">90</option>
+        <option value="135">135</option>
+        <option value="180">180</option>
+        <option value="225">225</option>
+        <option value="270">270</option>
+        <option value="315">315</option>
+      </select>
+    </div>
+
+    <!-- Botones On/Off de Espejos y Extensión con icono -->
+    <div class="placement-toggles-row">
+      <button type="button" class="fc-toggle-btn" id="btn-mirror-h" title="Reflejar sección horizontalmente (On/Off)">
+        <svg class="toggle-icon" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+          <line x1="8" y1="1" x2="8" y2="15" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 2"/>
+          <polygon points="6,4 2,8 6,12"/>
+          <polygon points="10,4 14,8 10,12"/>
+        </svg>
+        <span>Reflejar H</span>
+      </button>
+
+      <button type="button" class="fc-toggle-btn" id="btn-mirror-v" title="Reflejar sección verticalmente (On/Off)">
+        <svg class="toggle-icon" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+          <line x1="1" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 2"/>
+          <polygon points="4,6 8,2 12,6"/>
+          <polygon points="4,10 8,14 12,10"/>
+        </svg>
+        <span>Reflejar V</span>
+      </button>
+
+      <button type="button" class="fc-toggle-btn active" id="btn-pre-extend" title="Extender previamente el perfil para ingletes o uniones (On/Off)">
+        <svg class="toggle-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 8h8"/>
+          <path d="M10 5l3 3-3 3"/>
+          <path d="M6 5l-3 3 3 3"/>
+          <line x1="1" y1="3" x2="1" y2="13" stroke-dasharray="1 1.5"/>
+          <line x1="15" y1="3" x2="15" y2="13" stroke-dasharray="1 1.5"/>
+        </svg>
+        <span>Extender</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- PANEL 2 - PARTE INFERIOR: Opciones avanzadas (Colapsado por defecto) -->
+  <div class="section-accordion-header" id="header-config">
+    <div class="accordion-title-left">
+      <span class="fc-icon-f">F</span>
+      <span>Opciones avanzadas</span>
+    </div>
+    <span class="chevron" id="chevron-config">▼</span>
+  </div>
+
+  <div id="body-config" style="display: none;">
+    <!-- Grupo: Dimensiones -->
+    <div class="fc-groupbox">
+      <span class="fc-groupbox-title">Dimensiones</span>
+
+      <div class="fc-row" style="margin-top: 4px;">
+        <span class="fc-label">Altura o diámetro</span>
+        <div class="spinbox-wrap">
+          <input class="fc-input" type="text" value="100,0">
+          <div class="spinbox-buttons"><span class="spin-btn">▲</span><span class="spin-btn">▼</span></div>
+        </div>
+      </div>
+
+      <div class="fc-row">
+        <span class="fc-label">Ancho</span>
+        <div class="spinbox-wrap">
+          <input class="fc-input" type="text" value="40,0">
+          <div class="spinbox-buttons"><span class="spin-btn">▲</span><span class="spin-btn">▼</span></div>
+        </div>
+      </div>
+
+      <div class="fc-row">
+        <span class="fc-label">Espesor principal</span>
+        <div class="spinbox-wrap">
+          <input class="fc-input" type="text" value="0,00">
+          <div class="spinbox-buttons"><span class="spin-btn">▲</span><span class="spin-btn">▼</span></div>
+        </div>
+      </div>
+
+      <div class="fc-row">
+        <span class="fc-label">Espesor del ala</span>
+        <div class="spinbox-wrap">
+          <input class="fc-input" type="text" value="0,0">
+          <div class="spinbox-buttons"><span class="spin-btn">▲</span><span class="spin-btn">▼</span></div>
+        </div>
+      </div>
+
+      <div class="fc-row">
+        <span class="fc-label">Radio mayor</span>
+        <div class="spinbox-wrap">
+          <input class="fc-input" type="text" value="0,0">
+          <div class="spinbox-buttons"><span class="spin-btn">▲</span><span class="spin-btn">▼</span></div>
+        </div>
+      </div>
+
+      <div class="fc-row">
+        <span class="fc-label">Radio menor</span>
+        <div class="spinbox-wrap">
+          <input class="fc-input" type="text" value="0,0">
+          <div class="spinbox-buttons"><span class="spin-btn">▲</span><span class="spin-btn">▼</span></div>
+        </div>
+      </div>
+
+      <div class="fc-row">
+        <span class="fc-label">Peso (kg/m)</span>
+        <div class="spinbox-wrap">
+          <input class="fc-input" type="text" value="2,37">
+          <div class="spinbox-buttons"><span class="spin-btn">▲</span><span class="spin-btn">▼</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grupo: Opciones de perfiles -->
+    <div class="fc-groupbox">
+      <span class="fc-groupbox-title">Opciones de perfiles</span>
+
+      <div class="checkbox-row" style="margin-top: 6px;">
+        <label><input type="checkbox"> Crear redondeos</label>
+      </div>
+
+      <div style="font-size: 11px; font-weight: 600; margin-top: 8px; margin-bottom: 6px; color: var(--fc-text-secondary);">Destino de los perfiles</div>
+      <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px; margin-bottom: 8px;">
+        <label><input type="radio" name="opt_dest" checked> En su lugar</label>
+        <label><input type="radio" name="opt_dest"> Crear una Pieza (Part)</label>
+        <label><input type="radio" name="opt_dest"> Crear un Grupo</label>
+      </div>
+      <label style="font-size: 11px; display: flex; align-items: center; gap: 5px;">
+        <input type="checkbox"> Biselados combinados
+      </label>
+    </div>
+  </div>
+
+  <script>
+    // State per edge
+    const edgesData = {
+      'all': { name: 'Todas las aristas (Global)', rot: '0', mirrorH: false, mirrorV: false, preExtend: true, anchor: '1,1' },
+      'e1': { name: 'Arista 1 (Edge1)', rot: '0', mirrorH: false, mirrorV: false, preExtend: true, anchor: '1,1' },
+      'e2': { name: 'Arista 2 (Edge2)', rot: '90', mirrorH: false, mirrorV: false, preExtend: true, anchor: '1,1' },
+      'e3': { name: 'Arista 3 (Edge3)', rot: '180', mirrorH: true, mirrorV: false, preExtend: true, anchor: '1,1' },
+      'e4': { name: 'Arista 4 (Edge4)', rot: '270', mirrorH: false, mirrorV: true, preExtend: true, anchor: '1,1' }
+    };
+
+    let activeEdgeId = 'e1';
+    let isPerEdgeMode = true;
+
+    // DOM Elements
+    const tabGlobal = document.getElementById('tab-global');
+    const tabPerEdge = document.getElementById('tab-per-edge');
+    const sectionEdges = document.getElementById('section-edges');
+    const edgeListEl = document.getElementById('edge-list');
+    const targetLabelEl = document.getElementById('target-label');
+    const selRotationEl = document.getElementById('sel-rotation');
+    const btnMirrorH = document.getElementById('btn-mirror-h');
+    const btnMirrorV = document.getElementById('btn-mirror-v');
+    const btnPreExtend = document.getElementById('btn-pre-extend');
+    const profilePath = document.getElementById('profile-path');
+    const dots = document.querySelectorAll('.dot-anchor');
+    const btnReset = document.getElementById('btn-reset-edge');
+    const btnAddEdge = document.getElementById('btn-add-edge');
+    const btnClearEdges = document.getElementById('btn-clear-edges');
+    const edgeCountEl = document.getElementById('edge-count');
+
+    // Accordion Profile
+    const headerProfile = document.getElementById('header-profile');
+    const bodyProfile = document.getElementById('body-profile');
+    const chevronProfile = document.getElementById('chevron-profile');
+    headerProfile.addEventListener('click', () => {
+      const isClosed = bodyProfile.style.display === 'none';
+      bodyProfile.style.display = isClosed ? 'block' : 'none';
+      chevronProfile.textContent = isClosed ? '▲' : '▼';
+    });
+
+    // Accordion Placement
+    const headerPlacement = document.getElementById('header-placement');
+    const bodyPlacement = document.getElementById('body-placement');
+    const chevronPlacement = document.getElementById('chevron-placement');
+
+    headerPlacement.addEventListener('click', () => {
+      const isClosed = bodyPlacement.style.display === 'none';
+      bodyPlacement.style.display = isClosed ? 'block' : 'none';
+      chevronPlacement.textContent = isClosed ? '▲' : '▼';
+    });
+
+    // Accordion Config (Opciones avanzadas - Colapsado por defecto)
+    const headerConfig = document.getElementById('header-config');
+    const bodyConfig = document.getElementById('body-config');
+    const chevronConfig = document.getElementById('chevron-config');
+
+    headerConfig.addEventListener('click', () => {
+      const isClosed = bodyConfig.style.display === 'none';
+      bodyConfig.style.display = isClosed ? 'block' : 'none';
+      chevronConfig.textContent = isClosed ? '▲' : '▼';
+    });
+
+    // Global notice in Uniform mode
+    const sectionGlobalNotice = document.getElementById('section-global-notice');
+    const globalEdgeCount = document.getElementById('global-edge-count');
+    const btnAddGlobal = document.getElementById('btn-add-global');
+
+    // Profile name update
+    const selSize = document.getElementById('sel-size');
+    const profileNameTag = document.getElementById('profile-name-tag');
+    selSize.addEventListener('change', () => {
+      profileNameTag.textContent = `Perfil: ${selSize.value}`;
+    });
+
+    // Mode Toggle
+    tabGlobal.addEventListener('click', () => {
+      isPerEdgeMode = false;
+      tabGlobal.classList.add('active');
+      tabPerEdge.classList.remove('active');
+      sectionEdges.style.display = 'none';
+      sectionGlobalNotice.style.display = 'block';
+      globalEdgeCount.textContent = `${Object.keys(edgesData).filter(k => k !== 'all').length} aristas`;
+      activeEdgeId = 'all';
+      syncUI();
+    });
+
+    tabPerEdge.addEventListener('click', () => {
+      isPerEdgeMode = true;
+      tabPerEdge.classList.add('active');
+      tabGlobal.classList.remove('active');
+      sectionEdges.style.display = 'block';
+      sectionGlobalNotice.style.display = 'none';
+      if (activeEdgeId === 'all') activeEdgeId = 'e1';
+      syncUI();
+    });
+
+    function syncUI() {
+      const data = edgesData[activeEdgeId] || edgesData['all'];
+      if (!isPerEdgeMode) {
+        targetLabelEl.textContent = 'Editando: Modo Uniforme (Todas iguales)';
+      } else {
+        targetLabelEl.textContent = `Editando: ${data.name}`;
+      }
+
+      selRotationEl.value = data.rot;
+      btnMirrorH.classList.toggle('active', !!data.mirrorH);
+      btnMirrorV.classList.toggle('active', !!data.mirrorV);
+      btnPreExtend.classList.toggle('active', !!data.preExtend);
+
+      btnMirrorH.title = `Reflejar horizontalmente (${data.mirrorH ? 'Activado' : 'Desactivado'})`;
+      btnMirrorV.title = `Reflejar verticalmente (${data.mirrorV ? 'Activado' : 'Desactivado'})`;
+      btnPreExtend.title = `Extender previamente (${data.preExtend ? 'Activado' : 'Desactivado'})`;
+
+      if (profilePath) {
+        const scaleX = data.mirrorH ? -1 : 1;
+        const scaleY = data.mirrorV ? -1 : 1;
+        profilePath.style.transform = `rotate(${data.rot}deg) scale(${scaleX}, ${scaleY})`;
+      }
+
+      dots.forEach(dot => {
+        dot.classList.toggle('selected', dot.dataset.pos === data.anchor);
+      });
+
+      const badge = document.getElementById(`badge-${activeEdgeId}`);
+      if (badge) {
+        let extra = '';
+        if (data.mirrorH) extra += ' | EspH';
+        if (data.mirrorV) extra += ' | EspV';
+        badge.textContent = `Rot: ${data.rot}°${extra}`;
+      }
+    }
+
+    edgeListEl.addEventListener('click', (e) => {
+      const removeBtn = e.target.closest('[data-remove]');
+      if (removeBtn) {
+        e.stopPropagation();
+        const remId = removeBtn.dataset.remove;
+        delete edgesData[remId];
+        removeBtn.closest('.edge-item').remove();
+        updateCount();
+        if (activeEdgeId === remId) {
+          activeEdgeId = Object.keys(edgesData).find(k => k !== 'all') || 'all';
+          const nextItem = document.querySelector(`[data-id="${activeEdgeId}"]`);
+          if (nextItem) nextItem.classList.add('active');
+          syncUI();
+        }
+        return;
+      }
+
+      const item = e.target.closest('.edge-item');
+      if (!item) return;
+
+      document.querySelectorAll('.edge-item').forEach(el => el.classList.remove('active'));
+      item.classList.add('active');
+      activeEdgeId = item.dataset.id;
+      syncUI();
+    });
+
+    selRotationEl.addEventListener('change', () => {
+      if (edgesData[activeEdgeId]) {
+        edgesData[activeEdgeId].rot = selRotationEl.value;
+        syncUI();
+      }
+    });
+
+    btnMirrorH.addEventListener('click', () => {
+      if (edgesData[activeEdgeId]) {
+        edgesData[activeEdgeId].mirrorH = !edgesData[activeEdgeId].mirrorH;
+        syncUI();
+      }
+    });
+
+    btnMirrorV.addEventListener('click', () => {
+      if (edgesData[activeEdgeId]) {
+        edgesData[activeEdgeId].mirrorV = !edgesData[activeEdgeId].mirrorV;
+        syncUI();
+      }
+    });
+
+    btnPreExtend.addEventListener('click', () => {
+      if (edgesData[activeEdgeId]) {
+        edgesData[activeEdgeId].preExtend = !edgesData[activeEdgeId].preExtend;
+        syncUI();
+      }
+    });
+
+    dots.forEach(dot => {
+      dot.addEventListener('click', () => {
+        if (edgesData[activeEdgeId]) {
+          edgesData[activeEdgeId].anchor = dot.dataset.pos;
+          syncUI();
+        }
+      });
+    });
+
+    btnReset.addEventListener('click', () => {
+      if (activeEdgeId !== 'all') {
+        const global = edgesData['all'];
+        edgesData[activeEdgeId].rot = global.rot;
+        edgesData[activeEdgeId].mirrorH = global.mirrorH;
+        edgesData[activeEdgeId].mirrorV = global.mirrorV;
+        edgesData[activeEdgeId].preExtend = global.preExtend;
+        edgesData[activeEdgeId].anchor = global.anchor;
+        syncUI();
+      }
+    });
+
+    let nextIdx = 5;
+    btnAddEdge.addEventListener('click', () => {
+      const newId = `e${nextIdx}`;
+      const newName = `Arista ${nextIdx} (Edge${nextIdx})`;
+      edgesData[newId] = { ...edgesData['all'], name: newName };
+
+      const newEl = document.createElement('div');
+      newEl.className = 'edge-item';
+      newEl.dataset.id = newId;
+      newEl.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span>• ${newName}</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span class="edge-item-badge" id="badge-${newId}">Rot: 0°</span>
+          <span class="edge-item-remove" data-remove="${newId}" title="Quitar arista">×</span>
+        </div>
+      `;
+      edgeListEl.appendChild(newEl);
+      nextIdx++;
+      updateCount();
+
+      document.querySelectorAll('.edge-item').forEach(el => el.classList.remove('active'));
+      newEl.classList.add('active');
+      activeEdgeId = newId;
+      syncUI();
+    });
+
+    btnClearEdges.addEventListener('click', () => {
+      Object.keys(edgesData).forEach(k => { if (k !== 'all') delete edgesData[k]; });
+      edgeListEl.innerHTML = '';
+      activeEdgeId = 'all';
+      updateCount();
+      syncUI();
+    });
+
+    function updateCount() {
+      const count = Object.keys(edgesData).filter(k => k !== 'all').length;
+      edgeCountEl.textContent = count;
+      if (globalEdgeCount) globalEdgeCount.textContent = `${count} aristas`;
+    }
+
+    if (btnAddGlobal) {
+      btnAddGlobal.addEventListener('click', () => {
+        btnAddEdge.click();
+      });
+    }
+
+    syncUI();
+  </script>
+</body>
+</html>

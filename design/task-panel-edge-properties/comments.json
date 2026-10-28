@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "comments": [
+    {
+      "id": "pojz3co4",
+      "file": "01-master-detail-list.html",
+      "selector": "body > div:nth-of-type(2)",
+      "excerpt": "Perfil Seleccionado Familia Perfil C con labios (PGC) Tubo Cuadrado (SHS) Tubo Rectangular (RHS) Tamaño PGC 100 x 50 x 15 x 2.0 PGC 150 x 50 x 15 x 2.0 PGC 200 x 50 x 15 x 2.5 Material: Acero F24 Norma: IRAM-IAS U500-205 Unidad: Milímetros Peso: 3,45 kg/m",
+      "comment": "Falta la biblioteca",
+      "createdAt": "2026-10-28T08:40:59.203Z",
+      "status": "resolved",
+      "sentAt": "2026-10-28T08:57:55.339Z",
+      "resolvedAt": "2026-10-28T08:59:35.538Z"
+    },
+    {
+      "id": "vx0gp2hu",
+      "file": "01-master-detail-hybrid.html",
+      "selector": "#body-config > div:nth-of-type(2) > div:nth-of-type(1) > label:nth-of-type(2)",
+      "excerpt": "Extender previamente",
+      "comment": "Movamos a colocación",
+      "createdAt": "2026-10-28T08:54:41.636Z",
+      "status": "resolved",
+      "sentAt": "2026-10-28T08:57:55.339Z",
+      "resolvedAt": "2026-10-28T08:59:35.538Z"
+    },
+    {
+      "id": "n53gcmih",
+      "file": "01-master-detail-hybrid.html",
+      "selector": "body > div:nth-of-type(3)",
+      "excerpt": "Colocación ❖ Todas (Uniforme) ⚡ Por Arista (Individual) Rotación (°) 0 45 90 135 180 225 270 315 Reflejar horizontalmente Reflejar verticalmente",
+      "comment": "que sea un colapsable",
+      "createdAt": "2026-10-28T08:56:18.077Z",
+      "status": "resolved",
+      "sentAt": "2026-10-28T08:57:55.339Z",
+      "resolvedAt": "2026-10-28T08:59:35.538Z"
+    },
+    {
+      "id": "49r22ami",
+      "file": "01-master-detail-hybrid.html",
+      "selector": "#header-config",
+      "excerpt": "F Configuración del perfil ▲",
+      "comment": "Cambiemos el nombre a opciones avanzadas",
+      "createdAt": "2026-10-28T08:57:11.258Z",
+      "status": "resolved",
+      "sentAt": "2026-10-28T08:57:55.339Z",
+      "resolvedAt": "2026-10-28T08:59:35.538Z"
+    },
+    {
+      "id": "uf3b4gfg",
+      "file": "01-master-detail-hybrid.html",
+      "selector": "#header-config",
+      "excerpt": "F Opciones avanzadas ▼",
+      "comment": "Colapsado por defecto",
+      "createdAt": "2026-10-28T09:01:11.645Z",
+      "status": "resolved",
+      "sentAt": "2026-10-28T09:04:46.787Z",
+      "resolvedAt": "2026-10-28T09:08:28.107Z"
+    },
+    {
+      "id": "l89dw5de",
+      "file": "01-master-detail-hybrid.html",
+      "selector": "body > div:nth-of-type(2)",
+      "excerpt": "Perfil Biblioteca Steel - Acero Estructural (IRAM) Aluminum - Perfiles de Aluminio Custom - Mis Perfiles Familia Perfil C con labios (PGC) Perfil U comercial (PNU) Tubo Cuadrado (SHS) Tubo Rectangular (RHS) Tamaño PGC 100 x 50 x 15 x 2.0 PGC 150 x 50 x 15 x 2.0 PGC 200 x 50 x 15 x 2.5 Material: Acer",
+      "comment": "Que sea colapsable  y agregua un icono a los colapsables",
+      "createdAt": "2026-10-28T09:01:45.299Z",
+      "status": "resolved",
+      "sentAt": "2026-10-28T09:04:46.787Z",
+      "resolvedAt": "2026-10-28T09:08:28.107Z"
+    },
+    {
+      "id": "y7sn6j68",
+      "file": "01-master-detail-hybrid.html",
+      "selector": "#body-placement",
+      "excerpt": "❖ Todas (Uniforme) ⚡ Por Arista (Individual) Rotación (°) 0 45 90 135 180 225 270 315 Reflejar horizontalmente Reflejar verticalmente Extender previamente",
+      "comment": "Si esta en \"Todos\" mostremos una leyenda que indique cuantas arsitas estan seleccionadas",
+      "createdAt": "2026-10-28T09:03:16.691Z",
+      "status": "resolved",
+      "sentAt": "2026-10-28T09:04:46.787Z",
+      "resolvedAt": "2026-10-28T09:08:28.107Z"
+    },
+    {
+      "id": "0fq4q3l3",
+      "file": "01-master-detail-hybrid.html",
+      "selector": "#svg-profile",
+      "excerpt": "",
+      "comment": "Mostremos debajo el nombre del perfil",
+      "createdAt": "2026-10-28T09:04:07.408Z",
+      "status": "resolved",
+      "sentAt": "2026-10-28T09:04:46.787Z",
+      "resolvedAt": "2026-10-28T09:08:28.107Z"
+    },
+    {
+      "id": "fpm7lt4k",
+      "file": "01-master-detail-hybrid.html",
+      "selector": "#body-placement > div:nth-of-type(8) > label:nth-of-type(1)",
+      "excerpt": "Reflejar horizontalmente",
+      "comment": "Reflejar y extender usemos bostones on/off con icono",
+      "createdAt": "2026-10-28T09:26:24.533Z",
+      "status": "resolved",
+      "sentAt": "2026-10-28T09:26:24.601Z",
+      "resolvedAt": "2026-10-28T09:30:43.615Z"
+    }
+  ]
+}
