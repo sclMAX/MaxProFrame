@@ -284,6 +284,65 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertEqual(panel._edge_properties[e1_key]["rotation"], 0.0)
         self.assertFalse(panel._edge_properties[e1_key]["mirror_v"])
 
+    def test_sketch_interior_selection_callbacks_create_outline_profiles(self):
+        for per_edge in (False, True):
+            with self.subTest(per_edge=per_edge):
+                doc = self._new_doc("DocSketchInterior")
+                sk = self._create_rectangle_sketch(doc)
+                Gui.Selection.clearSelection()
+                panel = CreateProfileTaskPanel()
+                self.panels.append(panel)
+                panel.open()
+                panel.mode_switch.set_per_edge(per_edge)
+                Gui.Selection.addObserver(panel)
+                # Model the GUI's generated filled-face token, including when
+                # the sketch's stored shape does not contain a Face1. An actual
+                # GUI selection event drives the observer and preview lifecycle.
+                names = ["Face1", "Edge1", "Face1", "Vertex1", "Edge999"]
+                selection = type(
+                    "SelEx", (), {"Object": sk, "ObjectName": sk.Name, "SubElementNames": names}
+                )()
+                with patch.object(Gui.Selection, "getSelectionEx", return_value=[selection]):
+                    Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
+                    if per_edge:
+                        # Immediate individual-mode reconciliation belongs to the later editor slice.
+                        self.assertTrue(panel.apply())
+                    expected = {(sk, f"Edge{i}") for i in range(1, len(sk.Shape.Edges) + 1)}
+                    self.assertEqual(set(panel._objects), expected)
+                    self.assertEqual(panel.edge_list_widget.list_widget.count(), len(expected))
+                    for (source, edge), profile in panel._objects.items():
+                        self.assertFalse(profile.Shape.isNull())
+                        self.assertTrue(profile.Shape.isValid())
+                        self.assertNotIn("Invalid", profile.State)
+                        support = (
+                            profile.AttachmentSupport if hasattr(profile, "AttachmentSupport") else profile.Support
+                        )
+                        supports = support if isinstance(support[0], (tuple, list)) else [support]
+                        self.assertEqual(len(supports), 1)
+                        support_object, subelements = supports[0]
+                        self.assertEqual(support_object, source)
+                        self.assertEqual((subelements,) if isinstance(subelements, str) else tuple(subelements), (edge,))
+                        self.assertEqual(profile.MapMode, "NormalToEdge")
+                    self.assertEqual(names, ["Face1", "Edge1", "Face1", "Vertex1", "Edge999"])
+                panel.reject()
+                Gui.Selection.clearSelection()
+
+    def test_selection_normalization_preserves_edges_and_ignores_unsupported_paths(self):
+        doc = self._new_doc("DocNormalizedPaths")
+        sk = self._create_rectangle_sketch(doc)
+        solid = doc.addObject("Part::Feature", "Solid")
+        solid.Shape = Part.makeBox(10, 10, 10)
+        doc.recompute()
+        select = lambda obj, names: type("SelEx", (), {"Object": obj, "SubElementNames": names})()
+        normalize = CreateProfileTaskPanel._selection_edges
+        self.assertEqual(normalize(select(sk, [])), [f"Edge{i}" for i in range(1, 5)])
+        names = ["Edge2", "Edge2", "Vertex1", "Edge999"]
+        self.assertEqual(normalize(select(sk, names)), ["Edge2"])
+        self.assertEqual(names, ["Edge2", "Edge2", "Vertex1", "Edge999"])
+        self.assertEqual(normalize(select(solid, ["Face1", "Vertex1", "Edge1"])), ["Edge1"])
+        self.assertEqual(normalize(select(solid, ["Face1", "Vertex1"])), [])
+        self.assertEqual(len(normalize(select(solid, []))), len(solid.Shape.Edges))
+
     def test_s3_edge_removal(self):
         """S3: Clicking remove on an edge removes it from properties and removes its preview object, remaining absent on subsequent input changes."""
         doc = self._new_doc("DocRemoveEdge")

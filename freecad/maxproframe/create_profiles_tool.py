@@ -1818,6 +1818,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             #     container = App.activeDocument().addObject('App::DocumentObjectGroup','Group')
 
             # creates profiles
+            seen_edges = set()
             for sketch_sel in selection_list:
                 # move the sketch inside the container
                 if container:
@@ -1825,9 +1826,11 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
                 edges = self._selection_edges(sketch_sel)
 
-                for i, edge in enumerate(edges):
-                    if (sketch_sel.Object, edge) in getattr(self, "_excluded_edges", ()):
+                for edge in edges:
+                    key = (sketch_sel.Object, edge)
+                    if key in seen_edges or key in getattr(self, "_excluded_edges", ()):
                         continue
+                    seen_edges.add(key)
                     k = self.create_or_update_profile(sketch_sel.Object, edge, p_name)
                     seen_profiles.append(k)
 
@@ -2035,10 +2038,19 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
     @staticmethod
     def _selection_edges(selection):
         """The same path expansion is used by creation and its placement summary."""
-        if selection.SubElementNames:
-            return selection.SubElementNames
-        shape = getattr(selection.Object, "Shape", None)
-        return [f"Edge{index + 1}" for index, _edge in enumerate(getattr(shape, "Edges", ()))]
+        obj = selection.Object
+        shape = getattr(obj, "Shape", None)
+        edges = [f"Edge{index + 1}" for index, _edge in enumerate(getattr(shape, "Edges", ()))]
+        names = selection.SubElementNames
+        if not names:
+            return edges
+        # A filled sketch's GUI face can be generated for display and need not
+        # exist in Shape.Faces. It denotes the entire sketch outline.
+        if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject"):
+            if any(re.fullmatch(r"Face[1-9][0-9]*", name) for name in names):
+                return edges
+        valid = set(edges)
+        return list(dict.fromkeys(name for name in names if name in valid))
 
     def _update_placement_guidance(self):
         selections = (
@@ -2046,7 +2058,16 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             if getattr(self, "_saved_selection", None) is not None
             else (Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else [])
         )
-        details = [(selection.ObjectName, self._selection_edges(selection)) for selection in selections]
+        seen = set()
+        details = []
+        for selection in selections:
+            edges = []
+            for edge in self._selection_edges(selection):
+                key = (selection.Object, edge)
+                if key not in seen and key not in getattr(self, "_excluded_edges", ()):
+                    seen.add(key)
+                    edges.append(edge)
+            details.append((selection.ObjectName, edges))
         count = sum(len(edges) for _name, edges in details)
         if selections:
             source = "1 edge selected" if count == 1 else "%s edges selected"
@@ -2070,10 +2091,10 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             lbl.setToolTip(tooltip)
 
         edges_list = []
-        for selection in selections:
+        for selection, (_name, edges) in zip(selections, details):
             obj = getattr(selection, "Object", None)
             obj_label = getattr(obj, "Label", getattr(selection, "ObjectName", "Object"))
-            for edge_name in self._selection_edges(selection):
+            for edge_name in edges:
                 key = (obj, edge_name)
                 if hasattr(self, "_excluded_edges") and key in self._excluded_edges:
                     continue
