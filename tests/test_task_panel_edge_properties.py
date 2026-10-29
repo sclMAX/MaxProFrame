@@ -282,6 +282,185 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         panel.clean()
         self.assertTrue(all(p.ViewObject.Transparency == 80 for p in (prof_e1, prof_e2)))
 
+    def _canvas_panel(self):
+        doc = self._new_doc("DocPersistentPaths")
+        sk = self._create_rectangle_sketch(doc)
+        Gui.Selection.clearSelection()
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+        Gui.Selection.addObserver(panel)
+        return doc, sk, panel
+
+    def test_canvas_latest_pick_activates_editor(self):
+        doc, sk, panel = self._canvas_panel()
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
+        first = panel._objects[(sk, "Edge1")]
+        panel.set_rotation(90)
+        before = (first.Shape.exportBrepToString(), first.RotationAngle)
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge2")
+        self.assertEqual(panel.edge_list_widget.get_selected_edges(), [(sk, "Edge2")])
+        self.assertEqual(panel._objects[(sk, "Edge2")].ViewObject.Transparency, 35)
+        self.assertEqual(panel.get_rotation(), 90)
+        self.assertEqual((first.Shape.exportBrepToString(), first.RotationAngle), before)
+
+    def test_canvas_preview_pick_activates_base_without_derived_profile(self):
+        doc, sk, panel = self._canvas_panel()
+        for edge in ("Edge1", "Edge2"):
+            Gui.Selection.addSelection(doc.Name, sk.Name, edge)
+        first, second = panel._objects[(sk, "Edge1")], panel._objects[(sk, "Edge2")]
+        before = [(p.Name, p.Shape.exportBrepToString(), p.RotationAngle) for p in (first, second)]
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, first.Name, "Edge1")
+        self.assertEqual(panel.edge_list_widget.get_selected_edges(), [(sk, "Edge1")])
+        self.assertEqual(panel.edge_list_widget.list_widget.count(), 2)
+        self.assertEqual([(p.Name, p.Shape.exportBrepToString(), p.RotationAngle) for p in (first, second)], before)
+        self.assertEqual(first.ViewObject.Transparency, 35)
+
+    def test_canvas_ctrl_remove_selected_base_on_remove_event(self):
+        doc, sk, panel = self._canvas_panel()
+        for edge in ("Edge1", "Edge2"):
+            Gui.Selection.addSelection(doc.Name, sk.Name, edge)
+        removed = panel._objects[(sk, "Edge1")].Name
+        sibling = panel._objects[(sk, "Edge2")]
+        with patch.object(QtWidgets.QApplication, "keyboardModifiers", return_value=QtCore.Qt.ControlModifier):
+            Gui.Selection.removeSelection(doc.Name, sk.Name, "Edge1")
+        self.app.processEvents()
+        self.assertIsNone(doc.getObject(removed))
+        self.assertEqual(panel.edge_list_widget.list_widget.count(), 1)
+        self.assertTrue(panel.apply())
+        self.assertIsNone(doc.getObject(removed))
+        self.assertIs(doc.getObject(sibling.Name), sibling)
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
+        self.assertEqual(panel.edge_list_widget.list_widget.count(), 2)
+
+    def test_canvas_ctrl_remove_preview_on_add_event(self):
+        doc, sk, panel = self._canvas_panel()
+        for edge in ("Edge1", "Edge2"):
+            Gui.Selection.addSelection(doc.Name, sk.Name, edge)
+        removed = panel._objects[(sk, "Edge1")].Name
+        sibling = panel._objects[(sk, "Edge2")]
+        with patch.object(QtWidgets.QApplication, "keyboardModifiers", return_value=QtCore.Qt.ControlModifier):
+            Gui.Selection.addSelection(doc.Name, removed, "Edge1")
+        self.app.processEvents()
+        self.assertIsNone(doc.getObject(removed))
+        self.assertEqual(panel.edge_list_widget.list_widget.count(), 1)
+        self.assertTrue(panel.apply())
+        self.assertIs(doc.getObject(sibling.Name), sibling)
+
+    def test_canvas_pending_removal_before_apply_or_accept(self):
+        for action in ("apply", "accept"):
+            with self.subTest(action=action):
+                doc, sk, panel = self._canvas_panel()
+                for edge in ("Edge1", "Edge2"):
+                    Gui.Selection.addSelection(doc.Name, sk.Name, edge)
+                removed = panel._objects[(sk, "Edge1")].Name
+                sibling = panel._objects[(sk, "Edge2")]
+                sibling_name, shape = sibling.Name, sibling.Shape.exportBrepToString()
+                with patch.object(QtWidgets.QApplication, "keyboardModifiers", return_value=QtCore.Qt.ControlModifier):
+                    Gui.Selection.removeSelection(doc.Name, sk.Name, "Edge1")
+                self.assertTrue(panel.apply() if action == "apply" else panel.accept(defer=False))
+                self.app.processEvents()
+                self.assertIsNone(doc.getObject(removed))
+                self.assertIs(doc.getObject(sibling_name), sibling)
+                self.assertEqual(sibling.Shape.exportBrepToString(), shape)
+                self.assertEqual(panel.edge_list_widget.list_widget.count(), 1)
+                panel.clean()
+
+    def test_canvas_pending_removal_cancelled_by_normal_repick(self):
+        doc, sk, panel = self._canvas_panel()
+        for edge in ("Edge1", "Edge2"):
+            Gui.Selection.addSelection(doc.Name, sk.Name, edge)
+        first = panel._objects[(sk, "Edge1")]
+        name, shape = first.Name, first.Shape.exportBrepToString()
+        with patch.object(QtWidgets.QApplication, "keyboardModifiers", return_value=QtCore.Qt.ControlModifier):
+            Gui.Selection.removeSelection(doc.Name, sk.Name, "Edge1")
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
+        self.app.processEvents()
+        self.assertIs(doc.getObject(name), first)
+        self.assertEqual(first.Shape.exportBrepToString(), shape)
+        self.assertEqual(panel.edge_list_widget.list_widget.count(), 2)
+        self.assertEqual(panel.edge_list_widget.get_selected_edges(), [(sk, "Edge1")])
+
+    def test_canvas_control_removes_last_path_and_normal_pick_readds_it(self):
+        doc, sk, panel = self._canvas_panel()
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
+        removed = panel._objects[(sk, "Edge1")].Name
+        # Offscreen QtTest cannot set the physical keyboard modifier state.
+        # Inject only that input; exercise native selection dispatch and removal.
+        with patch.object(QtWidgets.QApplication, "keyboardModifiers", return_value=QtCore.Qt.ControlModifier):
+            Gui.Selection.removeSelection(doc.Name, sk.Name, "Edge1")
+        self.app.processEvents()
+        self.assertIsNone(doc.getObject(removed))
+        self.assertEqual(panel.edge_list_widget.list_widget.count(), 0)
+        with patch.object(QtWidgets.QApplication, "keyboardModifiers", return_value=QtCore.Qt.NoModifier):
+            Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
+        self.app.processEvents()
+        self.assertEqual(panel.edge_list_widget.list_widget.count(), 1)
+        self.assertEqual(panel.edge_list_widget.get_selected_edges(), [(sk, "Edge1")])
+        self.assertFalse(panel._objects[(sk, "Edge1")].Shape.isNull())
+
+    def test_canvas_existing_profile_remains_support(self):
+        doc, sk, panel = self._canvas_panel()
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
+        existing = panel._objects[(sk, "Edge1")]
+        self.assertTrue(panel.accept(defer=False))
+        Gui.Selection.clearSelection()
+        next_panel = CreateProfileTaskPanel()
+        self.panels.append(next_panel)
+        next_panel.open()
+        Gui.Selection.addObserver(next_panel)
+        Gui.Selection.addSelection(doc.Name, existing.Name, "Edge1")
+        self.assertEqual(next_panel.edge_list_widget.get_selected_edges(), [(existing, "Edge1")])
+        self.assertEqual(next_panel.edge_list_widget.list_widget.count(), 1)
+        self.assertIs(doc.getObject(existing.Name), existing)
+
+    def test_canvas_replacement_keeps_previous_path(self):
+        doc, sk, panel = self._canvas_panel()
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
+        first = panel._objects[(sk, "Edge1")]
+        name, shape = first.Name, first.Shape.exportBrepToString()
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge2")
+        self.assertEqual(panel.edge_list_widget.list_widget.count(), 2)
+        self.assertIs(doc.getObject(name), first)
+        self.assertEqual(first.Shape.exportBrepToString(), shape)
+        self.assertFalse(panel._objects[(sk, "Edge2")].Shape.isNull())
+
+    def test_canvas_clear_keeps_paths_through_apply_and_ok(self):
+        doc, sk, panel = self._canvas_panel()
+        for edge in ("Edge1", "Edge2"):
+            Gui.Selection.addSelection(doc.Name, sk.Name, edge)
+        profiles = list(panel._objects.values())
+        before = [(p.Name, p.Shape.exportBrepToString(), p.RotationAngle, p.MirrorH) for p in profiles]
+        Gui.Selection.clearSelection()
+        self.assertEqual(panel.edge_list_widget.list_widget.count(), 2)
+        self.assertFalse(panel.form_proxy.sb_length.isEnabled())
+        self.assertTrue(panel.apply())
+        self.assertTrue(panel.accept(defer=False))
+        self.assertEqual([(p.Name, p.Shape.exportBrepToString(), p.RotationAngle, p.MirrorH)
+                          for p in profiles], before)
+        self.assertTrue(all(doc.getObject(p.Name) is p for p in profiles))
+
+    def test_canvas_can_readd_explicitly_removed_path(self):
+        doc, sk, panel = self._canvas_panel()
+        for edge in ("Edge1", "Edge2"):
+            Gui.Selection.addSelection(doc.Name, sk.Name, edge)
+        key = (sk, "Edge1")
+        removed_name = panel._objects[key].Name
+        sibling = panel._objects[(sk, "Edge2")]
+        panel.edge_list_widget._items[key][1].btn_remove.click()
+        self.assertIsNone(doc.getObject(removed_name))
+        self.assertEqual(panel.edge_list_widget.list_widget.count(), 1)
+        panel.apply()
+        self.assertIsNone(doc.getObject(removed_name))
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
+        self.assertEqual(panel.edge_list_widget.list_widget.count(), 2)
+        self.assertFalse(panel._objects[key].Shape.isNull())
+        self.assertIs(panel._objects[(sk, "Edge2")], sibling)
+
     def test_per_edge_selection_callbacks_reconcile_previews(self):
         doc = self._new_doc("DocSelectionCallbacks")
         sk = self._create_rectangle_sketch(doc)
@@ -301,7 +480,7 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         original = dict(panel._edge_properties[e1])
 
         Gui.Selection.addSelection(doc.Name, sk.Name, "Edge2")
-        self.assertEqual(panel.edge_list_widget.get_selected_edge(), e1)
+        self.assertEqual(panel.edge_list_widget.get_selected_edge(), e2)
         self.assertEqual(panel._edge_properties[e1], original)
         self.assertEqual(panel._objects[e1].RotationAngle, 90.0)
         self.assertTrue(panel._objects[e1].MirrorH)
@@ -309,8 +488,8 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertFalse(panel._objects[e2].Shape.isNull())
         removed_name = panel._objects[e2].Name
         Gui.Selection.removeSelection(doc.Name, sk.Name, "Edge2")
-        self.assertNotIn(e2, panel._objects)
-        self.assertIsNone(doc.getObject(removed_name))
+        self.assertIn(e2, panel._objects)
+        self.assertIsNotNone(doc.getObject(removed_name))
         self.assertEqual(panel._edge_properties[e1], original)
 
         Gui.Selection.addSelection(doc.Name, sk.Name, "Edge2")
@@ -320,8 +499,8 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertIn(e3, panel._objects)
         self.assertEqual(panel._edge_properties[e1], original)
         Gui.Selection.clearSelection()
-        self.assertNotIn(e1, panel._objects)
-        self.assertNotIn(e3, panel._objects)
+        self.assertIn(e1, panel._objects)
+        self.assertIn(e3, panel._objects)
 
     def test_sketch_interior_selection_callbacks_create_outline_profiles(self):
         for per_edge in (False, True):

@@ -1,5 +1,6 @@
 import glob
 from functools import wraps
+from types import SimpleNamespace
 from contextlib import contextmanager
 import json
 import os
@@ -1270,6 +1271,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self._saved_selection = None
         self._saved_form_proxy = None
         self._excluded_edges = set()
+        self._pending_removals = {}
         self._mutation_depth = 0
         self._selection_pending = False
         self._edge_properties = {}
@@ -1580,7 +1582,9 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self._refresh_selection_presentation()
         self._refresh_edge_editor()
 
+    @_guard_reconciliation
     def _on_edge_removed(self, edge_key):
+        self._pending_removals.pop(edge_key, None)
         self._restore_preview_highlight()
         if self._active_edge_key == edge_key:
             self._active_edge_key = None
@@ -1685,11 +1689,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         if not had_edge_properties:
             self.proceed()
 
-        has_sel = len(
-            self._saved_selection
-            if hasattr(self, "_saved_selection") and self._saved_selection is not None
-            else (Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else [])
-        )
+        has_sel = len(self._path_selections())
         has_len = self.form_proxy.sb_length.value() > 0
         if has_sel or has_len:
             self._set_applied_state()
@@ -1718,6 +1718,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
     def reject(self):
         self._reject_called = True
+        self._pending_removals.clear()
         self._accept_finalizing = False
 
         self.clean()
@@ -1746,7 +1747,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         return True
 
     def apply(self):
-        has_sel = len(Gui.Selection.getSelectionEx()) if hasattr(Gui, "Selection") else 0
+        self._flush_pending_removals()
+        has_sel = len(self._path_selections())
         if has_sel or self.form_proxy.sb_length.value() > 0:
             self.proceed()
             self._set_applied_state()
@@ -1819,7 +1821,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             return False
 
     def accept(self, defer=None):
-        has_sel = len(Gui.Selection.getSelectionEx()) if hasattr(Gui, "Selection") else 0
+        self._flush_pending_removals()
+        has_sel = len(self._path_selections())
         if not (has_sel or self.form_proxy.sb_length.value() > 0):
             App.Console.PrintMessage(
                 translate("frameforge", "Not Accepting CreateProfile\nSelect Edges or set Length\n")
@@ -1871,7 +1874,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             self._accept_finalizing = True
             self._saved_anchor = (ax, ay)
             self._saved_rotation = self.get_rotation()
-            self._saved_selection = list(Gui.Selection.getSelectionEx()) if hasattr(Gui, "Selection") else []
+            self._saved_selection = self._path_selections()
             self._saved_form_proxy = _SnapshotFormProxy(self.form_proxy)
             self.clean()
             QtCore.QTimer.singleShot(0, self._finalize_accept)
@@ -2034,11 +2037,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self._restore_preview_highlight()
         seen_profiles = []
 
-        selection_list = (
-            getattr(self, "_saved_selection", None)
-            if getattr(self, "_saved_selection", None) is not None
-            else (Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else [])
-        )
+        selection_list = self._path_selections()
 
         p_name = "Profile_" if self.form_proxy.cb_prefix_profile_in_name.isChecked() else ""
 
@@ -2290,6 +2289,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         return tuple((s.ObjectName, tuple(s.SubElementNames)) for s in Gui.Selection.getSelectionEx())
 
     def _selection_changed(self):
+        if self._pending_removals and not self._mutation_depth:
+            return
         if self._mutation_depth:
             self._selection_pending = True
             return
@@ -2305,11 +2306,56 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         # Reconcile paths without treating the newly active row as an edit.
         self.proceed()
 
+    def _canvas_pick(self, doc, obj, sub, removed=False):
+        if (self._mutation_depth or self._initializing or self._rendering_thumbnail
+                or self._reject_called or self._accept_finalizing or self._preview_closed):
+            self._selection_changed()
+            return
+        document = App.getDocument(doc)
+        source = document.getObject(obj) if document else None
+        if source is None:
+            self._selection_changed()
+            return
+        preview_key = next((key for key, preview in self._objects.items() if preview == source), None)
+        selection = SimpleNamespace(Object=source, SubElementNames=[sub] if sub else [])
+        keys = [preview_key] if preview_key is not None else [
+            (source, edge) for edge in self._selection_edges(selection)
+        ]
+        ctrl = bool(QtWidgets.QApplication.keyboardModifiers() & QtCore.Qt.ControlModifier)
+        if ctrl:
+            # Never delete a selected object during FreeCAD's observer dispatch.
+            token = object()
+            for key in keys:
+                self._excluded_edges.add(key)
+                self._pending_removals[key] = token
+            QtCore.QTimer.singleShot(0, lambda: self._flush_pending_removals(token))
+        elif not removed:
+            for key in keys:
+                self._pending_removals.pop(key, None)
+                self._excluded_edges.discard(key)
+            self._selection_changed()
+            if keys:
+                self.edge_list_widget.select_edge(keys[-1])
+        else:
+            self._selection_changed()
+
+    def _flush_pending_removals(self, token=None):
+        if self._reject_called or self._preview_closed:
+            return
+        keys = [key for key, pending in self._pending_removals.items()
+                if token is None or pending is token]
+        for key in keys:
+            self._pending_removals.pop(key, None)
+            if key in self._edge_properties:
+                self._on_edge_removed(key)
+        if keys:
+            self._selection_changed()
+
     def addSelection(self, doc, obj, sub, other):
-        self._selection_changed()
+        self._canvas_pick(doc, obj, sub)
 
     def removeSelection(self, doc, obj, sub):
-        self._selection_changed()
+        self._canvas_pick(doc, obj, sub, removed=True)
 
     def clearSelection(self, other):
         self._selection_changed()
@@ -2331,12 +2377,30 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         valid = set(edges)
         return list(dict.fromkeys(name for name in names if name in valid))
 
+    def _path_selections(self):
+        """Canvas picks add paths; explicit removal forgets them."""
+        selections = self._saved_selection
+        if selections is None:
+            selections = Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else []
+        paths = {}
+        for obj, edge in self._edge_properties:
+            if (obj, edge) not in self._excluded_edges:
+                paths.setdefault(obj, []).append(edge)
+        for selection in selections:
+            # Session previews are editing targets, never new path supports.
+            if any(selection.Object == preview for preview in self._objects.values()):
+                continue
+            for edge in self._selection_edges(selection):
+                key = (selection.Object, edge)
+                if key not in self._excluded_edges:
+                    edges = paths.setdefault(selection.Object, [])
+                    if edge not in edges:
+                        edges.append(edge)
+        return [SimpleNamespace(Object=obj, ObjectName=obj.Name, SubElementNames=edges)
+                for obj, edges in paths.items()]
+
     def _update_placement_guidance(self):
-        selections = (
-            getattr(self, "_saved_selection", None)
-            if getattr(self, "_saved_selection", None) is not None
-            else (Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else [])
-        )
+        selections = self._path_selections()
         seen = set()
         details = []
         for selection in selections:
@@ -2405,7 +2469,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def update_selection(self):
         if self._rendering_thumbnail:
             return
-        selection_list = Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else []
+        selection_list = self._path_selections()
         self.form_proxy.sb_length.setEnabled(not selection_list)
         if selection_list:
             updating = self._updating_controls
