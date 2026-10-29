@@ -123,6 +123,8 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertFalse(panel.advanced_content.isVisibleTo(panel.form[1]))
         panel.advanced_button.setChecked(True)
         self.assertTrue(panel.advanced_content.isVisibleTo(panel.form[1]))
+        # Combined bevels remain an internal compatibility control, not a panel option.
+        self.assertFalse(panel.form_proxy.cb_combined_bevel.isVisibleTo(panel.form[1]))
 
         # Profile name label displays current size
         self.assertTrue(hasattr(panel, "label_profile_name"))

@@ -522,11 +522,11 @@ class BaseProfileTaskPanel(ABC):
         if lbl_3 is not None and hasattr(lbl_3, "setText"):
             lbl_3.setText("Price per metre")
 
-        # Move historical prototype combined-bevel option into Advanced
+        # Keep the legacy control for preference/model compatibility, outside the panel UI.
         sec_bevel = _safe_unwrap_widget(getattr(second, "cb_combined_bevel", None))
-        if gb3_layout is not None and sec_bevel is not None:
+        if sec_bevel is not None:
             _safe_remove_layout_widget(gb3_layout, sec_bevel)
-            advanced_layout.addWidget(sec_bevel)
+            sec_bevel.hide()
 
         # Compact remaining profile options (fillets) into gb3_layout
         sec_fillet = _safe_unwrap_widget(getattr(second, "cb_make_fillet", None))
@@ -2129,7 +2129,11 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             # create part or group and
             container = None
             if self.form_proxy.rb_profiles_in_part.isChecked():
-                container = App.activeDocument().addObject("App::Part", "Part")
+                target_doc = self._profile_target_document()
+                container = getattr(self, "_profile_container", None)
+                if container is None or target_doc.getObject(container.Name) != container:
+                    container = target_doc.addObject("App::Part", "Part")
+                    self._profile_container = container
             # elif self.form_proxy.rb_profiles_in_group.isChecked(): # not working
             #     container = App.activeDocument().addObject('App::DocumentObjectGroup','Group')
 
@@ -2156,6 +2160,9 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                         if self.form_proxy.cb_size_in_name.isChecked():
                             edge_name += self.form_proxy.combo_size.currentText() + "_"
                         k = self.create_or_update_profile(sketch_sel.Object, edge, edge_name + "000")
+                    if container:
+                        # Existing previews must follow paths moved into the session Part.
+                        container.addObject(self._objects[k])
                     seen_profiles.append(k)
 
         elif self.form_proxy.sb_length.value() > 0:
@@ -2336,6 +2343,13 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 link_sub,
                 **kwargs,
             )
+
+            if custom_profile_sketch is not None:
+                # Library sections are shared sources, not children of each profile's Part.
+                # Only new profiles are changed; existing saved links are not migrated.
+                obj.removeProperty("CustomProfile")
+                obj.addProperty("App::PropertyLinkGlobal", "CustomProfile", "Profile", "Target profile")
+                obj.CustomProfile = custom_profile_sketch
 
             # Create a ViewObject in current GUI
             if getattr(obj, "ViewObject", None) is not None:

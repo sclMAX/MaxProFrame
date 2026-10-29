@@ -72,6 +72,9 @@ class TestProfileParentGuard(unittest.TestCase):
             panel.get_anchor = lambda: (1, 1)
             panel.get_rotation = lambda: 0.0
             panel.profiles = {}
+            panel._mutation_depth = 0
+            panel._selection_pending = False
+            panel._selection_signature = lambda: ()
         return panel
 
     def create(self, custom):
@@ -212,6 +215,65 @@ class TestProfileParentGuard(unittest.TestCase):
             self.assertEqual(profile.getTypeIdOfProperty("Target"), "App::PropertyLinkSub")
             self.assert_parametric_profile(profile, 150)
             App.closeDocument(self.doc.Name)
+
+    def preview_panel(self, in_part=True):
+        panel = self.panel(False)
+        panel._target_doc = self.doc
+        panel._objects = {}
+        panel._edge_properties = {}
+        panel._edge_sections = {}
+        panel._excluded_edges = set()
+        panel._saved_selection = [SimpleNamespace(Object=self.path, SubElementNames=["Edge1"])]
+        panel._mutation_depth = 0
+        panel._selection_pending = False
+        panel._preview_closed = True
+        panel._restore_preview_highlight = Mock()
+        panel._selection_signature = lambda: ()
+        for key in ("sketch", "family", "size", "prefix_profile"):
+            setattr(panel.form_proxy, "cb_" + key + "_in_name", Mock(isChecked=Mock(return_value=False)))
+        panel.form_proxy.rb_profiles_in_part = Mock(isChecked=Mock(return_value=in_part))
+        return panel
+
+    def test_create_part_reuses_container_and_moves_existing_preview(self):
+        panel = self.preview_panel(False)
+        panel.proceed()
+        profile = next(iter(panel._objects.values()))
+        self.assertEqual(profile.Parents, [])
+        panel.form_proxy.rb_profiles_in_part.isChecked.return_value = True
+        for _ in range(4):
+            panel.proceed()
+        parts = [obj for obj in self.doc.Objects if obj.TypeId == "App::Part"]
+        self.assertEqual(len(parts), 1)
+        self.assertEqual(set(parts[0].Group), {self.path, profile})
+        self.assertEqual(list(panel._objects.values()), [profile])
+        self.assert_parametric_profile(profile, 100)
+
+    def test_same_place_preview_does_not_create_part(self):
+        panel = self.preview_panel(False)
+        for _ in range(3):
+            panel.proceed()
+        self.assertFalse(any(obj.TypeId == "App::Part" for obj in self.doc.Objects))
+        self.assertEqual(self.path.Parents, [])
+        self.assert_parametric_profile(next(iter(panel._objects.values())), 100)
+
+    def test_custom_section_outside_part_uses_global_link(self):
+        from freecad.maxproframe import create_profiles_tool as module
+
+        panel = self.panel(False)
+        panel.form_proxy.combo_family.currentText.return_value = "Custom Profile"
+        panel.profiles = {"Steel": {"Custom Profile": {"sizes": {"20x10": {"asset_path": "section.FCStd"}}}}}
+        panel.library_manager = Mock()
+        panel.library_manager._get_registered_folder.return_value = "unused"
+        part = self.doc.addObject("App::Part", "Part")
+        part.addObject(self.path)
+        with patch.object(module, "get_or_import_section_sketch", return_value=self.section):
+            profile = panel.make_profile(self.path, "Edge1", "Profile")
+        self.doc.recompute()
+        self.assertEqual(profile.getTypeIdOfProperty("CustomProfile"), "App::PropertyLinkGlobal")
+        self.assertEqual(profile.CustomProfile, self.section)
+        self.assertEqual(self.section.Parents, [])
+        self.assertIn(profile, part.Group)
+        self.assert_parametric_profile(profile, 100)
 
     def test_standard_body_rejection_finishes_profile_at_root(self):
         self.check_parent("PartDesign::Body", False)
