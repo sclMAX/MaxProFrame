@@ -382,6 +382,248 @@ class TestCustomProfileSelectedImport(unittest.TestCase):
             if getattr(getattr(o, "Proxy", None), "Type", None) == "Profile" or hasattr(o, "CustomProfile")
         ]
 
+    def test_multiselection_custom_identity_survives_import_and_accept(self):
+        """Changing one selected edge must not delete siblings or their shared source."""
+        doc = self._new_doc("ProjectSelectiveCustom")
+        App.setActiveDocument(doc.Name)
+        paths = [self._create_line_path(doc, f"Path{i}") for i in range(3)]
+        Gui.Selection.clearSelection()
+        for path in paths:
+            Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
+
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+        panel.edge_list_widget.list_widget.selectAll()
+        self._select_profile(panel, "CustomFolderLib", "Custom Profile", "CP-901")
+        rows = panel.edge_list_widget.list_widget
+        keys = [(path, "Edge1") for path in paths]
+        previews = [panel._objects[key] for key in keys]
+        source = previews[0].CustomProfile
+        self.assertTrue(all(profile.CustomProfile == source for profile in previews))
+
+        # Importing CP-902 clears and restores Gui.Selection synchronously.
+        # The same preview objects and the siblings' source must survive it.
+        panel.edge_list_widget.select_edge(keys[2])
+        self._select_profile(panel, "CustomFolderLib", "Custom Profile", "CP-902")
+        self._assert_no_modals("selective custom import")
+        self.assertEqual([panel._objects[key] for key in keys], previews)
+        self.assertEqual([profile.SizeName for profile in previews], ["CP-901", "CP-901", "CP-902"])
+        self.assertEqual(previews[0].CustomProfile, source)
+        self.assertEqual(previews[1].CustomProfile, source)
+        self.assertIsNotNone(doc.getObject(source.Name))
+        for key, expected in zip(keys, ("CP-901", "CP-901", "CP-902")):
+            panel.edge_list_widget.select_edge(key)
+            self.assertEqual(panel.form_proxy.combo_material.currentText(), "CustomFolderLib")
+            self.assertEqual(panel.form_proxy.combo_family.currentText(), "Custom Profile")
+            self.assertEqual(panel.form_proxy.combo_size.currentText(), expected)
+        self.assertEqual([profile.SizeName for profile in previews], ["CP-901", "CP-901", "CP-902"])
+
+        panel.proceed()
+        self.assertEqual([profile.SizeName for profile in previews], ["CP-901", "CP-901", "CP-902"])
+        self.assertTrue(panel.accept())
+        self._assert_no_modals("selective custom accept")
+        doc.recompute()
+        self.assertEqual([profile.SizeName for profile in previews], ["CP-901", "CP-901", "CP-902"])
+        self.assertEqual(previews[0].CustomProfile, source)
+        self.assertEqual(previews[1].CustomProfile, source)
+        self.assertIsNotNone(doc.getObject(source.Name))
+
+    def test_batch_rotation_and_section_preserve_individual_placement(self):
+        doc = self._new_doc("ProjectBatch")
+        App.setActiveDocument(doc.Name)
+        paths = [self._create_line_path(doc, f"BatchPath{i}") for i in range(3)]
+        Gui.Selection.clearSelection()
+        for path in paths:
+            Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+        keys = [(path, "Edge1") for path in paths]
+        rows = panel.edge_list_widget.list_widget
+        rows.selectAll()
+        self._select_profile(panel, "CustomFolderLib", "Custom Profile", "CP-901")
+        panel.edge_list_widget.select_edge(keys[0])
+        panel.btn_mirror_h.setChecked(True)
+        panel.edge_list_widget.select_edge(keys[1])
+        panel.btn_mirror_v.setChecked(True)
+        self._select_profile(panel, "CustomFolderLib", "Custom Profile", "CP-902")
+        previews = [panel._objects[key] for key in keys]
+        sibling = previews[2]
+        sibling_before = (sibling.SizeName, sibling.CustomProfile, sibling.Shape.exportBrepToString())
+        rows.item(0).setSelected(True)
+        self.assertEqual(panel.edge_list_widget.get_selected_edges(), keys[:2])
+        before = [(p.SizeName, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY) for p in previews]
+        panel.set_rotation(180)
+        self.assertEqual([p.RotationAngle for p in previews[:2]], [180, 180])
+        self.assertEqual([(p.SizeName, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY) for p in previews], before)
+        self._select_profile(panel, "CustomFolderLib", "Custom Profile", "CP-903")
+        self.assertEqual([p.SizeName for p in previews], ["CP-903", "CP-903", "CP-901"])
+        self.assertEqual([(p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY) for p in previews],
+                         [state[1:] for state in before])
+        self.assertEqual((sibling.SizeName, sibling.CustomProfile, sibling.Shape.exportBrepToString()), sibling_before)
+        rows.clearSelection()
+        states = [(p.SizeName, p.RotationAngle, p.MirrorH, p.MirrorV) for p in previews]
+        panel.set_rotation(90)
+        self.assertEqual([(p.SizeName, p.RotationAngle, p.MirrorH, p.MirrorV) for p in previews], states)
+
+    def test_mixed_catalog_reference_commit_preserves_unselected_custom_source(self):
+        doc = self._new_doc("ProjectMixedCatalog")
+        App.setActiveDocument(doc.Name)
+        paths = [self._create_line_path(doc, f"CatalogPath{i}") for i in range(3)]
+        Gui.Selection.clearSelection()
+        for path in paths:
+            Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+        Gui.Selection.addObserver(panel)
+        rows = panel.edge_list_widget.list_widget
+        keys = [(path, "Edge1") for path in paths]
+        rows.selectAll()
+        self._select_profile(panel, "CustomFolderLib", "Custom Profile", "CP-901")
+        panel.edge_list_widget.select_edge(keys[0])
+        self._select_profile(panel, "StockSteel", "Square Hollow", "40x40x2")
+        panel.set_rotation(90)
+        panel.btn_mirror_h.setChecked(True)
+        panel.alignment_widget.anchorClicked.emit(0, 0)
+        panel.edge_list_widget.select_edge(keys[1])
+        panel.set_rotation(180)
+        panel.btn_mirror_v.setChecked(True)
+        panel.alignment_widget.anchorClicked.emit(2, 0)
+        panel.edge_list_widget.select_edge(keys[2])
+        panel.set_rotation(270)
+        panel.alignment_widget.anchorClicked.emit(0, 2)
+        profiles = [panel._objects[key] for key in keys]
+        self.assertEqual([p.Material for p in profiles], ["StockSteel", "CustomFolderLib", "CustomFolderLib"])
+        self.assertEqual([p.SizeName for p in profiles], ["40x40x2", "CP-901", "CP-901"])
+        sibling = profiles[2]
+        source = sibling.CustomProfile
+        source_name = source.Name
+        sibling_before = (sibling.Material, sibling.CatalogFamily, sibling.SizeName, sibling.CustomProfile,
+                          sibling.Shape.exportBrepToString(), source.Shape.exportBrepToString())
+        placements = [(p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY) for p in profiles]
+        self.assertEqual(len(set(placements)), 3)
+        panel.edge_list_widget.select_edge(keys[0])
+        rows.item(1).setSelected(True)
+        self.assertEqual(panel.edge_list_widget.get_selected_edges(), keys[:2])
+        combo = panel.form_proxy.combo_material
+        self.assertTrue(combo.property("mixedValues"))
+        self.assertEqual(combo.currentText(), "StockSteel")
+        # The displayed Mixed label masks this already-current library; activate it as a user would.
+        combo.activated.emit(combo.currentIndex())
+        self._assert_no_modals("mixed catalog reference activation")
+        self.assertFalse(combo.property("mixedValues"))
+        self.assertEqual([p.Material for p in profiles[:2]], ["StockSteel", "StockSteel"])
+        self.assertEqual([p.CatalogFamily for p in profiles[:2]], ["Square Hollow", "Square Hollow"])
+        self.assertEqual([p.SizeName for p in profiles[:2]], ["40x40x2", "40x40x2"])
+        for profile in profiles[:2]:
+            self.assertTrue(profile.Shape.isValid())
+            self.assertAlmostEqual(profile.Shape.Volume, 30400.0, places=1)
+            self.assertIsNone(getattr(profile, "CustomProfile", None))
+        self.assertEqual([(p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY)
+                          for p in profiles], placements)
+        self.assertEqual((sibling.Material, sibling.CatalogFamily, sibling.SizeName, sibling.CustomProfile,
+                          sibling.Shape.exportBrepToString(), source.Shape.exportBrepToString()), sibling_before)
+        self.assertIs(doc.getObject(source_name), source)
+        self.assertTrue(source.Shape.isValid())
+        self.assertTrue(sibling.Shape.isValid())
+
+    def test_mixed_section_commit_reference_and_deferred_selected_set(self):
+        doc = self._new_doc("ProjectMixedDeferred")
+        App.setActiveDocument(doc.Name)
+        paths = [self._create_line_path(doc, f"MixedPath{i}") for i in range(3)]
+        Gui.Selection.clearSelection()
+        for path in paths:
+            Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+        Gui.Selection.addObserver(panel)
+        rows = panel.edge_list_widget.list_widget
+        keys = [(path, "Edge1") for path in paths]
+        rows.selectAll()
+        self._select_profile(panel, "CustomFolderLib", "Custom Profile", "CP-901")
+        panel.edge_list_widget.select_edge(keys[1])
+        self._select_profile(panel, "CustomFolderLib", "Custom Profile", "CP-902")
+        panel.set_rotation(90)
+        panel.btn_mirror_h.setChecked(True)
+        panel.edge_list_widget.select_edge(keys[2])
+        panel.set_rotation(180)
+        panel.alignment_widget.anchorClicked.emit(0, 0)
+        profiles = [panel._objects[key] for key in keys]
+        sibling = profiles[2]
+        sibling_source = sibling.CustomProfile
+        sibling_state = (sibling.Material, sibling.CatalogFamily, sibling.SizeName,
+                         sibling.CustomProfile, sibling.Shape.exportBrepToString())
+        placements = [(p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY) for p in profiles]
+        panel.edge_list_widget.select_edge(keys[1])
+        rows.item(0).setSelected(True)
+        combo = panel.form_proxy.combo_size
+        self.assertTrue(combo.property("mixedValues"))
+        reference = combo.currentText()
+        self.assertIn(reference, ("CP-901", "CP-902"))
+        # Commit the current underlying choice even though its painted label is Mixed.
+        combo.activated.emit(combo.currentIndex())
+        self._assert_no_modals("mixed reference section activation")
+        self.assertEqual([p.SizeName for p in profiles[:2]], [reference, reference])
+        self.assertEqual([(p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY)
+                          for p in profiles], placements)
+        self.assertEqual((sibling.Material, sibling.CatalogFamily, sibling.SizeName,
+                          sibling.CustomProfile, sibling.Shape.exportBrepToString()), sibling_state)
+        expected_volume = {"CP-901": 60000.0, "CP-902": 150000.0}[reference]
+        for profile in profiles[:2]:
+            self.assertTrue(profile.Shape.isValid())
+            self.assertAlmostEqual(profile.Shape.Volume, expected_volume, places=2)
+            self.assertIsNotNone(doc.getObject(profile.CustomProfile.Name))
+        self.assertIsNotNone(doc.getObject(sibling_source.Name))
+        self.assertTrue(panel.accept(defer=True))
+        self.app.processEvents()
+        self._assert_no_modals("mixed selected-set deferred accept")
+        doc.recompute()
+        self.assertEqual([p.SizeName for p in profiles], [reference, reference, "CP-901"])
+        self.assertEqual([p.Material for p in profiles], ["CustomFolderLib"] * 3)
+        self.assertEqual([p.CatalogFamily for p in profiles], ["Custom Profile"] * 3)
+        self.assertEqual([(p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY)
+                          for p in profiles], placements)
+        self.assertEqual(sibling.CustomProfile, sibling_source)
+        for profile in profiles:
+            self.assertIsNotNone(doc.getObject(profile.CustomProfile.Name))
+            self.assertTrue(profile.Shape.isValid())
+            self.assertEqual(profile.ViewObject.Transparency, 0)
+            for actual, expected in zip(profile.ViewObject.ShapeColor, (0.44, 0.47, 0.5)):
+                self.assertAlmostEqual(actual, expected, places=2)
+
+    def test_per_edge_custom_identity_survives_deferred_accept_and_new_selection(self):
+        doc = self._new_doc("ProjectDeferredSelective")
+        App.setActiveDocument(doc.Name)
+        paths = [self._create_line_path(doc, f"DeferredPath{i}") for i in range(3)]
+        Gui.Selection.clearSelection()
+        for path in paths[:2]:
+            Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+        Gui.Selection.addObserver(panel)
+        panel.edge_list_widget.list_widget.selectAll()
+        self._select_profile(panel, "CustomFolderLib", "Custom Profile", "CP-901")
+        keys = [(path, "Edge1") for path in paths]
+        panel.edge_list_widget.select_edge(keys[1])
+        panel.set_rotation(90.0)
+        self._select_profile(panel, "CustomFolderLib", "Custom Profile", "CP-902")
+        Gui.Selection.addSelection(doc.Name, paths[2].Name, "Edge1")
+        previews = [panel._objects[key] for key in keys]
+        self.assertEqual([p.SizeName for p in previews], ["CP-901", "CP-902", "CP-902"])
+        self.assertEqual([p.RotationAngle for p in previews], [0.0, 90.0, 90.0])
+        panel.edge_list_widget.select_edge(keys[0])
+        self.assertTrue(panel.accept(defer=True))
+        self.app.processEvents()
+        self._assert_no_modals("deferred selective accept")
+        self.assertEqual([p.SizeName for p in previews], ["CP-901", "CP-902", "CP-902"])
+        self.assertEqual([p.RotationAngle for p in previews], [0.0, 90.0, 90.0])
+        self.assertIsNotNone(doc.getObject(previews[0].CustomProfile.Name))
+        self.assertIsNotNone(doc.getObject(previews[1].CustomProfile.Name))
+
     # --- Rule S11: Selected Custom Profile import only (no orphan accumulation) ---
 
     def test_s11_single_selected_custom_profile_import_no_orphans(self):
@@ -578,6 +820,7 @@ class TestCustomProfileSelectedImport(unittest.TestCase):
         panel.open()
         self._assert_no_modals("panel.open")
 
+        panel.edge_list_widget.list_widget.selectAll()
         self._select_profile(panel, "CustomFolderLib", "Custom Profile", "CP-901")
 
         accepted = panel.accept()

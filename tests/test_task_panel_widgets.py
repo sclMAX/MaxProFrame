@@ -85,6 +85,10 @@ class TestTaskPanelWidgets(unittest.TestCase):
         edge_list.set_edges(edges)
 
         self.assertEqual(edge_list.get_selected_edge(), "e1")
+        self.assertEqual(edge_list.list_widget.selectionMode(), QtWidgets.QAbstractItemView.ExtendedSelection)
+        event = QtGui.QKeyEvent(QtCore.QEvent.KeyPress, QtCore.Qt.Key_A, QtCore.Qt.ControlModifier)
+        QtWidgets.QApplication.sendEvent(edge_list.list_widget, event)
+        self.assertEqual(edge_list.get_selected_edges(), ["e1", "e2"])
 
         selected = []
         edge_list.edgeSelected.connect(selected.append)
@@ -96,7 +100,7 @@ class TestTaskPanelWidgets(unittest.TestCase):
         # Update badge
         edge_list.update_edge_badge("e2", rotation="90", mirror_h=True, mirror_v=False)
         _, item_widget = edge_list._items["e2"]
-        self.assertEqual(item_widget.lbl_badge.text(), "Rot: 90° | EspH")
+        self.assertEqual(item_widget.lbl_badge.text(), "90° · Mirror H")
 
         # Remove edge
         removed = []

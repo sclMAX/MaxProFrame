@@ -11,6 +11,11 @@ import Part
 import Sketcher
 from PySide import QtCore, QtGui, QtWidgets
 
+try:
+    from PySide6 import QtTest
+except ImportError:
+    from PySide2 import QtTest
+
 from freecad.maxproframe.alignment_widget import AlignmentWidget
 from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
 from freecad.maxproframe.edit_profile_tool import EditProfileTaskPanel
@@ -161,8 +166,8 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         panel.form_proxy.cb_mirror_h.setChecked(False)
         self.assertFalse(panel.btn_mirror_h.isChecked())
 
-    def test_s2_mode_switch_and_edge_list(self):
-        """S2: Mode switch toggles between Uniform notice and Individual edge list."""
+    def test_s2_edge_list(self):
+        """The edge list is always available without a mode selector."""
         doc = self._new_doc("DocModeSwitch")
         sk = self._create_rectangle_sketch(doc)
 
@@ -180,23 +185,11 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         ]
         panel.update_selection()
 
-        # Default is Uniform mode
-        self.assertFalse(panel.mode_switch.is_per_edge())
-        self.assertTrue(panel.notice_uniform.isVisibleTo(panel.form[0]))
-        self.assertFalse(panel.edge_list_widget.isVisibleTo(panel.form[0]))
-        self.assertIn("4", panel.label_uniform_count.text())
-
-        # Switch to Individual mode
-        panel.mode_switch.set_per_edge(True)
-        self.assertTrue(panel.mode_switch.is_per_edge())
-        self.assertFalse(panel.notice_uniform.isVisibleTo(panel.form[0]))
+        self.assertFalse(hasattr(panel, "mode_switch"))
         self.assertTrue(panel.edge_list_widget.isVisibleTo(panel.form[0]))
-
-        # Switch back to Uniform mode
-        panel.mode_switch.set_per_edge(False)
-        self.assertFalse(panel.mode_switch.is_per_edge())
-        self.assertTrue(panel.notice_uniform.isVisibleTo(panel.form[0]))
-        self.assertFalse(panel.edge_list_widget.isVisibleTo(panel.form[0]))
+        self.assertEqual(panel.edge_list_widget.list_widget.count(), 4)
+        self.assertTrue(panel.form[0].label_14.isHidden())
+        self.assertTrue(panel.form_proxy.label_attach.isHidden())
 
     def test_s3_per_edge_property_editing_and_badges(self):
         """S3: In Individual mode, modifying rotation/mirrors modifies only the active edge and updates its badge."""
@@ -219,8 +212,6 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertIn(e1_key, panel._objects)
         self.assertIn(e2_key, panel._objects)
 
-        # Switch to Individual mode
-        panel.mode_switch.set_per_edge(True)
         panel.edge_list_widget.select_edge(e1_key)
 
         # Edit edge 1: set rotation to 90 and mirror H
@@ -249,41 +240,88 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         # Verify badge updated
         _, item_widget_e1 = panel.edge_list_widget._items[e1_key]
         self.assertIn("90", item_widget_e1.lbl_badge.text())
-        self.assertIn("EspH", item_widget_e1.lbl_badge.text())
+        self.assertIn("Mirror H", item_widget_e1.lbl_badge.text())
 
-    def test_s3_reset_edge_to_global(self):
-        """S3: Reset button restores the active edge's properties to global defaults."""
-        doc = self._new_doc("DocResetEdge")
+        # Switching rows reloads the complete section state without editing either profile.
+        before = [(p.RotationAngle, p.MirrorH, p.Shape.Volume) for p in (prof_e1, prof_e2)]
+        selection_before = [(s.ObjectName, tuple(s.SubElementNames)) for s in Gui.Selection.getSelectionEx()]
+        baseline = (prof_e2.ViewObject.LineColor, prof_e2.ViewObject.LineWidth, prof_e2.ViewObject.Transparency)
+        panel.edge_list_widget.select_edge(e2_key)
+        self.assertEqual(panel.get_rotation(), 0.0)
+        self.assertFalse(panel.btn_mirror_h.isChecked())
+        self.assertEqual(panel.alignment_widget.rotation, 0.0)
+        self.assertEqual(panel.alignment_widget.mirrors, (False, False))
+        self.assertIn("Edge 2", panel.label_editing_edge.text())
+        self.assertEqual(prof_e1.ViewObject.Transparency, 80)
+        self.assertEqual(prof_e2.ViewObject.Transparency, 35)
+        self.assertGreaterEqual(prof_e2.ViewObject.LineWidth, 3.0)
+        panel.edge_list_widget.select_edge(e1_key)
+        self.assertEqual(panel.alignment_widget.rotation, 90.0)
+        self.assertEqual(panel.alignment_widget.mirrors, (True, False))
+        self.assertEqual(
+            (prof_e2.ViewObject.LineColor, prof_e2.ViewObject.LineWidth, prof_e2.ViewObject.Transparency),
+            baseline,
+        )
+        self.assertEqual([(p.RotationAngle, p.MirrorH, p.Shape.Volume) for p in (prof_e1, prof_e2)], before)
+        self.assertEqual(
+            [(s.ObjectName, tuple(s.SubElementNames)) for s in Gui.Selection.getSelectionEx()], selection_before
+        )
+        # Extension edits recompute the active solid immediately and leave its sibling unchanged.
+        panel.edge_list_widget.select_edge(e2_key)
+        volume = prof_e2.Shape.Volume
+        sibling_shape = prof_e1.Shape.exportBrepToString()
+        panel.btn_pre_extend.setChecked(True)
+        offset = max(panel.form_proxy.sb_width.value(), panel.form_proxy.sb_height.value())
+        self.assertEqual(prof_e2.OffsetA, offset)
+        self.assertEqual(prof_e2.OffsetB, offset)
+        self.assertGreater(prof_e2.Shape.Volume, volume)
+        self.assertEqual(prof_e1.Shape.exportBrepToString(), sibling_shape)
+        panel.btn_pre_extend.setChecked(False)
+        self.assertAlmostEqual(prof_e2.Shape.Volume, volume)
+
+        panel.clean()
+        self.assertTrue(all(p.ViewObject.Transparency == 80 for p in (prof_e1, prof_e2)))
+
+    def test_per_edge_selection_callbacks_reconcile_previews(self):
+        doc = self._new_doc("DocSelectionCallbacks")
         sk = self._create_rectangle_sketch(doc)
-
+        Gui.Selection.clearSelection()
         panel = CreateProfileTaskPanel()
         self.panels.append(panel)
         panel.open()
+        Gui.Selection.addObserver(panel)
+        e1, e2, e3 = ((sk, f"Edge{i}") for i in (1, 2, 3))
 
-        e1_key = (sk, "Edge1")
-        panel._saved_selection = [
-            type("SelEx", (), {"Object": sk, "ObjectName": sk.Name, "SubElementNames": ["Edge1"]})()
-        ]
-        panel.update_selection()
-        panel.proceed()
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
+        self.assertIn(e1, panel._objects)
+        self.assertFalse(panel._objects[e1].Shape.isNull())
+        panel.edge_list_widget.select_edge(e1)
+        panel.set_rotation(90.0)
+        panel.btn_mirror_h.setChecked(True)
+        original = dict(panel._edge_properties[e1])
 
-        panel.mode_switch.set_per_edge(True)
-        panel.edge_list_widget.select_edge(e1_key)
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge2")
+        self.assertEqual(panel.edge_list_widget.get_selected_edge(), e1)
+        self.assertEqual(panel._edge_properties[e1], original)
+        self.assertEqual(panel._objects[e1].RotationAngle, 90.0)
+        self.assertTrue(panel._objects[e1].MirrorH)
+        self.assertIn(e2, panel._objects)
+        self.assertFalse(panel._objects[e2].Shape.isNull())
+        removed_name = panel._objects[e2].Name
+        Gui.Selection.removeSelection(doc.Name, sk.Name, "Edge2")
+        self.assertNotIn(e2, panel._objects)
+        self.assertIsNone(doc.getObject(removed_name))
+        self.assertEqual(panel._edge_properties[e1], original)
 
-        # Modify edge 1
-        panel.set_rotation(180.0)
-        panel.btn_mirror_v.setChecked(True)
-        panel.on_input_changed()
-
-        self.assertEqual(panel._edge_properties[e1_key]["rotation"], 180.0)
-        self.assertTrue(panel._edge_properties[e1_key]["mirror_v"])
-
-        # Click reset
-        panel.edge_list_widget.btn_reset.click()
-
-        # Should be restored to global default (rotation 0, mirror_v False)
-        self.assertEqual(panel._edge_properties[e1_key]["rotation"], 0.0)
-        self.assertFalse(panel._edge_properties[e1_key]["mirror_v"])
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge2")
+        panel.edge_list_widget._items[e2][1].btn_remove.click()
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge3")
+        self.assertNotIn(e2, panel._objects)
+        self.assertIn(e3, panel._objects)
+        self.assertEqual(panel._edge_properties[e1], original)
+        Gui.Selection.clearSelection()
+        self.assertNotIn(e1, panel._objects)
+        self.assertNotIn(e3, panel._objects)
 
     def test_sketch_interior_selection_callbacks_create_outline_profiles(self):
         for per_edge in (False, True):
@@ -294,7 +332,6 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
                 panel = CreateProfileTaskPanel()
                 self.panels.append(panel)
                 panel.open()
-                panel.mode_switch.set_per_edge(per_edge)
                 Gui.Selection.addObserver(panel)
                 # Model the GUI's generated filled-face token, including when
                 # the sketch's stored shape does not contain a Face1. An actual
@@ -305,9 +342,6 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
                 )()
                 with patch.object(Gui.Selection, "getSelectionEx", return_value=[selection]):
                     Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
-                    if per_edge:
-                        # Immediate individual-mode reconciliation belongs to the later editor slice.
-                        self.assertTrue(panel.apply())
                     expected = {(sk, f"Edge{i}") for i in range(1, len(sk.Shape.Edges) + 1)}
                     self.assertEqual(set(panel._objects), expected)
                     self.assertEqual(panel.edge_list_widget.list_widget.count(), len(expected))
@@ -344,6 +378,234 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertEqual(normalize(select(solid, ["Face1", "Vertex1"])), [])
         self.assertEqual(len(normalize(select(solid, []))), len(solid.Shape.Edges))
 
+    def test_per_edge_face_colors_restore_on_row_mode_and_clean(self):
+        doc = self._new_doc("DocFaceColors")
+        sk = self._create_rectangle_sketch(doc)
+        Gui.Selection.clearSelection()
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+        Gui.Selection.addObserver(panel)
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge2")
+        e1, e2 = (sk, "Edge1"), (sk, "Edge2")
+        p1, p2 = panel._objects[e1], panel._objects[e2]
+        panel.edge_list_widget.list_widget.clearSelection()
+        p1.ViewObject.ShapeColor = (0.7, 0.2, 0.1)
+        p2.ViewObject.ShapeColor = (0.1, 0.7, 0.2)
+        if hasattr(p1.ViewObject, "DiffuseColor"):
+            p1.ViewObject.DiffuseColor = [(0.3, 0.2, 0.6)] * len(p1.Shape.Faces)
+
+        def appearance(profile):
+            view = profile.ViewObject
+            return (
+                view.ShapeColor,
+                list(view.DiffuseColor) if hasattr(view, "DiffuseColor") else None,
+                view.LineColor,
+                view.LineWidth,
+                view.Transparency,
+            )
+
+        before1, before2 = appearance(p1), appearance(p2)
+        selection = [(s.ObjectName, tuple(s.SubElementNames)) for s in Gui.Selection.getSelectionEx()]
+        panel.edge_list_widget.select_edge(e1)
+        self.assertNotEqual(p1.ViewObject.ShapeColor, before1[0])
+        if before1[1]:
+            self.assertNotEqual(list(p1.ViewObject.DiffuseColor), before1[1])
+        panel.edge_list_widget.list_widget.item(1).setSelected(True)
+        self.assertNotEqual(p1.ViewObject.ShapeColor, before1[0])
+        self.assertNotEqual(p2.ViewObject.ShapeColor, before2[0])
+        panel.edge_list_widget.list_widget.item(0).setSelected(False)
+        self.assertEqual(appearance(p1), before1)
+        self.assertNotEqual(p2.ViewObject.ShapeColor, before2[0])
+        panel.clean()
+        self.assertEqual(appearance(p2), before2)
+        self.assertEqual([(s.ObjectName, tuple(s.SubElementNames)) for s in Gui.Selection.getSelectionEx()], selection)
+
+    def test_mixed_selection_is_display_only_and_edits_one_property(self):
+        doc = self._new_doc("DocMixedSelection")
+        sk = self._create_rectangle_sketch(doc)
+        Gui.Selection.clearSelection()
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+        Gui.Selection.addObserver(panel)
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge2")
+        e1, e2 = (sk, "Edge1"), (sk, "Edge2")
+        panel.edge_list_widget.select_edge(e1)
+        panel.set_rotation(90)
+        panel.btn_mirror_h.setChecked(True)
+        panel.alignment_widget.anchorClicked.emit(0, 0)
+        size_combo = panel.form_proxy.combo_size
+        has_alternative_size = size_combo.count() > 1
+        if has_alternative_size:
+            size_combo.setCurrentIndex((size_combo.currentIndex() + 1) % size_combo.count())
+        if panel.form_proxy.sb_width.isEnabled():
+            panel.form_proxy.sb_width.setValue(panel.form_proxy.sb_width.value() + 1)
+        panel.edge_list_widget.select_edge(e2)
+        panel.set_rotation(180)
+        p1, p2 = panel._objects[e1], panel._objects[e2]
+
+        def state(p):
+            return (p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY,
+                    p.Material, p.CatalogFamily, p.SizeName, p.ProfileWidth,
+                    p.ProfileHeight, p.Thickness, p.OffsetA, p.OffsetB,
+                    p.Shape.exportBrepToString())
+
+        before = [state(p) for p in (p1, p2)]
+        panel.edge_list_widget.list_widget.item(0).setSelected(True)
+        self.assertEqual([state(p) for p in (p1, p2)], before)
+        self.assertIn("2", panel.label_editing_edge.text())
+        self.assertTrue(panel.form_proxy.combo_rotation.property("mixedValues"))
+        self.assertTrue(panel.btn_mirror_h.property("mixedValues"))
+        self.assertIsNone(panel.alignment_widget.selected_anchor)
+        self.assertFalse(panel.form_proxy.combo_material.property("mixedValues"))
+        if has_alternative_size:
+            self.assertTrue(panel.form_proxy.combo_size.property("mixedValues"))
+        if before[0][8] != before[1][8]:
+            self.assertTrue(panel.form_proxy.sb_width.property("mixedValues"))
+        panel.btn_mirror_h.click()
+        self.assertTrue(p1.MirrorH)
+        self.assertTrue(p2.MirrorH)
+        self.assertEqual(p1.RotationAngle, 90)
+        self.assertEqual(p2.RotationAngle, 180)
+        self.assertEqual((p1.AnchorX, p1.AnchorY), before[0][3:5])
+        self.assertEqual((p2.AnchorX, p2.AnchorY), before[1][3:5])
+        self.assertEqual(state(p1)[5:11], before[0][5:11])
+        self.assertEqual(state(p2)[5:11], before[1][5:11])
+        for button, property_name in ((panel.btn_mirror_v, "MirrorV"), (panel.btn_pre_extend, None)):
+            panel.edge_list_widget.select_edge(e2)
+            button.setChecked(False)
+            panel.edge_list_widget.select_edge(e1)
+            button.setChecked(True)
+            panel.edge_list_widget.list_widget.item(1).setSelected(True)
+            before_toggle = [state(p) for p in (p1, p2)]
+            self.assertTrue(button.property("mixedValues"))
+            button.click()
+            for index, p in enumerate((p1, p2)):
+                current = state(p)
+                if property_name:
+                    self.assertTrue(getattr(p, property_name))
+                    self.assertEqual(current[:2], before_toggle[index][:2])
+                    self.assertEqual(current[3:13], before_toggle[index][3:13])
+                else:
+                    self.assertEqual(current[:11], before_toggle[index][:11])
+                    self.assertGreater(p.OffsetA, 0)
+                    self.assertEqual(p.OffsetA, p.OffsetB)
+        after = [state(p) for p in (p1, p2)]
+        panel.edge_list_widget.list_widget.clearSelection()
+        self.assertFalse(panel.form_proxy.combo_rotation.isEnabled())
+        self.assertEqual([state(p) for p in (p1, p2)], after)
+        panel.edge_list_widget.select_edge(e1)
+        self.assertTrue(panel.form_proxy.combo_rotation.isEnabled())
+        self.assertEqual([state(p) for p in (p1, p2)], after)
+
+    def test_mixed_numeric_reference_commit_and_focus_without_edit(self):
+        doc = self._new_doc("DocMixedNumeric")
+        sk = self._create_rectangle_sketch(doc)
+        Gui.Selection.clearSelection()
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+        Gui.Selection.addObserver(panel)
+        for edge in ("Edge1", "Edge2", "Edge3"):
+            Gui.Selection.addSelection(doc.Name, sk.Name, edge)
+        keys = [(sk, f"Edge{i}") for i in (1, 2, 3)]
+        panel.edge_list_widget.select_edge(keys[0])
+        width = panel.form_proxy.sb_width
+        self.assertTrue(width.isEnabled())
+        width.setValue(width.value() + 5)
+        panel.set_rotation(90)
+        panel.btn_mirror_h.setChecked(True)
+        panel.alignment_widget.anchorClicked.emit(0, 0)
+        panel.edge_list_widget.select_edge(keys[1])
+        panel.set_rotation(180)
+        panel.btn_mirror_v.setChecked(True)
+        profiles = [panel._objects[key] for key in keys]
+
+        def state(p):
+            return (p.ProfileWidth, p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY,
+                    p.Material, p.CatalogFamily, p.SizeName, p.Shape.exportBrepToString())
+
+        before = [state(p) for p in profiles]
+        panel.edge_list_widget.list_widget.item(0).setSelected(True)
+        self.assertTrue(width.property("mixedValues"))
+        self.assertEqual([state(p) for p in profiles], before)
+        for form in panel.form:
+            form.show()
+        width.setFocus()
+        self.app.processEvents()
+        panel.form_proxy.combo_rotation.setFocus()
+        self.app.processEvents()
+        self.assertEqual([state(p) for p in profiles], before)
+        self.assertTrue(width.property("mixedValues"))
+        reference = width.value()
+        reference_text = width.cleanText()
+        width.setFocus()
+        edit = width.lineEdit()
+        edit.selectAll()
+        QtTest.QTest.keyClicks(edit, reference_text)
+        QtTest.QTest.keyClick(edit, QtCore.Qt.Key_Return)
+        self.app.processEvents()
+        self.assertEqual([p.ProfileWidth for p in profiles[:2]], [reference, reference])
+        for index, p in enumerate(profiles[:2]):
+            self.assertEqual(state(p)[1:9], before[index][1:9])
+            self.assertTrue(p.Shape.isValid())
+        self.assertEqual(state(profiles[2]), before[2])
+        after_width = [state(p) for p in profiles]
+        panel.alignment_widget.anchorClicked.emit(2, 2)
+        for index, p in enumerate(profiles[:2]):
+            self.assertEqual((p.AnchorX, p.AnchorY), ("Right", "Top"))
+            self.assertEqual(state(p)[:4], after_width[index][:4])
+            self.assertEqual(state(p)[6:9], after_width[index][6:9])
+            self.assertTrue(p.Shape.isValid())
+        self.assertEqual(state(profiles[2]), after_width[2])
+
+    def test_selected_removal_restores_survivor_appearance_and_exclusion(self):
+        doc = self._new_doc("DocRemoveHighlighted")
+        sk = self._create_rectangle_sketch(doc)
+        source_shape = sk.Shape.exportBrepToString()
+        Gui.Selection.clearSelection()
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+        Gui.Selection.addObserver(panel)
+        for edge in ("Edge1", "Edge2", "Edge3"):
+            Gui.Selection.addSelection(doc.Name, sk.Name, edge)
+        keys = [(sk, f"Edge{i}") for i in (1, 2, 3)]
+        rows = panel.edge_list_widget.list_widget
+        rows.clearSelection()
+        p1, removed, p3 = [panel._objects[key] for key in keys]
+        p1.ViewObject.ShapeColor = (0.7, 0.2, 0.1)
+        p3.ViewObject.ShapeColor = (0.1, 0.7, 0.2)
+        p1.ViewObject.Transparency = 60
+        p3.ViewObject.Transparency = 70
+
+        def appearance(p):
+            view = p.ViewObject
+            return (view.ShapeColor, list(view.DiffuseColor), view.LineColor, view.LineWidth, view.Transparency)
+
+        original = [appearance(p1), appearance(p3)]
+        selection = [(s.ObjectName, tuple(s.SubElementNames)) for s in Gui.Selection.getSelectionEx()]
+        rows.selectAll()
+        removed_name = removed.Name
+        panel.edge_list_widget._items[keys[1]][1].btn_remove.click()
+        self.assertIsNone(doc.getObject(removed_name))
+        self.assertEqual(sk.Shape.exportBrepToString(), source_shape)
+        self.assertEqual([(s.ObjectName, tuple(s.SubElementNames)) for s in Gui.Selection.getSelectionEx()], selection)
+        panel.update_selection()
+        panel.proceed()
+        self.assertIsNone(doc.getObject(removed_name))
+        self.assertEqual(panel.edge_list_widget.list_widget.count(), 2)
+        rows.clearSelection()
+        self.assertEqual([appearance(p1), appearance(p3)], original)
+        rows.selectAll()
+        panel.clean()
+        self.assertEqual([appearance(p1), appearance(p3)], original)
+        self.assertEqual([(s.ObjectName, tuple(s.SubElementNames)) for s in Gui.Selection.getSelectionEx()], selection)
+        self.assertEqual(sk.Shape.exportBrepToString(), source_shape)
+
     def test_s3_edge_removal(self):
         """S3: Clicking remove on an edge removes it from properties and removes its preview object, remaining absent on subsequent input changes."""
         doc = self._new_doc("DocRemoveEdge")
@@ -363,8 +625,6 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
 
         self.assertEqual(len(panel._objects), 2)
         prof_e2_name = panel._objects[e2_key].Name
-
-        panel.mode_switch.set_per_edge(True)
 
         # Remove Edge2
         panel._on_edge_removed(e2_key)
@@ -436,6 +696,7 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertEqual(edit_panel.alignment_widget.selected_anchor, (2, 0))
         self.assertEqual(edit_panel.alignment_widget.rotation, 45.0)
         self.assertEqual(edit_panel.alignment_widget.mirrors, (True, False))
+
 
     def test_alignment_unset_keyboard_and_mouse(self):
         widget = AlignmentWidget()

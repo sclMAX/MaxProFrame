@@ -222,13 +222,13 @@ class ModeSwitchWidget(QtWidgets.QWidget):
         layout.setSpacing(2)
 
         self.btn_uniform = QtWidgets.QToolButton(self)
-        self.btn_uniform.setText(translate("frameforge", "❖ All (Uniform)"))
+        self.btn_uniform.setText(translate("frameforge", "Uniform"))
         self.btn_uniform.setCheckable(True)
         self.btn_uniform.setChecked(True)
         self.btn_uniform.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
 
         self.btn_per_edge = QtWidgets.QToolButton(self)
-        self.btn_per_edge.setText(translate("frameforge", "⚡ Per Edge (Individual)"))
+        self.btn_per_edge.setText(translate("frameforge", "Per edge"))
         self.btn_per_edge.setCheckable(True)
         self.btn_per_edge.setChecked(False)
         self.btn_per_edge.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
@@ -276,7 +276,7 @@ class EdgeItemWidget(QtWidgets.QWidget):
         self.lbl_name = QtWidgets.QLabel(f"• {display_name}", self)
         layout.addWidget(self.lbl_name, 1)
 
-        self.lbl_badge = QtWidgets.QLabel("Rot: 0°", self)
+        self.lbl_badge = QtWidgets.QLabel("0°", self)
         f_badge = self.lbl_badge.font()
         f_badge.setBold(True)
         self.lbl_badge.setFont(f_badge)
@@ -290,12 +290,12 @@ class EdgeItemWidget(QtWidgets.QWidget):
         layout.addWidget(self.btn_remove)
 
     def update_badge(self, rotation, mirror_h, mirror_v):
-        extra = ""
+        parts = [f"{float(rotation):g}°"]
         if mirror_h:
-            extra += " | EspH"
+            parts.append(translate("frameforge", "Mirror H"))
         if mirror_v:
-            extra += " | EspV"
-        self.lbl_badge.setText(f"Rot: {rotation}°{extra}")
+            parts.append(translate("frameforge", "Mirror V"))
+        self.lbl_badge.setText(" · ".join(parts))
 
 
 class EdgeListWidget(QtWidgets.QWidget):
@@ -303,7 +303,7 @@ class EdgeListWidget(QtWidgets.QWidget):
 
     edgeSelected = QtCore.Signal(object)  # emits edge_key
     edgeRemoved = QtCore.Signal(object)  # emits edge_key
-    resetRequested = QtCore.Signal()  # emits reset to global
+    selectionChanged = QtCore.Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -323,17 +323,14 @@ class EdgeListWidget(QtWidgets.QWidget):
         tb_layout.addWidget(self.lbl_title)
         tb_layout.addStretch()
 
-        self.btn_reset = QtWidgets.QToolButton(self)
-        self.btn_reset.setText(translate("frameforge", "Reset to global"))
-        self.btn_reset.setToolTip(translate("frameforge", "Reset selected edge placement to global values"))
-        self.btn_reset.clicked.connect(self.resetRequested.emit)
-        tb_layout.addWidget(self.btn_reset)
         layout.addLayout(tb_layout)
 
         # List widget
         self.list_widget = QtWidgets.QListWidget(self)
         self.list_widget.setMaximumHeight(115)
+        self.list_widget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.list_widget.currentItemChanged.connect(self._on_item_changed)
+        self.list_widget.itemSelectionChanged.connect(self.selectionChanged.emit)
         layout.addWidget(self.list_widget)
 
     def set_edges(self, edges_list):
@@ -360,7 +357,7 @@ class EdgeListWidget(QtWidgets.QWidget):
                 self._items[edge_key] = (item, widget)
 
         self.lbl_title.setText(f"{translate('frameforge', 'Selected edges')} ({len(edges_list)}):")
-        if self._items and not self.get_selected_edge():
+        if self._items and self.list_widget.currentItem() is None:
             self.list_widget.setCurrentRow(0)
 
     def update_edge_badge(self, edge_key, rotation, mirror_h, mirror_v):
@@ -372,12 +369,15 @@ class EdgeListWidget(QtWidgets.QWidget):
         item = self.list_widget.currentItem()
         return item.data(QtCore.Qt.UserRole) if item is not None else None
 
+    def get_selected_edges(self):
+        return [self.list_widget.item(i).data(QtCore.Qt.UserRole)
+                for i in range(self.list_widget.count()) if self.list_widget.item(i).isSelected()]
+
     def select_edge(self, edge_key):
         if edge_key in self._items:
             item, _ = self._items[edge_key]
-            self.list_widget.setCurrentItem(item)
+            self.list_widget.setCurrentItem(item, QtCore.QItemSelectionModel.ClearAndSelect)
 
     def _on_item_changed(self, current, previous):
-        if current is not None:
-            edge_key = current.data(QtCore.Qt.UserRole)
-            self.edgeSelected.emit(edge_key)
+        edge_key = current.data(QtCore.Qt.UserRole) if current is not None else None
+        self.edgeSelected.emit(edge_key)
