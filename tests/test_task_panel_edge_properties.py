@@ -11,6 +11,7 @@ import Part
 import Sketcher
 from PySide import QtCore, QtGui, QtWidgets
 
+from freecad.maxproframe.alignment_widget import AlignmentWidget
 from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
 from freecad.maxproframe.edit_profile_tool import EditProfileTaskPanel
 from freecad.maxproframe.ff_tools import get_param_group
@@ -427,6 +428,40 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertTrue(edit_panel.btn_mirror_h.isChecked())
         self.assertFalse(edit_panel.btn_mirror_v.isChecked())
         self.assertEqual(edit_panel.get_rotation(), 45.0)
+        edit_panel.form_proxy.combo_rotation.setCurrentText("90")
+        self.assertEqual(obj.RotationAngle, 90.0)
+        edit_panel.form_proxy.cb_mirror_h.setChecked(False)
+        self.assertFalse(obj.MirrorH)
+        edit_panel.alignment_widget.set_state((2, 0), 45, True, False)
+        self.assertEqual(edit_panel.alignment_widget.selected_anchor, (2, 0))
+        self.assertEqual(edit_panel.alignment_widget.rotation, 45.0)
+        self.assertEqual(edit_panel.alignment_widget.mirrors, (True, False))
+
+    def test_alignment_unset_keyboard_and_mouse(self):
+        widget = AlignmentWidget()
+        widget.resize(220, 180)
+        widget.set_section(Part.makePlane(40, 30))
+        clicked = []
+        widget.anchorClicked.connect(lambda x, y: clicked.append((x, y)))
+        widget.set_state(None)
+        self.assertIsNone(widget.selected_anchor)
+        self.assertEqual(clicked, [])
+        event = QtGui.QKeyEvent(QtCore.QEvent.KeyPress, QtCore.Qt.Key_Right, QtCore.Qt.NoModifier)
+        QtWidgets.QApplication.sendEvent(widget, event)
+        self.assertEqual(widget.selected_anchor, (2, 1))
+        self.assertEqual(clicked, [(2, 1)])
+        widget.set_state((1, 1), 90, True, False)
+        self.assertEqual(widget.selected_anchor, (1, 1))
+        self.assertEqual(widget.rotation, 90.0)
+        self.assertEqual(widget.mirrors, (True, False))
+        position = widget.anchor_position(0, 2).toPoint()
+        mouse = QtGui.QMouseEvent(
+            QtCore.QEvent.MouseButtonPress, position, QtCore.Qt.LeftButton,
+            QtCore.Qt.LeftButton, QtCore.Qt.NoModifier,
+        )
+        QtWidgets.QApplication.sendEvent(widget, mouse)
+        self.assertEqual(widget.selected_anchor, (0, 2))
+        self.assertEqual(clicked, [(2, 1), (0, 2)])
 
 
 if __name__ == "__main__":

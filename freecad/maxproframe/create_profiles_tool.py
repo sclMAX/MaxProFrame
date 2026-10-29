@@ -116,7 +116,8 @@ class _TranslatedFamilyPresentation(QtWidgets.QStyledItemDelegate):
         if event.type() == QtCore.QEvent.Paint:
             option = QtWidgets.QStyleOptionComboBox()
             watched.initStyleOption(option)
-            option.currentText = translate("frameforge", watched.currentText())
+            option.currentText = (translate("frameforge", "Mixed values") if watched.property("mixedValues")
+                                  else translate("frameforge", watched.currentText()))
             painter = QtWidgets.QStylePainter(watched)
             painter.drawComplexControl(QtWidgets.QStyle.CC_ComboBox, option)
             painter.drawControl(QtWidgets.QStyle.CE_ComboBoxLabel, option)
@@ -609,23 +610,18 @@ class BaseProfileTaskPanel(ABC):
 
             self.form_proxy.cb_make_fillet.stateChanged.connect(self.on_cb_make_fillet_changed)
 
-            self.form_proxy.cb_mirror_h.stateChanged.connect(self.on_input_changed)
-            self.form_proxy.cb_mirror_v.stateChanged.connect(self.on_input_changed)
-            self.form_proxy.cb_pre_extend.stateChanged.connect(self.on_input_changed)
-            self.form_proxy.combo_rotation.currentTextChanged.connect(self.on_input_changed)
+            self.form_proxy.cb_mirror_h.stateChanged.connect(self._input_slot("mirror_h"))
+            self.form_proxy.cb_mirror_v.stateChanged.connect(self._input_slot("mirror_v"))
+            self.form_proxy.cb_pre_extend.stateChanged.connect(self._input_slot("pre_extend"))
+            self.form_proxy.combo_rotation.currentTextChanged.connect(self._input_slot("rotation"))
             for ax in range(3):
                 for ay in range(3):
-                    getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}").clicked.connect(self.on_input_changed)
+                    getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}").clicked.connect(self._input_slot("anchor"))
 
-            self.form_proxy.sb_width.valueChanged.connect(self.on_input_changed)
-            self.form_proxy.sb_height.valueChanged.connect(self.on_input_changed)
-            self.form_proxy.sb_main_thickness.valueChanged.connect(self.on_input_changed)
-            self.form_proxy.sb_flange_thickness.valueChanged.connect(self.on_input_changed)
-            self.form_proxy.sb_radius1.valueChanged.connect(self.on_input_changed)
-            self.form_proxy.sb_radius2.valueChanged.connect(self.on_input_changed)
-            if hasattr(self.form_proxy, "sb_lip_length"):
-                self.form_proxy.sb_lip_length.valueChanged.connect(self.on_input_changed)
-            self.form_proxy.sb_length.valueChanged.connect(self.on_input_changed)
+            for name in ("sb_width", "sb_height", "sb_main_thickness", "sb_flange_thickness",
+                         "sb_radius1", "sb_radius2", "sb_lip_length", "sb_length"):
+                if hasattr(self.form_proxy, name):
+                    getattr(self.form_proxy, name).valueChanged.connect(self._input_slot(name))
 
             self.form_proxy.cb_sketch_in_name.stateChanged.connect(self.on_input_changed)
             self.form_proxy.cb_family_in_name.stateChanged.connect(self.on_input_changed)
@@ -640,6 +636,9 @@ class BaseProfileTaskPanel(ABC):
         if hasattr(self, "btn_pre_extend") and hasattr(self.form_proxy, "cb_pre_extend"):
             self.btn_pre_extend.setChecked(self.form_proxy.cb_pre_extend.isChecked())
         self._refresh_alignment()
+
+    def _input_slot(self, intent):
+        return self.on_input_changed
 
     def _on_alignment_clicked(self, ax, ay):
         self.set_anchor(ax, ay)

@@ -44,7 +44,7 @@ class AlignmentWidget(QtWidgets.QWidget):
         self.update()
 
     def set_state(self, anchor, rotation=0.0, mirror_h=False, mirror_v=False):
-        self.selected_anchor = tuple(anchor)
+        self.selected_anchor = tuple(anchor) if anchor is not None else None
         self.rotation = float(rotation) if math.isfinite(float(rotation)) else 0.0
         self.mirrors = (bool(mirror_h), bool(mirror_v))
         self.update()
@@ -105,7 +105,7 @@ class AlignmentWidget(QtWidgets.QWidget):
 
     def keyPressEvent(self, event):
         key = event.key()
-        ax, ay = self.selected_anchor
+        ax, ay = self.selected_anchor if self.selected_anchor is not None else (1, 1)
         if key == QtCore.Qt.Key_Left:
             ax = max(0, ax - 1)
         elif key == QtCore.Qt.Key_Right:
