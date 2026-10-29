@@ -3,6 +3,26 @@
 <TS version="2.1" language="es" sourcelanguage="en">
 <context>
     <name>frameforge</name>
+    <message><source>Uniform</source><translation>Uniforme</translation></message>
+    <message><source>Per edge</source><translation>Por arista</translation></message>
+    <message><source>Edge</source><translation>Arista</translation></message>
+    <message><source>Editing: %s</source><translation>Editando: %s</translation></message>
+    <message><source>Editing %s edges</source><translation>Editando %s aristas</translation></message>
+    <message><source>Mixed values</source><translation>Varios</translation></message>
+    <message><source>No edges selected for editing</source><translation>Ninguna arista seleccionada para editar</translation></message>
+    <message><source>Default profile settings</source><translation>Configuración predeterminada del perfil</translation></message>
+    <message><source>Click, Ctrl-click, Shift-click or Ctrl+A to select edges to edit.</source><translation>Hacé clic, Ctrl+clic, Shift+clic o Ctrl+A para seleccionar aristas para editar.</translation></message>
+    <message><source>Selected edges:</source><translation>Aristas seleccionadas:</translation></message>
+    <message><source>Selected edges</source><translation>Aristas seleccionadas</translation></message>
+    <message><source>Reset this edge</source><translation>Restablecer esta arista</translation></message>
+    <message><source>Restore this edge to the placement values saved in Uniform mode</source><translation>Restablece esta arista con los valores de colocación guardados en modo Uniforme</translation></message>
+    <message><source>Remove edge</source><translation>Quitar arista</translation></message>
+    <message><source>Mirror H</source><translation>Espejo H</translation></message>
+    <message><source>Mirror V</source><translation>Espejo V</translation></message>
+    <message><source>Extend</source><translation>Extender</translation></message>
+    <message><source>🎯 0 edges selected</source><translation>🎯 0 aristas seleccionadas</translation></message>
+    <message><source>edges selected in 3D view</source><translation>aristas seleccionadas en la vista 3D</translation></message>
+    <message><source>Placement properties will apply uniformly to all edges.</source><translation>Las propiedades de colocación se aplicarán por igual a todas las aristas.</translation></message>
     <message><source>Library</source><translation>Biblioteca</translation></message>
     <message><source>Create Profiles</source><translation>Crear perfiles</translation></message>
     <message><source>Profile Settings</source><translation>Configuración del perfil</translation></message>
