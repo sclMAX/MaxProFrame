@@ -370,8 +370,11 @@ class EdgeListWidget(QtWidgets.QWidget):
         return item.data(QtCore.Qt.UserRole) if item is not None else None
 
     def get_selected_edges(self):
-        return [self.list_widget.item(i).data(QtCore.Qt.UserRole)
-                for i in range(self.list_widget.count()) if self.list_widget.item(i).isSelected()]
+        return [
+            self.list_widget.item(i).data(QtCore.Qt.UserRole)
+            for i in range(self.list_widget.count())
+            if self.list_widget.item(i).isSelected()
+        ]
 
     def select_edge(self, edge_key):
         if edge_key in self._items:

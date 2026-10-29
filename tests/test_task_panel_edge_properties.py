@@ -439,8 +439,7 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertFalse(panel.form_proxy.sb_length.isEnabled())
         self.assertTrue(panel.apply())
         self.assertTrue(panel.accept(defer=False))
-        self.assertEqual([(p.Name, p.Shape.exportBrepToString(), p.RotationAngle, p.MirrorH)
-                          for p in profiles], before)
+        self.assertEqual([(p.Name, p.Shape.exportBrepToString(), p.RotationAngle, p.MirrorH) for p in profiles], before)
         self.assertTrue(all(doc.getObject(p.Name) is p for p in profiles))
 
     def test_canvas_can_readd_explicitly_removed_path(self):
@@ -516,9 +515,7 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
                 # the sketch's stored shape does not contain a Face1. An actual
                 # GUI selection event drives the observer and preview lifecycle.
                 names = ["Face1", "Edge1", "Face1", "Vertex1", "Edge999"]
-                selection = type(
-                    "SelEx", (), {"Object": sk, "ObjectName": sk.Name, "SubElementNames": names}
-                )()
+                selection = type("SelEx", (), {"Object": sk, "ObjectName": sk.Name, "SubElementNames": names})()
                 with patch.object(Gui.Selection, "getSelectionEx", return_value=[selection]):
                     Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
                     expected = {(sk, f"Edge{i}") for i in range(1, len(sk.Shape.Edges) + 1)}
@@ -535,7 +532,9 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
                         self.assertEqual(len(supports), 1)
                         support_object, subelements = supports[0]
                         self.assertEqual(support_object, source)
-                        self.assertEqual((subelements,) if isinstance(subelements, str) else tuple(subelements), (edge,))
+                        self.assertEqual(
+                            (subelements,) if isinstance(subelements, str) else tuple(subelements), (edge,)
+                        )
                         self.assertEqual(profile.MapMode, "NormalToEdge")
                     self.assertEqual(names, ["Face1", "Edge1", "Face1", "Vertex1", "Edge999"])
                 panel.reject()
@@ -627,10 +626,22 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         p1, p2 = panel._objects[e1], panel._objects[e2]
 
         def state(p):
-            return (p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY,
-                    p.Material, p.CatalogFamily, p.SizeName, p.ProfileWidth,
-                    p.ProfileHeight, p.Thickness, p.OffsetA, p.OffsetB,
-                    p.Shape.exportBrepToString())
+            return (
+                p.RotationAngle,
+                p.MirrorH,
+                p.MirrorV,
+                p.AnchorX,
+                p.AnchorY,
+                p.Material,
+                p.CatalogFamily,
+                p.SizeName,
+                p.ProfileWidth,
+                p.ProfileHeight,
+                p.Thickness,
+                p.OffsetA,
+                p.OffsetB,
+                p.Shape.exportBrepToString(),
+            )
 
         before = [state(p) for p in (p1, p2)]
         panel.edge_list_widget.list_widget.item(0).setSelected(True)
@@ -704,8 +715,18 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         profiles = [panel._objects[key] for key in keys]
 
         def state(p):
-            return (p.ProfileWidth, p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY,
-                    p.Material, p.CatalogFamily, p.SizeName, p.Shape.exportBrepToString())
+            return (
+                p.ProfileWidth,
+                p.RotationAngle,
+                p.MirrorH,
+                p.MirrorV,
+                p.AnchorX,
+                p.AnchorY,
+                p.Material,
+                p.CatalogFamily,
+                p.SizeName,
+                p.Shape.exportBrepToString(),
+            )
 
         before = [state(p) for p in profiles]
         panel.edge_list_widget.list_widget.item(0).setSelected(True)
@@ -876,7 +897,6 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertEqual(edit_panel.alignment_widget.rotation, 45.0)
         self.assertEqual(edit_panel.alignment_widget.mirrors, (True, False))
 
-
     def test_alignment_unset_keyboard_and_mouse(self):
         widget = AlignmentWidget()
         widget.resize(220, 180)
@@ -896,8 +916,11 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertEqual(widget.mirrors, (True, False))
         position = widget.anchor_position(0, 2).toPoint()
         mouse = QtGui.QMouseEvent(
-            QtCore.QEvent.MouseButtonPress, position, QtCore.Qt.LeftButton,
-            QtCore.Qt.LeftButton, QtCore.Qt.NoModifier,
+            QtCore.QEvent.MouseButtonPress,
+            position,
+            QtCore.Qt.LeftButton,
+            QtCore.Qt.LeftButton,
+            QtCore.Qt.NoModifier,
         )
         QtWidgets.QApplication.sendEvent(widget, mouse)
         self.assertEqual(widget.selected_anchor, (0, 2))

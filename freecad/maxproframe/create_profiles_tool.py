@@ -1,11 +1,11 @@
 import glob
-from functools import wraps
-from types import SimpleNamespace
-from contextlib import contextmanager
 import json
 import os
 import re
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
+from functools import wraps
+from types import SimpleNamespace
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -118,8 +118,11 @@ class _TranslatedFamilyPresentation(QtWidgets.QStyledItemDelegate):
         if event.type() == QtCore.QEvent.Paint:
             option = QtWidgets.QStyleOptionComboBox()
             watched.initStyleOption(option)
-            option.currentText = (translate("frameforge", "Mixed values") if watched.property("mixedValues")
-                                  else translate("frameforge", watched.currentText()))
+            option.currentText = (
+                translate("frameforge", "Mixed values")
+                if watched.property("mixedValues")
+                else translate("frameforge", watched.currentText())
+            )
             painter = QtWidgets.QStylePainter(watched)
             painter.drawComplexControl(QtWidgets.QStyle.CC_ComboBox, option)
             painter.drawControl(QtWidgets.QStyle.CE_ComboBoxLabel, option)
@@ -162,7 +165,11 @@ class _MixedPresentation(QtCore.QObject):
             painter.drawControl(QtWidgets.QStyle.CE_ComboBoxLabel, option)
             painter.end()
             return True
-        if self.label is not None and event.type() in (QtCore.QEvent.Resize, QtCore.QEvent.FocusIn, QtCore.QEvent.FocusOut):
+        if self.label is not None and event.type() in (
+            QtCore.QEvent.Resize,
+            QtCore.QEvent.FocusIn,
+            QtCore.QEvent.FocusOut,
+        ):
             self.set_mixed(bool(watched.property("mixedValues")))
         return False
 
@@ -659,8 +666,16 @@ class BaseProfileTaskPanel(ABC):
                 for ay in range(3):
                     getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}").clicked.connect(self._input_slot("anchor"))
 
-            for name in ("sb_width", "sb_height", "sb_main_thickness", "sb_flange_thickness",
-                         "sb_radius1", "sb_radius2", "sb_lip_length", "sb_length"):
+            for name in (
+                "sb_width",
+                "sb_height",
+                "sb_main_thickness",
+                "sb_flange_thickness",
+                "sb_radius1",
+                "sb_radius2",
+                "sb_lip_length",
+                "sb_length",
+            ):
                 if hasattr(self.form_proxy, name):
                     getattr(self.form_proxy, name).valueChanged.connect(self._input_slot(name))
 
@@ -1234,6 +1249,7 @@ class _SnapshotFormProxy:
 
 def _guard_reconciliation(method):
     """Defer selection notifications during synchronous preview mutations."""
+
     @wraps(method)
     def guarded(self, *args, **kwargs):
         outer = self._mutation_depth == 0
@@ -1249,13 +1265,23 @@ def _guard_reconciliation(method):
                 self._selection_pending = False
                 if pending and self._selection_signature() != self._mutation_selection:
                     self._selection_changed()
+
     return guarded
 
 
 _SECTION_CONTROLS = (
-    "combo_material", "combo_family", "combo_size", "sb_width", "sb_height",
-    "sb_main_thickness", "sb_flange_thickness", "sb_radius1", "sb_radius2",
-    "sb_lip_length", "sb_weight", "cb_make_fillet",
+    "combo_material",
+    "combo_family",
+    "combo_size",
+    "sb_width",
+    "sb_height",
+    "sb_main_thickness",
+    "sb_flange_thickness",
+    "sb_radius1",
+    "sb_radius2",
+    "sb_lip_length",
+    "sb_weight",
+    "cb_make_fillet",
 )
 
 
@@ -1331,8 +1357,18 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             self.edge_list_widget.selectionChanged.connect(self._on_list_selection_changed)
             self.edge_list_widget.edgeRemoved.connect(self._on_edge_removed)
 
-        for name in ("combo_material", "combo_size", "combo_rotation", "sb_width", "sb_height",
-                     "sb_main_thickness", "sb_flange_thickness", "sb_radius1", "sb_radius2", "sb_lip_length"):
+        for name in (
+            "combo_material",
+            "combo_size",
+            "combo_rotation",
+            "sb_width",
+            "sb_height",
+            "sb_main_thickness",
+            "sb_flange_thickness",
+            "sb_radius1",
+            "sb_radius2",
+            "sb_lip_length",
+        ):
             if hasattr(self.form_proxy, name):
                 widget = getattr(self.form_proxy, name)
                 self._mixed_presenters[name] = _MixedPresentation(widget, name.startswith("combo_"))
@@ -1344,9 +1380,9 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 widget = getattr(self.form_proxy, name)
                 widget.lineEdit().textEdited.connect(lambda _text, n=name: self._mixed_spin_edits.add(n))
                 widget.editingFinished.connect(lambda n=name: self._finish_mixed_spin(n))
-        self.edge_list_widget.list_widget.setToolTip(translate(
-            "frameforge", "Click, Ctrl-click, Shift-click or Ctrl+A to select edges to edit."
-        ))
+        self.edge_list_widget.list_widget.setToolTip(
+            translate("frameforge", "Click, Ctrl-click, Shift-click or Ctrl+A to select edges to edit.")
+        )
         self._set_initial_state()
 
     def _activate_mixed_combo(self, name):
@@ -1437,14 +1473,31 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def _refresh_selection_presentation(self):
         if not hasattr(self, "edge_list_widget") or self._preview_closed:
             return
-        keys = [key for key in self.edge_list_widget.get_selected_edges()
-                if key in self._edge_properties and key in self._edge_sections]
+        keys = [
+            key
+            for key in self.edge_list_widget.get_selected_edges()
+            if key in self._edge_properties and key in self._edge_sections
+        ]
         current = self.edge_list_widget.get_selected_edge()
         reference = current if current in keys else (keys[0] if keys else None)
         disabled = bool(self._edge_properties) and not keys
-        names = ("combo_material", "combo_family", "combo_size", "combo_rotation", "sb_width", "sb_height",
-                 "sb_main_thickness", "sb_flange_thickness", "sb_radius1", "sb_radius2", "sb_lip_length",
-                 "cb_make_fillet", "cb_mirror_h", "cb_mirror_v", "cb_pre_extend")
+        names = (
+            "combo_material",
+            "combo_family",
+            "combo_size",
+            "combo_rotation",
+            "sb_width",
+            "sb_height",
+            "sb_main_thickness",
+            "sb_flange_thickness",
+            "sb_radius1",
+            "sb_radius2",
+            "sb_lip_length",
+            "cb_make_fillet",
+            "cb_mirror_h",
+            "cb_mirror_v",
+            "cb_pre_extend",
+        )
         previous = self._updating_controls
         self._updating_controls = True
         try:
@@ -1467,8 +1520,18 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 self._load_edge_properties_to_controls(reference)
             self._presented_selection = signature
             mixed_text = translate("frameforge", "Mixed values")
-            for name in ("combo_material", "combo_family", "combo_size", "sb_width", "sb_height",
-                         "sb_main_thickness", "sb_flange_thickness", "sb_radius1", "sb_radius2", "sb_lip_length"):
+            for name in (
+                "combo_material",
+                "combo_family",
+                "combo_size",
+                "sb_width",
+                "sb_height",
+                "sb_main_thickness",
+                "sb_flange_thickness",
+                "sb_radius1",
+                "sb_radius2",
+                "sb_lip_length",
+            ):
                 values = [self._edge_sections[key][name] for key in keys if name in self._edge_sections[key]]
                 values = [v.currentText() if name.startswith("combo_") else v.value() for v in values]
                 mixed = len(set(values)) > 1
@@ -1481,8 +1544,9 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                         self._mixed_presenters[name].set_mixed(mixed)
             if keys:
                 sizes = [self._edge_sections[key]["combo_size"].currentText() for key in keys]
-                self.label_profile_name.setText(translate("frameforge", "Profile") + ": " +
-                                                (mixed_text if len(set(sizes)) > 1 else sizes[0]))
+                self.label_profile_name.setText(
+                    translate("frameforge", "Profile") + ": " + (mixed_text if len(set(sizes)) > 1 else sizes[0])
+                )
             rotations = [self._edge_properties[key]["rotation"] for key in keys]
             self._mixed_presenters["combo_rotation"].set_mixed(len(set(rotations)) > 1)
             for name, caption in (("mirror_h", "Mirror H"), ("mirror_v", "Mirror V"), ("pre_extend", "Extend")):
@@ -1498,9 +1562,12 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 button.setToolTip(text)
             anchors = [self._edge_properties[key]["anchor"] for key in keys]
             if len(set(anchors)) > 1:
-                self.alignment_widget.set_state(None, self.get_rotation(),
-                                                self.form_proxy.cb_mirror_h.isChecked(),
-                                                self.form_proxy.cb_mirror_v.isChecked())
+                self.alignment_widget.set_state(
+                    None,
+                    self.get_rotation(),
+                    self.form_proxy.cb_mirror_h.isChecked(),
+                    self.form_proxy.cb_mirror_v.isChecked(),
+                )
             if len(keys) > 1:
                 self.label_editing_edge.setText(translate("frameforge", "Editing %s edges") % len(keys))
             elif reference is not None:
@@ -1508,8 +1575,11 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 name = f"{translate('frameforge', 'Edge')} {edge.removeprefix('Edge')}"
                 self.label_editing_edge.setText(translate("frameforge", "Editing: %s") % f"{name} · {obj.Label}")
             else:
-                self.label_editing_edge.setText(translate("frameforge", "No edges selected for editing") if disabled
-                                                else translate("frameforge", "Default profile settings"))
+                self.label_editing_edge.setText(
+                    translate("frameforge", "No edges selected for editing")
+                    if disabled
+                    else translate("frameforge", "Default profile settings")
+                )
             self.label_editing_edge.show()
         finally:
             self._updating_controls = previous
@@ -1535,9 +1605,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             active = None
         if hasattr(self, "edge_list_widget"):
             for key, props in self._edge_properties.items():
-                self.edge_list_widget.update_edge_badge(
-                    key, props["rotation"], props["mirror_h"], props["mirror_v"]
-                )
+                self.edge_list_widget.update_edge_badge(key, props["rotation"], props["mirror_h"], props["mirror_v"])
         if self._preview_closed or not hasattr(self, "edge_list_widget"):
             return
         for key in self.edge_list_widget.get_selected_edges():
@@ -1547,7 +1615,9 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             view = getattr(preview, "ViewObject", None)
             if view is None:
                 continue
-            appearance = {name: getattr(view, name) for name in ("LineColor", "LineWidth", "Transparency", "ShapeColor")}
+            appearance = {
+                name: getattr(view, name) for name in ("LineColor", "LineWidth", "Transparency", "ShapeColor")
+            }
             if hasattr(view, "DiffuseColor"):
                 appearance["DiffuseColor"] = list(view.DiffuseColor)
             self._preview_highlights[key] = (preview, appearance)
@@ -1664,7 +1734,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         had_edge_properties = bool(self._edge_properties)
         keys = self.edge_list_widget.get_selected_edges() if hasattr(self, "edge_list_widget") else []
         placement = {
-            "rotation": self.get_rotation(), "anchor": self.get_anchor(),
+            "rotation": self.get_rotation(),
+            "anchor": self.get_anchor(),
             "mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
             "mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
             "pre_extend": self.form_proxy.cb_pre_extend.isChecked(),
@@ -2307,8 +2378,14 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self.proceed()
 
     def _canvas_pick(self, doc, obj, sub, removed=False):
-        if (self._mutation_depth or self._initializing or self._rendering_thumbnail
-                or self._reject_called or self._accept_finalizing or self._preview_closed):
+        if (
+            self._mutation_depth
+            or self._initializing
+            or self._rendering_thumbnail
+            or self._reject_called
+            or self._accept_finalizing
+            or self._preview_closed
+        ):
             self._selection_changed()
             return
         document = App.getDocument(doc)
@@ -2318,9 +2395,9 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             return
         preview_key = next((key for key, preview in self._objects.items() if preview == source), None)
         selection = SimpleNamespace(Object=source, SubElementNames=[sub] if sub else [])
-        keys = [preview_key] if preview_key is not None else [
-            (source, edge) for edge in self._selection_edges(selection)
-        ]
+        keys = (
+            [preview_key] if preview_key is not None else [(source, edge) for edge in self._selection_edges(selection)]
+        )
         ctrl = bool(QtWidgets.QApplication.keyboardModifiers() & QtCore.Qt.ControlModifier)
         if ctrl:
             # Never delete a selected object during FreeCAD's observer dispatch.
@@ -2342,8 +2419,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def _flush_pending_removals(self, token=None):
         if self._reject_called or self._preview_closed:
             return
-        keys = [key for key, pending in self._pending_removals.items()
-                if token is None or pending is token]
+        keys = [key for key, pending in self._pending_removals.items() if token is None or pending is token]
         for key in keys:
             self._pending_removals.pop(key, None)
             if key in self._edge_properties:
@@ -2396,8 +2472,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                     edges = paths.setdefault(selection.Object, [])
                     if edge not in edges:
                         edges.append(edge)
-        return [SimpleNamespace(Object=obj, ObjectName=obj.Name, SubElementNames=edges)
-                for obj, edges in paths.items()]
+        return [SimpleNamespace(Object=obj, ObjectName=obj.Name, SubElementNames=edges) for obj, edges in paths.items()]
 
     def _update_placement_guidance(self):
         selections = self._path_selections()
@@ -2446,13 +2521,20 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 edges_list.append((key, display_name))
                 if key not in self._edge_properties:
                     active = self._active_edge_key
-                    self._edge_sections[key] = dict(self._edge_sections[active]) if active in self._edge_sections else self._snapshot_section()
-                    self._edge_properties[key] = dict(self._edge_properties[active]) if active in self._edge_properties else {
-                        "rotation": self.get_rotation(), "anchor": self.get_anchor(),
-                        "mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
-                        "mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
-                        "pre_extend": self.form_proxy.cb_pre_extend.isChecked(),
-                    }
+                    self._edge_sections[key] = (
+                        dict(self._edge_sections[active]) if active in self._edge_sections else self._snapshot_section()
+                    )
+                    self._edge_properties[key] = (
+                        dict(self._edge_properties[active])
+                        if active in self._edge_properties
+                        else {
+                            "rotation": self.get_rotation(),
+                            "anchor": self.get_anchor(),
+                            "mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
+                            "mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
+                            "pre_extend": self.form_proxy.cb_pre_extend.isChecked(),
+                        }
+                    )
 
         valid_keys = {k for k, _ in edges_list}
         for k in list(self._edge_properties.keys()):

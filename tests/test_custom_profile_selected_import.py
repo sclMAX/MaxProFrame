@@ -247,7 +247,9 @@ class TestCustomProfileSelectedImport(unittest.TestCase):
         if hasattr(self, "legacy_param_group") and hasattr(self, "saved_legacy_pref_contents"):
             self._restore_param_group(self.legacy_param_group, self.saved_legacy_pref_contents)
         if hasattr(self, "param_group") and hasattr(self, "saved_pref_contents"):
-            if self.param_group is not getattr(self, "canonical_param_group", None) and self.param_group is not getattr(self, "legacy_param_group", None):
+            if self.param_group is not getattr(self, "canonical_param_group", None) and self.param_group is not getattr(
+                self, "legacy_param_group", None
+            ):
                 self._restore_param_group(self.param_group, self.saved_pref_contents)
 
         # 6. Close message patches
@@ -378,7 +380,8 @@ class TestCustomProfileSelectedImport(unittest.TestCase):
 
     def _get_profiles(self, doc):
         return [
-            o for o in doc.Objects
+            o
+            for o in doc.Objects
             if getattr(getattr(o, "Proxy", None), "Type", None) == "Profile" or hasattr(o, "CustomProfile")
         ]
 
@@ -459,8 +462,9 @@ class TestCustomProfileSelectedImport(unittest.TestCase):
         self.assertEqual([(p.SizeName, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY) for p in previews], before)
         self._select_profile(panel, "CustomFolderLib", "Custom Profile", "CP-903")
         self.assertEqual([p.SizeName for p in previews], ["CP-903", "CP-903", "CP-901"])
-        self.assertEqual([(p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY) for p in previews],
-                         [state[1:] for state in before])
+        self.assertEqual(
+            [(p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY) for p in previews], [state[1:] for state in before]
+        )
         self.assertEqual((sibling.SizeName, sibling.CustomProfile, sibling.Shape.exportBrepToString()), sibling_before)
         rows.clearSelection()
         states = [(p.SizeName, p.RotationAngle, p.MirrorH, p.MirrorV) for p in previews]
@@ -500,8 +504,14 @@ class TestCustomProfileSelectedImport(unittest.TestCase):
         sibling = profiles[2]
         source = sibling.CustomProfile
         source_name = source.Name
-        sibling_before = (sibling.Material, sibling.CatalogFamily, sibling.SizeName, sibling.CustomProfile,
-                          sibling.Shape.exportBrepToString(), source.Shape.exportBrepToString())
+        sibling_before = (
+            sibling.Material,
+            sibling.CatalogFamily,
+            sibling.SizeName,
+            sibling.CustomProfile,
+            sibling.Shape.exportBrepToString(),
+            source.Shape.exportBrepToString(),
+        )
         placements = [(p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY) for p in profiles]
         self.assertEqual(len(set(placements)), 3)
         panel.edge_list_widget.select_edge(keys[0])
@@ -521,10 +531,18 @@ class TestCustomProfileSelectedImport(unittest.TestCase):
             self.assertTrue(profile.Shape.isValid())
             self.assertAlmostEqual(profile.Shape.Volume, 30400.0, places=1)
             self.assertIsNone(getattr(profile, "CustomProfile", None))
-        self.assertEqual([(p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY)
-                          for p in profiles], placements)
-        self.assertEqual((sibling.Material, sibling.CatalogFamily, sibling.SizeName, sibling.CustomProfile,
-                          sibling.Shape.exportBrepToString(), source.Shape.exportBrepToString()), sibling_before)
+        self.assertEqual([(p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY) for p in profiles], placements)
+        self.assertEqual(
+            (
+                sibling.Material,
+                sibling.CatalogFamily,
+                sibling.SizeName,
+                sibling.CustomProfile,
+                sibling.Shape.exportBrepToString(),
+                source.Shape.exportBrepToString(),
+            ),
+            sibling_before,
+        )
         self.assertIs(doc.getObject(source_name), source)
         self.assertTrue(source.Shape.isValid())
         self.assertTrue(sibling.Shape.isValid())
@@ -554,8 +572,13 @@ class TestCustomProfileSelectedImport(unittest.TestCase):
         profiles = [panel._objects[key] for key in keys]
         sibling = profiles[2]
         sibling_source = sibling.CustomProfile
-        sibling_state = (sibling.Material, sibling.CatalogFamily, sibling.SizeName,
-                         sibling.CustomProfile, sibling.Shape.exportBrepToString())
+        sibling_state = (
+            sibling.Material,
+            sibling.CatalogFamily,
+            sibling.SizeName,
+            sibling.CustomProfile,
+            sibling.Shape.exportBrepToString(),
+        )
         placements = [(p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY) for p in profiles]
         panel.edge_list_widget.select_edge(keys[1])
         rows.item(0).setSelected(True)
@@ -567,10 +590,17 @@ class TestCustomProfileSelectedImport(unittest.TestCase):
         combo.activated.emit(combo.currentIndex())
         self._assert_no_modals("mixed reference section activation")
         self.assertEqual([p.SizeName for p in profiles[:2]], [reference, reference])
-        self.assertEqual([(p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY)
-                          for p in profiles], placements)
-        self.assertEqual((sibling.Material, sibling.CatalogFamily, sibling.SizeName,
-                          sibling.CustomProfile, sibling.Shape.exportBrepToString()), sibling_state)
+        self.assertEqual([(p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY) for p in profiles], placements)
+        self.assertEqual(
+            (
+                sibling.Material,
+                sibling.CatalogFamily,
+                sibling.SizeName,
+                sibling.CustomProfile,
+                sibling.Shape.exportBrepToString(),
+            ),
+            sibling_state,
+        )
         expected_volume = {"CP-901": 60000.0, "CP-902": 150000.0}[reference]
         for profile in profiles[:2]:
             self.assertTrue(profile.Shape.isValid())
@@ -584,8 +614,7 @@ class TestCustomProfileSelectedImport(unittest.TestCase):
         self.assertEqual([p.SizeName for p in profiles], [reference, reference, "CP-901"])
         self.assertEqual([p.Material for p in profiles], ["CustomFolderLib"] * 3)
         self.assertEqual([p.CatalogFamily for p in profiles], ["Custom Profile"] * 3)
-        self.assertEqual([(p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY)
-                          for p in profiles], placements)
+        self.assertEqual([(p.RotationAngle, p.MirrorH, p.MirrorV, p.AnchorX, p.AnchorY) for p in profiles], placements)
         self.assertEqual(sibling.CustomProfile, sibling_source)
         for profile in profiles:
             self.assertIsNotNone(doc.getObject(profile.CustomProfile.Name))
@@ -671,8 +700,7 @@ class TestCustomProfileSelectedImport(unittest.TestCase):
 
         # S11 core check: exactly ONE section sketch must exist in project document (excluding Path)
         sketches = [
-            o for o in project_doc.Objects
-            if hasattr(o, "isDerivedFrom") and o.isDerivedFrom("Sketcher::SketchObject")
+            o for o in project_doc.Objects if hasattr(o, "isDerivedFrom") and o.isDerivedFrom("Sketcher::SketchObject")
         ]
         section_sketches = [s for s in sketches if s.Name != path_sk.Name]
         self.assertEqual(
@@ -922,8 +950,7 @@ class TestCustomProfileSelectedImport(unittest.TestCase):
 
         # No auxiliary section sketches imported into document (only Path exists)
         sketches = [
-            o for o in project_doc.Objects
-            if hasattr(o, "isDerivedFrom") and o.isDerivedFrom("Sketcher::SketchObject")
+            o for o in project_doc.Objects if hasattr(o, "isDerivedFrom") and o.isDerivedFrom("Sketcher::SketchObject")
         ]
         self.assertEqual(len(sketches), 1, "Only the path sketch should exist in document.")
         self.assertEqual(sketches[0].Name, path_sk.Name)

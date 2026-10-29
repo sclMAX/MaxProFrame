@@ -151,6 +151,12 @@ For more details on custom libraries and architecture, see [docs/folder-librarie
 
 ---
 
+## Development
+
+For automatic staged Python formatting on commit, see [development setup](docs/development.md).
+
+---
+
 ## Maintainer & Authors
 
 - **Maintained by**: [sclMAX](https://github.com/sclMAX) (Maximiliano Basso)
