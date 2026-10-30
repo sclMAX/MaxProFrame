@@ -6,13 +6,23 @@ import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtGui
 
-from freecad.maxproframe.ff_tools import add_command, ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, FormProxy, move_profile_to_parent_if_supported, translate
+from freecad.maxproframe.ff_tools import (
+    ICONPATH,
+    PROFILEIMAGES_PATH,
+    PROFILESPATH,
+    UIPATH,
+    FormProxy,
+    add_command,
+    move_profile_to_parent_if_supported,
+    translate,
+)
 from freecad.maxproframe.profile import Profile, ViewProviderCustomProfile
+from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 
 
 class CreateCustomProfileTaskPanel:
     def __init__(self):
-        self.form = Gui.PySideUic.loadUi(os.path.join(UIPATH, "create_custom_profiles.ui"))
+        self.form = keep_alive_until_destroyed(Gui.PySideUic.loadUi(os.path.join(UIPATH, "create_custom_profiles.ui")))
 
         self.select_profile_flag = False
         self.custom_profile = None

@@ -9,14 +9,23 @@ import FreeCADGui as Gui
 import Part
 from PySide import QtCore, QtGui
 
-from freecad.maxproframe.ff_tools import get_param_group, add_command, ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, translate
+from freecad.maxproframe.ff_tools import (
+    ICONPATH,
+    PROFILEIMAGES_PATH,
+    PROFILESPATH,
+    UIPATH,
+    add_command,
+    get_param_group,
+    translate,
+)
+from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrimmedProfile
 
 
 class CreateTrimmedProfileTaskPanel:
     def __init__(self, fp, mode):
         ui_file = os.path.join(UIPATH, "create_trimmed_profiles.ui")
-        self.form = Gui.PySideUic.loadUi(ui_file)
+        self.form = keep_alive_until_destroyed(Gui.PySideUic.loadUi(ui_file))
 
         self.fp = fp
         self.dump = fp.dumpContent()
