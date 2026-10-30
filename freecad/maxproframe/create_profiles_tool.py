@@ -2204,7 +2204,12 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
     @staticmethod
     def _has_live_referrer(doc, target):
-        for obj in list(getattr(doc, "Objects", []) or []):
+        # Referrers may live in other open documents (cross-document App::Link).
+        documents = list(App.listDocuments().values()) if hasattr(App, "listDocuments") else []
+        if doc is not None and doc not in documents:
+            documents.append(doc)
+        live_objects = [obj for document in documents for obj in (getattr(document, "Objects", []) or [])]
+        for obj in live_objects:
             if obj is target:
                 continue
             try:
