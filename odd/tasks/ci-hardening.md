@@ -10,7 +10,7 @@ S4. Approved plan item (d) "Workflow nocturno de flakiness: corre la suite nativ
 
 ## Tasks
 T1 [S1] route=delegated worker mvv0abk4-6-k2xh; status=done; commit=see git log (crash diagnosis); host 84 OK (RED 9F+3E on 12 new); parent e2e forced SIGSEGV: exit 1 preserved, summary + test id + gdb backtrace with Python frame; crash summary + gdb rerun of the crashing test + artifact, test-first in ci/tests.
-T2 [S2,S3] route=inline; status=pending; commit=pending; AppImage cache keyed by sha256 with verification on hit; concurrency group cancelling only non-main refs; policy tests.
+T2 [S2,S3] route=inline; status=done; commit=see git log (cache+concurrency); host RED 2 failures -> GREEN 86 OK; existing pin-count test updated 6->7 (cache v6.1.0 verified node24); AppImage cache keyed by sha256 with verification on hit; concurrency group cancelling only non-main refs; policy tests.
 T3 [S4] route=delegated worker; status=pending; commit=pending; `--shuffle-seed` option in ci/run_tests.py (+macro) and `.github/workflows/nightly.yml`; policy tests; docs/ci.md.
 
 ## Log

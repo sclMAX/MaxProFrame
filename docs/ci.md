@@ -220,6 +220,11 @@ using the existing `test-failure-reports-stable` name and seven-day retention.
 Missing/empty native frames or Qt events cannot exclude a modal or prove a cause.
 Diagnostics do not dismiss dialogs, synthesize input, skip tests or repair the GUI.
 
+## AppImage cache and superseded runs
+
+- **AppImage cache:** each native job restores the FreeCAD AppImage from `actions/cache` under the key `freecad-appimage-<sha256>`, so a pinned build is downloaded once and reused. The download step runs only on a cache miss, and the checksum step always runs, so a cached file is verified against the pinned SHA-256 exactly like a fresh download. Bumping a target's URL and SHA-256 creates a new key automatically.
+- **Superseded runs:** the workflow uses `concurrency` grouped by workflow and ref. A new push to the same branch or PR cancels the older run; runs on `main` are never cancelled, so every `main` commit keeps its own result.
+
 ## GitHub Actions runner infrastructure and Node 24
 
 GitHub Actions JavaScript actions execute on the runner's internal Node.js runtime. GitHub Actions has updated official actions to Node 24 and flags workflows invoking Node 20 actions with runner deprecation warnings.
@@ -229,6 +234,7 @@ GitHub Actions JavaScript actions execute on the runner's internal Node.js runti
 | `actions/checkout` | `3d3c42e5aac5ba805825da76410c181273ba90b1` (`v7.0.1`) | Node 24 |
 | `actions/setup-python` | `5fda3b95a4ea91299a34e894583c3862153e4b97` (`v7.0.0`) | Node 24 |
 | `actions/upload-artifact` | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` (`v7.0.2`) | Node 24 |
+| `actions/cache` | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` (`v6.1.0`) | Node 24 |
 
 ### Infrastructure boundary vs project dependencies
 - **Action infrastructure only:** Node 24 is strictly an execution requirement of GitHub's hosted runner infrastructure. MaxProFrame does **not** depend on Node.js, npm, or JavaScript. MaxProFrame remains a FreeCAD workbench; its native CI suites run offscreen under Python 3.11 / Python 3.13. Contributors and users do not need Node.js installed locally.
