@@ -30,6 +30,19 @@ jobs:
         with:
           persist-credentials: false
 
+      # ci/targets.json is the single source of truth for the pinned stable runtime (see docs/ci.md).
+      - name: Read pinned stable target
+        id: target
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+
+          with open("ci/targets.json", encoding="utf-8") as handle:
+              stable = json.load(handle)["stable"]
+          print("url=" + stable["url"])
+          print("sha256=" + stable["sha256"])
+          PY
+
       - name: Install minimal headless dependencies
         run: |
           sudo apt-get update
@@ -40,17 +53,20 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/FreeCAD.AppImage
-          key: freecad-appimage-f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434
+          key: freecad-appimage-${{ steps.target.outputs.sha256 }}
 
       - name: Download FreeCAD AppImage
         if: steps.appimage-cache.outputs.cache-hit != 'true'
+        env:
+          STABLE_URL: ${{ steps.target.outputs.url }}
         run: |
-          curl -fL -o "${{ runner.temp }}/FreeCAD.AppImage" \
-            "https://github.com/FreeCAD/FreeCAD/releases/download/1.1.4/FreeCAD_1.1.4-Linux-x86_64-py311.AppImage"
+          curl -fL -o "${{ runner.temp }}/FreeCAD.AppImage" "$STABLE_URL"
 
       - name: Verify FreeCAD AppImage checksum
+        env:
+          STABLE_SHA256: ${{ steps.target.outputs.sha256 }}
         run: |
-          echo "f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434  ${{ runner.temp }}/FreeCAD.AppImage" | sha256sum -c -
+          echo "$STABLE_SHA256  ${{ runner.temp }}/FreeCAD.AppImage" | sha256sum -c -
 
       - name: Extract AppImage
         run: |

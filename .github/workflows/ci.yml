@@ -67,27 +67,45 @@ jobs:
           path: ${{ runner.temp }}/format-reports
           retention-days: 7
 
+  targets:
+    name: Read pinned FreeCAD targets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # ci/targets.json is the single source of truth for the pinned runtimes (see docs/ci.md).
+      - name: Build the target matrix
+        id: matrix
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+
+          with open("ci/targets.json", encoding="utf-8") as handle:
+              targets = json.load(handle)
+          keys = ("label", "url", "sha256", "timeout", "blocking")
+          include = [{"target": name, **{key: data[key] for key in keys}} for name, data in targets.items()]
+          print("matrix=" + json.dumps({"include": include}, separators=(",", ":")))
+          PY
+
   test:
     name: Native FreeCAD (${{ matrix.target }})
+    needs: targets
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    # Weekly is informative: its failure is visible but does not fail the workflow. Stable stays blocking.
-    continue-on-error: ${{ matrix.target == 'weekly' }}
+    # Only targets marked `blocking` in ci/targets.json can fail the workflow; the weekly build is informative.
+    continue-on-error: ${{ !matrix.blocking }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - target: stable
-            label: FreeCAD 1.1.4
-            url: https://github.com/FreeCAD/FreeCAD/releases/download/1.1.4/FreeCAD_1.1.4-Linux-x86_64-py311.AppImage
-            sha256: f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434
-            timeout: 420
-          - target: weekly
-            label: FreeCAD weekly-2026.10.28
-            url: https://github.com/FreeCAD/FreeCAD/releases/download/weekly-2026.10.28/FreeCAD_weekly-2026.10.28-Linux-x86_64.AppImage
-            sha256: 34d6b2fa3d6686fce67ed8b3013fa7526da4051ac61012a8b34a8214682a5b2b
-            # Development builds run the suite about 2x slower than stable locally (372s vs 167s).
-            timeout: 480
+      matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
 
     steps:
       - name: Checkout code
