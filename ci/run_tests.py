@@ -100,6 +100,11 @@ def main() -> None:
         "--test",
         help="Run one dotted test_ module[.Class[.method]] from tests/ (default: full discovery)",
     )
+    parser.add_argument(
+        "--no-crash-rerun",
+        action="store_true",
+        help="Skip the diagnostic gdb rerun of the crashing test (the crash summary is still written)",
+    )
     args = parser.parse_args()
     if args.test is not None and not valid_test_selector(args.test):
         parser.error("--test must be test_module[.Class[.method]] using ASCII identifiers, without paths")
@@ -274,14 +279,39 @@ def main() -> None:
             )
             sys.exit(124)
 
+        def diagnose_crash():
+            """Diagnostic only: any failure here must not change the runner's exit status."""
+            try:
+                import crash_diagnosis
+
+                if not crash_diagnosis.is_crash(proc.returncode, reports_dir):
+                    return
+                test_id = crash_diagnosis.inflight_test(crash_diagnosis.read_text(reports_dir / "tests.log"))
+                if args.no_crash_rerun:
+                    note = "rerun disabled by --no-crash-rerun."
+                elif native is not None:
+                    note = "rerun skipped: --native-diagnostics already runs under gdb."
+                elif test_id is None:
+                    note = "rerun skipped: no unfinished test was found in tests.log."
+                elif not valid_test_selector(test_id):
+                    note = f"rerun skipped: {test_id} is not a selectable tests/ test."
+                else:
+                    note = crash_diagnosis.rerun_under_gdb(cmd, env, test_id, reports_dir, scratch)
+                plain, markdown = crash_diagnosis.report(args.target, proc.returncode, test_id, stderr_text, note)
+                crash_diagnosis.publish(plain, markdown, sys.stderr)
+            except Exception as exc:
+                sys.stderr.write(f"run_tests crash diagnosis failed: {type(exc).__name__}: {exc}\n")
+
         if proc.returncode != 0:
             sys.stderr.write(f"run_tests error: FreeCAD child process failed with exit code {proc.returncode}.\n")
+            diagnose_crash()
             sys.exit(proc.returncode)
 
         # Validate summary report
         summary_file = reports_dir / "summary.json"
         if not summary_file.is_file():
             sys.stderr.write("run_tests error: summary.json was not generated.\n")
+            diagnose_crash()
             sys.exit(1)
 
         try:

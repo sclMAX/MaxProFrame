@@ -111,12 +111,7 @@ jobs:
         if: steps.planner.outputs.run_tests == 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libegl1 libopengl0 libxkbcommon-x11-0 libxcb-cursor0
-
-      - name: Install manual native debugger
-        if: github.event_name == 'workflow_dispatch' && inputs.native_diagnostics && matrix.target == 'stable'
-        run: |
-          sudo apt-get install -y --no-install-recommends gdb
+          sudo apt-get install -y --no-install-recommends libegl1 libopengl0 libxkbcommon-x11-0 libxcb-cursor0 gdb
 
       - name: Download and verify FreeCAD AppImage
         if: steps.planner.outputs.run_tests == 'true'

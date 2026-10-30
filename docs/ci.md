@@ -164,10 +164,33 @@ To bump the weekly pin, update together:
 2. `ci/run-tests.FCMacro`: expected `FreeCAD.Version()[:3]` and Python version for `weekly`, plus the target label.
 3. `ci/tests/test_policy.py` and this document (URL, SHA-256, version).
 
+## Crash diagnosis (automatic, diagnostic only)
+
+When the native FreeCAD child dies by a signal (for example exit -11, SIGSEGV), or
+exits without a valid `summary.json` while a test was still running, `run_tests.py`:
+
+1. Finds the test that was running: the last test line in `tests.log` without a result.
+2. Writes a short diagnosis to stderr and, when `GITHUB_STEP_SUMMARY` is set, appends
+   a Markdown section to the job summary: target, signal/exit code, crashing test id and
+   the last `stderr.log` lines (Qt/GL noise and consecutive repeats removed).
+3. Reruns **only that test once** under `gdb` (120 s limit, isolated reports directory)
+   and saves `bt 60` plus a Python traceback (`faulthandler`, called from inside the
+   stopped process because FreeCAD's own SIGSEGV handler hides it) to
+   `<reports>/crash-backtrace.txt`. The existing failure-report artifact uploads it.
+
+The rerun never changes the outcome: the runner exits with the original failure
+status, a rerun that passes or fails is only evidence, and a missing `gdb`, a gdb error
+or a timeout is noted in the diagnosis instead of failing differently. A normal failing
+suite (valid summary with failures) and timeouts (exit 124) do not trigger it. The
+hosted test job installs `gdb` next to the other headless dependencies.
+
+Pass `--no-crash-rerun` locally to keep the diagnosis but skip the gdb rerun. The
+rerun is also skipped under `--native-diagnostics`, which already runs under gdb.
+
 ## Explicit manual native investigation (stable only)
 
 Dispatch CI with the boolean `native_diagnostics` enabled (default: false).
-Only the stable job installs GDB and passes `--native-diagnostics`; PR, push,
+Only the stable job passes `--native-diagnostics`; PR, push,
 Weekly and ordinary manual runs retain the normal launch path and deadlines.
 Locally, add `--native-diagnostics --target stable --timeout 420` to the native
 runner command above. GDB must already be installed; timeouts <=160 are rejected.
