@@ -29,6 +29,7 @@ from freecad.maxproframe.library_manager import (
     calculate_linear_weight,
     sanitize_library_name,
 )
+from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 
 try:
     from freecad.maxproframe.custom_section_geometry import build_custom_section_face
@@ -114,9 +115,7 @@ class _HeaderBadge(QtWidgets.QLabel):
         option = QtWidgets.QStyleOption()
         option.initFrom(self)
         painter.drawPrimitive(QtWidgets.QStyle.PE_Widget, option)
-        rect = self.rect().adjusted(
-            self._TEXT_INSET_X, self._TEXT_INSET_Y, -self._TEXT_INSET_X, -self._TEXT_INSET_Y
-        )
+        rect = self.rect().adjusted(self._TEXT_INSET_X, self._TEXT_INSET_Y, -self._TEXT_INSET_X, -self._TEXT_INSET_Y)
         text = self.fontMetrics().elidedText(self.text(), QtCore.Qt.ElideRight, max(0, rect.width()))
         self.style().drawItemText(
             painter,
@@ -426,6 +425,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
     def __init__(self, parent=None, library_manager=None):
         super().__init__(parent)
+        keep_alive_until_destroyed(self)
         self.ensure_translations_loaded()
         self.manager = library_manager or LibraryManager()
         self.current_lib_meta = None
@@ -2056,7 +2056,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         meta = self.current_lib_meta
         material, density = self.manager.get_library_material_info(meta["name"])
-        review = SketchSectionReview(meta["name"], material, density, self._add_dxf_section)
+        review = keep_alive_until_destroyed(SketchSectionReview(meta["name"], material, density, self._add_dxf_section))
         review.library_root = os.path.realpath(meta["folder_path"])
         restore_visible = self.isVisible()
         self._dxf_review = review
@@ -2166,7 +2166,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             doc = App.newDocument("DXFReview")
             sketch = import_dxf_section(path, doc, unit_override=units.confirmed_unit())
             material, density = self.manager.get_library_material_info(meta["name"])
-            review = DXFSectionReview(sketch, meta["name"], material, density, self._add_dxf_section)
+            review = keep_alive_until_destroyed(
+                DXFSectionReview(sketch, meta["name"], material, density, self._add_dxf_section)
+            )
             review.library_root = os.path.realpath(meta["folder_path"])
             App.setActiveDocument(doc.Name)
             Gui.setActiveDocument(doc.Name)

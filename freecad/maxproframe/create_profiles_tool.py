@@ -2,7 +2,6 @@ import glob
 import json
 import os
 import re
-import weakref
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from functools import wraps
@@ -28,6 +27,7 @@ from freecad.maxproframe.ff_tools import (
 )
 from freecad.maxproframe.library_manager import LibraryManager, get_canonical_family
 from freecad.maxproframe.profile import Profile, ViewProviderCustomProfile, ViewProviderProfile
+from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, release_layout_item_wrappers
 from freecad.maxproframe.section_library import find_existing_section_sketch, get_or_import_section_sketch
 from freecad.maxproframe.section_outline import build_section_face
 from freecad.maxproframe.task_panel_widgets import (
@@ -73,24 +73,6 @@ def load_ui_file(path):
         finally:
             f.close()
     raise RuntimeError(f"Unable to load UI file: {path}")
-
-
-def _invalidate_wrapper_on_destroy(widget):
-    # A widget built by the UI loader and later deleted by Qt (the task view deletes the panel
-    # form when its dialog closes) keeps a registered PySide wrapper: it still looks valid, and a
-    # new QObject allocated at the same address resolves to it (SIGSEGV in QWidget::toolTip).
-    try:
-        from shiboken6 import invalidate
-    except ImportError:
-        return
-    wrapper = weakref.ref(widget)
-
-    def release(*_):
-        stale = wrapper()
-        if stale is not None:
-            invalidate(stale)
-
-    widget.destroyed.connect(release)
 
 
 def _safe_unwrap_widget(widget_or_item):
@@ -245,7 +227,7 @@ class BaseProfileTaskPanel(ABC):
         # exposing a second task panel to FreeCAD's task dialog.
         self._legacy_form = load_ui_file(os.path.join(UIPATH, "create_profiles2.ui"))
         for form in self.form + [self._legacy_form]:
-            _invalidate_wrapper_on_destroy(form)
+            invalidate_wrapper_on_destroy(form)
 
         # Replace before FormProxy discovers children, so no stale label survives.
         raw_image = getattr(self.form[0], "label_image", None)
@@ -1328,25 +1310,7 @@ class BaseProfileTaskPanel(ABC):
         pass
 
     def _release_layout_item_wrappers(self):
-        # PySide wraps the QWidgetItem/QSpacerItem objects the layouts own, but the wrappers are not
-        # QObjects, so they stay registered after Qt deletes the form with the closed task dialog.
-        # A later widget allocated at the same address then resolves to the stale wrapper and
-        # SIGSEGVs in PySide::getWrapperForQObject. Drop them while the C++ items are still alive.
-        try:
-            from shiboken6 import invalidate
-        except ImportError:
-            return
-        for form in list(getattr(self, "form", [])) + [getattr(self, "_legacy_form", None)]:
-            if form is None:
-                continue
-            try:
-                for layout in form.findChildren(QtWidgets.QLayout):
-                    for index in range(layout.count()):
-                        item = layout.itemAt(index)
-                        if item is not None and not isinstance(item, QtWidgets.QLayout):
-                            invalidate(item)
-            except RuntimeError:
-                continue
+        release_layout_item_wrappers(list(getattr(self, "form", [])) + [getattr(self, "_legacy_form", None)])
 
     @abstractmethod
     def open(self):

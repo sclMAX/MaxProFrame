@@ -333,6 +333,16 @@ def main() -> None:
                     note = "rerun disabled by --no-crash-rerun."
                 elif native is not None:
                     note = "rerun skipped: --native-diagnostics already runs under gdb."
+                elif args.shuffle_seed is not None:
+                    note = crash_diagnosis.rerun_under_gdb(
+                        cmd,
+                        env,
+                        test_id,
+                        reports_dir,
+                        scratch,
+                        timeout=crash_diagnosis.seeded_timeout(args.timeout),
+                        shuffle_seed=args.shuffle_seed,
+                    )
                 elif test_id is None:
                     note = "rerun skipped: no unfinished test was found in tests.log."
                 elif not valid_test_selector(test_id):

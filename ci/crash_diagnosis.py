@@ -13,9 +13,11 @@ import native_diagnostics
 MAX_STDERR_LINES = 20
 MAX_REPORT_BYTES = 1024 * 1024
 RERUN_TIMEOUT = 120.0
+SEEDED_RERUN_CAP = 1800.0
 REPORT_NAME = "crash-backtrace.txt"
 TEST_START = re.compile(r"^\S+ \(([\w.]+)\)(?: \.\.\. ?(.*))?$")
 RESULT = re.compile(r" \.\.\. (?:ok|FAIL|ERROR|skipped|expected failure|unexpected success)")
+GDB_CRASH = re.compile(r"Program (?:received|terminated with) signal")
 FREECAD_SIGNAL = re.compile(r"received signal (SIG[A-Z0-9]+)")
 GL_NOISE = re.compile(r"QOpenGL|libEGL|libGL|MESA|GLX|EGL|qt\.(?:qpa|glx)|DRI\d|OpenGL", re.IGNORECASE)
 
@@ -80,17 +82,33 @@ def read_text(path):
         return ""
 
 
-def rerun_under_gdb(command, environment, test_id, reports, scratch, timeout=RERUN_TIMEOUT):
-    """Rerun only TEST_ID under gdb. Returns a one-line note about what happened."""
+def seeded_timeout(run_timeout):
+    """A seeded replay runs the whole suite: allow the run's own timeout (plus slack), within a cap."""
+    return min(max(RERUN_TIMEOUT, run_timeout * 1.5), SEEDED_RERUN_CAP)
+
+
+def rerun_under_gdb(command, environment, test_id, reports, scratch, timeout=RERUN_TIMEOUT, shuffle_seed=None):
+    """Rerun under gdb and return a one-line note about what happened.
+
+    Without SHUFFLE_SEED only TEST_ID is rerun. With it the original selection and seed
+    (FF_TEST / FF_SHUFFLE_SEED already in ENVIRONMENT) are replayed, so order-dependent crashes reproduce.
+    """
     if shutil.which("gdb") is None:
         return "gdb is not installed; crash rerun skipped."
     rerun_reports = pathlib.Path(scratch) / "rerun-reports"
     rerun_reports.mkdir(exist_ok=True)
     env = environment.copy()
-    env["FF_TEST"] = test_id
+    if shuffle_seed is None:
+        env["FF_TEST"] = test_id
+        mode = "single test"
+        what = test_id
+    else:
+        env["FF_SHUFFLE_SEED"] = str(shuffle_seed)
+        mode = f"seeded suite replay, seed {shuffle_seed}"
+        what = f"the seeded suite (seed {shuffle_seed}, in-flight test {test_id or 'unknown'})"
     env["FF_REPORTS"] = str(rerun_reports)
     argv, env = native_diagnostics.backtrace_command(command, env)
-    header = f"# Diagnostic rerun of {test_id} under gdb (result does not change the job outcome)\n"
+    header = f"# Diagnostic rerun of {what} under gdb, mode: {mode} (result does not change the job outcome)\n"
     proc = subprocess.Popen(
         argv,
         env=env,
@@ -104,6 +122,8 @@ def rerun_under_gdb(command, environment, test_id, reports, scratch, timeout=RER
     try:
         output, _ = proc.communicate(timeout=timeout)
         status = f"gdb exited with {proc.returncode}"
+        if not GDB_CRASH.search(output):
+            status += "; the crash did not reproduce under gdb"
     except subprocess.TimeoutExpired:
         try:
             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
@@ -111,6 +131,7 @@ def rerun_under_gdb(command, environment, test_id, reports, scratch, timeout=RER
             pass
         output, _ = proc.communicate()
         status = f"gdb timed out after {timeout:g}s"
+    status = f"{mode}: {status}"
     data = f"{header}# {status}\n{output}".encode("utf-8", errors="replace")[:MAX_REPORT_BYTES]
     (pathlib.Path(reports) / REPORT_NAME).write_bytes(data)
     return f"Backtrace of the rerun saved to {REPORT_NAME} ({status})."

@@ -21,13 +21,22 @@ from freecad.maxproframe.create_bom import (
     make_cut_list,
     traverse_assembly,
 )
-from freecad.maxproframe.ff_tools import get_param_group, add_command, ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, translate
+from freecad.maxproframe.ff_tools import (
+    ICONPATH,
+    PROFILEIMAGES_PATH,
+    PROFILESPATH,
+    UIPATH,
+    add_command,
+    get_param_group,
+    translate,
+)
+from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrimmedProfile
 
 
 class CreateBOMTaskPanel:
     def __init__(self):
-        self.form = Gui.PySideUic.loadUi(os.path.join(UIPATH, "create_bom.ui"))
+        self.form = keep_alive_until_destroyed(Gui.PySideUic.loadUi(os.path.join(UIPATH, "create_bom.ui")))
 
         param = get_param_group()
         if not param.IsEmpty():

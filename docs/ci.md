@@ -173,10 +173,17 @@ exits without a valid `summary.json` while a test was still running, `run_tests.
 2. Writes a short diagnosis to stderr and, when `GITHUB_STEP_SUMMARY` is set, appends
    a Markdown section to the job summary: target, signal/exit code, crashing test id and
    the last `stderr.log` lines (Qt/GL noise and consecutive repeats removed).
-3. Reruns **only that test once** under `gdb` (120 s limit, isolated reports directory)
-   and saves `bt 60` plus a Python traceback (`faulthandler`, called from inside the
+3. Reruns **only that test once** under `gdb` (120 s limit, isolated reports directory).
+   When the run was started with `--shuffle-seed N`, it instead replays the **same seeded
+   suite** (same `FF_TEST` selection and `FF_SHUFFLE_SEED`), so order-dependent crashes get
+   a backtrace; that replay is bounded by 1.5x the run's `--timeout`, at least 120 s and at
+   most 1800 s. The diagnosis states the mode (`single test` or `seeded suite replay, seed N`).
+   It saves `bt 60` plus a Python traceback (`faulthandler`, called from inside the
    stopped process because FreeCAD's own SIGSEGV handler hides it) to
    `<reports>/crash-backtrace.txt`. The existing failure-report artifact uploads it.
+
+If gdb exits without the process receiving a signal, the diagnosis and the header of
+`crash-backtrace.txt` say the crash did not reproduce under gdb.
 
 The rerun never changes the outcome: the runner exits with the original failure
 status, a rerun that passes or fails is only evidence, and a missing `gdb`, a gdb error
