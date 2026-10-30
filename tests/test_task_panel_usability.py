@@ -130,6 +130,9 @@ class TestTaskPanelUsability(unittest.TestCase):
                         receiver.style().unpolish(receiver)
                         receiver.style().polish(receiver)
                         receiver.ensurePolished()
+                self.app.processEvents()
+                for field, reference in zip(fields, references):
+                    # L9 decision (3): measure after the layout settles, not from the pre-layout size.
                     reference.resize(field.size())
                 self.app.processEvents()
                 for field, reference in zip(fields, references):
@@ -294,7 +297,10 @@ class TestTaskPanelUsability(unittest.TestCase):
         before = self._snapshot()
         for sub, count in (("Edge1", 1), ("", 3)):
             with self.subTest(selection=sub or "whole object"):
+                # L9 decision (2) "Se mantienen": clearing the 3D selection keeps panel edges, so use a fresh panel.
+                panel.clean()
                 Gui.Selection.clearSelection()
+                panel = self._create()
                 if sub:
                     Gui.Selection.addSelection(self.doc.Name, path.Name, sub)
                 else:
@@ -308,6 +314,9 @@ class TestTaskPanelUsability(unittest.TestCase):
                 self.assertFalse(panel.form_proxy.sb_length.isEnabled())
                 self.assertEqual(panel.form_proxy.sb_length.value(), 0)
                 self.assertEqual(self._snapshot(), before)
+        # L9 decision (2) "Se mantienen": edges leave the panel only through explicit removal.
+        for key in list(panel._edge_properties):
+            panel._on_edge_removed(key)
         Gui.Selection.clearSelection()
         panel.update_selection()
         self.assertTrue(panel.form_proxy.sb_length.isEnabled())

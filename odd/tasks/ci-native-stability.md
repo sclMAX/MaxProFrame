@@ -11,7 +11,7 @@ S3. Keep accepted CI policy S1 of `odd/tasks/ci-policy.md`: "CI reproducible: ve
 ## Tasks
 T1 [S1] route=inline; status=done; commit=1fb1434; 0/20 crashes after fix (was 5/10); modules show identical results base vs fix; root cause: `_clean_unreferenced_session_sources` read native `InList` of a source sketch right after a preview `removeObject`; gdb shows SIGSEGV in `App::DocumentObjectPy::getInList()`. Fix: derive live referrers from `doc.Objects` OutList. Baseline: single test crashed 5/10 locally.
 T1b [S1,S4] route=delegated worker mvusim9u-1-rwwv; status=done (7 of 14, see L8); commit=see git log (regressions); resolve the 14 deterministic stable failures exposed once the crash stopped masking them, classifying each per L4. See L5-L6 for exact list and bisect attribution.
-T1c [S4] route=delegated worker; status=in_progress; commit=pending; update the 7 remaining tests per user decisions L9 (rows 8-14 of L8 report).
+T1c [S4] route=delegated worker mvuuenl3-3-eynb; status=done; commit=see git log (tests per L9); worker full stable suite 645 OK; update the 7 remaining tests per user decisions L9 (rows 8-14 of L8 report).
 T2 [S2,S3] route=delegated worker mvuswoj9-2-8unb (context backstop); status=done; commit=acc443f; host policy RED 8/71 -> GREEN 71/71; native smoke weekly-on-weekly exit0, stable-on-stable exit0, weekly-on-stable rejected exit1; hosted CI not yet observed; replace `rc` target with pinned `weekly` (URL+sha256, version/Python asserted by macro), `continue-on-error` only for weekly; update runner choices, macro, policy tests, docs/ci.md.
 T3 [S1,S2] route=inline; status=pending; commit=none; full local suite on stable and weekly; hosted CI result after user-authorized push.
 

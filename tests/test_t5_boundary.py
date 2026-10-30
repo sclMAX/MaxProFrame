@@ -1,22 +1,24 @@
 """Independent T5 public chooser probes; run only in isolated native GUI state."""
+
 import hashlib
 import json
 import os
 import shutil
 import unittest
 from unittest.mock import patch
+
 import FreeCAD as App
 import FreeCADGui as Gui
 import Part
 import test_portable_library_profile_instantiation as helper
+
 from freecad.maxproframe import create_profiles_tool as chooser
 
 TOPOLOGY_CONTROL = {}
 
 
 def selection():
-    return [(s.DocumentName, s.ObjectName, list(s.SubElementNames))
-            for s in Gui.Selection.getSelectionEx()]
+    return [(s.DocumentName, s.ObjectName, list(s.SubElementNames)) for s in Gui.Selection.getSelectionEx()]
 
 
 def files(root):
@@ -32,8 +34,10 @@ def files(root):
 class Boundary(helper.TestPortableLibraryProfileInstantiation):
     def setUp(self):
         super().setUp()
+
         def modal(box, *args):
             raise AssertionError("UNEXPECTED_MODAL: " + box.windowTitle() + ": " + box.text())
+
         self.messages.enter_context(patch.object(helper.QtWidgets.QMessageBox, "exec_", modal))
         self.panels = []
         src = self._new_doc("Source")
@@ -116,8 +120,13 @@ class Boundary(helper.TestPortableLibraryProfileInstantiation):
     def test_path_change_repeated_preview_then_reject(self):
         # S2/S8: stale-key cleanup and complete rollback after non-vacuous imports.
         panel = self.panel()
+        previous = self.p1
         for path, volume in ((self.p2, 120000), (self.p1, 80000), (self.p2, 120000)):
+            # L9 decision (2) "Se mantienen": edges leave the panel only through explicit removal.
+            panel._on_edge_removed((previous, "Edge1"))
+            previous = path
             self.pick(path)
+            panel.addSelection(self.project.Name, path, "Edge1", None)
             before = selection()
             panel.proceed()
             self.valid(panel, volume)
@@ -147,8 +156,15 @@ class Boundary(helper.TestPortableLibraryProfileInstantiation):
         self.assertTrue(control_face.isValid())
         after_validation = source.Shape.exportBrepToString()
         TOPOLOGY_CONTROL.update(raw=raw, again=again, after_validation=after_validation)
-        before = (owned.Label, owned.FileName, source.Label, source.UserNote,
-                  list(source.State), source.Shape.exportBrepToString(), str(source.ExpressionEngine))
+        before = (
+            owned.Label,
+            owned.FileName,
+            source.Label,
+            source.UserNote,
+            list(source.State),
+            source.Shape.exportBrepToString(),
+            str(source.ExpressionEngine),
+        )
         self.pick(self.p1)
         docs = set(App.listDocuments())
         disk = files(self.folder_lib_path)
@@ -159,8 +175,18 @@ class Boundary(helper.TestPortableLibraryProfileInstantiation):
         self.assertEqual(App.ActiveDocument.Name, self.project.Name)
         self.assertEqual(selection(), sel)
         self.assertIs(App.getDocument(name), owned)
-        self.assertEqual((owned.Label, owned.FileName, source.Label, source.UserNote,
-                          list(source.State), source.Shape.exportBrepToString(), str(source.ExpressionEngine)), before)
+        self.assertEqual(
+            (
+                owned.Label,
+                owned.FileName,
+                source.Label,
+                source.UserNote,
+                list(source.State),
+                source.Shape.exportBrepToString(),
+                str(source.ExpressionEngine),
+            ),
+            before,
+        )
         self.assertEqual(files(self.folder_lib_path), disk)
 
     def test_failed_new_path_preview_is_atomic(self):
@@ -176,14 +202,26 @@ class Boundary(helper.TestPortableLibraryProfileInstantiation):
         App.closeDocument(doc_name)
         missing_path = "sections/missing.FCStd"
         cases = [
-            ({"object_name": "Absent"}, ValueError,
-             "Object 'Absent' not found or is not a SketchObject in asset '" + self.a[0] + "'."),
-            ({"asset_path": missing_path}, FileNotFoundError,
-             "Asset file '" + os.path.join(self.folder_lib_path, missing_path) + "' does not exist."),
-            ({"asset_path": "../outside.FCStd"}, ValueError,
-             "Asset path contains parent directory traversal: ../outside.FCStd"),
-            ({"asset_path": bad_path, "object_name": bad_name, "asset_id": "open"}, ValueError,
-             "Custom profile contains open contours; all contours must be closed"),
+            (
+                {"object_name": "Absent"},
+                ValueError,
+                "Object 'Absent' not found or is not a SketchObject in asset '" + self.a[0] + "'.",
+            ),
+            (
+                {"asset_path": missing_path},
+                FileNotFoundError,
+                "Asset file '" + os.path.join(self.folder_lib_path, missing_path) + "' does not exist.",
+            ),
+            (
+                {"asset_path": "../outside.FCStd"},
+                ValueError,
+                "Asset path contains parent directory traversal: ../outside.FCStd",
+            ),
+            (
+                {"asset_path": bad_path, "object_name": bad_name, "asset_id": "open"},
+                ValueError,
+                "Custom profile contains open contours; all contours must be closed",
+            ),
         ]
         for change, error, text in cases:
             with self.subTest(change=change):
@@ -200,7 +238,10 @@ class Boundary(helper.TestPortableLibraryProfileInstantiation):
                         panel.proceed()
                     self.assertEqual(str(caught.exception), text)
                     self.assertEqual({o.Name for o in self.project.Objects}, names)
-                    self.assertEqual([(o.Name, o.Shape.exportBrepToString()) for o in self.project.Objects if hasattr(o, "Shape")], objects)
+                    self.assertEqual(
+                        [(o.Name, o.Shape.exportBrepToString()) for o in self.project.Objects if hasattr(o, "Shape")],
+                        objects,
+                    )
                     self.assertEqual(set(App.listDocuments()), docs)
                     self.assertEqual(selection(), sel)
                     self.assertEqual(files(self.test_root), disk)
@@ -226,8 +267,13 @@ class Boundary(helper.TestPortableLibraryProfileInstantiation):
         App.closeDocument(asset_name)
         data = self.manager.get_library("CustomFolderLib")
         data["Custom Profile"]["sizes"]["C"] = {
-            "asset_path": self.a[0], "object_name": alternate_name, "asset_id": self.a[2],
-            "Height": "10", "Width": "15", "Weight": "1.1775"}
+            "asset_path": self.a[0],
+            "object_name": alternate_name,
+            "asset_id": self.a[2],
+            "Height": "10",
+            "Width": "15",
+            "Weight": "1.1775",
+        }
         self.manager.save_folder_library(self.folder_lib_path, data)
         self.pick(self.p1)
         panel = self.panel()
