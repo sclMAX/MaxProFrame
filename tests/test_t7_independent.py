@@ -70,12 +70,14 @@ class IndependentT7(fixture.TestCustomProfileSelectedImport):
                 owned_before = snapshot(existing)
                 self.defaults("CP-901")
                 panel = self.opened(doc, path)
-                self.assertEqual(len(self._get_profiles(doc)), 0, "No profile before first Apply")
-                self.assertEqual({o.Name for o in sources(doc)}, {existing_name}, "No import before first Apply")
+                # L9 decision (1) "Sí, preview al abrir": a preselected edge creates the preview on open.
+                self.assertEqual(len(self._get_profiles(doc)), 1, "Preview created on open")
+                opened_source = self._get_profiles(doc)[0].CustomProfile.Name
+                self.assertEqual({o.Name for o in sources(doc)}, {existing_name, opened_source})
                 self._select_profile(panel, "CustomFolderLib", "Custom Profile", "CP-901")
-                self.assertEqual(len(self._get_profiles(doc)), 0, "No profile on combo selection before Apply")
+                self.assertEqual(len(self._get_profiles(doc)), 1, "Combo selection reuses the open preview")
                 self.assertEqual(
-                    {o.Name for o in sources(doc)}, {existing_name}, "No import on combo selection before Apply"
+                    {o.Name for o in sources(doc)}, {existing_name, opened_source}, "No extra import on combo selection"
                 )
                 self.assertTrue(panel.apply())
                 a = self._get_profiles(doc)[0].CustomProfile
@@ -140,11 +142,12 @@ class IndependentT7(fixture.TestCustomProfileSelectedImport):
         try:
             panel = self.opened(doc, path)
             self.assertEqual(panel.form_proxy.combo_size.currentText(), "CP-902")
-            self.assertEqual(len(created), 0, "No import before first Apply")
-            self.assertEqual(len(sources(doc)), 0, "No source sketch before first Apply")
-            self.assertEqual(len(self._get_profiles(doc)), 0, "No profile before first Apply")
+            # L9 decision (1) "Sí, preview al abrir": the default section is imported once, on open.
+            self.assertEqual(len(created), 1, "Exactly one import on open")
+            self.assertEqual(len(sources(doc)), 1, "One source sketch after open")
+            self.assertEqual(len(self._get_profiles(doc)), 1, "Preview created on open")
             self.assertTrue(panel.apply())
-            self.assertEqual(len(created), 1, "Transient first/unselected source imported during default restore")
+            self.assertEqual(len(created), 1, "Apply must not import again")
             self.assertEqual(len(sources(doc)), 1)
             prof = self._get_profiles(doc)[0]
             source = prof.CustomProfile
@@ -168,7 +171,7 @@ class IndependentT7(fixture.TestCustomProfileSelectedImport):
             source.Label = "User renamed selected source"
             before = snapshot(source)
             second = self.opened(doc, path)
-            self.assertEqual(len(created), 1, "No import before second Apply")
+            self.assertEqual(len(created), 1, "Reopening reuses the existing source")
             self.assertTrue(second.apply())
             self.assertEqual(len(created), 1, "Repeat asset use imported another source")
             self.assertEqual(len(sources(doc)), 1)

@@ -66,6 +66,8 @@ jobs:
     name: Native FreeCAD (${{ matrix.target }})
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    # Weekly is informative: its failure is visible but does not fail the workflow. Stable stays blocking.
+    continue-on-error: ${{ matrix.target == 'weekly' }}
     strategy:
       fail-fast: false
       matrix:
@@ -75,11 +77,12 @@ jobs:
             url: https://github.com/FreeCAD/FreeCAD/releases/download/1.1.4/FreeCAD_1.1.4-Linux-x86_64-py311.AppImage
             sha256: f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434
             timeout: 420
-          - target: rc
-            label: FreeCAD 26.3rc2
-            url: https://github.com/FreeCAD/FreeCAD/releases/download/26.3rc2/FreeCAD_26.3rc2-Linux-x86_64.AppImage
-            sha256: 2cf4212d5a348574e786da7d5a8faeeb3e83dd4245c23898dede92ce82ce4908
-            timeout: 360
+          - target: weekly
+            label: FreeCAD weekly-2026.10.28
+            url: https://github.com/FreeCAD/FreeCAD/releases/download/weekly-2026.10.28/FreeCAD_weekly-2026.10.28-Linux-x86_64.AppImage
+            sha256: 34d6b2fa3d6686fce67ed8b3013fa7526da4051ac61012a8b34a8214682a5b2b
+            # Development builds run the suite about 2x slower than stable locally (372s vs 167s).
+            timeout: 480
 
     steps:
       - name: Checkout code

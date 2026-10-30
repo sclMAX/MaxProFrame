@@ -708,9 +708,9 @@ class TestRunTestsPolicy(unittest.TestCase):
         dumped_env = json.loads(env_dump.read_text(encoding="utf-8"))
         self.assertEqual(dumped_env.get("FF_TARGET"), "stable")
 
-    def test_run_tests_target_explicit_rc(self):
-        """Runner must accept --target rc and export FF_TARGET=rc to child."""
-        env_dump = self.work_dir / "env_target_rc.json"
+    def test_run_tests_target_explicit_weekly(self):
+        """Runner must accept --target weekly and export FF_TARGET=weekly to child."""
+        env_dump = self.work_dir / "env_target_weekly.json"
         summary_path = self.reports_dir / "summary.json"
         summary_data = {"tests": 1, "failures": 0, "errors": 0, "skipped": 0, "successful": True}
 
@@ -731,7 +731,7 @@ class TestRunTestsPolicy(unittest.TestCase):
                 "--timeout",
                 "10",
                 "--target",
-                "rc",
+                "weekly",
             ],
             cwd=REPO_ROOT,
             env=env,
@@ -741,7 +741,7 @@ class TestRunTestsPolicy(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, f"Stderr: {proc.stderr}")
         self.assertTrue(env_dump.is_file())
         dumped_env = json.loads(env_dump.read_text(encoding="utf-8"))
-        self.assertEqual(dumped_env.get("FF_TARGET"), "rc")
+        self.assertEqual(dumped_env.get("FF_TARGET"), "weekly")
 
     def test_run_tests_target_rejects_invalid_choice(self):
         """Runner must reject unsupported --target choices with non-zero exit and diagnostic error."""
@@ -840,38 +840,38 @@ class TestRunTestsPolicy(unittest.TestCase):
         self.assertEqual(summary.get("tests"), 1)
         self.assertIs(summary.get("successful"), True)
 
-    def test_macro_accepts_rc_target_with_26_3_0_and_py313(self):
-        """Macro must accept rc target when runtime matches FreeCAD 26.3.0 and Python 3.13."""
+    def test_macro_accepts_weekly_target_with_27_1_0_and_py313(self):
+        """Macro must accept weekly target when runtime matches FreeCAD 27.1.0 and Python 3.13."""
         proc, summary_file, summary, _ = self._run_macro_synthetic(
-            target="rc", fc_version=("26", "3", "0"), py_version=(3, 13, 0)
+            target="weekly", fc_version=("27", "1", "0"), py_version=(3, 13, 0)
         )
         self.assertEqual(proc.returncode, 0, f"Stderr: {proc.stderr}")
         self.assertTrue(summary_file.is_file(), "summary.json must be generated")
         self.assertEqual(summary.get("tests"), 1)
         self.assertIs(summary.get("successful"), True)
 
-    def test_macro_rejects_rc_runtime_when_target_is_stable(self):
-        """Macro targeting stable must strictly reject FreeCAD 26.3.0 runtime without writing summary."""
+    def test_macro_rejects_weekly_runtime_when_target_is_stable(self):
+        """Macro targeting stable must strictly reject FreeCAD 27.1.0 runtime without writing summary."""
         proc, summary_file, summary, child_stderr = self._run_macro_synthetic(
-            target="stable", fc_version=("26", "3", "0"), py_version=(3, 13, 0)
+            target="stable", fc_version=("27", "1", "0"), py_version=(3, 13, 0)
         )
         self.assertNotEqual(proc.returncode, 0)
         self.assertFalse(summary_file.is_file(), "Rejected runtime must NOT generate summary.json")
         self.assertIn("incompatible freecad runtime version", child_stderr.lower())
 
-    def test_macro_rejects_stable_runtime_when_target_is_rc(self):
-        """Macro targeting rc must strictly reject FreeCAD 1.1.4 runtime without writing summary."""
+    def test_macro_rejects_stable_runtime_when_target_is_weekly(self):
+        """Macro targeting weekly must strictly reject FreeCAD 1.1.4 runtime without writing summary."""
         proc, summary_file, summary, child_stderr = self._run_macro_synthetic(
-            target="rc", fc_version=("1", "1", "4"), py_version=(3, 11, 0)
+            target="weekly", fc_version=("1", "1", "4"), py_version=(3, 11, 0)
         )
         self.assertNotEqual(proc.returncode, 0)
         self.assertFalse(summary_file.is_file(), "Rejected runtime must NOT generate summary.json")
         self.assertIn("incompatible freecad runtime version", child_stderr.lower())
 
-    def test_macro_rejects_incompatible_python_on_rc_target(self):
-        """Macro targeting rc must strictly reject non-3.13 Python runtime without writing summary."""
+    def test_macro_rejects_incompatible_python_on_weekly_target(self):
+        """Macro targeting weekly must strictly reject non-3.13 Python runtime without writing summary."""
         proc, summary_file, summary, child_stderr = self._run_macro_synthetic(
-            target="rc", fc_version=("26", "3", "0"), py_version=(3, 11, 0)
+            target="weekly", fc_version=("27", "1", "0"), py_version=(3, 11, 0)
         )
         self.assertNotEqual(proc.returncode, 0)
         self.assertFalse(summary_file.is_file(), "Rejected runtime must NOT generate summary.json")
@@ -906,27 +906,41 @@ class TestWorkflowStaticPolicy(unittest.TestCase):
         self.assertIn("1.1.4", self.content, "S1 requires pinned FreeCAD 1.1.4 baseline version")
         self.assertNotIn("pip install --upgrade pip", self.content, "CI must not introduce an unpinned pip upgrade")
 
-    def test_workflow_defines_matrix_for_stable_and_rc(self):
-        """Workflow test job must define a matrix for stable (1.1.4) and rc (26.3rc2) with official checksums."""
+    def test_workflow_defines_matrix_for_stable_and_weekly(self):
+        """Workflow test job must define a matrix for stable (1.1.4) and pinned weekly-2026.10.28 with checksums."""
         self.assertIn("matrix:", self.content, "Workflow must configure matrix execution")
         self.assertIn("fail-fast: false", self.content, "Matrix must run both targets without early cancellation")
         self.assertIn("target: stable", self.content, "Matrix must define stable target")
-        self.assertIn("target: rc", self.content, "Matrix must define rc target")
+        self.assertIn("target: weekly", self.content, "Matrix must define weekly target")
+        self.assertNotIn("target: rc", self.content, "RC target must be replaced by weekly")
+        self.assertIn(
+            "https://github.com/FreeCAD/FreeCAD/releases/download/weekly-2026.10.28/"
+            "FreeCAD_weekly-2026.10.28-Linux-x86_64.AppImage",
+            self.content,
+            "Weekly must use the exact pinned release URL, not latest",
+        )
+        self.assertNotIn("latest", self.content)
         self.assertIn(
             "f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434",
             self.content,
             "Workflow must retain pinned official FreeCAD 1.1.4 AppImage SHA-256",
         )
         self.assertIn(
-            "2cf4212d5a348574e786da7d5a8faeeb3e83dd4245c23898dede92ce82ce4908",
+            "34d6b2fa3d6686fce67ed8b3013fa7526da4051ac61012a8b34a8214682a5b2b",
             self.content,
-            "Workflow must pin official FreeCAD 26.3rc2 AppImage SHA-256",
+            "Workflow must pin FreeCAD weekly-2026.10.28 AppImage SHA-256",
         )
         self.assertIn(
             "test-failure-reports-${{ matrix.target }}",
             self.content,
             "Failure reports must use target-specific unique artifact names",
         )
+
+    def test_workflow_weekly_is_informative_and_stable_is_blocking(self):
+        """Only the weekly job may continue on error; stable failures must still fail the workflow."""
+        self.assertEqual(self.content.count("continue-on-error:"), 1)
+        self.assertIn("continue-on-error: ${{ matrix.target == 'weekly' }}", self.content)
+        self.assertNotIn("continue-on-error: true", self.content)
 
     def test_workflow_pins_official_node24_actions_with_full_shas(self):
         """Workflow must pin official Node 24 actions (checkout v7.0.1, setup-python v7.0.0, upload-artifact v7.0.2) using full SHAs."""
@@ -985,11 +999,13 @@ class TestDocumentationPolicy(unittest.TestCase):
         self.assertIn("1.1.4", content)
         self.assertNotIn("≥ v0.21.x", content)
 
-    def test_ci_docs_document_stable_and_rc_targets(self):
+    def test_ci_docs_document_stable_and_weekly_targets(self):
         ci_doc = REPO_ROOT / "docs" / "ci.md"
         content = ci_doc.read_text(encoding="utf-8")
-        self.assertIn("26.3rc2", content)
-        self.assertIn("26.3.0", content)
+        self.assertIn("weekly-2026.10.28", content)
+        self.assertIn("27.1.0", content)
+        self.assertIn("34d6b2fa3d6686fce67ed8b3013fa7526da4051ac61012a8b34a8214682a5b2b", content)
+        self.assertIn("informative", content.lower())
         self.assertIn("--target", content)
 
     def test_ci_docs_document_node24_actions_infrastructure(self):

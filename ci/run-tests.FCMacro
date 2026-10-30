@@ -55,8 +55,8 @@ try:
 
     # 2. Strict runtime version validation
     target = os.environ.get("FF_TARGET", "stable")
-    if target not in ("stable", "rc"):
-        msg = f"ERROR: Unsupported test target '{target}'. Expected 'stable' or 'rc'.\n"
+    if target not in ("stable", "weekly"):
+        msg = f"ERROR: Unsupported test target '{target}'. Expected 'stable' or 'weekly'.\n"
         log_startup(f"error-target: {target}")
         sys.stderr.write(msg)
         sys.stderr.flush()
@@ -69,10 +69,10 @@ try:
         expected_fc = ("1", "1", "4")
         expected_py = (3, 11)
         target_label = "Pinned baseline FreeCAD 1.1.4 (Python 3.11)"
-    elif target == "rc":
-        expected_fc = ("26", "3", "0")
+    elif target == "weekly":
+        expected_fc = ("27", "1", "0")
         expected_py = (3, 13)
-        target_label = "Pinned RC FreeCAD 26.3rc2 (Version 26.3.0, Python 3.13)"
+        target_label = "Pinned weekly FreeCAD weekly-2026.10.28 (Version 27.1.0, Python 3.13)"
 
     if (
         len(fc_version) < 3

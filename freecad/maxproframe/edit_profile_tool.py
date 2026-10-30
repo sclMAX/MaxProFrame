@@ -143,6 +143,7 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
             self.profile.ViewObject.ShapeColor = (0.8, 0.2, 0.1)
 
     def reject(self):
+        self._release_layout_item_wrappers()
         App.ActiveDocument.abortTransaction()
         Gui.ActiveDocument.resetEdit()
 
@@ -150,6 +151,7 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
 
     def accept(self):
         self.proceed()
+        self._release_layout_item_wrappers()
 
         if getattr(self.profile, "ViewObject", None) is not None and self._original_appearance is not None:
             color, transparency = self._original_appearance

@@ -2,6 +2,7 @@ import glob
 import json
 import os
 import re
+import weakref
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from functools import wraps
@@ -72,6 +73,24 @@ def load_ui_file(path):
         finally:
             f.close()
     raise RuntimeError(f"Unable to load UI file: {path}")
+
+
+def _invalidate_wrapper_on_destroy(widget):
+    # A widget built by the UI loader and later deleted by Qt (the task view deletes the panel
+    # form when its dialog closes) keeps a registered PySide wrapper: it still looks valid, and a
+    # new QObject allocated at the same address resolves to it (SIGSEGV in QWidget::toolTip).
+    try:
+        from shiboken6 import invalidate
+    except ImportError:
+        return
+    wrapper = weakref.ref(widget)
+
+    def release(*_):
+        stale = wrapper()
+        if stale is not None:
+            invalidate(stale)
+
+    widget.destroyed.connect(release)
 
 
 def _safe_unwrap_widget(widget_or_item):
@@ -225,6 +244,8 @@ class BaseProfileTaskPanel(ABC):
         # Keep designer controls alive for the existing model bindings without
         # exposing a second task panel to FreeCAD's task dialog.
         self._legacy_form = load_ui_file(os.path.join(UIPATH, "create_profiles2.ui"))
+        for form in self.form + [self._legacy_form]:
+            _invalidate_wrapper_on_destroy(form)
 
         # Replace before FormProxy discovers children, so no stale label survives.
         raw_image = getattr(self.form[0], "label_image", None)
@@ -728,7 +749,7 @@ class BaseProfileTaskPanel(ABC):
             self.form_proxy.combo_rotation.currentTextChanged.connect(self._input_slot("rotation"))
             for ax in range(3):
                 for ay in range(3):
-                    getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}").clicked.connect(self._input_slot("anchor"))
+                    self._connect_anchor_radio(getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}"))
 
             for name in (
                 "sb_width",
@@ -759,6 +780,9 @@ class BaseProfileTaskPanel(ABC):
 
     def _input_slot(self, intent):
         return self.on_input_changed
+
+    def _connect_anchor_radio(self, radio):
+        radio.clicked.connect(self._input_slot("anchor"))
 
     def _on_alignment_clicked(self, ax, ay):
         self.set_anchor(ax, ay)
@@ -1302,6 +1326,27 @@ class BaseProfileTaskPanel(ABC):
     @abstractmethod
     def proceed(self):
         pass
+
+    def _release_layout_item_wrappers(self):
+        # PySide wraps the QWidgetItem/QSpacerItem objects the layouts own, but the wrappers are not
+        # QObjects, so they stay registered after Qt deletes the form with the closed task dialog.
+        # A later widget allocated at the same address then resolves to the stale wrapper and
+        # SIGSEGVs in PySide::getWrapperForQObject. Drop them while the C++ items are still alive.
+        try:
+            from shiboken6 import invalidate
+        except ImportError:
+            return
+        for form in list(getattr(self, "form", [])) + [getattr(self, "_legacy_form", None)]:
+            if form is None:
+                continue
+            try:
+                for layout in form.findChildren(QtWidgets.QLayout):
+                    for index in range(layout.count()):
+                        item = layout.itemAt(index)
+                        if item is not None and not isinstance(item, QtWidgets.QLayout):
+                            invalidate(item)
+            except RuntimeError:
+                continue
 
     @abstractmethod
     def open(self):
@@ -1854,8 +1899,20 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def _input_slot(self, intent):
         return lambda *args: self.on_input_changed(intent)
 
+    def _connect_anchor_radio(self, radio):
+        # toggled also fires for set_anchor(), so programmatic changes reach the per-edge state.
+        radio.toggled.connect(self._on_anchor_toggled)
+
+    def _on_anchor_toggled(self, checked):
+        if checked and not getattr(self, "_alignment_click", False):
+            self.on_input_changed("anchor")
+
     def _on_alignment_clicked(self, ax, ay):
-        self.set_anchor(ax, ay)
+        self._alignment_click = True
+        try:
+            self.set_anchor(ax, ay)
+        finally:
+            self._alignment_click = False
         self.on_input_changed("anchor")
 
     def on_cb_make_fillet_changed(self, state):
@@ -2176,6 +2233,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
     def clean(self):
         self._preview_closed = True
+        self._release_layout_item_wrappers()
         self._restore_preview_highlight()
         if hasattr(Gui, "Selection"):
             try:
@@ -2186,6 +2244,23 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 Gui.Selection.removeSelectionGate()
             except Exception:
                 pass
+
+    @staticmethod
+    def _has_live_referrer(doc, target):
+        # Referrers may live in other open documents (cross-document App::Link).
+        documents = list(App.listDocuments().values()) if hasattr(App, "listDocuments") else []
+        if doc is not None and doc not in documents:
+            documents.append(doc)
+        live_objects = [obj for document in documents for obj in (getattr(document, "Objects", []) or [])]
+        for obj in live_objects:
+            if obj is target:
+                continue
+            try:
+                if target in obj.OutList:
+                    return True
+            except Exception:
+                pass
+        return False
 
     def _clean_unreferenced_session_sources(self):
         if not hasattr(self, "_session_imported_sketches") or not self._session_imported_sketches:
@@ -2216,23 +2291,9 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             if sk_name in active_referenced_names:
                 continue
 
-            in_list = getattr(sk_obj, "InList", []) or []
-            active_in_list = []
-            for ref in in_list:
-                try:
-                    if ref is None or not hasattr(ref, "Name"):
-                        continue
-                    ref_doc = getattr(ref, "Document", None) or doc
-                    if ref_doc is None or not hasattr(ref_doc, "getObject"):
-                        continue
-                    if hasattr(ref_doc, "Name") and hasattr(App, "listDocuments"):
-                        if ref_doc.Name not in App.listDocuments():
-                            continue
-                    if ref_doc.getObject(ref.Name) is not None:
-                        active_in_list.append(ref)
-                except Exception:
-                    pass
-            if active_in_list:
+            # Never read sk_obj.InList: right after a preview removal it can still
+            # hold a dangling native pointer and crash FreeCAD. Scan live objects.
+            if self._has_live_referrer(doc, sk_obj):
                 continue
 
             try:
@@ -2534,6 +2595,10 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self.update_selection()
         # Reconcile paths without treating the newly active row as an edit.
         self.proceed()
+        if self._path_selections() or self.form_proxy.sb_length.value() > 0:
+            self._set_applied_state()
+        else:
+            self._set_initial_state()
 
     def _canvas_pick(self, doc, obj, sub, removed=False):
         if (
@@ -2547,7 +2612,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             self._selection_changed()
             return
         document = App.getDocument(doc)
-        source = document.getObject(obj) if document else None
+        # Observers receive the object name, but legacy callers pass the object itself.
+        source = document.getObject(getattr(obj, "Name", obj)) if document else None
         if source is None:
             self._selection_changed()
             return
@@ -2624,6 +2690,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             # Session previews are editing targets, never new path supports.
             if any(selection.Object == preview for preview in self._objects.values()):
                 continue
+            # A selected object without edges still counts as a selected path.
+            paths.setdefault(selection.Object, [])
             for edge in self._selection_edges(selection):
                 key = (selection.Object, edge)
                 if key not in self._excluded_edges:

@@ -27,12 +27,12 @@ python3 ci/run_tests.py \
   --reports /path/to/reports \
   --timeout 180
 
-# Run offscreen suite inside official FreeCAD 26.3rc2 Linux AppImage (--target rc)
+# Run offscreen suite inside the pinned FreeCAD weekly-2026.10.28 Linux AppImage (--target weekly)
 python3 ci/run_tests.py \
-  --freecad-bin /path/to/rc-squashfs-root/AppRun \
+  --freecad-bin /path/to/weekly-squashfs-root/AppRun \
   --reports /path/to/reports \
   --timeout 180 \
-  --target rc
+  --target weekly
 ```
 
 ### Run one test for investigation
@@ -55,7 +55,7 @@ not evidence that the full suite passes; CI continues to run full discovery.
 
 | Spec | Area | Accepted Policy Rule |
 |------|------|----------------------|
-| **S1** | Compatibility | Minimum supported: **FreeCAD 1.1.4**. Pinned matrix targets: **stable FreeCAD 1.1.4** (Python 3.11) and **RC FreeCAD 26.3rc2** (reports Version 26.3.0, Python 3.13). Never `latest`. Versions validated strictly per-target. |
+| **S1** | Compatibility | Minimum supported: **FreeCAD 1.1.4**. Pinned matrix targets: **stable FreeCAD 1.1.4** (Python 3.11) and **weekly FreeCAD weekly-2026.10.28** (reports Version 27.1.0, Python 3.13). Never `latest`. Versions validated strictly per-target. The weekly job is informative only (see "Weekly target policy"); stable is blocking. |
 | **S2** | Formatting | **Black + isort**, 120-column limit, pinned tool versions. Enforced strictly on **new or modified Python files** (no retroactive repository reformatting). |
 | **S3** | Tests | Full test suite executed on changes to code, tests, runtime resources, or execution configs. Native tests are skipped for purely documentation changes. |
 | **S4** | Failure | Formatting and native test targets run in **independent matrix jobs** (`fail-fast: false`). Any test failure, error, or timeout fails CI immediately without automatic retries. |
@@ -76,16 +76,16 @@ not evidence that the full suite passes; CI continues to run full discovery.
 
 ## Native runner and offscreen execution
 
-Official FreeCAD AppImages (such as 1.1.4 and 26.3rc2) ship an `AppRun` script that unconditionally exports `QT_QPA_PLATFORM=xcb` (or falls back to it). In headless environments without X11 or Wayland, this causes Qt initialization failure (exit code 134). Furthermore, FreeCAD's CLI argument parser (Boost Program Options) rejects unrecognized Qt options such as `-platform`, prompting an invisible `QMessageBox` modal dialog in `MainGui.cpp` that blocks headless execution until timeout (exit code 124).
+Official FreeCAD AppImages (such as 1.1.4 and weekly-2026.10.28) ship an `AppRun` script that unconditionally exports `QT_QPA_PLATFORM=xcb` (or falls back to it). In headless environments without X11 or Wayland, this causes Qt initialization failure (exit code 134). Furthermore, FreeCAD's CLI argument parser (Boost Program Options) rejects unrecognized Qt options such as `-platform`, prompting an invisible `QMessageBox` modal dialog in `MainGui.cpp` that blocks headless execution until timeout (exit code 124).
 
 To resolve both issues without patching vendor AppImages:
 1. When `--freecad-bin` points to `AppRun` (e.g. `--freecad-bin /path/to/squashfs-root/AppRun`), `ci/run_tests.py` automatically resolves to the native binary (`usr/bin/freecad`), bypassing the vendor `AppRun` script to prevent `QT_QPA_PLATFORM=xcb` from overriding the headless environment.
 2. The wrapper reproduces the official AppRun environment bootstrap (`PREFIX`, `PYTHONHOME`, `PATH_TO_FREECAD_LIBDIR`, font and SSL certificate paths) while preserving `QT_QPA_PLATFORM=offscreen`.
 3. Execution invokes the native binary with `--user-cfg` and the macro path, omitting any `-platform` command-line argument.
 4. Execution occurs inside isolated temporary directories for `HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `TMPDIR`, and `FREECAD_USER_HOME` (which suppresses the version migration prompt).
-5. Target validation (`--target stable` or `--target rc`):
+5. Target validation (`--target stable` or `--target weekly`):
    - Default is `--target stable`, requiring FreeCAD 1.1.4 and Python 3.11.
-   - When `--target rc` is selected, the macro strictly verifies FreeCAD 26.3.0 (`FreeCAD.Version()[:3] == ['26', '3', '0']`) and embedded Python 3.13. Packaging labels (e.g. `26.3rc2`) are distinguished from the runtime's internal Version tuple (`26.3.0`).
+   - When `--target weekly` is selected, the macro strictly verifies FreeCAD 27.1.0 (`FreeCAD.Version()[:3] == ('27', '1', '0')`) and embedded Python 3.13. Packaging labels (e.g. `weekly-2026.10.28`) are distinguished from the runtime's internal Version tuple (`27.1.0`).
    - Any runtime or Python version mismatch terminates execution immediately with exit code 1 and writes no `summary.json`.
 6. Process-group timeouts are enforced (exit code 124 on timeout), and `ci/run-tests.FCMacro` emits structured diagnostic checkpoints (`macro-entry`, `validated-version`, `discovery-start`, `completed-summary`) to `startup.log`.
 7. Test outcomes require fresh, strictly validated `summary.json` containing positive test counts, zero failures/errors, and consistent non-negative counts. Previous execution artifacts are cleared before launch to avoid stale false-green results.
@@ -155,11 +155,20 @@ The hosted stable timeout at 420 seconds remains unexplained: both original loca
 450-test suites passed. This slice collects evidence, not a preventive dialog fix;
 a native modal escaping the existing offscreen fixture remains unproven.
 
+## Weekly target policy
+
+The `weekly` matrix entry is **informative**: the job sets `continue-on-error: ${{ matrix.target == 'weekly' }}`, so a weekly failure is visible in the run (and its reports are uploaded) but does not turn the workflow red. `stable` (FreeCAD 1.1.4, Python 3.11) remains blocking. The weekly build is pinned to an exact release URL and SHA-256 (never `latest`).
+
+To bump the weekly pin, update together:
+1. `.github/workflows/ci.yml` weekly matrix entry: `label`, `url` and `sha256` (verify with `sha256sum` of the downloaded AppImage).
+2. `ci/run-tests.FCMacro`: expected `FreeCAD.Version()[:3]` and Python version for `weekly`, plus the target label.
+3. `ci/tests/test_policy.py` and this document (URL, SHA-256, version).
+
 ## Explicit manual native investigation (stable only)
 
 Dispatch CI with the boolean `native_diagnostics` enabled (default: false).
 Only the stable job installs GDB and passes `--native-diagnostics`; PR, push,
-RC and ordinary manual runs retain the normal launch path and deadlines.
+Weekly and ordinary manual runs retain the normal launch path and deadlines.
 Locally, add `--native-diagnostics --target stable --timeout 420` to the native
 runner command above. GDB must already be installed; timeouts <=160 are rejected.
 
@@ -208,10 +217,11 @@ GitHub Actions JavaScript actions execute on the runner's internal Node.js runti
 - **Host validation:** CI policy tests (`ci/tests/test_policy.py`) verify planner logic, formatting wrappers, runner process isolation, AppRun binary resolution, `--target` parameter routing, summary validation contracts, and exact pinned action SHAs. Host tests are fully green.
 - **Native execution:** CI pins the following official Linux x86_64 AppImage SHA-256 checksums; local native suites used the already-extracted runtimes:
   - Stable: FreeCAD 1.1.4 py311 (`f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434`).
-  - RC: FreeCAD 26.3rc2 (`2cf4212d5a348574e786da7d5a8faeeb3e83dd4245c23898dede92ce82ce4908`).
+  - Weekly: FreeCAD weekly-2026.10.28 (`34d6b2fa3d6686fce67ed8b3013fa7526da4051ac61012a8b34a8214682a5b2b`).
+  - Historical RC evidence (superseded target): FreeCAD 26.3rc2 (`2cf4212d5a348574e786da7d5a8faeeb3e83dd4245c23898dede92ce82ce4908`).
   Local results:
   - Stable: **355/355 passed** offscreen (exit code 0, 0 failures, 0 errors, 0 skips).
-  - RC (initial run): **354/355 passed** (exit code 1, 1 failure, 0 errors, 0 skips). `test_named_forward_formula_and_metadata` failed its source BREP snapshot comparison after the test itself changed and restored a sketch datum; the diff included a numerical epsilon (`-8.8817841970012523e-16` versus `0.0`) due to registration-time evaluation in `addCleanup` mixing native OCC recompute precision with capture immutability.
-  - RC (corrected boundary run): **355/355 passed** offscreen (exit code 0, 0 failures, 0 errors, 0 skips). Causal observation boundaries in `tests/test_t2_independent.py` were corrected to assert exact full source snapshot equality immediately after capture and compare against a fresh post-control baseline after editing the captured copy, without adding tolerances, skips, or application changes. Both native suites are now fully green on their pinned extracted runtimes.
-- **Review status:** Independent bounded verification of this stable/RC CI change passed: target-validation probes, six baseline/candidate default-runner comparisons, fixture AST checks and native evidence readback found no candidate-caused blockers. Native review assessment could not resolve the current untracked scope; no native review approval is claimed.
-- **Hosted execution:** Matrix jobs test both `stable` and `rc` targets independently (`fail-fast: false`). Historical evidence: prior hosted CI run `39333298411` on `main` at `7b63d90` passed 355/355 on both targets and 37 host tests under prior actions. For this new Node 24 candidate, hosted execution cannot run locally without publishing/dispatch authorization; no hosted CI claim is made for this candidate.
+  - Historical RC evidence (initial run, FreeCAD 26.3rc2): **354/355 passed** (exit code 1, 1 failure, 0 errors, 0 skips). `test_named_forward_formula_and_metadata` failed its source BREP snapshot comparison after the test itself changed and restored a sketch datum; the diff included a numerical epsilon (`-8.8817841970012523e-16` versus `0.0`) due to registration-time evaluation in `addCleanup` mixing native OCC recompute precision with capture immutability.
+  - Historical RC evidence (corrected boundary run, FreeCAD 26.3rc2): **355/355 passed** offscreen (exit code 0, 0 failures, 0 errors, 0 skips). Causal observation boundaries in `tests/test_t2_independent.py` were corrected to assert exact full source snapshot equality immediately after capture and compare against a fresh post-control baseline after editing the captured copy, without adding tolerances, skips, or application changes. Both native suites are now fully green on their pinned extracted runtimes.
+- **Review status:** Independent bounded verification of this stable/RC CI change (historical RC evidence) passed: target-validation probes, six baseline/candidate default-runner comparisons, fixture AST checks and native evidence readback found no candidate-caused blockers. Native review assessment could not resolve the current untracked scope; no native review approval is claimed.
+- **Hosted execution:** Matrix jobs test both `stable` and `weekly` targets independently (`fail-fast: false`). Historical RC evidence: prior hosted CI run `39333298411` on `main` at `7b63d90` passed 355/355 on both targets and 37 host tests under prior actions. For this new Node 24 candidate, hosted execution cannot run locally without publishing/dispatch authorization; no hosted CI claim is made for this candidate.
