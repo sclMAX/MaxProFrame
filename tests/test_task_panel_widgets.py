@@ -111,6 +111,14 @@ class TestTaskPanelWidgets(unittest.TestCase):
 
         self.assertEqual(edge_list.get_selected_edge(), "e1")
         self.assertEqual(edge_list.list_widget.selectionMode(), QtWidgets.QAbstractItemView.ExtendedSelection)
+        # Qt records the modifiers of a delivered key press as the application state; clear it afterwards or
+        # later tests that read QApplication.keyboardModifiers() see a Ctrl that nobody is holding.
+        self.addCleanup(lambda: self.assertEqual(QtWidgets.QApplication.keyboardModifiers(), QtCore.Qt.NoModifier))
+        self.addCleanup(
+            QtWidgets.QApplication.sendEvent,
+            edge_list.list_widget,
+            QtGui.QKeyEvent(QtCore.QEvent.KeyPress, QtCore.Qt.Key_A, QtCore.Qt.NoModifier),
+        )
         event = QtGui.QKeyEvent(QtCore.QEvent.KeyPress, QtCore.Qt.Key_A, QtCore.Qt.ControlModifier)
         QtWidgets.QApplication.sendEvent(edge_list.list_widget, event)
         self.assertEqual(edge_list.get_selected_edges(), ["e1", "e2"])

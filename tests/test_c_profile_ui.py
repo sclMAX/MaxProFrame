@@ -27,12 +27,19 @@ class TestCProfileUI(unittest.TestCase):
         cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
 
     def setUp(self):
-        question_patch = patch.object(
-            QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Discard
-        )
+        question_patch = patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Discard)
         self.discard_question = question_patch.start()
         # Registered first so LIFO cleanup closes every dialog before unpatching.
         self.addCleanup(question_patch.stop)
+        # Panels restore (and accepted panels save) the last used material/family/size; keep those preferences
+        # private so the order of earlier suites cannot preselect a different library.
+        preferences = App.ParamGet("User parameter:BaseApp/Preferences")
+        group_name = f"FFTestCProfileUI_{id(self)}"
+        isolated = preferences.GetGroup(group_name)
+        self.addCleanup(preferences.RemGroup, group_name)
+        patcher = patch("freecad.maxproframe.create_profiles_tool.get_param_group", return_value=isolated)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.test_user_dir = tempfile.mkdtemp(prefix="ff_test_c_ui_user_")
         self.manager = LibraryManager(user_dir=self.test_user_dir)
         self.doc_count = 0
@@ -211,10 +218,7 @@ class TestCProfileUI(unittest.TestCase):
         self.assertEqual(dialog.TABLE_COLUMNS[8][0], "Lip Length")
 
         # Columns 0..7 must retain exact historical keys
-        expected_first_8 = [
-            "Size", "Height", "Width", "Thickness",
-            "Flange Thickness", "Radius1", "Radius2", "Weight"
-        ]
+        expected_first_8 = ["Size", "Height", "Width", "Thickness", "Flange Thickness", "Radius1", "Radius2", "Weight"]
         actual_first_8 = [col[0] for col in dialog.TABLE_COLUMNS[:8]]
         self.assertEqual(actual_first_8, expected_first_8)
 
@@ -227,7 +231,9 @@ class TestCProfileUI(unittest.TestCase):
         dialog.combo_family.setCurrentText("C (Fillet)")
         visible_fillet = {i for i in range(len(dialog.TABLE_COLUMNS)) if not dialog.table_sizes.isColumnHidden(i)}
         self.assertEqual(visible_fillet, {0, 1, 2, 3, 5, 7, 8})  # Size, H, W, Thickness, Radius1, Weight, Lip Length
-        self.assertEqual(dialog.table_sizes.horizontalHeaderItem(5).text(), translate("frameforge", "Exterior Radius [mm]"))
+        self.assertEqual(
+            dialog.table_sizes.horizontalHeaderItem(5).text(), translate("frameforge", "Exterior Radius [mm]")
+        )
 
         # Square Hollow visibility: Lip Length (8) must be hidden
         dialog.combo_family.setCurrentText("Square Hollow")
@@ -241,9 +247,11 @@ class TestCProfileUI(unittest.TestCase):
         header = dialog.table_sizes.horizontalHeader()
 
         def visible_keys():
-            return [dialog.TABLE_COLUMNS[header.logicalIndex(index)][0]
-                    for index in range(header.count())
-                    if not dialog.table_sizes.isColumnHidden(header.logicalIndex(index))]
+            return [
+                dialog.TABLE_COLUMNS[header.logicalIndex(index)][0]
+                for index in range(header.count())
+                if not dialog.table_sizes.isColumnHidden(header.logicalIndex(index))
+            ]
 
         expected = ["Size", "Height", "Width", "Lip Length", "Thickness", "Weight"]
         dialog.combo_family.setCurrentText("C")
@@ -382,6 +390,7 @@ class TestCProfileUI(unittest.TestCase):
     def test_preserve_non_c_families_unchanged(self):
         """Preserve: Square Hollow and Channels retain unchanged controls and Make Fillet behavior."""
         from freecad.maxproframe.library_manager import FILLET_FAMILIES
+
         # Channels must not be in FILLET_FAMILIES
         self.assertNotIn("Channels", FILLET_FAMILIES)
 
@@ -445,21 +454,29 @@ class TestCProfileUI(unittest.TestCase):
         dialog.refresh_libraries(select_name="TestCLib")
 
         # Channels / unlisted families must hide Lip Length column (index 8)
-        self.manager.save_user_library("TestChannelsLib", {
-            "_metadata": {"name": "TestChannelsLib", "material": "Steel", "density": 7.85},
-            "Channels": {
-                "canonical_family": "Channels",
-                "norm": "Custom",
-                "unit": "Metric Units",
-                "fillet": False,
-                "sizes": {
-                    "CH1": {
-                        "Height": "50", "Width": "25", "Thickness": "2",
-                        "Flange Thickness": "3", "Radius1": "0", "Radius2": "0", "Weight": "2.0"
-                    }
-                }
-            }
-        })
+        self.manager.save_user_library(
+            "TestChannelsLib",
+            {
+                "_metadata": {"name": "TestChannelsLib", "material": "Steel", "density": 7.85},
+                "Channels": {
+                    "canonical_family": "Channels",
+                    "norm": "Custom",
+                    "unit": "Metric Units",
+                    "fillet": False,
+                    "sizes": {
+                        "CH1": {
+                            "Height": "50",
+                            "Width": "25",
+                            "Thickness": "2",
+                            "Flange Thickness": "3",
+                            "Radius1": "0",
+                            "Radius2": "0",
+                            "Weight": "2.0",
+                        }
+                    },
+                },
+            },
+        )
         dialog.refresh_libraries(select_name="TestChannelsLib")
         dialog.combo_family.setCurrentText("Channels")
         self.assertTrue(dialog.table_sizes.isColumnHidden(8), "Lip Length must be hidden for Channels")
@@ -485,12 +502,16 @@ class TestCProfileUI(unittest.TestCase):
                 "fillet": False,
                 "sizes": {
                     "Manual": {
-                        "Height": "50", "Width": "50", "Thickness": "2",
-                        "Flange Thickness": "0", "Radius1": "0", "Radius2": "0",
-                        "Weight": "9.999"
+                        "Height": "50",
+                        "Width": "50",
+                        "Thickness": "2",
+                        "Flange Thickness": "0",
+                        "Radius1": "0",
+                        "Radius2": "0",
+                        "Weight": "9.999",
                     }
-                }
-            }
+                },
+            },
         }
         self.manager.save_user_library("CustomWeightLib", lib_data)
         dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
@@ -507,7 +528,9 @@ class TestCProfileUI(unittest.TestCase):
 
         # Editing Radius1 (col 5) must NOT recalculate manual weight for non-C
         dialog.table_sizes.item(0, 5).setText("4")
-        self.assertEqual(dialog.table_sizes.item(0, 7).text(), "9.999", "Radius1 edit must not overwrite non-C manual weight")
+        self.assertEqual(
+            dialog.table_sizes.item(0, 7).text(), "9.999", "Radius1 edit must not overwrite non-C manual weight"
+        )
 
         # Non-C legacy autocalc must still update mass when col 1 is edited, even with irrelevant col 5 / col 8 text
         dialog.table_sizes.item(0, 5).setText("N/A")
