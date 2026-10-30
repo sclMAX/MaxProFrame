@@ -1,0 +1,244 @@
+name: Weekly FreeCAD bump
+
+on:
+  schedule:
+    # Wednesdays, off-peak (UTC), after the weekly release is published.
+    - cron: '23 6 * * 3'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weekly-bump
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    name: Detect and verify the latest weekly
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Read-only: this job downloads and runs the weekly AppImage, so it must never hold write access.
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.detect.outputs.changed }}
+      current_tag: ${{ steps.detect.outputs.current_tag }}
+      tag: ${{ steps.detect.outputs.tag }}
+      url: ${{ steps.detect.outputs.url }}
+      sha256: ${{ steps.verify.outputs.sha256 }}
+      sha_source: ${{ steps.verify.outputs.sha_source }}
+      fc_version: ${{ steps.versions.outputs.fc_version }}
+      py_version: ${{ steps.versions.outputs.py_version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      - name: Detect latest weekly
+        id: detect
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RESULT_FILE: ${{ runner.temp }}/detect.json
+        run: |
+          python3 ci/bump_weekly.py detect > "$RESULT_FILE"
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          with open(os.environ["RESULT_FILE"], encoding="utf-8") as handle:
+              result = json.load(handle)
+          if result.get("error"):
+              sys.exit("detect failed: " + result["error"])
+          latest = result.get("latest") or {}
+          lines = [
+              "changed=" + ("true" if result["changed"] else "false"),
+              "current_tag=" + result["current"]["tag"],
+              "tag=" + (latest.get("tag") or ""),
+              "url=" + (latest.get("url") or ""),
+              "api_sha256=" + (latest.get("sha256") or ""),
+          ]
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write("\n".join(lines) + "\n")
+          print("\n".join(lines))
+          PY
+
+      - name: Download weekly AppImage
+        if: steps.detect.outputs.changed == 'true'
+        env:
+          WEEKLY_URL: ${{ steps.detect.outputs.url }}
+          WORK_DIR: ${{ runner.temp }}
+        run: |
+          curl -fL -o "$WORK_DIR/FreeCAD.AppImage" "$WEEKLY_URL"
+
+      - name: Verify SHA-256
+        id: verify
+        if: steps.detect.outputs.changed == 'true'
+        env:
+          API_SHA256: ${{ steps.detect.outputs.api_sha256 }}
+          WORK_DIR: ${{ runner.temp }}
+        run: |
+          computed="$(sha256sum "$WORK_DIR/FreeCAD.AppImage" | cut -d' ' -f1)"
+          if [[ -n "$API_SHA256" ]]; then
+            echo "$API_SHA256  $WORK_DIR/FreeCAD.AppImage" | sha256sum -c -
+            source_label="api-digest"
+          else
+            echo "The releases API gave no digest; using the computed SHA-256."
+            source_label="computed"
+          fi
+          echo "sha256=$computed" >> "$GITHUB_OUTPUT"
+          echo "sha_source=$source_label" >> "$GITHUB_OUTPUT"
+
+      - name: Extract AppImage
+        if: steps.detect.outputs.changed == 'true'
+        env:
+          WORK_DIR: ${{ runner.temp }}
+        run: |
+          chmod +x "$WORK_DIR/FreeCAD.AppImage"
+          mkdir "$WORK_DIR/extract"
+          cd "$WORK_DIR/extract" && "$WORK_DIR/FreeCAD.AppImage" --appimage-extract > /dev/null
+
+      - name: Read FreeCAD and Python versions
+        id: versions
+        if: steps.detect.outputs.changed == 'true'
+        env:
+          WORK_DIR: ${{ runner.temp }}
+        run: |
+          isolated_home="$(mktemp -d)"
+          output="$(env -u PYTHONHOME -u PYTHONPATH HOME="$isolated_home" \
+            XDG_CONFIG_HOME="$isolated_home/config" XDG_DATA_HOME="$isolated_home/data" \
+            XDG_CACHE_HOME="$isolated_home/cache" FREECAD_USER_HOME="$isolated_home" \
+            "$WORK_DIR/extract/squashfs-root/usr/bin/freecadcmd" -c \
+            "import sys, FreeCAD; print('FC_VERSION=' + '.'.join(str(p) for p in FreeCAD.Version()[:3])); print('PY_VERSION=%d.%d' % sys.version_info[:2])")"
+          echo "$output"
+          fc_version="$(sed -n 's/^FC_VERSION=\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$/\1/p' <<< "$output" | head -n1)"
+          py_version="$(sed -n 's/^PY_VERSION=\([0-9][0-9]*\.[0-9][0-9]*\)$/\1/p' <<< "$output" | head -n1)"
+          if [[ -z "$fc_version" || -z "$py_version" ]]; then
+            echo "Could not read the FreeCAD and Python versions from the weekly build." >&2
+            exit 1
+          fi
+          echo "fc_version=$fc_version" >> "$GITHUB_OUTPUT"
+          echo "py_version=$py_version" >> "$GITHUB_OUTPUT"
+
+  open-pr:
+    name: Open the bump pull request
+    needs: detect
+    if: needs.detect.outputs.changed == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Write access lives only here. This job edits text files and opens the PR; it never runs downloaded binaries.
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          # The default token is needed by `git push` below; no other step reads it.
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      - name: Check for an existing bump
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.detect.outputs.tag }}
+        run: |
+          if [[ ! "$TAG" =~ ^weekly-[0-9]{4}\.[0-9]{2}\.[0-9]{2}$ ]]; then
+            echo "Unexpected tag: $TAG" >&2
+            exit 1
+          fi
+          branch="ci/weekly-bump-$TAG"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          open="$(gh pr list --head "$branch" --state open --json number --jq length)"
+          if [[ "$open" != "0" ]]; then
+            echo "A pull request from $branch is already open; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
+            echo "Branch $branch already exists without an open pull request; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply the bump
+        if: steps.existing.outputs.skip == 'false'
+        env:
+          TAG: ${{ needs.detect.outputs.tag }}
+          WEEKLY_URL: ${{ needs.detect.outputs.url }}
+          SHA256: ${{ needs.detect.outputs.sha256 }}
+          FC_VERSION: ${{ needs.detect.outputs.fc_version }}
+          PY_VERSION: ${{ needs.detect.outputs.py_version }}
+        run: |
+          python3 ci/bump_weekly.py apply "$TAG" "$WEEKLY_URL" "$SHA256" "$FC_VERSION" "$PY_VERSION"
+
+      - name: Run host CI policy tests
+        if: steps.existing.outputs.skip == 'false'
+        run: |
+          python3 -m unittest discover -s ci/tests -p 'test_*.py'
+
+      - name: Commit, push and open the pull request
+        if: steps.existing.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.existing.outputs.branch }}
+          TAG: ${{ needs.detect.outputs.tag }}
+          OLD_TAG: ${{ needs.detect.outputs.current_tag }}
+          WEEKLY_URL: ${{ needs.detect.outputs.url }}
+          SHA256: ${{ needs.detect.outputs.sha256 }}
+          SHA_SOURCE: ${{ needs.detect.outputs.sha_source }}
+          FC_VERSION: ${{ needs.detect.outputs.fc_version }}
+          PY_VERSION: ${{ needs.detect.outputs.py_version }}
+          BODY_FILE: ${{ runner.temp }}/pr-body.md
+        run: |
+          if [[ "$SHA_SOURCE" == "api-digest" ]]; then
+            sha_note="the digest published by the GitHub releases API, re-checked against the downloaded file"
+          else
+            sha_note="computed from the downloaded file (the releases API gave no digest)"
+          fi
+          cat > "$BODY_FILE" <<EOF
+          Bumps the pinned weekly FreeCAD target.
+
+          | | |
+          |---|---|
+          | Old tag | \`$OLD_TAG\` |
+          | New tag | \`$TAG\` |
+          | URL | $WEEKLY_URL |
+          | SHA-256 | \`$SHA256\` |
+          | FreeCAD | $FC_VERSION |
+          | Python | $PY_VERSION |
+
+          The SHA-256 is $sha_note. The versions were read by running the build in the read-only \`detect\` job.
+
+          If FreeCAD's major or minor version changed, the native weekly job will show whether the suite still passes.
+          The weekly job is informative, so a red weekly run does not block the workflow.
+
+          **CI does not start by itself.** Pull requests opened with the default \`GITHUB_TOKEN\` do not trigger
+          workflows. The maintainer must trigger CI: close and reopen this pull request, or push an empty commit
+          (\`git commit --allow-empty -m "ci: trigger"\`) to \`$BRANCH\`.
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add .github/workflows/ci.yml ci/run-tests.FCMacro ci/run_tests.py ci/tests/test_policy.py docs/ci.md
+          git commit -m "ci: bump pinned weekly to $TAG"
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "ci: bump pinned weekly to $TAG" \
+            --body-file "$BODY_FILE" \
+            --label type:chore

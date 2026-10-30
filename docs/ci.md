@@ -164,6 +164,46 @@ To bump the weekly pin, update together:
 2. `ci/run-tests.FCMacro`: expected `FreeCAD.Version()[:3]` and Python version for `weekly`, plus the target label.
 3. `ci/tests/test_policy.py` and this document (URL, SHA-256, version).
 
+## Automatic weekly bump
+
+`.github/workflows/weekly-bump.yml` ("Weekly FreeCAD bump") keeps the pinned weekly current without making the pin float. It runs on Wednesdays (06:23 UTC, after the weekly release) and on manual dispatch. When a newer `weekly-YYYY.MM.DD` release with a Linux x86_64 AppImage exists, it opens a pull request that rewrites the pin; it never merges or pushes to `main`.
+
+### What it does
+
+1. **`detect` job** runs `ci/bump_weekly.py detect`, which reads the public releases API and compares the newest weekly with the pinned tag (`changed` is true only for a strictly newer tag). If changed, it downloads the AppImage, checks its SHA-256 against the API digest (when the API gives none, it uses the computed hash and the PR says so), extracts it and runs `freecadcmd` with `PYTHONHOME`/`PYTHONPATH` unset and an isolated `HOME` to read `FreeCAD.Version()[:3]` and the Python `major.minor`.
+2. **`open-pr` job** runs `ci/bump_weekly.py apply` on a checkout of `main`, runs the host policy tests, and only if they pass creates the branch `ci/weekly-bump-<tag>`, commits `ci: bump pinned weekly to <tag>`, pushes it and opens a PR labelled `type:chore`. The PR body lists old/new tag, URL, SHA-256 and its source, and the FreeCAD/Python versions. If a PR from that branch is already open (or the branch exists), the job does nothing.
+
+If the new weekly changes FreeCAD's major or minor version, the PR still opens. Its native weekly job shows whether the suite passes; weekly stays informative.
+
+### Permission split
+
+- The workflow default is `contents: read`. `detect` keeps it: it is the only job that downloads and **executes** third-party binaries, so a compromised build cannot reach a write token.
+- `open-pr` is the only job with `contents: write` and `pull-requests: write`. It only edits text files and calls `git` and `gh`; it never downloads or runs the AppImage. Everything it receives from `detect` (tag, URL, hashes, versions) reaches the shell through `env` and is validated by `ci/bump_weekly.py` before any file changes.
+- Actions are pinned by full SHA, like the other workflows.
+
+### Run CI on the opened PR
+
+PRs opened with the default `GITHUB_TOKEN` do not trigger workflows, so the PR starts with no checks. The maintainer triggers them by closing and reopening the PR, or by pushing an empty commit to the bump branch:
+
+```bash
+git fetch origin ci/weekly-bump-<tag> && git switch ci/weekly-bump-<tag>
+git commit --allow-empty -m "ci: trigger" && git push
+```
+
+The repository setting "Allow GitHub Actions to create and approve pull requests" must be enabled for `open-pr` to work.
+
+### Bump manually
+
+Find the tag, then run the same tool the workflow uses (the SHA-256 is that of the downloaded AppImage; the versions are what `freecadcmd -c` prints for `FreeCAD.Version()[:3]` and `sys.version_info[:2]`):
+
+```bash
+python3 ci/bump_weekly.py detect          # JSON: current vs latest, field "changed"
+python3 ci/bump_weekly.py apply <tag> <url> <sha256> <fc-version> <python-version>
+python3 -m unittest discover -s ci/tests -p 'test_*.py'
+```
+
+`apply` rewrites exactly the pinned values in `.github/workflows/ci.yml`, `ci/run-tests.FCMacro`, `ci/run_tests.py`, `ci/tests/test_policy.py` and this document, and fails without writing anything if an expected anchor is missing. It is idempotent.
+
 ## Crash diagnosis (automatic, diagnostic only)
 
 When the native FreeCAD child dies by a signal (for example exit -11, SIGSEGV), or
