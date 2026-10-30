@@ -125,7 +125,12 @@ try:
         )
         test_runner = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(test_runner)
-        suite = test_runner.selected_suite(os.path.join(root, "tests"), os.environ.get("FF_TEST"))
+        shuffle_seed = os.environ.get("FF_SHUFFLE_SEED")
+        suite = test_runner.selected_suite(
+            os.path.join(root, "tests"),
+            os.environ.get("FF_TEST"),
+            shuffle_seed=int(shuffle_seed) if shuffle_seed else None,
+        )
         runner = unittest.TextTestRunner(stream=stream, verbosity=2)
         result = runner.run(suite)
         summary = {

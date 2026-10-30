@@ -1,0 +1,142 @@
+name: Nightly native flakiness
+
+on:
+  schedule:
+    # Once a day, off-peak (UTC).
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+    inputs:
+      repetitions:
+        description: 'Runs of the full suite in the original order (1-20)'
+        required: false
+        default: '3'
+      seed:
+        description: 'Integer seed for the shuffled run (default: derived from the run id)'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  flakiness:
+    name: Native FreeCAD 1.1.4 repeated runs
+    runs-on: ubuntu-24.04
+    # Each full run takes about 1-3 minutes; the budget covers the maximum of 20 repetitions plus the shuffled run.
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install minimal headless dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libopengl0 libxkbcommon-x11-0 libxcb-cursor0 gdb
+
+      - name: Restore cached FreeCAD AppImage
+        id: appimage-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/FreeCAD.AppImage
+          key: freecad-appimage-f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434
+
+      - name: Download FreeCAD AppImage
+        if: steps.appimage-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -fL -o "${{ runner.temp }}/FreeCAD.AppImage" \
+            "https://github.com/FreeCAD/FreeCAD/releases/download/1.1.4/FreeCAD_1.1.4-Linux-x86_64-py311.AppImage"
+
+      - name: Verify FreeCAD AppImage checksum
+        run: |
+          echo "f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434  ${{ runner.temp }}/FreeCAD.AppImage" | sha256sum -c -
+
+      - name: Extract AppImage
+        run: |
+          chmod +x "${{ runner.temp }}/FreeCAD.AppImage"
+          cd "${{ runner.temp }}" && ./FreeCAD.AppImage --appimage-extract
+
+      # Every run executes, even after a failure; the step fails at the end if any run failed.
+      - name: Run native test repetitions
+        env:
+          REPETITIONS: ${{ inputs.repetitions || '3' }}
+          SHUFFLE_SEED: ${{ inputs.seed || github.run_id }}
+        run: |
+          if [[ ! "$REPETITIONS" =~ ^[0-9]+$ ]] || (( REPETITIONS < 1 || REPETITIONS > 20 )); then
+            echo "repetitions must be an integer from 1 to 20 (got '$REPETITIONS')" >&2
+            exit 2
+          fi
+          if [[ ! "$SHUFFLE_SEED" =~ ^[0-9]+$ ]]; then
+            echo "seed must be a non-negative integer (got '$SHUFFLE_SEED')" >&2
+            exit 2
+          fi
+          reports="${{ runner.temp }}/nightly-reports"
+          failed_reports="${{ runner.temp }}/failed-reports"
+          results="${{ runner.temp }}/nightly-results.tsv"
+          failed=0
+          : > "$results"
+
+          run_once() {
+            local label="$1" order="$2"
+            shift 2
+            if python3 ci/run_tests.py \
+              --freecad-bin "${{ runner.temp }}/squashfs-root/AppRun" \
+              --reports "$reports/run-$label" \
+              --timeout 420 \
+              --target stable "$@"; then
+              printf '%s\t%s\tpassed\n' "$label" "$order" >> "$results"
+            else
+              printf '%s\t%s\tFAILED\n' "$label" "$order" >> "$results"
+              mkdir -p "$failed_reports"
+              cp -r "$reports/run-$label" "$failed_reports/run-$label"
+              failed=1
+            fi
+          }
+
+          for n in $(seq 1 "$REPETITIONS"); do
+            run_once "$n" "original order"
+          done
+          run_once "shuffled" "shuffled, seed $SHUFFLE_SEED" --shuffle-seed "$SHUFFLE_SEED"
+
+          exit "$failed"
+
+      - name: Summarize runs
+        if: always()
+        run: |
+          python3 - "${{ runner.temp }}/nightly-results.tsv" "${{ runner.temp }}/nightly-reports" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          sys.path.insert(0, "ci")
+          import crash_diagnosis
+
+          results, reports = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+          print("## Nightly native flakiness\n")
+          print("| Run | Order / seed | Result | Tests | Crash test |")
+          print("|-----|--------------|--------|-------|------------|")
+          lines = results.read_text(encoding="utf-8").splitlines() if results.is_file() else []
+          for line in lines:
+              label, order, result = line.split("\t")
+              run_dir = reports / f"run-{label}"
+              tests, crash = "n/a", "-"
+              try:
+                  tests = str(json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))["tests"])
+              except (OSError, ValueError, KeyError):
+                  pass
+              if (run_dir / crash_diagnosis.REPORT_NAME).is_file():
+                  crash = crash_diagnosis.inflight_test(crash_diagnosis.read_text(run_dir / "tests.log")) or "unknown"
+              print(f"| {label} | {order} | {result} | {tests} | {crash} |")
+          if not lines:
+              print("| - | no run completed | - | - | - |")
+          PY
+
+      - name: Upload failing run reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nightly-failure-reports
+          path: ${{ runner.temp }}/failed-reports
+          if-no-files-found: ignore
+          retention-days: 7

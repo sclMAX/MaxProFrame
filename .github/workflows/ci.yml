@@ -22,6 +22,11 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded runs of the same branch or PR; every main commit keeps its own result.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   format:
     name: Code Formatting (Black & isort)
@@ -111,18 +116,25 @@ jobs:
         if: steps.planner.outputs.run_tests == 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libegl1 libopengl0 libxkbcommon-x11-0 libxcb-cursor0
+          sudo apt-get install -y --no-install-recommends libegl1 libopengl0 libxkbcommon-x11-0 libxcb-cursor0 gdb
 
-      - name: Install manual native debugger
-        if: github.event_name == 'workflow_dispatch' && inputs.native_diagnostics && matrix.target == 'stable'
-        run: |
-          sudo apt-get install -y --no-install-recommends gdb
+      - name: Restore cached FreeCAD AppImage
+        id: appimage-cache
+        if: steps.planner.outputs.run_tests == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/FreeCAD.AppImage
+          key: freecad-appimage-${{ matrix.sha256 }}
 
       - name: Download and verify FreeCAD AppImage
-        if: steps.planner.outputs.run_tests == 'true'
+        if: steps.planner.outputs.run_tests == 'true' && steps.appimage-cache.outputs.cache-hit != 'true'
         run: |
           curl -fL -o "${{ runner.temp }}/FreeCAD.AppImage" \
             "${{ matrix.url }}"
+
+      - name: Verify FreeCAD AppImage checksum
+        if: steps.planner.outputs.run_tests == 'true'
+        run: |
           echo "${{ matrix.sha256 }}  ${{ runner.temp }}/FreeCAD.AppImage" | sha256sum -c -
 
       - name: Extract AppImage

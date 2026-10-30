@@ -33,7 +33,34 @@ def valid_test_selector(value: str) -> bool:
     return re.fullmatch(r"test_[A-Za-z0-9_]+(?:\.[A-Za-z_][A-Za-z0-9_]*){0,2}", value) is not None
 
 
-def selected_suite(tests_dir, selector):
+def flatten_suite(suite):
+    """Yield the individual tests of a (nested) suite in execution order."""
+    import unittest
+
+    for item in suite:
+        if isinstance(item, unittest.TestSuite):
+            yield from flatten_suite(item)
+        else:
+            yield item
+
+
+def shuffled(suite, seed):
+    """Deterministically reorder every test across modules and classes for a given seed."""
+    import random
+    import unittest
+
+    tests = list(flatten_suite(suite))
+    random.Random(seed).shuffle(tests)
+    return unittest.TestSuite(tests)
+
+
+def selected_suite(tests_dir, selector, shuffle_seed=None):
+    """Select the suite; with a seed, run it in a reproducible random order."""
+    suite = _selected_suite(tests_dir, selector)
+    return suite if shuffle_seed is None else shuffled(suite, shuffle_seed)
+
+
+def _selected_suite(tests_dir, selector):
     """Discover only the local module; resolve attributes without further imports."""
     import importlib.util
     import types
@@ -99,6 +126,16 @@ def main() -> None:
     parser.add_argument(
         "--test",
         help="Run one dotted test_ module[.Class[.method]] from tests/ (default: full discovery)",
+    )
+    parser.add_argument(
+        "--no-crash-rerun",
+        action="store_true",
+        help="Skip the diagnostic gdb rerun of the crashing test (the crash summary is still written)",
+    )
+    parser.add_argument(
+        "--shuffle-seed",
+        type=int,
+        help="Run the selected tests in a random order reproducible from this integer seed (default: original order)",
     )
     args = parser.parse_args()
     if args.test is not None and not valid_test_selector(args.test):
@@ -207,6 +244,11 @@ def main() -> None:
         env.pop("FF_TEST", None)
         if args.test is not None:
             env["FF_TEST"] = args.test
+        env.pop("FF_SHUFFLE_SEED", None)
+        if args.shuffle_seed is not None:
+            env["FF_SHUFFLE_SEED"] = str(args.shuffle_seed)
+            sys.stdout.write(f"run_tests: shuffle seed {args.shuffle_seed}\n")
+            sys.stdout.flush()
         env.pop("FF_NATIVE_DIAGNOSTICS", None)
         if args.native_diagnostics:
             env["FF_NATIVE_DIAGNOSTICS"] = "1"
@@ -238,6 +280,10 @@ def main() -> None:
             except RuntimeError as exc:
                 sys.stderr.write(f"run_tests error: {exc}.\n")
                 sys.exit(1)
+
+        def replay_hint():
+            if args.shuffle_seed is not None:
+                sys.stderr.write(f"run_tests: replay with --shuffle-seed {args.shuffle_seed}\n")
 
         timed_out = False
         proc = subprocess.Popen(
@@ -272,16 +318,44 @@ def main() -> None:
             sys.stderr.write(
                 f"run_tests error: FreeCAD process timed out after {args.timeout}s (killed process group).\n"
             )
+            replay_hint()
             sys.exit(124)
+
+        def diagnose_crash():
+            """Diagnostic only: any failure here must not change the runner's exit status."""
+            try:
+                import crash_diagnosis
+
+                if not crash_diagnosis.is_crash(proc.returncode, reports_dir):
+                    return
+                test_id = crash_diagnosis.inflight_test(crash_diagnosis.read_text(reports_dir / "tests.log"))
+                if args.no_crash_rerun:
+                    note = "rerun disabled by --no-crash-rerun."
+                elif native is not None:
+                    note = "rerun skipped: --native-diagnostics already runs under gdb."
+                elif test_id is None:
+                    note = "rerun skipped: no unfinished test was found in tests.log."
+                elif not valid_test_selector(test_id):
+                    note = f"rerun skipped: {test_id} is not a selectable tests/ test."
+                else:
+                    note = crash_diagnosis.rerun_under_gdb(cmd, env, test_id, reports_dir, scratch)
+                plain, markdown = crash_diagnosis.report(args.target, proc.returncode, test_id, stderr_text, note)
+                crash_diagnosis.publish(plain, markdown, sys.stderr)
+            except Exception as exc:
+                sys.stderr.write(f"run_tests crash diagnosis failed: {type(exc).__name__}: {exc}\n")
 
         if proc.returncode != 0:
             sys.stderr.write(f"run_tests error: FreeCAD child process failed with exit code {proc.returncode}.\n")
+            diagnose_crash()
+            replay_hint()
             sys.exit(proc.returncode)
 
         # Validate summary report
         summary_file = reports_dir / "summary.json"
         if not summary_file.is_file():
             sys.stderr.write("run_tests error: summary.json was not generated.\n")
+            diagnose_crash()
+            replay_hint()
             sys.exit(1)
 
         try:
@@ -332,6 +406,7 @@ def main() -> None:
             sys.stderr.write(
                 f"run_tests error: Test suite reported failures ({failures}), errors ({errors}), or successful is False.\n"
             )
+            replay_hint()
             sys.exit(1)
 
     sys.stdout.write(f"run_tests: Test suite succeeded ({tests_run} tests executed).\n")

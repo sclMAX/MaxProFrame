@@ -906,6 +906,26 @@ class TestWorkflowStaticPolicy(unittest.TestCase):
         self.assertIn("1.1.4", self.content, "S1 requires pinned FreeCAD 1.1.4 baseline version")
         self.assertNotIn("pip install --upgrade pip", self.content, "CI must not introduce an unpinned pip upgrade")
 
+    def test_workflow_caches_appimage_by_checksum_and_still_verifies(self):
+        """AppImages are cached under their pinned SHA-256 and a cache hit is still checksum-verified."""
+        self.assertIn("actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", self.content)
+        self.assertIn("key: freecad-appimage-${{ matrix.sha256 }}", self.content)
+        download = self.content.split("- name: Download and verify FreeCAD AppImage", 1)[1].split("- name:", 1)[0]
+        self.assertIn("steps.appimage-cache.outputs.cache-hit != 'true'", download, "Download only on cache miss")
+        verify = self.content.split("- name: Verify FreeCAD AppImage checksum", 1)[1].split("- name:", 1)[0]
+        self.assertIn("sha256sum -c -", verify)
+        self.assertNotIn("cache-hit", verify, "Checksum must be verified on cache hits too")
+
+    def test_workflow_cancels_superseded_runs_except_on_main(self):
+        """Superseded branch/PR runs are cancelled; every main commit keeps its own result."""
+        self.assertIn("concurrency:", self.content)
+        # A shared main group would still cancel a pending main run, so main commits get unique groups.
+        self.assertIn(
+            "group: ci-${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}",
+            self.content,
+        )
+        self.assertIn("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", self.content)
+
     def test_workflow_defines_matrix_for_stable_and_weekly(self):
         """Workflow test job must define a matrix for stable (1.1.4) and pinned weekly-2026.10.28 with checksums."""
         self.assertIn("matrix:", self.content, "Workflow must configure matrix execution")
@@ -943,7 +963,7 @@ class TestWorkflowStaticPolicy(unittest.TestCase):
         self.assertNotIn("continue-on-error: true", self.content)
 
     def test_workflow_pins_official_node24_actions_with_full_shas(self):
-        """Workflow must pin official Node 24 actions (checkout v7.0.1, setup-python v7.0.0, upload-artifact v7.0.2) using full SHAs."""
+        """Workflow must pin official Node 24 actions (checkout v7.0.1, setup-python v7.0.0, upload-artifact v7.0.2, cache v6.1.0) using full SHAs."""
         expected_actions = {
             "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1": 2,
             "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0": 2,
@@ -971,7 +991,7 @@ class TestWorkflowStaticPolicy(unittest.TestCase):
 
         # Verify all uses: references in workflow use a 40-character hex SHA
         uses_lines = [line.strip() for line in self.content.splitlines() if line.strip().startswith("uses:")]
-        self.assertEqual(len(uses_lines), 6, f"Expected exactly 6 uses steps, found {len(uses_lines)}")
+        self.assertEqual(len(uses_lines), 7, f"Expected exactly 7 uses steps, found {len(uses_lines)}")
         sha_pattern = re.compile(r"^uses:\s+actions/[a-zA-Z0-9_-]+@([0-9a-f]{40})\s+#\s+v[0-9.]+$")
         for line in uses_lines:
             self.assertRegex(

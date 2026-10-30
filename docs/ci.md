@@ -164,10 +164,33 @@ To bump the weekly pin, update together:
 2. `ci/run-tests.FCMacro`: expected `FreeCAD.Version()[:3]` and Python version for `weekly`, plus the target label.
 3. `ci/tests/test_policy.py` and this document (URL, SHA-256, version).
 
+## Crash diagnosis (automatic, diagnostic only)
+
+When the native FreeCAD child dies by a signal (for example exit -11, SIGSEGV), or
+exits without a valid `summary.json` while a test was still running, `run_tests.py`:
+
+1. Finds the test that was running: the last test line in `tests.log` without a result.
+2. Writes a short diagnosis to stderr and, when `GITHUB_STEP_SUMMARY` is set, appends
+   a Markdown section to the job summary: target, signal/exit code, crashing test id and
+   the last `stderr.log` lines (Qt/GL noise and consecutive repeats removed).
+3. Reruns **only that test once** under `gdb` (120 s limit, isolated reports directory)
+   and saves `bt 60` plus a Python traceback (`faulthandler`, called from inside the
+   stopped process because FreeCAD's own SIGSEGV handler hides it) to
+   `<reports>/crash-backtrace.txt`. The existing failure-report artifact uploads it.
+
+The rerun never changes the outcome: the runner exits with the original failure
+status, a rerun that passes or fails is only evidence, and a missing `gdb`, a gdb error
+or a timeout is noted in the diagnosis instead of failing differently. A normal failing
+suite (valid summary with failures) and timeouts (exit 124) do not trigger it. The
+hosted test job installs `gdb` next to the other headless dependencies.
+
+Pass `--no-crash-rerun` locally to keep the diagnosis but skip the gdb rerun. The
+rerun is also skipped under `--native-diagnostics`, which already runs under gdb.
+
 ## Explicit manual native investigation (stable only)
 
 Dispatch CI with the boolean `native_diagnostics` enabled (default: false).
-Only the stable job installs GDB and passes `--native-diagnostics`; PR, push,
+Only the stable job passes `--native-diagnostics`; PR, push,
 Weekly and ordinary manual runs retain the normal launch path and deadlines.
 Locally, add `--native-diagnostics --target stable --timeout 420` to the native
 runner command above. GDB must already be installed; timeouts <=160 are rejected.
@@ -197,6 +220,38 @@ using the existing `test-failure-reports-stable` name and seven-day retention.
 Missing/empty native frames or Qt events cannot exclude a modal or prove a cause.
 Diagnostics do not dismiss dialogs, synthesize input, skip tests or repair the GUI.
 
+## AppImage cache and superseded runs
+
+- **AppImage cache:** each native job restores the FreeCAD AppImage from `actions/cache` under the key `freecad-appimage-<sha256>`, so a pinned build is downloaded once and reused. The download step runs only on a cache miss, and the checksum step always runs, so a cached file is verified against the pinned SHA-256 exactly like a fresh download. Bumping a target's URL and SHA-256 creates a new key automatically.
+- **Superseded runs:** the workflow uses `concurrency` grouped by workflow and ref. A new push to the same branch or PR cancels the older run. On `main` the group is the commit SHA, so no run waits on or replaces another (a shared group would still cancel a pending run) and every `main` commit keeps its own result.
+
+## Nightly flakiness run
+
+`.github/workflows/nightly.yml` ("Nightly native flakiness") looks for tests that fail only sometimes. It runs on a daily schedule (04:17 UTC) and on manual dispatch, with read-only permissions, on `ubuntu-24.04`, against the pinned stable target (FreeCAD 1.1.4, same URL, SHA-256, cache key and action SHAs as `ci.yml`; the checksum is verified on cache hits too).
+
+- **What it runs:** the full native suite `repetitions` times (default 3) in the original order, plus one run in a random order from `--shuffle-seed`. The default seed is the workflow run id and is printed at the start of the shuffled run.
+- **Failures are never hidden:** every run executes even after a failure, there are no automatic retries, and the job fails if any run failed, even once.
+- **Reports:** each run writes to its own directory. The job summary has a table with the run number, order or seed, result, test count and the crashing test (if any). The reports of all failing runs are uploaded as one `nightly-failure-reports` artifact kept for 7 days.
+
+### Replay a failure locally
+
+Use the seed from the failed run's log or job summary. The same seed gives the same order:
+
+```bash
+python3 ci/run_tests.py \
+  --freecad-bin /path/to/squashfs-root/AppRun \
+  --reports /path/to/reports \
+  --timeout 420 \
+  --target stable \
+  --shuffle-seed 123456789
+```
+
+`--shuffle-seed <int>` shuffles the selected tests across modules and classes (it combines with `--test`), prints `run_tests: shuffle seed <int>` at start and repeats `run_tests: replay with --shuffle-seed <int>` when the run fails. Without the option the order is unchanged.
+
+### Dispatch manually
+
+In GitHub, open Actions, select "Nightly native flakiness" and use "Run workflow". Optional inputs: `repetitions` (1-20, default 3) and `seed` (non-negative integer, default the run id). With the GitHub CLI: `gh workflow run nightly.yml -f repetitions=5 -f seed=123456789`.
+
 ## GitHub Actions runner infrastructure and Node 24
 
 GitHub Actions JavaScript actions execute on the runner's internal Node.js runtime. GitHub Actions has updated official actions to Node 24 and flags workflows invoking Node 20 actions with runner deprecation warnings.
@@ -206,6 +261,7 @@ GitHub Actions JavaScript actions execute on the runner's internal Node.js runti
 | `actions/checkout` | `3d3c42e5aac5ba805825da76410c181273ba90b1` (`v7.0.1`) | Node 24 |
 | `actions/setup-python` | `5fda3b95a4ea91299a34e894583c3862153e4b97` (`v7.0.0`) | Node 24 |
 | `actions/upload-artifact` | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` (`v7.0.2`) | Node 24 |
+| `actions/cache` | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` (`v6.1.0`) | Node 24 |
 
 ### Infrastructure boundary vs project dependencies
 - **Action infrastructure only:** Node 24 is strictly an execution requirement of GitHub's hosted runner infrastructure. MaxProFrame does **not** depend on Node.js, npm, or JavaScript. MaxProFrame remains a FreeCAD workbench; its native CI suites run offscreen under Python 3.11 / Python 3.13. Contributors and users do not need Node.js installed locally.
