@@ -2,6 +2,7 @@ import glob
 import json
 import os
 import re
+import weakref
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from functools import wraps
@@ -72,6 +73,24 @@ def load_ui_file(path):
         finally:
             f.close()
     raise RuntimeError(f"Unable to load UI file: {path}")
+
+
+def _invalidate_wrapper_on_destroy(widget):
+    # A widget built by the UI loader and later deleted by Qt (the task view deletes the panel
+    # form when its dialog closes) keeps a registered PySide wrapper: it still looks valid, and a
+    # new QObject allocated at the same address resolves to it (SIGSEGV in QWidget::toolTip).
+    try:
+        from shiboken6 import invalidate
+    except ImportError:
+        return
+    wrapper = weakref.ref(widget)
+
+    def release(*_):
+        stale = wrapper()
+        if stale is not None:
+            invalidate(stale)
+
+    widget.destroyed.connect(release)
 
 
 def _safe_unwrap_widget(widget_or_item):
@@ -225,6 +244,8 @@ class BaseProfileTaskPanel(ABC):
         # Keep designer controls alive for the existing model bindings without
         # exposing a second task panel to FreeCAD's task dialog.
         self._legacy_form = load_ui_file(os.path.join(UIPATH, "create_profiles2.ui"))
+        for form in self.form + [self._legacy_form]:
+            _invalidate_wrapper_on_destroy(form)
 
         # Replace before FormProxy discovers children, so no stale label survives.
         raw_image = getattr(self.form[0], "label_image", None)
