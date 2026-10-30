@@ -81,7 +81,8 @@ jobs:
             label: FreeCAD weekly-2026.10.28
             url: https://github.com/FreeCAD/FreeCAD/releases/download/weekly-2026.10.28/FreeCAD_weekly-2026.10.28-Linux-x86_64.AppImage
             sha256: 34d6b2fa3d6686fce67ed8b3013fa7526da4051ac61012a8b34a8214682a5b2b
-            timeout: 360
+            # Development builds run the suite about 2x slower than stable locally (372s vs 167s).
+            timeout: 480
 
     steps:
       - name: Checkout code
