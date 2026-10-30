@@ -2187,6 +2187,18 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             except Exception:
                 pass
 
+    @staticmethod
+    def _has_live_referrer(doc, target):
+        for obj in list(getattr(doc, "Objects", []) or []):
+            if obj is target:
+                continue
+            try:
+                if target in obj.OutList:
+                    return True
+            except Exception:
+                pass
+        return False
+
     def _clean_unreferenced_session_sources(self):
         if not hasattr(self, "_session_imported_sketches") or not self._session_imported_sketches:
             return
@@ -2216,23 +2228,9 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             if sk_name in active_referenced_names:
                 continue
 
-            in_list = getattr(sk_obj, "InList", []) or []
-            active_in_list = []
-            for ref in in_list:
-                try:
-                    if ref is None or not hasattr(ref, "Name"):
-                        continue
-                    ref_doc = getattr(ref, "Document", None) or doc
-                    if ref_doc is None or not hasattr(ref_doc, "getObject"):
-                        continue
-                    if hasattr(ref_doc, "Name") and hasattr(App, "listDocuments"):
-                        if ref_doc.Name not in App.listDocuments():
-                            continue
-                    if ref_doc.getObject(ref.Name) is not None:
-                        active_in_list.append(ref)
-                except Exception:
-                    pass
-            if active_in_list:
+            # Never read sk_obj.InList: right after a preview removal it can still
+            # hold a dangling native pointer and crash FreeCAD. Scan live objects.
+            if self._has_live_referrer(doc, sk_obj):
                 continue
 
             try:
