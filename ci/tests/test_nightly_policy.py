@@ -223,12 +223,29 @@ class TestNightlyWorkflowPolicy(unittest.TestCase):
         self.assertNotIn("matrix", self.content)
         self.assertIn("--target stable", self.content)
 
-    def test_runtime_pins_match_ci(self):
-        self.assertIn(STABLE_URL, self.content)
-        self.assertIn(STABLE_URL, self.ci)
-        self.assertIn(STABLE_SHA256, self.content)
-        self.assertEqual(set(re.findall(r"\b[0-9a-f]{64}\b", self.content)), {STABLE_SHA256})
+    def test_runtime_pin_is_read_from_targets_json(self):
+        """The nightly pins nothing itself: it reads the stable URL and SHA-256 from ci/targets.json."""
+        self.assertNotIn(STABLE_URL, self.content)
+        self.assertNotRegex(self.content, r"\b[0-9a-f]{64}\b")
+        self.assertNotIn("releases/download", self.content)
         self.assertNotIn("latest", self.content)
+        read = self.content.split("- name: Read pinned stable target", 1)[1].split("- name:", 1)[0]
+        self.assertIn("id: target", read)
+        self.assertIn("ci/targets.json", read)
+        self.assertIn('["stable"]', read)
+        self.assertIn('"url=', read)
+        self.assertIn('"sha256=', read)
+        stable = test_policy.load_targets()["stable"]
+        self.assertEqual((stable["url"], stable["sha256"]), (STABLE_URL, STABLE_SHA256))
+
+    def test_targets_are_read_after_checkout_and_reach_shell_through_env(self):
+        self.assertLess(self.content.index("actions/checkout@"), self.content.index("ci/targets.json"))
+        download = self.content.split("- name: Download FreeCAD AppImage", 1)[1].split("- name:", 1)[0]
+        self.assertIn("STABLE_URL: ${{ steps.target.outputs.url }}", download)
+        self.assertNotIn("${{ steps.target", download.split("run: |", 1)[1])
+        verify = self.content.split("- name: Verify FreeCAD AppImage checksum", 1)[1].split("- name:", 1)[0]
+        self.assertIn("STABLE_SHA256: ${{ steps.target.outputs.sha256 }}", verify)
+        self.assertNotIn("${{ steps.target", verify.split("run: |", 1)[1])
 
     def test_actions_are_pinned_to_the_same_shas_as_ci(self):
         pin = re.compile(r"uses:\s+(actions/[\w-]+@[0-9a-f]{40} # v[\d.]+)$", re.M)
@@ -241,7 +258,7 @@ class TestNightlyWorkflowPolicy(unittest.TestCase):
         self.assertIn("actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0", self.content)
 
     def test_cache_key_scheme_and_checksum_always_verified(self):
-        self.assertIn(f"key: freecad-appimage-{STABLE_SHA256}", self.content)
+        self.assertIn("key: freecad-appimage-${{ steps.target.outputs.sha256 }}", self.content)
         download = self.content.split("- name: Download FreeCAD AppImage", 1)[1].split("- name:", 1)[0]
         self.assertIn("steps.appimage-cache.outputs.cache-hit != 'true'", download)
         verify = self.content.split("- name: Verify FreeCAD AppImage checksum", 1)[1].split("- name:", 1)[0]

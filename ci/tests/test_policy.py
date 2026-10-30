@@ -25,6 +25,17 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 CI_DIR = REPO_ROOT / "ci"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+TARGETS_PATH = CI_DIR / "targets.json"
+
+
+def load_targets():
+    """The pinned runtimes; ci/targets.json is the single source of truth (S1)."""
+    return json.loads(TARGETS_PATH.read_text(encoding="utf-8"))
+
+
+def wrong_python(target):
+    major, minor = load_targets()[target]["expected_python"]
+    return (major, minor + 1, 0)
 
 
 class TestChangedFilesPolicy(unittest.TestCase):
@@ -840,10 +851,15 @@ class TestRunTestsPolicy(unittest.TestCase):
         self.assertEqual(summary.get("tests"), 1)
         self.assertIs(summary.get("successful"), True)
 
-    def test_macro_accepts_weekly_target_with_27_1_0_and_py313(self):
-        """Macro must accept weekly target when runtime matches FreeCAD 27.1.0 and Python 3.13."""
+    def _runtime(self, target):
+        pinned = load_targets()[target]
+        return tuple(pinned["expected_freecad"]), (*pinned["expected_python"], 0)
+
+    def test_macro_accepts_weekly_target_when_runtime_matches_targets_json(self):
+        """Macro must accept weekly target when the runtime matches the weekly entry of ci/targets.json."""
+        fc_version, py_version = self._runtime("weekly")
         proc, summary_file, summary, _ = self._run_macro_synthetic(
-            target="weekly", fc_version=("27", "1", "0"), py_version=(3, 13, 0)
+            target="weekly", fc_version=fc_version, py_version=py_version
         )
         self.assertEqual(proc.returncode, 0, f"Stderr: {proc.stderr}")
         self.assertTrue(summary_file.is_file(), "summary.json must be generated")
@@ -851,31 +867,120 @@ class TestRunTestsPolicy(unittest.TestCase):
         self.assertIs(summary.get("successful"), True)
 
     def test_macro_rejects_weekly_runtime_when_target_is_stable(self):
-        """Macro targeting stable must strictly reject FreeCAD 27.1.0 runtime without writing summary."""
+        """Macro targeting stable must strictly reject the weekly runtime without writing summary."""
+        fc_version, py_version = self._runtime("weekly")
         proc, summary_file, summary, child_stderr = self._run_macro_synthetic(
-            target="stable", fc_version=("27", "1", "0"), py_version=(3, 13, 0)
+            target="stable", fc_version=fc_version, py_version=py_version
         )
         self.assertNotEqual(proc.returncode, 0)
         self.assertFalse(summary_file.is_file(), "Rejected runtime must NOT generate summary.json")
         self.assertIn("incompatible freecad runtime version", child_stderr.lower())
 
     def test_macro_rejects_stable_runtime_when_target_is_weekly(self):
-        """Macro targeting weekly must strictly reject FreeCAD 1.1.4 runtime without writing summary."""
+        """Macro targeting weekly must strictly reject the stable runtime without writing summary."""
+        fc_version, py_version = self._runtime("stable")
         proc, summary_file, summary, child_stderr = self._run_macro_synthetic(
-            target="weekly", fc_version=("1", "1", "4"), py_version=(3, 11, 0)
+            target="weekly", fc_version=fc_version, py_version=py_version
         )
         self.assertNotEqual(proc.returncode, 0)
         self.assertFalse(summary_file.is_file(), "Rejected runtime must NOT generate summary.json")
         self.assertIn("incompatible freecad runtime version", child_stderr.lower())
 
     def test_macro_rejects_incompatible_python_on_weekly_target(self):
-        """Macro targeting weekly must strictly reject non-3.13 Python runtime without writing summary."""
+        """Macro targeting weekly must strictly reject a Python other than the pinned one, without a summary."""
+        fc_version, _ = self._runtime("weekly")
         proc, summary_file, summary, child_stderr = self._run_macro_synthetic(
-            target="weekly", fc_version=("27", "1", "0"), py_version=(3, 11, 0)
+            target="weekly", fc_version=fc_version, py_version=wrong_python("weekly")
         )
         self.assertNotEqual(proc.returncode, 0)
         self.assertFalse(summary_file.is_file(), "Rejected runtime must NOT generate summary.json")
         self.assertIn("incompatible python runtime version", child_stderr.lower())
+
+    def test_macro_error_names_the_pinned_target_from_targets_json(self):
+        """The rejection message keeps naming the pinned baseline/weekly label, now read from ci/targets.json."""
+        _, py_version = self._runtime("stable")
+        proc, _, _, child_stderr = self._run_macro_synthetic(
+            target="stable", fc_version=("0", "0", "0"), py_version=py_version
+        )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("Pinned baseline FreeCAD 1.1.4 (Python 3.11) is required.", child_stderr)
+        weekly = load_targets()["weekly"]
+        fc_version, py_version = self._runtime("weekly")
+        proc, _, _, child_stderr = self._run_macro_synthetic(
+            target="weekly", fc_version=("0", "0", "0"), py_version=py_version
+        )
+        label = (
+            f"Pinned weekly {weekly['label']} (Version {'.'.join(fc_version)}, "
+            f"Python {py_version[0]}.{py_version[1]}) is required."
+        )
+        self.assertIn(label, child_stderr)
+
+    def test_macro_has_no_hardcoded_runtime_versions(self):
+        """Expected versions and labels live in ci/targets.json, not in the macro."""
+        macro = (CI_DIR / "run-tests.FCMacro").read_text(encoding="utf-8")
+        self.assertIn("targets.json", macro)
+        self.assertNotIn("expected_fc = (", macro)
+        self.assertNotIn("expected_py = (", macro)
+        self.assertNotRegex(macro, r"weekly-\d{4}\.\d{2}\.\d{2}")
+
+
+class TestTargetsFilePolicy(unittest.TestCase):
+    """ci/targets.json is the single source of truth for the pinned native targets (S1)."""
+
+    KEYS = {"label", "url", "sha256", "timeout", "blocking", "expected_freecad", "expected_python"}
+
+    def test_defines_exactly_stable_and_weekly_with_all_fields(self):
+        targets = load_targets()
+        self.assertEqual(list(targets), ["stable", "weekly"])
+        for name, entry in targets.items():
+            self.assertEqual(set(entry), self.KEYS, name)
+            self.assertRegex(entry["sha256"], r"^[0-9a-f]{64}$")
+            self.assertTrue(entry["url"].startswith("https://github.com/FreeCAD/FreeCAD/releases/download/"))
+            self.assertNotIn("latest", entry["url"])
+            self.assertEqual(len(entry["expected_freecad"]), 3)
+            self.assertTrue(all(isinstance(part, str) and part.isdigit() for part in entry["expected_freecad"]))
+            self.assertEqual(len(entry["expected_python"]), 2)
+            self.assertTrue(all(isinstance(part, int) for part in entry["expected_python"]))
+            self.assertIsInstance(entry["timeout"], int)
+            self.assertIsInstance(entry["blocking"], bool)
+
+    def test_stable_pin_is_the_accepted_baseline(self):
+        stable = load_targets()["stable"]
+        self.assertEqual(stable["label"], "FreeCAD 1.1.4")
+        self.assertEqual(
+            stable["url"],
+            "https://github.com/FreeCAD/FreeCAD/releases/download/1.1.4/FreeCAD_1.1.4-Linux-x86_64-py311.AppImage",
+        )
+        self.assertEqual(stable["sha256"], "f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434")
+        self.assertEqual((stable["timeout"], stable["blocking"]), (420, True))
+        self.assertEqual((stable["expected_freecad"], stable["expected_python"]), (["1", "1", "4"], [3, 11]))
+
+    def test_weekly_is_pinned_to_one_tag_and_informative(self):
+        weekly = load_targets()["weekly"]
+        tag = weekly["label"].removeprefix("FreeCAD ")
+        self.assertRegex(tag, r"^weekly-\d{4}\.\d{2}\.\d{2}$")
+        self.assertEqual(
+            weekly["url"],
+            f"https://github.com/FreeCAD/FreeCAD/releases/download/{tag}/FreeCAD_{tag}-Linux-x86_64.AppImage",
+        )
+        self.assertEqual((weekly["timeout"], weekly["blocking"]), (480, False))
+
+    def test_run_tests_target_choices_come_from_targets_json(self):
+        from ci import run_tests
+
+        self.assertEqual(run_tests.target_names(), list(load_targets()))
+        script = (CI_DIR / "run_tests.py").read_text(encoding="utf-8")
+        self.assertNotIn('choices=["stable", "weekly"]', script)
+        self.assertNotRegex(script, r"weekly-\d{4}\.\d{2}\.\d{2}")
+
+    def test_run_tests_help_names_no_specific_weekly_version(self):
+        done = subprocess.run(
+            [sys.executable, str(CI_DIR / "run_tests.py"), "--help"], capture_output=True, text=True, timeout=60
+        )
+        self.assertEqual(done.returncode, 0)
+        self.assertIn("stable", done.stdout)
+        self.assertIn("weekly", done.stdout)
+        self.assertNotRegex(done.stdout, r"weekly-\d{4}")
 
 
 class TestWorkflowStaticPolicy(unittest.TestCase):
@@ -903,7 +1008,7 @@ class TestWorkflowStaticPolicy(unittest.TestCase):
     def test_workflow_pins_permissions_and_freecad_baseline(self):
         self.assertIn("permissions:", self.content, "S6 requires explicit pinned permissions block")
         self.assertIn("contents: read", self.content, "S6 requires minimal read-only permissions")
-        self.assertIn("1.1.4", self.content, "S1 requires pinned FreeCAD 1.1.4 baseline version")
+        self.assertEqual(load_targets()["stable"]["label"], "FreeCAD 1.1.4")
         self.assertNotIn("pip install --upgrade pip", self.content, "CI must not introduce an unpinned pip upgrade")
 
     def test_workflow_caches_appimage_by_checksum_and_still_verifies(self):
@@ -926,46 +1031,70 @@ class TestWorkflowStaticPolicy(unittest.TestCase):
         )
         self.assertIn("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", self.content)
 
-    def test_workflow_defines_matrix_for_stable_and_weekly(self):
-        """Workflow test job must define a matrix for stable (1.1.4) and pinned weekly-2026.10.28 with checksums."""
-        self.assertIn("matrix:", self.content, "Workflow must configure matrix execution")
+    def test_workflow_builds_matrix_from_targets_json(self):
+        """The native job runs a matrix built by a read-only `targets` job from ci/targets.json."""
         self.assertIn("fail-fast: false", self.content, "Matrix must run both targets without early cancellation")
-        self.assertIn("target: stable", self.content, "Matrix must define stable target")
-        self.assertIn("target: weekly", self.content, "Matrix must define weekly target")
-        self.assertNotIn("target: rc", self.content, "RC target must be replaced by weekly")
-        self.assertIn(
-            "https://github.com/FreeCAD/FreeCAD/releases/download/weekly-2026.10.28/"
-            "FreeCAD_weekly-2026.10.28-Linux-x86_64.AppImage",
-            self.content,
-            "Weekly must use the exact pinned release URL, not latest",
-        )
+        self.assertIn("matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}", self.content)
+        self.assertNotIn("include:", self.content, "Targets must not be listed inside the workflow")
+        self.assertNotIn("target: rc", self.content)
+        targets_job = self.content.split("\n  targets:\n", 1)[1].split("\n  test:\n", 1)[0]
+        self.assertIn("permissions:\n      contents: read", targets_job)
+        self.assertIn("persist-credentials: false", targets_job)
+        self.assertIn("ci/targets.json", targets_job)
+        self.assertIn("matrix: ${{ steps.matrix.outputs.matrix }}", targets_job)
+        test_job = self.content.split("\n  test:\n", 1)[1]
+        self.assertRegex(test_job, r"(?m)^    needs: targets$")
+
+    def test_workflow_keeps_pinned_values_out_of_the_yaml(self):
+        """Nothing about the pinned runtimes is hard-coded in ci.yml any more."""
         self.assertNotIn("latest", self.content)
-        self.assertIn(
-            "f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434",
-            self.content,
-            "Workflow must retain pinned official FreeCAD 1.1.4 AppImage SHA-256",
-        )
-        self.assertIn(
-            "34d6b2fa3d6686fce67ed8b3013fa7526da4051ac61012a8b34a8214682a5b2b",
-            self.content,
-            "Workflow must pin FreeCAD weekly-2026.10.28 AppImage SHA-256",
-        )
-        self.assertIn(
-            "test-failure-reports-${{ matrix.target }}",
-            self.content,
-            "Failure reports must use target-specific unique artifact names",
-        )
+        self.assertNotIn(".AppImage\n", self.content.replace("FreeCAD.AppImage\n", ""))
+        self.assertNotRegex(self.content, r"\b[0-9a-f]{64}\b")
+        self.assertNotRegex(self.content, r"weekly-\d{4}\.\d{2}\.\d{2}")
+        self.assertNotIn("releases/download", self.content)
+
+    def test_workflow_matrix_json_matches_targets_json(self):
+        """Running the targets job script yields one matrix entry per target with the fields the job uses."""
+        script = self.content.split("python3 - <<'PY' >> \"$GITHUB_OUTPUT\"\n", 1)[1].split("\n          PY\n", 1)[0]
+        script = "\n".join(line[10:] for line in script.splitlines())
+        with tempfile.TemporaryDirectory() as tmp:
+            (pathlib.Path(tmp) / "ci").mkdir()
+            (pathlib.Path(tmp) / "ci" / "targets.json").write_text(TARGETS_PATH.read_text(encoding="utf-8"))
+            done = subprocess.run(
+                [sys.executable, "-I", "-c", script], cwd=tmp, capture_output=True, text=True, timeout=60
+            )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        line = done.stdout.strip()
+        self.assertTrue(line.startswith("matrix="))
+        include = json.loads(line[len("matrix=") :])["include"]
+        targets = load_targets()
+        self.assertEqual([entry["target"] for entry in include], list(targets))
+        for entry in include:
+            expected = {key: targets[entry["target"]][key] for key in ("label", "url", "sha256", "timeout", "blocking")}
+            self.assertEqual({k: v for k, v in entry.items() if k != "target"}, expected)
+
+    def test_workflow_check_names_do_not_change(self):
+        self.assertIn("name: Native FreeCAD (${{ matrix.target }})", self.content)
+        self.assertIn("name: Code Formatting (Black & isort)", self.content)
 
     def test_workflow_weekly_is_informative_and_stable_is_blocking(self):
-        """Only the weekly job may continue on error; stable failures must still fail the workflow."""
+        """Only targets that are not `blocking` in ci/targets.json may continue on error."""
         self.assertEqual(self.content.count("continue-on-error:"), 1)
-        self.assertIn("continue-on-error: ${{ matrix.target == 'weekly' }}", self.content)
+        self.assertIn("continue-on-error: ${{ !matrix.blocking }}", self.content)
         self.assertNotIn("continue-on-error: true", self.content)
+        targets = load_targets()
+        self.assertIs(targets["stable"]["blocking"], True)
+        self.assertIs(targets["weekly"]["blocking"], False)
+
+    def test_workflow_uses_matrix_values_for_download_timeout_and_target(self):
+        self.assertIn("${{ matrix.url }}", self.content)
+        self.assertIn("--timeout ${{ matrix.timeout }}", self.content)
+        self.assertIn('--target "${{ matrix.target }}"', self.content)
 
     def test_workflow_pins_official_node24_actions_with_full_shas(self):
         """Workflow must pin official Node 24 actions (checkout v7.0.1, setup-python v7.0.0, upload-artifact v7.0.2, cache v6.1.0) using full SHAs."""
         expected_actions = {
-            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1": 2,
+            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1": 3,
             "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0": 2,
             "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2": 2,
         }
@@ -991,7 +1120,7 @@ class TestWorkflowStaticPolicy(unittest.TestCase):
 
         # Verify all uses: references in workflow use a 40-character hex SHA
         uses_lines = [line.strip() for line in self.content.splitlines() if line.strip().startswith("uses:")]
-        self.assertEqual(len(uses_lines), 7, f"Expected exactly 7 uses steps, found {len(uses_lines)}")
+        self.assertEqual(len(uses_lines), 8, f"Expected exactly 8 uses steps, found {len(uses_lines)}")
         sha_pattern = re.compile(r"^uses:\s+actions/[a-zA-Z0-9_-]+@([0-9a-f]{40})\s+#\s+v[0-9.]+$")
         for line in uses_lines:
             self.assertRegex(
@@ -1022,9 +1151,13 @@ class TestDocumentationPolicy(unittest.TestCase):
     def test_ci_docs_document_stable_and_weekly_targets(self):
         ci_doc = REPO_ROOT / "docs" / "ci.md"
         content = ci_doc.read_text(encoding="utf-8")
-        self.assertIn("weekly-2026.10.28", content)
-        self.assertIn("27.1.0", content)
-        self.assertIn("34d6b2fa3d6686fce67ed8b3013fa7526da4051ac61012a8b34a8214682a5b2b", content)
+        weekly = load_targets()["weekly"]
+        self.assertIn(weekly["label"].removeprefix("FreeCAD "), content)
+        self.assertIn(".".join(weekly["expected_freecad"]), content)
+        self.assertIn(weekly["sha256"], content)
+        self.assertIn("ci/targets.json", content)
+        self.assertIn("single source of truth", content)
+        self.assertIn("never anything under `.github/`", content)
         self.assertIn("informative", content.lower())
         self.assertIn("--target", content)
 

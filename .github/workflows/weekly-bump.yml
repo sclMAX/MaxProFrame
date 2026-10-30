@@ -144,6 +144,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
+          fetch-depth: 0
           # The default token is needed by `git push` below; no other step reads it.
           persist-credentials: true
 
@@ -152,6 +153,10 @@ jobs:
         with:
           python-version: '3.11'
 
+      # mode=skip: a PR (open, closed or merged) already exists for the branch.
+      # mode=reuse: the branch exists but no PR was ever opened from it (an earlier run failed after pushing it),
+      #   so the PR is opened from that branch and nothing is pushed.
+      # mode=create: fresh bump.
       - name: Check for an existing bump
         id: existing
         env:
@@ -164,19 +169,19 @@ jobs:
           fi
           branch="ci/weekly-bump-$TAG"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
-          open="$(gh pr list --head "$branch" --state open --json number --jq length)"
-          if [[ "$open" != "0" ]]; then
-            echo "A pull request from $branch is already open; nothing to do."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
+          prs="$(gh pr list --head "$branch" --state all --json number --jq length)"
+          if [[ "$prs" != "0" ]]; then
+            echo "A pull request from $branch already exists; nothing to do."
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
           elif git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
-            echo "Branch $branch already exists without an open pull request; nothing to do."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Branch $branch exists without a pull request; opening the pull request from it."
+            echo "mode=reuse" >> "$GITHUB_OUTPUT"
           else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "mode=create" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Apply the bump
-        if: steps.existing.outputs.skip == 'false'
+        if: steps.existing.outputs.mode == 'create'
         env:
           TAG: ${{ needs.detect.outputs.tag }}
           WEEKLY_URL: ${{ needs.detect.outputs.url }}
@@ -186,13 +191,46 @@ jobs:
         run: |
           python3 ci/bump_weekly.py apply "$TAG" "$WEEKLY_URL" "$SHA256" "$FC_VERSION" "$PY_VERSION"
 
+      # GITHUB_TOKEN cannot write workflow files, so a bump that touches .github/ must never be pushed.
+      - name: Guard against workflow changes
+        if: steps.existing.outputs.mode != 'skip'
+        env:
+          MODE: ${{ steps.existing.outputs.mode }}
+          BRANCH: ${{ steps.existing.outputs.branch }}
+        run: |
+          if [[ "$MODE" == "reuse" ]]; then
+            git fetch origin "$BRANCH"
+            changed="$(git diff --name-only "origin/main...FETCH_HEAD")"
+          else
+            changed="$(git diff --name-only HEAD)"
+          fi
+          echo "Changed files:"
+          echo "$changed"
+          if grep -q '^\.github/' <<< "$changed"; then
+            echo "The bump touches .github/, which GITHUB_TOKEN cannot push." >&2
+            exit 1
+          fi
+
       - name: Run host CI policy tests
-        if: steps.existing.outputs.skip == 'false'
+        if: steps.existing.outputs.mode == 'create'
         run: |
           python3 -m unittest discover -s ci/tests -p 'test_*.py'
 
-      - name: Commit, push and open the pull request
-        if: steps.existing.outputs.skip == 'false'
+      - name: Commit and push the branch
+        if: steps.existing.outputs.mode == 'create'
+        env:
+          BRANCH: ${{ steps.existing.outputs.branch }}
+          TAG: ${{ needs.detect.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add ci/targets.json docs/ci.md
+          git commit -m "ci: bump pinned weekly to $TAG"
+          git push origin "$BRANCH"
+
+      - name: Open the pull request
+        if: steps.existing.outputs.mode != 'skip'
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ steps.existing.outputs.branch }}
@@ -211,7 +249,7 @@ jobs:
             sha_note="computed from the downloaded file (the releases API gave no digest)"
           fi
           cat > "$BODY_FILE" <<EOF
-          Bumps the pinned weekly FreeCAD target.
+          Bumps the pinned weekly FreeCAD target in \`ci/targets.json\`.
 
           | | |
           |---|---|
@@ -228,16 +266,9 @@ jobs:
           The weekly job is informative, so a red weekly run does not block the workflow.
 
           **CI does not start by itself.** Pull requests opened with the default \`GITHUB_TOKEN\` do not trigger
-          workflows. The maintainer must trigger CI: close and reopen this pull request, or push an empty commit
+          workflows. The maintainer must trigger CI: close and reopen this pull request, or add an empty commit
           (\`git commit --allow-empty -m "ci: trigger"\`) to \`$BRANCH\`.
           EOF
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
-          git add .github/workflows/ci.yml ci/run-tests.FCMacro ci/run_tests.py ci/tests/test_policy.py docs/ci.md
-          git commit -m "ci: bump pinned weekly to $TAG"
-          git push origin "$BRANCH"
           gh pr create --base main --head "$BRANCH" \
             --title "ci: bump pinned weekly to $TAG" \
             --body-file "$BODY_FILE" \

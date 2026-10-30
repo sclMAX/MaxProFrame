@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Detect a newer FreeCAD weekly release and rewrite the pinned weekly target (stdlib only).
 
+The pin lives in ci/targets.json; `apply` edits that file and the current-state references in docs/ci.md.
+It never touches .github/: GITHUB_TOKEN cannot push workflow-file changes.
+
 Subcommands:
   detect  print JSON with the latest published weekly versus the pinned one (always exits 0)
   apply   rewrite exactly the pinned values: TAG URL SHA256 FC_VERSION PY_VERSION
@@ -22,52 +25,23 @@ ASSET_RE = re.compile(r"^FreeCAD_weekly-[0-9.]+-Linux-x86_64\.AppImage$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 VERSION_PART_RE = re.compile(r"^\d+$")
 
-CI_WORKFLOW = ".github/workflows/ci.yml"
-MACRO = "ci/run-tests.FCMacro"
-RUNNER = "ci/run_tests.py"
+TARGETS = "ci/targets.json"
 DOCS = "docs/ci.md"
-POLICY_TEST = "ci/tests/test_policy.py"
 
-# Every file holding a weekly pin; the text blocks below are the only parts rewritten in each.
-# Tokens: @TAG@ @URL@ @SHA@, @FC@ (27.1.0), @FCQ@ ("27", "1", "0"), @FCS@ ('27', '1', '0'), @PY@ (3.13), @PYT@ (3, 13).
-ANCHORS = {
-    CI_WORKFLOW: [
-        "- target: weekly\n"
-        "            label: FreeCAD @TAG@\n"
-        "            url: @URL@\n"
-        "            sha256: @SHA@\n",
-    ],
-    MACRO: [
-        'elif target == "weekly":\n'
-        "        expected_fc = (@FCQ@)\n"
-        "        expected_py = (@PYT@)\n"
-        '        target_label = "Pinned weekly FreeCAD @TAG@ (Version @FC@, Python @PY@)"\n',
-    ],
-    RUNNER: [
-        "'weekly' (pinned FreeCAD @TAG@ / Python @PY@, informative in CI)",
-    ],
-    DOCS: [
-        "inside the pinned FreeCAD @TAG@ Linux AppImage (--target weekly)",
-        "**weekly FreeCAD @TAG@** (reports Version @FC@, Python @PY@)",
-        "(such as 1.1.4 and @TAG@)",
-        "strictly verifies FreeCAD @FC@ (`FreeCAD.Version()[:3] == (@FCS@)`) and embedded Python @PY@.",
-        "Packaging labels (e.g. `@TAG@`)",
-        "internal Version tuple (`@FC@`)",
-        "Python 3.11 / Python @PY@",
-        "- Weekly: FreeCAD @TAG@ (`@SHA@`).",
-    ],
-    POLICY_TEST: [
-        "@TAG@",
-        "@SHA@",
-        "fc_version=(@FCQ@)",
-        "py_version=(@PYT@, 0)",
-        "FreeCAD @FC@",
-        'assertIn("@FC@", content)',
-        "Python @PY@",
-        "non-@PY@",
-    ],
-}
-PINNED_FILES = tuple(ANCHORS)
+# Docs text holding the current weekly pin; each is rewritten from the old to the new value.
+# Tokens: @TAG@ @SHA@, @FC@ (27.1.0), @FCS@ ('27', '1', '0'), @PY@ (3.13).
+DOC_ANCHORS = [
+    "inside the pinned FreeCAD @TAG@ Linux AppImage (--target weekly)",
+    "**weekly FreeCAD @TAG@** (reports Version @FC@, Python @PY@)",
+    "(such as 1.1.4 and @TAG@)",
+    "strictly verifies FreeCAD @FC@ (`FreeCAD.Version()[:3] == (@FCS@)`) and embedded Python @PY@.",
+    "Packaging labels (e.g. `@TAG@`)",
+    "internal Version tuple (`@FC@`)",
+    "Python 3.11 / Python @PY@",
+    "- Weekly: FreeCAD @TAG@ (`@SHA@`).",
+]
+# Only these files are ever written.
+PINNED_FILES = (TARGETS, DOCS)
 
 
 class BumpError(Exception):
@@ -114,31 +88,32 @@ def _read(repo_root, rel):
         raise BumpError(f"cannot read {rel}: {exc}") from exc
 
 
+def _weekly_block(targets_text):
+    """Return (start, end) of the weekly object body in ci/targets.json."""
+    match = re.search(r'"weekly"\s*:\s*\{(?P<body>[^{}]*)\}', targets_text)
+    if not match:
+        raise BumpError(f"{TARGETS}: weekly entry not found")
+    return match.start("body"), match.end("body")
+
+
 def read_pinned(repo_root):
-    """Read the currently pinned weekly values from ci.yml and the macro."""
-    workflow = _read(repo_root, CI_WORKFLOW)
-    block = re.search(
-        r"- target: weekly\n\s+label: FreeCAD (?P<tag>weekly-\d{4}\.\d{2}\.\d{2})\n"
-        r"\s+url: (?P<url>\S+)\n\s+sha256: (?P<sha>[0-9a-f]{64})\n",
-        workflow,
-    )
-    if not block:
-        raise BumpError(f"{CI_WORKFLOW}: weekly matrix entry (label, url, sha256) not found")
-    macro = _read(repo_root, MACRO)
-    versions = re.search(
-        r'elif target == "weekly":\n\s+expected_fc = \("(\d+)", "(\d+)", "(\d+)"\)\n\s+expected_py = \((\d+), (\d+)\)\n',
-        macro,
-    )
-    if not versions:
-        raise BumpError(f"{MACRO}: weekly expected_fc/expected_py branch not found")
-    groups = versions.groups()
-    return {
-        "tag": block["tag"],
-        "url": block["url"],
-        "sha256": block["sha"],
-        "fc": tuple(groups[:3]),
-        "py": (int(groups[3]), int(groups[4])),
-    }
+    """Read the currently pinned weekly values from ci/targets.json."""
+    text = _read(repo_root, TARGETS)
+    try:
+        weekly = json.loads(text)["weekly"]
+        label = weekly["label"]
+        pinned = {
+            "tag": label.removeprefix("FreeCAD "),
+            "url": weekly["url"],
+            "sha256": weekly["sha256"],
+            "fc": tuple(weekly["expected_freecad"]),
+            "py": tuple(weekly["expected_python"]),
+        }
+    except (ValueError, KeyError, TypeError, AttributeError) as exc:
+        raise BumpError(f"{TARGETS}: weekly entry is malformed: {exc!r}") from exc
+    if not TAG_RE.match(pinned["tag"]) or not SHA256_RE.match(pinned["sha256"]):
+        raise BumpError(f"{TARGETS}: weekly label/sha256 do not look like a pinned weekly")
+    return pinned
 
 
 def _tokens(tag, url, sha256, fc, py):
@@ -173,6 +148,25 @@ def _validate(tag, url, sha256, fc, py):
         raise BumpError(f"Python version must be two numeric parts, got {py!r}")
 
 
+def _rewrite_targets(text, tag, url, sha256, fc, py):
+    """Replace the weekly values inside the weekly object only, keeping every other byte."""
+    start, end = _weekly_block(text)
+    body = text[start:end]
+    values = {
+        "label": json.dumps(f"FreeCAD {tag}"),
+        "url": json.dumps(url),
+        "sha256": json.dumps(sha256),
+        "expected_freecad": "[" + ", ".join(json.dumps(part) for part in fc) + "]",
+        "expected_python": "[" + ", ".join(str(part) for part in py) + "]",
+    }
+    for key, value in values.items():
+        pattern = re.compile(r'("' + key + r'"\s*:\s*)(?:"[^"]*"|\[[^\[\]]*\])')
+        if not pattern.search(body):
+            raise BumpError(f"{TARGETS}: weekly key {key!r} not found")
+        body = pattern.sub(lambda match: match.group(1) + value, body, count=1)
+    return text[:start] + body + text[end:]
+
+
 def apply_bump(repo_root, tag, url, sha256, fc_version_tuple, py_tuple):
     """Rewrite the pinned weekly values in place; nothing is written unless every anchor matches."""
     fc = tuple(str(part) for part in fc_version_tuple)
@@ -182,17 +176,16 @@ def apply_bump(repo_root, tag, url, sha256, fc_version_tuple, py_tuple):
     old_tokens = _tokens(old["tag"], old["url"], old["sha256"], old["fc"], old["py"])
     new_tokens = _tokens(tag, url, sha256, fc, py)
 
-    updates = {}
-    for rel, templates in ANCHORS.items():
-        text = _read(repo_root, rel)
-        for template in templates:
-            old_text = _render(template, old_tokens)
-            if old_text not in text:
-                raise BumpError(f"{rel}: expected anchor not found: {old_text!r}")
-            text = text.replace(old_text, _render(template, new_tokens))
-        updates[rel] = text
-    for rel, text in updates.items():
-        (pathlib.Path(repo_root) / rel).write_bytes(text.encode("utf-8"))
+    updates = {TARGETS: _rewrite_targets(_read(repo_root, TARGETS), tag, url, sha256, fc, py)}
+    text = _read(repo_root, DOCS)
+    for template in DOC_ANCHORS:
+        old_text = _render(template, old_tokens)
+        if old_text not in text:
+            raise BumpError(f"{DOCS}: expected anchor not found: {old_text!r}")
+        text = text.replace(old_text, _render(template, new_tokens))
+    updates[DOCS] = text
+    for rel, content in updates.items():
+        (pathlib.Path(repo_root) / rel).write_bytes(content.encode("utf-8"))
     return sorted(updates)
 
 

@@ -155,23 +155,30 @@ The hosted stable timeout at 420 seconds remains unexplained: both original loca
 450-test suites passed. This slice collects evidence, not a preventive dialog fix;
 a native modal escaping the existing offscreen fixture remains unproven.
 
-## Weekly target policy
+## Pinned targets (`ci/targets.json`)
 
-The `weekly` matrix entry is **informative**: the job sets `continue-on-error: ${{ matrix.target == 'weekly' }}`, so a weekly failure is visible in the run (and its reports are uploaded) but does not turn the workflow red. `stable` (FreeCAD 1.1.4, Python 3.11) remains blocking. The weekly build is pinned to an exact release URL and SHA-256 (never `latest`).
+`ci/targets.json` is the single source of truth for both native targets, `stable` and `weekly`. Each entry holds `label`, `url`, `sha256`, `timeout`, `blocking`, `expected_freecad` (the three strings of `FreeCAD.Version()[:3]`) and `expected_python` (major, minor). Everything else reads it:
 
-To bump the weekly pin, update together:
-1. `.github/workflows/ci.yml` weekly matrix entry: `label`, `url` and `sha256` (verify with `sha256sum` of the downloaded AppImage).
-2. `ci/run-tests.FCMacro`: expected `FreeCAD.Version()[:3]` and Python version for `weekly`, plus the target label.
-3. `ci/tests/test_policy.py` and this document (URL, SHA-256, version).
+- `ci.yml`: the `targets` job turns the file into the matrix, and `Native FreeCAD (<target>)` runs `strategy.matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}`. Check names do not change.
+- `nightly.yml`: reads the `stable` URL and SHA-256.
+- `ci/run-tests.FCMacro`: validates the runtime against `expected_freecad` and `expected_python` of the selected target.
+- `ci/run_tests.py`: `--target` accepts the names in the file (default `stable`).
+
+The `weekly` entry is **informative**: the job sets `continue-on-error: ${{ !matrix.blocking }}`, so a weekly failure is visible in the run (and its reports are uploaded) but does not turn the workflow red. `stable` (`blocking: true`) stays blocking. The weekly build is pinned to an exact release URL and SHA-256 (never `latest`).
+
+The pin is kept out of `.github/` on purpose: the default `GITHUB_TOKEN` cannot push changes to workflow files, so the automatic bump could not open its pull request if the pin lived there.
+
+To bump the weekly pin by hand, edit **only** `ci/targets.json` (the `weekly` entry: `label`, `url`, `sha256` verified with `sha256sum` of the downloaded AppImage, `expected_freecad`, `expected_python`) and refresh the current-state references in this document (tag, version, Python, SHA-256). `ci/bump_weekly.py apply` does both.
 
 ## Automatic weekly bump
 
-`.github/workflows/weekly-bump.yml` ("Weekly FreeCAD bump") keeps the pinned weekly current without making the pin float. It runs on Wednesdays (06:23 UTC, after the weekly release) and on manual dispatch. When a newer `weekly-YYYY.MM.DD` release with a Linux x86_64 AppImage exists, it opens a pull request that rewrites the pin; it never merges or pushes to `main`.
+`.github/workflows/weekly-bump.yml` ("Weekly FreeCAD bump") keeps the pinned weekly current without making the pin float. It runs on Wednesdays (06:23 UTC, after the weekly release) and on manual dispatch. When a newer `weekly-YYYY.MM.DD` release with a Linux x86_64 AppImage exists, it opens a pull request that rewrites the pin; it never merges or changes `main`.
 
 ### What it does
 
-1. **`detect` job** runs `ci/bump_weekly.py detect`, which reads the public releases API and compares the newest weekly with the pinned tag (`changed` is true only for a strictly newer tag). If changed, it downloads the AppImage, checks its SHA-256 against the API digest (when the API gives none, it uses the computed hash and the PR says so), extracts it and runs `freecadcmd` with `PYTHONHOME`/`PYTHONPATH` unset and an isolated `HOME` to read `FreeCAD.Version()[:3]` and the Python `major.minor`.
-2. **`open-pr` job** runs `ci/bump_weekly.py apply` on a checkout of `main`, runs the host policy tests, and only if they pass creates the branch `ci/weekly-bump-<tag>`, commits `ci: bump pinned weekly to <tag>`, pushes it and opens a PR labelled `type:chore`. The PR body lists old/new tag, URL, SHA-256 and its source, and the FreeCAD/Python versions. If a PR from that branch is already open (or the branch exists), the job does nothing.
+1. **`detect` job** runs `ci/bump_weekly.py detect`, which reads the public releases API and compares the newest weekly with the tag pinned in `ci/targets.json` (`changed` is true only for a strictly newer tag). If changed, it downloads the AppImage, checks its SHA-256 against the API digest (when the API gives none, it uses the computed hash and the PR says so), extracts it and runs `freecadcmd` with `PYTHONHOME`/`PYTHONPATH` unset and an isolated `HOME` to read `FreeCAD.Version()[:3]` and the Python `major.minor`.
+2. **`open-pr` job** runs `ci/bump_weekly.py apply` on a checkout of `main`, fails if the diff touches anything under `.github/`, runs the host policy tests, and only if they pass creates the branch `ci/weekly-bump-<tag>`, commits `ci: bump pinned weekly to <tag>`, pushes it and opens a PR labelled `type:chore`. The PR body lists old/new tag, URL, SHA-256 and its source, and the FreeCAD/Python versions.
+3. **Retries:** if any PR (open, closed or merged) already exists for that branch, the job does nothing, so a PR closed on purpose is not reopened every week. If the branch exists on the remote but no PR was ever opened from it (the push worked and `gh pr create` failed), the job opens the PR from that branch instead of skipping forever; it does not push again.
 
 If the new weekly changes FreeCAD's major or minor version, the PR still opens. Its native weekly job shows whether the suite passes; weekly stays informative.
 
@@ -179,11 +186,12 @@ If the new weekly changes FreeCAD's major or minor version, the PR still opens. 
 
 - The workflow default is `contents: read`. `detect` keeps it: it is the only job that downloads and **executes** third-party binaries, so a compromised build cannot reach a write token.
 - `open-pr` is the only job with `contents: write` and `pull-requests: write`. It only edits text files and calls `git` and `gh`; it never downloads or runs the AppImage. Everything it receives from `detect` (tag, URL, hashes, versions) reaches the shell through `env` and is validated by `ci/bump_weekly.py` before any file changes.
+- **Why `.github/` is never touched:** `GITHUB_TOKEN` cannot write changes under `.github/workflows/` (it has no `workflows` permission), and granting that would need a personal token or GitHub App secret. Instead the pin lives in `ci/targets.json`, `apply` only writes that file and this document, and a guard step fails the job if the diff contains a `.github/` path.
 - Actions are pinned by full SHA, like the other workflows.
 
 ### Run CI on the opened PR
 
-PRs opened with the default `GITHUB_TOKEN` do not trigger workflows, so the PR starts with no checks. The maintainer triggers them by closing and reopening the PR, or by pushing an empty commit to the bump branch:
+PRs opened with the default `GITHUB_TOKEN` do not trigger workflows, so the PR starts with no checks. The maintainer triggers them by closing and reopening the PR, or by adding an empty commit to the bump branch:
 
 ```bash
 git fetch origin ci/weekly-bump-<tag> && git switch ci/weekly-bump-<tag>
@@ -202,7 +210,7 @@ python3 ci/bump_weekly.py apply <tag> <url> <sha256> <fc-version> <python-versio
 python3 -m unittest discover -s ci/tests -p 'test_*.py'
 ```
 
-`apply` rewrites exactly the pinned values in `.github/workflows/ci.yml`, `ci/run-tests.FCMacro`, `ci/run_tests.py`, `ci/tests/test_policy.py` and this document, and fails without writing anything if an expected anchor is missing. It is idempotent.
+`apply` rewrites exactly the weekly values in `ci/targets.json` and the current-state references in this document, never anything under `.github/`, and fails without writing if an expected anchor is missing. It is idempotent. Editing `ci/targets.json` by hand is equivalent.
 
 ## Crash diagnosis (automatic, diagnostic only)
 

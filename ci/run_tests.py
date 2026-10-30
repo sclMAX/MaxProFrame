@@ -21,6 +21,15 @@ import tempfile
 MAX_LOG_BYTES = 1024 * 1024  # 1MB per log file
 
 
+TARGETS_PATH = pathlib.Path(__file__).resolve().parent / "targets.json"
+
+
+def target_names():
+    """Target names pinned in ci/targets.json (the single source of truth for the runtimes)."""
+    with open(TARGETS_PATH, encoding="utf-8") as handle:
+        return list(json.load(handle))
+
+
 def write_bounded_file(dest: pathlib.Path, text: str) -> None:
     encoded = text.encode("utf-8")
     if len(encoded) > MAX_LOG_BYTES:
@@ -114,9 +123,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--target",
-        choices=["stable", "weekly"],
+        choices=target_names(),
         default="stable",
-        help="Target FreeCAD runtime to validate and test: 'stable' (FreeCAD 1.1.4 / Python 3.11, default) or 'weekly' (pinned FreeCAD weekly-2026.10.28 / Python 3.13, informative in CI)",
+        help="Target FreeCAD runtime to validate and test, as pinned in ci/targets.json (default: stable)",
     )
     parser.add_argument(
         "--native-diagnostics",

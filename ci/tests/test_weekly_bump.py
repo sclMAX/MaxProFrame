@@ -17,7 +17,8 @@ WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "weekly-bump.yml"
 BASE_URL = "https://github.com/FreeCAD/FreeCAD/releases/download"
 SHA_A = "a" * 64
 SHA_B = "b" * 64
-NEW_TAG = "weekly-2026.11.04"
+# Obviously synthetic: it can never collide with a real weekly release.
+NEW_TAG = "weekly-2099.01.01"
 NEW_SHA = "c" * 64
 NEW_URL = f"{BASE_URL}/{NEW_TAG}/FreeCAD_{NEW_TAG}-Linux-x86_64.AppImage"
 
@@ -100,21 +101,35 @@ class SelectLatestWeeklyTests(unittest.TestCase):
         self.assertIsNone(bump_weekly.select_latest_weekly([release]))
 
 
+# Files that hold the pin elsewhere (or point at it) and that `apply` must never write.
+UNTOUCHED_FILES = (
+    ".github/workflows/ci.yml",
+    ".github/workflows/nightly.yml",
+    ".github/workflows/weekly-bump.yml",
+    "ci/run-tests.FCMacro",
+    "ci/run_tests.py",
+    "ci/tests/test_policy.py",
+)
+
+
 class RepoCopyMixin:
     def make_repo_copy(self):
         root = pathlib.Path(tempfile.mkdtemp(prefix="weekly-bump-test-"))
         self.addCleanup(shutil.rmtree, root, ignore_errors=True)
-        for rel in bump_weekly.PINNED_FILES:
+        for rel in bump_weekly.PINNED_FILES + UNTOUCHED_FILES:
             target = root / rel
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(REPO_ROOT / rel, target)
         return root
 
-    def snapshot(self, root):
-        return {rel: (root / rel).read_bytes() for rel in bump_weekly.PINNED_FILES}
+    def snapshot(self, root, files=bump_weekly.PINNED_FILES):
+        return {rel: (root / rel).read_bytes() for rel in files}
 
 
 class ApplyBumpTests(RepoCopyMixin, unittest.TestCase):
+    def test_apply_only_writes_targets_json_and_docs(self):
+        self.assertEqual(bump_weekly.PINNED_FILES, ("ci/targets.json", "docs/ci.md"))
+
     def test_read_pinned_returns_current_values(self):
         pinned = bump_weekly.read_pinned(REPO_ROOT)
         self.assertRegex(pinned["tag"], r"^weekly-\d{4}\.\d{2}\.\d{2}$")
@@ -122,6 +137,9 @@ class ApplyBumpTests(RepoCopyMixin, unittest.TestCase):
         self.assertRegex(pinned["sha256"], r"^[0-9a-f]{64}$")
         self.assertEqual(len(pinned["fc"]), 3)
         self.assertEqual(len(pinned["py"]), 2)
+        weekly = test_policy.load_targets()["weekly"]
+        self.assertEqual(pinned["fc"], tuple(weekly["expected_freecad"]))
+        self.assertEqual(pinned["py"], tuple(weekly["expected_python"]))
 
     def test_apply_changes_only_pinned_values(self):
         root = self.make_repo_copy()
@@ -147,9 +165,8 @@ class ApplyBumpTests(RepoCopyMixin, unittest.TestCase):
             ('"27", "2", "0"', ", ".join(f'"{p}"' for p in old["fc"])),
             ("'27', '2', '0'", ", ".join(f"'{p}'" for p in old["fc"])),
             ("27.2.0", ".".join(old["fc"])),
-            ("(3, 14", f"({old['py'][0]}, {old['py'][1]}"),
+            ("[3, 14]", f"[{old['py'][0]}, {old['py'][1]}]"),
             ("Python 3.14", f"Python {old['py'][0]}.{old['py'][1]}"),
-            ("non-3.14", f"non-{old['py'][0]}.{old['py'][1]}"),
         ]
         for rel, data in after.items():
             text = data.decode("utf-8")
@@ -157,15 +174,28 @@ class ApplyBumpTests(RepoCopyMixin, unittest.TestCase):
                 text = text.replace(new_value, old_value)
             self.assertEqual(text.encode("utf-8"), before[rel], f"{rel} changed outside the pinned values")
 
-    def test_apply_keeps_stable_target_untouched(self):
+    def test_apply_never_touches_workflows_macro_runner_or_policy_tests(self):
         root = self.make_repo_copy()
+        before = self.snapshot(root, UNTOUCHED_FILES)
         bump_weekly.apply_bump(root, NEW_TAG, NEW_URL, NEW_SHA, ("27", "2", "0"), (3, 14))
-        workflow = (root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-        self.assertIn("f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434", workflow)
-        self.assertIn("label: FreeCAD 1.1.4", workflow)
-        macro = (root / "ci" / "run-tests.FCMacro").read_text(encoding="utf-8")
-        self.assertIn('expected_fc = ("1", "1", "4")', macro)
-        self.assertIn("expected_py = (3, 11)", macro)
+        self.assertEqual(self.snapshot(root, UNTOUCHED_FILES), before)
+
+    def test_apply_works_when_github_directory_is_absent(self):
+        root = self.make_repo_copy()
+        shutil.rmtree(root / ".github")
+        bump_weekly.apply_bump(root, NEW_TAG, NEW_URL, NEW_SHA, ("27", "2", "0"), (3, 14))
+        self.assertFalse((root / ".github").exists())
+
+    def test_apply_keeps_stable_target_and_weekly_policy_fields_untouched(self):
+        root = self.make_repo_copy()
+        before = json.loads((root / "ci/targets.json").read_text(encoding="utf-8"))
+        bump_weekly.apply_bump(root, NEW_TAG, NEW_URL, NEW_SHA, ("27", "2", "0"), (3, 14))
+        after = json.loads((root / "ci/targets.json").read_text(encoding="utf-8"))
+        self.assertEqual(after["stable"], before["stable"])
+        self.assertEqual((after["weekly"]["timeout"], after["weekly"]["blocking"]), (480, False))
+        self.assertEqual(after["weekly"]["label"], f"FreeCAD {NEW_TAG}")
+        self.assertEqual(after["weekly"]["expected_freecad"], ["27", "2", "0"])
+        self.assertEqual(after["weekly"]["expected_python"], [3, 14])
 
     def test_apply_is_idempotent(self):
         root = self.make_repo_copy()
@@ -182,19 +212,38 @@ class ApplyBumpTests(RepoCopyMixin, unittest.TestCase):
         bump_weekly.apply_bump(root, pinned["tag"], pinned["url"], pinned["sha256"], pinned["fc"], pinned["py"])
         self.assertEqual(self.snapshot(root), before)
 
-    def test_missing_anchor_fails_loudly_and_writes_nothing(self):
+    def test_missing_docs_anchor_fails_loudly_and_writes_nothing(self):
         root = self.make_repo_copy()
-        macro = root / "ci" / "run-tests.FCMacro"
-        macro.write_text(macro.read_text(encoding="utf-8").replace("Pinned weekly FreeCAD", "Pinned nightly"))
+        docs = root / "docs" / "ci.md"
+        docs.write_text(docs.read_text(encoding="utf-8").replace("Packaging labels (e.g. `", "Packaging names (e.g. `"))
         before = self.snapshot(root)
         with self.assertRaises(bump_weekly.BumpError) as caught:
             bump_weekly.apply_bump(root, NEW_TAG, NEW_URL, NEW_SHA, ("27", "2", "0"), (3, 14))
-        self.assertIn("run-tests.FCMacro", str(caught.exception))
+        self.assertIn("docs/ci.md", str(caught.exception))
         self.assertEqual(self.snapshot(root), before)
+
+    def test_missing_targets_key_fails_loudly_and_writes_nothing(self):
+        root = self.make_repo_copy()
+        targets = root / "ci" / "targets.json"
+        text = targets.read_text(encoding="utf-8")
+        weekly = text.index('"weekly"')
+        targets.write_text(text[:weekly] + text[weekly:].replace('"expected_python"', '"expected_py"'))
+        before = self.snapshot(root)
+        with self.assertRaises(bump_weekly.BumpError) as caught:
+            bump_weekly.apply_bump(root, NEW_TAG, NEW_URL, NEW_SHA, ("27", "2", "0"), (3, 14))
+        self.assertIn("targets.json", str(caught.exception))
+        self.assertEqual(self.snapshot(root), before)
+
+    def test_missing_weekly_entry_fails_loudly(self):
+        root = self.make_repo_copy()
+        targets = root / "ci" / "targets.json"
+        targets.write_text(json.dumps({"stable": test_policy.load_targets()["stable"]}), encoding="utf-8")
+        with self.assertRaises(bump_weekly.BumpError):
+            bump_weekly.apply_bump(root, NEW_TAG, NEW_URL, NEW_SHA, ("27", "2", "0"), (3, 14))
 
     def test_missing_pinned_file_fails_loudly(self):
         root = self.make_repo_copy()
-        (root / "docs" / "ci.md").unlink()
+        (root / "ci" / "targets.json").unlink()
         with self.assertRaises(bump_weekly.BumpError):
             bump_weekly.apply_bump(root, NEW_TAG, NEW_URL, NEW_SHA, ("27", "2", "0"), (3, 14))
 
@@ -347,6 +396,36 @@ class WeeklyBumpWorkflowPolicyTests(unittest.TestCase):
         self.assertLess(tests, open_pr.index("git push origin"))
         self.assertLess(tests, open_pr.index("gh pr create"))
 
+    def test_open_pr_commits_only_the_bump_files_and_guards_against_workflow_changes(self):
+        open_pr = self.jobs["open-pr"]
+        self.assertIn("git add ci/targets.json docs/ci.md", open_pr)
+        self.assertNotIn("git add .github", open_pr)
+        self.assertNotIn("git add -A", open_pr)
+        guard = open_pr.split("- name: Guard against workflow changes", 1)[1].split("- name:", 1)[0]
+        self.assertIn("git diff --name-only", guard)
+        self.assertIn("^\\.github/", guard)
+        self.assertIn("exit 1", guard)
+        self.assertLess(open_pr.index("ci/bump_weekly.py apply"), open_pr.index("- name: Guard against workflow"))
+        self.assertLess(open_pr.index("- name: Guard against workflow"), open_pr.index("- name: Run host CI"))
+        self.assertLess(open_pr.index("- name: Guard against workflow"), open_pr.index("git push origin"))
+
+    def test_open_pr_handles_an_orphan_branch_by_opening_the_pr_from_it(self):
+        open_pr = self.jobs["open-pr"]
+        check = open_pr.split("- name: Check for an existing bump", 1)[1].split("- name:", 1)[0]
+        self.assertIn("gh pr list", check)
+        self.assertIn("--state all", check, "closed or merged PRs must also stop a new bump")
+        self.assertIn("git ls-remote --exit-code --heads origin", check)
+        for mode in ("skip", "reuse", "create"):
+            self.assertIn(f"mode={mode}", check)
+        for name in ("Apply the bump", "Run host CI policy tests", "Commit and push the branch"):
+            step = open_pr.split(f"- name: {name}", 1)[1].split("- name:", 1)[0]
+            self.assertIn("steps.existing.outputs.mode == 'create'", step, name)
+        pr_step = open_pr.split("- name: Open the pull request", 1)[1]
+        self.assertIn("steps.existing.outputs.mode != 'skip'", pr_step.split("run: |", 1)[0])
+        self.assertNotIn("git push", pr_step)
+        guard = open_pr.split("- name: Guard against workflow changes", 1)[1].split("- name:", 1)[0]
+        self.assertIn("origin/main...FETCH_HEAD", guard, "a reused branch is checked against main too")
+
     def test_open_pr_branch_commit_and_pr_conventions(self):
         open_pr = self.jobs["open-pr"]
         self.assertIn("ci/weekly-bump-", open_pr)
@@ -375,6 +454,9 @@ class WeeklyBumpWorkflowPolicyTests(unittest.TestCase):
     def test_checkouts_do_not_persist_credentials_in_read_only_job(self):
         detect = self.jobs["detect"]
         self.assertIn("persist-credentials: false", detect)
+
+    def test_workflow_hard_codes_no_pinned_hash(self):
+        self.assertNotRegex(self.text, r"\b[0-9a-f]{64}\b")
 
 
 if __name__ == "__main__":
