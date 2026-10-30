@@ -52,6 +52,8 @@
     <message><source>Rotation (°)</source><translation>Rotación (°)</translation></message>
     <message><source>Dimensions</source><translation>Dimensiones</translation></message>
     <message><source>Height or Diameter</source><translation>Altura o diámetro</translation></message>
+    <message><source>Height</source><translation>Altura</translation></message>
+    <message><source>Diameter</source><translation>Diámetro</translation></message>
     <message><source>Width</source><translation>Ancho</translation></message>
     <message><source>Main Thickness</source><translation>Espesor principal</translation></message>
     <message><source>Flange Thickness</source><translation>Espesor del ala</translation></message>

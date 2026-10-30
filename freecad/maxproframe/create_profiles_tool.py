@@ -32,7 +32,7 @@ from freecad.maxproframe.section_outline import build_section_face
 from freecad.maxproframe.task_panel_widgets import (
     EdgeListWidget,
     SectionHeaderButton,
-    create_advanced_icon,
+    SectionHeaderRule,
     create_mirror_h_icon,
     create_mirror_v_icon,
     create_placement_icon,
@@ -221,10 +221,10 @@ class BaseProfileTaskPanel(ABC):
     def __init__(self):
         self._objects = {}
 
-        self.form = [
-            load_ui_file(os.path.join(UIPATH, "create_profiles1.ui")),
-            load_ui_file(os.path.join(UIPATH, "create_profiles2.ui")),
-        ]
+        self.form = [load_ui_file(os.path.join(UIPATH, "create_profiles1.ui"))]
+        # Keep designer controls alive for the existing model bindings without
+        # exposing a second task panel to FreeCAD's task dialog.
+        self._legacy_form = load_ui_file(os.path.join(UIPATH, "create_profiles2.ui"))
 
         # Replace before FormProxy discovers children, so no stale label survives.
         raw_image = getattr(self.form[0], "label_image", None)
@@ -269,7 +269,7 @@ class BaseProfileTaskPanel(ABC):
         self._alignment_geometry_key = None
         self._preview_family = None
         self._rendering_thumbnail = False
-        self.form_proxy = FormProxy(self.form)
+        self.form_proxy = FormProxy(self.form + [self._legacy_form])
         self._configure_presentation()
 
         self.load_data()
@@ -277,7 +277,7 @@ class BaseProfileTaskPanel(ABC):
 
     def _configure_presentation(self):
         """Rearrange the shared widgets without changing their identities or signals."""
-        first, second = self.form
+        first, second = self.form[0], self._legacy_form
         second_hl = _safe_unwrap_widget(getattr(second, "horizontalLayout", None))
         if second_hl is not None and hasattr(second_hl, "setDirection"):
             second_hl.setDirection(QtWidgets.QBoxLayout.TopToBottom)
@@ -490,15 +490,50 @@ class BaseProfileTaskPanel(ABC):
         if sec_anc is not None and hasattr(sec_anc, "hide"):
             sec_anc.hide()
 
-        self.advanced_button = SectionHeaderButton(
-            translate("frameforge", "Advanced options"),
-            create_advanced_icon(),
-            target_widget=None,
-            parent=second,
-            expanded=False,
+        def section_header(title, name, parent, target, expanded):
+            button = SectionHeaderButton(
+                translate("frameforge", title), target_widget=target, parent=parent, expanded=expanded
+            )
+            button.setObjectName(name)
+            button.setAutoRaise(True)
+            button.setStyleSheet(
+                f"QToolButton#{name} {{ border: 1px solid transparent; background: transparent; }}"
+                f"QToolButton#{name}:focus {{ border: 1px solid palette(highlight); }}"
+            )
+            button.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
+            font = button.font()
+            font.setBold(True)
+            button.setFont(font)
+            row = QtWidgets.QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.addWidget(button)
+            line = SectionHeaderRule(parent)
+            line.setFrameShape(QtWidgets.QFrame.HLine)
+            line.setFrameShadow(QtWidgets.QFrame.Sunken)
+            row.addWidget(line, 1)
+            return button, row
+
+        outer_layout = first.layout()
+        for group, title, name, attr in (
+            (first_gb, "Profile", "button_profile", "profile_button"),
+            (gb4, "Placement", "button_placement", "placement_button"),
+        ):
+            group.setTitle("")
+            group.setFlat(True)
+            group.setStyleSheet(f"QGroupBox#{group.objectName()} {{ border: none; margin-top: 0; padding-top: 0; }}")
+            button, row = section_header(title, name, first, group, True)
+            outer_layout.insertLayout(outer_layout.indexOf(group), row)
+            setattr(self, attr, button)
+
+        self.settings_group = QtWidgets.QWidget(first)
+        settings_layout = QtWidgets.QVBoxLayout(self.settings_group)
+        settings_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout = first.layout()
+        outer_layout.insertWidget(outer_layout.indexOf(gb4) + 1, self.settings_group)
+        self.advanced_button, header_row = section_header(
+            "Settings", "button_advanced", self.settings_group, None, False
         )
-        self.advanced_button.setObjectName("button_advanced")
-        self.advanced_content = QtWidgets.QWidget(second)
+        self.advanced_content = QtWidgets.QWidget(self.settings_group)
         self.advanced_button.target_widget = self.advanced_content
         advanced_layout = QtWidgets.QVBoxLayout(self.advanced_content)
         advanced_layout.setContentsMargins(0, 0, 0, 0)
@@ -506,6 +541,9 @@ class BaseProfileTaskPanel(ABC):
         sec_gb5 = _safe_unwrap_widget(getattr(second, "groupBox_5", None))
         _safe_remove_layout_widget(second_layout, getattr(second, "groupBox_5", None))
         if sec_gb5 is not None and hasattr(advanced_layout, "addWidget"):
+            sec_gb5.setTitle("")
+            sec_gb5.setFlat(True)
+            sec_gb5.setStyleSheet("QGroupBox#groupBox_5 { border: none; margin-top: 0; padding-top: 0; }")
             advanced_layout.addWidget(sec_gb5)
         # Transfer widgets, not the owned child layout: removeItem can delete
         # the C++ layout immediately under PySide6.
@@ -528,17 +566,43 @@ class BaseProfileTaskPanel(ABC):
             _safe_remove_layout_widget(gb3_layout, sec_bevel)
             sec_bevel.hide()
 
-        # Compact remaining profile options (fillets) into gb3_layout
-        sec_fillet = _safe_unwrap_widget(getattr(second, "cb_make_fillet", None))
-        if gb3_layout is not None and sec_fillet is not None:
-            _safe_remove_layout_widget(gb3_layout, sec_fillet)
-            gb3_layout.addWidget(sec_fillet)
-
         self.advanced_content.hide()
-        second.layout().insertWidget(1, self.advanced_button)
-        second.layout().insertWidget(2, self.advanced_content)
+        settings_layout.addLayout(header_row)
+        settings_layout.addWidget(self.advanced_content)
+
+        self.information_group = QtWidgets.QWidget(first)
+        outer_layout.insertWidget(outer_layout.indexOf(self.settings_group) + 1, self.information_group)
+        info_layout = QtWidgets.QVBoxLayout(self.information_group)
+        info_layout.setContentsMargins(0, 0, 0, 0)
+        self.information_content = QtWidgets.QWidget(self.information_group)
+        self.information_button, info_header = section_header(
+            "Information", "button_information", self.information_group, self.information_content, False
+        )
+        info_layout.addLayout(info_header)
+        info_layout.addWidget(self.information_content)
+        info_rows = QtWidgets.QFormLayout(self.information_content)
+        self.information_values = {}
+        self.information_labels = {}
+        for name in (
+            "Height",
+            "Diameter",
+            "Width",
+            "Lip Length",
+            "Main Thickness",
+            "Flange Thickness",
+            "Large Radius",
+            "Exterior radius",
+            "Small Radius",
+        ):
+            label = QtWidgets.QLabel(translate("frameforge", name), self.information_content)
+            value = QtWidgets.QLabel(self.information_content)
+            value.setObjectName("information_" + name.lower().replace(" ", "_"))
+            info_rows.addRow(label, value)
+            self.information_labels[name] = label
+            self.information_values[name] = value
+        self.information_content.hide()
         # UI files use the generic Dialog context; product copy uses frameforge.
-        for form in self.form:
+        for form in self.form + [self._legacy_form]:
             form.setWindowTitle(translate("frameforge", form.windowTitle()))
             for widget in form.findChildren(QtWidgets.QWidget):
                 for getter, setter in (("text", "setText"), ("title", "setTitle"), ("toolTip", "setToolTip")):
@@ -589,7 +653,7 @@ class BaseProfileTaskPanel(ABC):
                     func(param.GetBool(key))
 
             # Center anchor radio buttons in grid cells (create_profiles2.ui)
-            form2 = self.form[1]
+            form2 = self._legacy_form
             grid_anchor = form2.group_anchor.layout()
             for ax in range(3):
                 for ay in range(3):
@@ -781,6 +845,85 @@ class BaseProfileTaskPanel(ABC):
             self.form_proxy.cb_mirror_h.isChecked(),
             self.form_proxy.cb_mirror_v.isChecked(),
         )
+        self._refresh_information()
+
+    def _refresh_information(self):
+        """Present section data without changing the controls or the model."""
+        family = self._preview_family
+        material = self.form_proxy.combo_material.currentText()
+        key = self.form_proxy.combo_family.currentText()
+        size = self.form_proxy.combo_size.currentText()
+        entry = self.profiles.get(material, {}).get(key, {}).get("sizes", {}).get(size)
+        available = set(entry) if entry is not None else None
+        controls = {
+            "Height": ("Height", "sb_height"),
+            "Diameter": ("Height", "sb_height"),
+            "Width": ("Width", "sb_width"),
+            "Lip Length": ("Lip Length", "sb_lip_length"),
+            "Main Thickness": ("Thickness", "sb_main_thickness"),
+            "Flange Thickness": ("Flange Thickness", "sb_flange_thickness"),
+            "Large Radius": ("Radius1", "sb_radius1"),
+            "Exterior radius": ("Radius1", "sb_radius1"),
+            "Small Radius": ("Radius2", "sb_radius2"),
+        }
+        circular = family in ("Pipe", "Round Bar")
+        has_thickness = family in (
+            "Pipe",
+            "Square Hollow",
+            "Rectangular Hollow",
+            "Equal Leg Angles",
+            "Unequal Leg Angles",
+            "Channels",
+            "C",
+            "HEA",
+            "HEB",
+            "HEM",
+            "IPE",
+            "IPN",
+            "UPE",
+            "UPN",
+        )
+        has_flange = family in ("Channels", "HEA", "HEB", "HEM", "IPE", "IPN", "UPE", "UPN")
+        has_radii = family in (
+            "Square Hollow",
+            "Rectangular Hollow",
+            "Equal Leg Angles",
+            "Unequal Leg Angles",
+            "C",
+            "HEA",
+            "HEB",
+            "HEM",
+            "IPE",
+            "IPN",
+            "UPE",
+            "UPN",
+        )
+        allowed = {"Diameter"} if circular else {"Height", "Width"}
+        if has_thickness:
+            allowed.add("Main Thickness")
+        if has_flange:
+            allowed.add("Flange Thickness")
+        if family == "C":
+            allowed.add("Lip Length")
+        if has_radii:
+            allowed.update(("Exterior radius",) if family == "C" else ("Large Radius", "Small Radius"))
+        bounds = self.alignment_widget.section_bounds
+        for name, (catalog_key, control) in controls.items():
+            visible = name in allowed and (available is None or catalog_key in available)
+            if family == "Custom Profile":
+                visible = name in ("Height", "Width") and not bounds.isEmpty()
+                number = bounds.width() if name == "Width" else bounds.height()
+            else:
+                number = getattr(self.form_proxy, control).value()
+            mixed = bool(getattr(self.form_proxy, control).property("mixedValues"))
+            if family == "Custom Profile":
+                mixed = mixed or bool(self.form_proxy.combo_size.property("mixedValues"))
+            mixed = mixed or bool(self.form_proxy.combo_family.property("mixedValues"))
+            self.information_labels[name].setVisible(visible)
+            self.information_values[name].setVisible(visible)
+            self.information_values[name].setText(
+                (translate("frameforge", "Mixed values") if mixed else "%g mm" % number) if visible else ""
+            )
 
     def on_input_changed(self):
         if not getattr(self, "_initializing", False) and not self._rendering_thumbnail:
@@ -1581,6 +1724,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                     else translate("frameforge", "Default profile settings")
                 )
             self.label_editing_edge.show()
+            self._refresh_information()
         finally:
             self._updating_controls = previous
 

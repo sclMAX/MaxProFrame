@@ -19,7 +19,7 @@ except ImportError:
 from freecad.maxproframe.alignment_widget import AlignmentWidget
 from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
 from freecad.maxproframe.edit_profile_tool import EditProfileTaskPanel
-from freecad.maxproframe.ff_tools import get_param_group
+from freecad.maxproframe.ff_tools import get_param_group, translate
 from freecad.maxproframe.library_manager import LibraryManager
 from freecad.maxproframe.profile import Profile
 
@@ -118,18 +118,219 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertTrue(panel.form[0].groupBox.isVisibleTo(panel.form[0]))
         self.assertTrue(panel.form[0].groupBox_4.isVisibleTo(panel.form[0]))
 
-        # Advanced options header starts collapsed by default
+        placement = panel.form[0].groupBox_4
+        layout = placement.layout()
+        mirror_row = next(
+            row
+            for row in range(layout.rowCount())
+            if (item := layout.itemAt(row, QtWidgets.QFormLayout.SpanningRole)) is not None
+            and item.layout() is not None
+            and item.layout().indexOf(panel.btn_mirror_h) >= 0
+        )
+        self.assertEqual(mirror_row, layout.rowCount() - 1)
+        group = panel.advanced_button.parentWidget()
+        self.assertIs(group.parentWidget(), placement.parentWidget())
+        outer = panel.form[0].layout()
+        self.assertEqual(outer.indexOf(group), outer.indexOf(placement) + 1)
+        self.assertIs(panel.advanced_content.parentWidget(), group)
+        self.assertIs(panel.form_proxy.groupBox_5.parentWidget(), panel.advanced_content)
+        self.assertIs(panel.form_proxy.sb_unitprice.parentWidget(), panel.advanced_content)
+        self.assertFalse(placement.isAncestorOf(group))
+        print(
+            "settings sibling order:",
+            outer.indexOf(placement),
+            outer.indexOf(group),
+            "parents:",
+            placement.parentWidget().objectName(),
+            group.parentWidget().objectName(),
+        )
+        placement = panel.form[0]
+        self.assertEqual(panel.advanced_button.text(), " " + translate("frameforge", "Settings"))
+        self.assertEqual(panel.form_proxy.groupBox_5.title(), "")
+        self.assertTrue(panel.form_proxy.groupBox_5.isFlat())
         self.assertFalse(panel.advanced_button.isChecked())
-        self.assertFalse(panel.advanced_content.isVisibleTo(panel.form[1]))
+        self.assertFalse(panel.advanced_content.isVisibleTo(placement))
         panel.advanced_button.setChecked(True)
-        self.assertTrue(panel.advanced_content.isVisibleTo(panel.form[1]))
+        self.assertTrue(panel.advanced_content.isVisibleTo(placement))
+        controls = [
+            getattr(panel.form_proxy, name)
+            for name in (
+                "rb_profiles_in_place",
+                "rb_profiles_in_part",
+                "rb_profiles_in_group",
+                "cb_sketch_in_name",
+                "cb_family_in_name",
+                "cb_size_in_name",
+                "cb_prefix_profile_in_name",
+            )
+        ]
+        for control in controls:
+            self.assertTrue(control.isVisibleTo(placement))
+        controls[1].setChecked(True)
+        controls[3].setChecked(not controls[3].isChecked())
+        checked = controls[3].isChecked()
+        price = panel.form_proxy.sb_unitprice
+        self.assertTrue(price.isVisibleTo(placement))
+        price.setValue(12.5)
+        panel.advanced_button.setChecked(False)
+        self.assertFalse(panel.advanced_content.isVisibleTo(placement))
+        panel.advanced_button.setChecked(True)
+        self.assertTrue(controls[1].isChecked())
+        self.assertEqual(controls[3].isChecked(), checked)
+        self.assertEqual(price.value(), 12.5)
         # Combined bevels remain an internal compatibility control, not a panel option.
-        self.assertFalse(panel.form_proxy.cb_combined_bevel.isVisibleTo(panel.form[1]))
+        self.assertFalse(panel.form_proxy.cb_combined_bevel.isVisibleTo(panel._legacy_form))
 
         # Profile name label displays current size
         self.assertTrue(hasattr(panel, "label_profile_name"))
         size_text = panel.form_proxy.combo_size.currentText()
         self.assertIn(size_text, panel.label_profile_name.text())
+
+    def test_configuration_heading_style_and_keyboard(self):
+        self._new_doc("DocSettingsHeading")
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+        form = panel.form[0]
+        form.resize(420, 900)
+        # Representative OpenDark rules: group title spacing and styled tool buttons.
+        form.setStyleSheet(
+            """
+            QWidget { background-color: #282828; color: #eeeeee; }
+            QGroupBox { margin-top: 1.5ex; padding-top: 10px; border-top: 3px solid #777777; }
+            QToolButton { border: 1px solid #4488cc; background-color: #333333; }
+            QToolButton:checked { background-color: #2266aa; }
+            QFrame { border: 0px solid transparent; }
+        """
+        )
+        form.show()
+        self.app.processEvents()
+        button = panel.advanced_button
+        placement = form.groupBox_4
+        group = button.parentWidget()
+        header = group.layout().itemAt(0).layout()
+        placement = form
+        lines = [
+            header.itemAt(i).widget()
+            for i in range(header.count())
+            if isinstance(header.itemAt(i).widget(), QtWidgets.QFrame)
+        ]
+        self.assertEqual(len(lines), 1)
+        line = lines[0]
+        visual_dir = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), ".freecad-test", "profile-placement-collapse-visual"
+        )
+        os.makedirs(visual_dir, exist_ok=True)
+        self.assertTrue(placement.grab().save(os.path.join(visual_dir, "settings-collapsed.png")))
+        QtTest.QTest.mouseClick(button, QtCore.Qt.LeftButton)
+        self.app.processEvents()
+        self.assertTrue(placement.grab().save(os.path.join(visual_dir, "settings-expanded.png")))
+        self.assertTrue(panel.advanced_content.isVisibleTo(placement))
+        QtTest.QTest.mouseClick(button, QtCore.Qt.LeftButton)
+        self.app.processEvents()
+        print("settings geometry:", placement.width(), header.geometry(), button.geometry(), line.geometry())
+        self.assertGreater(line.width(), 40, "heading rule must fill the remaining row")
+        image = line.grab().toImage()
+        colors = {image.pixelColor(x, y).rgba() for x in range(image.width()) for y in range(image.height())}
+        self.assertGreater(len(colors), 1, "heading rule must actually render under a dark theme")
+        self.assertEqual(line.frameShape(), QtWidgets.QFrame.HLine)
+        self.assertTrue(button.font().bold())
+        self.assertTrue(button.autoRaise())
+        self.assertTrue(button.icon().isNull())
+        self.assertEqual(button.arrowType(), QtCore.Qt.RightArrow)
+        for section in (panel.profile_button, panel.placement_button):
+            row = next(
+                form.layout().itemAt(i).layout()
+                for i in range(form.layout().count())
+                if form.layout().itemAt(i).layout() is not None
+                and form.layout().itemAt(i).layout().indexOf(section) >= 0
+            )
+            rule = row.itemAt(1).widget()
+            self.assertEqual(type(rule), type(line))
+            self.assertTrue(section.font().bold())
+            self.assertTrue(section.autoRaise())
+            self.assertIn("palette(highlight)", section.styleSheet())
+            self.assertGreater(rule.width(), 40)
+            self.assertGreater(rule.geometry().left(), section.geometry().right())
+            self.assertLessEqual(abs(rule.geometry().center().y() - section.geometry().center().y()), 2)
+        self.assertGreater(line.geometry().left(), button.geometry().right())
+        self.assertLessEqual(abs(line.geometry().center().y() - button.geometry().center().y()), 2)
+        self.assertIn("margin-top: 0", panel.form_proxy.groupBox_5.styleSheet())
+        form.window().activateWindow()
+        self.app.setActiveWindow(form.window())
+        button.setFocus(QtCore.Qt.TabFocusReason)
+        self.app.processEvents()
+        QtTest.QTest.keyClick(button, QtCore.Qt.Key_Space)
+        self.app.processEvents()
+        self.assertTrue(button.hasFocus())
+        self.assertEqual(button.arrowType(), QtCore.Qt.DownArrow)
+        self.assertTrue(panel.advanced_content.isVisibleTo(placement))
+        QtTest.QTest.keyClick(button, QtCore.Qt.Key_Space)
+        self.assertEqual(button.arrowType(), QtCore.Qt.RightArrow)
+        self.assertFalse(panel.advanced_content.isVisibleTo(placement))
+
+    def test_profile_placement_independent_collapse(self):
+        doc, sk, panel = self._canvas_panel()
+        Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
+        panel.set_rotation(90)
+        panel.btn_mirror_h.setChecked(True)
+        form = panel.form[0]
+        form.resize(420, 900)
+        form.setStyleSheet("QWidget { background: #282828; color: #eeeeee; } QFrame { border: 0; }")
+        form.show()
+        self.app.processEvents()
+        profile, placement = panel.profile_button, panel.placement_button
+        groups = (form.groupBox, form.groupBox_4)
+        self.assertTrue(profile.isChecked())
+        self.assertTrue(placement.isChecked())
+        self.assertFalse(panel.advanced_button.isChecked())
+        self.assertTrue(all(group.isVisibleTo(form) for group in groups))
+        obj = panel._objects[(sk, "Edge1")]
+
+        def state():
+            return (
+                panel.form_proxy.combo_size.currentText(),
+                panel.get_rotation(),
+                panel.btn_mirror_h.isChecked(),
+                panel.edge_list_widget.get_selected_edges(),
+                [(s.ObjectName, tuple(s.SubElementNames)) for s in Gui.Selection.getSelectionEx()],
+                obj.Shape.exportBrepToString(),
+                obj.RotationAngle,
+                obj.MirrorH,
+                panel.form_proxy.label_image.pixmap().cacheKey(),
+            )
+
+        before = state()
+        visual = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), ".freecad-test", "profile-placement-collapse-visual"
+        )
+        os.makedirs(visual, exist_ok=True)
+        QtTest.QTest.mouseClick(profile, QtCore.Qt.LeftButton)
+        self.app.processEvents()
+        self.assertFalse(groups[0].isVisibleTo(form))
+        self.assertTrue(groups[1].isVisibleTo(form))
+        self.assertEqual(state(), before)
+        self.assertTrue(form.grab().save(os.path.join(visual, "profile-collapsed.png")))
+        form.window().activateWindow()
+        self.app.setActiveWindow(form.window())
+        placement.setFocus(QtCore.Qt.TabFocusReason)
+        QtTest.QTest.keyClick(placement, QtCore.Qt.Key_Space)
+        self.app.processEvents()
+        self.assertFalse(groups[1].isVisibleTo(form))
+        self.assertFalse(groups[0].isVisibleTo(form))
+        self.assertEqual(state(), before)
+        QtTest.QTest.mouseClick(profile, QtCore.Qt.LeftButton)
+        self.app.processEvents()
+        self.assertTrue(groups[0].isVisibleTo(form))
+        self.assertFalse(groups[1].isVisibleTo(form))
+        self.assertEqual(state(), before)
+        self.assertTrue(form.grab().save(os.path.join(visual, "placement-collapsed.png")))
+        QtTest.QTest.keyClick(placement, QtCore.Qt.Key_Space)
+        self.assertTrue(groups[1].isVisibleTo(form))
+        self.assertEqual(state(), before)
+        for button in (profile, placement):
+            self.assertTrue(button.font().bold())
+            self.assertEqual(button.arrowType(), QtCore.Qt.DownArrow)
 
     def test_s4_toggle_buttons_with_icons_and_sync(self):
         """S4: Mirror H, Mirror V, and Extend are toggle buttons with icons synced to checkboxes."""
@@ -293,6 +494,29 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         panel.open()
         Gui.Selection.addObserver(panel)
         return doc, sk, panel
+
+    def test_information_follows_selected_edge_without_changing_previews(self):
+        doc, sk, panel = self._canvas_panel()
+        for edge in ("Edge1", "Edge2"):
+            Gui.Selection.addSelection(doc.Name, sk.Name, edge)
+        first, second = (sk, "Edge1"), (sk, "Edge2")
+        panel.edge_list_widget.select_edge(first)
+        sizes = panel.form_proxy.combo_size
+        self.assertGreater(sizes.count(), 1)
+        sizes.setCurrentIndex((sizes.currentIndex() + 1) % sizes.count())
+        objects = [panel._objects[first], panel._objects[second]]
+        before = [(p.ProfileWidth, p.ProfileHeight, p.MakeFillet, p.Shape.exportBrepToString()) for p in objects]
+        panel.information_button.setChecked(True)
+        panel.edge_list_widget.select_edge(second)
+        self.assertEqual(panel.information_values["Height"].text(), "%g mm" % objects[1].ProfileHeight)
+        panel.edge_list_widget.select_edge(first)
+        self.assertEqual(panel.information_values["Height"].text(), "%g mm" % objects[0].ProfileHeight)
+        panel.edge_list_widget.list_widget.item(1).setSelected(True)
+        if objects[0].ProfileHeight != objects[1].ProfileHeight:
+            self.assertEqual(panel.information_values["Height"].text(), translate("frameforge", "Mixed values"))
+        self.assertEqual(
+            [(p.ProfileWidth, p.ProfileHeight, p.MakeFillet, p.Shape.exportBrepToString()) for p in objects], before
+        )
 
     def test_canvas_latest_pick_activates_editor(self):
         doc, sk, panel = self._canvas_panel()
@@ -884,8 +1108,22 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.panels.append(edit_panel)
         edit_panel.initialize_ui()
 
+        # Collapsing either group must not change live edit values.
+        self.assertTrue(edit_panel.profile_button.isChecked())
+        self.assertTrue(edit_panel.placement_button.isChecked())
+        edit_panel.profile_button.click()
+        edit_panel.placement_button.click()
+        self.assertEqual(obj.RotationAngle, 45.0)
+        self.assertTrue(obj.MirrorH)
+        edit_panel.profile_button.click()
+        edit_panel.placement_button.click()
+        self.assertEqual(obj.RotationAngle, 45.0)
+        self.assertTrue(obj.MirrorH)
         # Check that advanced section exists and toggle buttons reflect profile state
         self.assertTrue(hasattr(edit_panel, "advanced_button"))
+        edit_panel.advanced_button.setChecked(True)
+        self.assertFalse(edit_panel.form_proxy.groupBox_5.isEnabled())
+        self.assertEqual(edit_panel.form_proxy.sb_unitprice.value(), 10.0)
         self.assertTrue(hasattr(edit_panel, "btn_mirror_h"))
         self.assertTrue(edit_panel.btn_mirror_h.isChecked())
         self.assertFalse(edit_panel.btn_mirror_v.isChecked())

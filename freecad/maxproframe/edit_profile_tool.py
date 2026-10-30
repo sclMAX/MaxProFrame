@@ -125,6 +125,7 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
         if hasattr(self, "btn_pre_extend") and hasattr(self.form_proxy, "cb_pre_extend"):
             self.btn_pre_extend.setChecked(self.form_proxy.cb_pre_extend.isChecked())
         self._initializing = False
+        self._refresh_alignment()
 
     def open(self):
         if getattr(self.profile, "ViewObject", None) is not None:

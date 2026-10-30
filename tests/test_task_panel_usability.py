@@ -94,10 +94,10 @@ class TestTaskPanelUsability(unittest.TestCase):
         # WA_SetPalette can be set by FreeCAD's native QSS. Compare receivers
         # with native siblings through the same polish and theme lifecycle.
         fields = (
-            panel.form_proxy.label_attach,
+            panel.form[0].label_10,
             panel.material_info,
             panel.form_proxy.label_norm,
-            panel.form[1].label_12,
+            panel.information_values["Height"],
         )
         references = []
         original_styles = [form.styleSheet() for form in panel.form]
@@ -171,11 +171,14 @@ class TestTaskPanelUsability(unittest.TestCase):
         if not reports:
             return
         os.makedirs(reports, exist_ok=True)
-        button = panel.form[1].findChild(QtWidgets.QToolButton, "button_advanced")
+        button = panel.advanced_button
+        information = panel.information_button
         was_expanded = button.isChecked()
+        info_was_expanded = information.isChecked()
         try:
             for expanded in (False, True):
                 button.setChecked(expanded)
+                information.setChecked(expanded)
                 for width in (360, 600):
                     for form in panel.form:
                         form.show()
@@ -194,6 +197,7 @@ class TestTaskPanelUsability(unittest.TestCase):
                         self.assertTrue(form.grab().save(os.path.join(reports, name), "PNG"))
         finally:
             button.setChecked(was_expanded)
+            information.setChecked(info_was_expanded)
 
     def _labels(self, panel):
         return [label.text() for form in panel.form for label in form.findChildren(QtWidgets.QLabel)]
@@ -452,24 +456,100 @@ class TestTaskPanelUsability(unittest.TestCase):
             root = widget.window()
             self.assertFalse(widget.isVisibleTo(root), "Advanced controls start collapsed")
         self.assertTrue(panel.form_proxy.groupBox_5.isAncestorOf(naming))
-        button = panel.form[1].findChild(QtWidgets.QToolButton, "button_advanced")
-        self.assertIsNotNone(button)
+        form = panel.form[0]
+        self.assertEqual(len(panel.form), 1)
+        self.assertEqual(
+            form.layout().indexOf(panel.information_group), form.layout().indexOf(panel.settings_group) + 1
+        )
+        button = panel.advanced_button
         button.click()
         self.app.processEvents()
-        self.assertTrue(naming.isVisibleTo(panel.form[1]))
-        self.assertTrue(price.isVisibleTo(panel.form[1]))
+        self.assertTrue(naming.isVisibleTo(form))
+        self.assertTrue(price.isVisibleTo(form))
         button.click()
         self.app.processEvents()
-        self.assertFalse(naming.isVisibleTo(panel.form[1]))
-        self.assertFalse(price.isVisibleTo(panel.form[1]))
+        self.assertFalse(naming.isVisibleTo(form))
+        self.assertFalse(price.isVisibleTo(form))
+        self.assertFalse(panel.information_button.isChecked())
+        self.assertFalse(panel.information_content.isVisibleTo(form))
+        panel.information_button.setFocus()
+        for kind in (QtCore.QEvent.KeyPress, QtCore.QEvent.KeyRelease):
+            self.app.sendEvent(
+                panel.information_button, QtGui.QKeyEvent(kind, QtCore.Qt.Key_Space, QtCore.Qt.NoModifier)
+            )
+        self.app.processEvents()
+        self.assertTrue(panel.information_content.isVisibleTo(form))
+        self.assertEqual(panel.information_values["Height"].text(), "40 mm")
+        self.assertEqual(panel.information_values["Width"].text(), "40 mm")
+        self.assertEqual(panel.information_values["Main Thickness"].text(), "2 mm")
+        self.assertFalse(panel.information_values["Flange Thickness"].isVisibleTo(form))
+        for value in panel.information_values.values():
+            self.assertIsInstance(value, QtWidgets.QLabel)
+            self.assertEqual(value.styleSheet(), "")
+        for name in (
+            "sb_height",
+            "sb_width",
+            "sb_main_thickness",
+            "sb_flange_thickness",
+            "sb_radius1",
+            "sb_radius2",
+            "cb_make_fillet",
+        ):
+            self.assertFalse(getattr(panel.form_proxy, name).isVisible())
         # Price basis may be on its label, suffix or tooltip, but not a made-up currency.
         price_context = price.suffix() + price.toolTip() + " ".join(self._labels(panel))
         self.assertTrue("/m" in price_context or "per metre" in price_context)
-        for form in panel.form:
-            for widget in [form] + form.findChildren(QtWidgets.QWidget):
-                self.assertEqual(widget.styleSheet(), "", "Use inherited native styling")
+        for header in (panel.profile_button, panel.placement_button, button, panel.information_button):
+            self.assertIn("palette(highlight)", header.styleSheet())
         self._assert_native_theme_response(panel)
+        panel.information_button.click()
+        self.assertFalse(panel.information_content.isVisibleTo(form))
         self.assertEqual(self._snapshot(), before)
+
+    def test_information_catalog_family_semantics(self):
+        panel = self._create()
+        before = self._snapshot()
+        cases = (
+            (
+                "Channels",
+                {
+                    "Height": "80",
+                    "Width": "40",
+                    "Thickness": "3",
+                    "Flange Thickness": "4",
+                    "Radius1": "8",
+                    "Radius2": "2",
+                },
+                {"Height": "80 mm", "Width": "40 mm", "Main Thickness": "3 mm", "Flange Thickness": "4 mm"},
+            ),
+            ("Flat Sections", {"Height": "3", "Width": "40"}, {"Height": "3 mm", "Width": "40 mm"}),
+            (
+                "Unequal Leg Angles",
+                {"Height": "80", "Width": "40", "Thickness": "3", "Radius1": "4", "Radius2": "2"},
+                {
+                    "Height": "80 mm",
+                    "Width": "40 mm",
+                    "Main Thickness": "3 mm",
+                    "Large Radius": "4 mm",
+                    "Small Radius": "2 mm",
+                },
+            ),
+        )
+        panel.information_button.setChecked(True)
+        for family, entry, expected in cases:
+            with self.subTest(family=family):
+                panel.profiles["Panel Library"][family] = {
+                    "canonical_family": family,
+                    "fillet": False,
+                    "sizes": {"example": entry},
+                }
+                panel.form_proxy.combo_family.addItem(family)
+                panel.form_proxy.combo_family.setCurrentText(family)
+                for name, label in panel.information_values.items():
+                    self.assertEqual(label.isVisibleTo(panel.form[0]), name in expected, name)
+                    if name in expected:
+                        self.assertEqual(label.text(), expected[name])
+                self.assertEqual(self._snapshot(), before)
 
     def test_preserve_edit_live_updates_naming_membership_and_missing_catalog(self):
         for material in ("Panel Library", "Unavailable Library"):

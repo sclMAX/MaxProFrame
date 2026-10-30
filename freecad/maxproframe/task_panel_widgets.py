@@ -209,6 +209,17 @@ class SectionHeaderButton(QtWidgets.QToolButton):
             self.target_widget.setVisible(checked)
 
 
+class SectionHeaderRule(QtWidgets.QFrame):
+    """Palette-colored rule unaffected by theme QFrame border overrides."""
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QtGui.QPainter(self)
+        painter.setPen(self.palette().color(QtGui.QPalette.Mid))
+        painter.drawLine(0, self.height() // 2, self.width() - 1, self.height() // 2)
+        painter.end()
+
+
 class ModeSwitchWidget(QtWidgets.QWidget):
     """Segmented mode switch between Uniform (all edges) and Individual (per edge)."""
 

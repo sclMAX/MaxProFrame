@@ -139,6 +139,144 @@ class TestTaskPanelPreview(unittest.TestCase):
         self.assertEqual(panel.get_anchor(), (ax, ay))
         self.assertEqual(widget.selected_anchor, (ax, ay))
 
+    def test_information_is_a_collapsed_sibling_without_a_second_task_panel(self):
+        panel = self._panel()
+        form = panel.form[0]
+        self.assertFalse(any(f.windowTitle() == "Profile Settings" for f in panel.form))
+        self.assertIs(panel.information_group.parentWidget(), form)
+        self.assertEqual(
+            form.layout().indexOf(panel.information_group), form.layout().indexOf(panel.settings_group) + 1
+        )
+        self.assertFalse(panel.information_button.isChecked())
+        self.assertFalse(panel.information_content.isVisibleTo(form))
+        panel.information_button.setChecked(True)
+        self.assertTrue(panel.information_content.isVisibleTo(form))
+
+    def test_information_updates_custom_and_standard_without_mutation(self):
+        panel = self._panel()
+        panel.information_button.setChecked(True)
+        before = self._state(panel)
+        self.assertEqual(panel.information_values["Width"].text(), "80 mm")
+        self.assertEqual(panel.information_values["Height"].text(), "20 mm")
+        self.assertFalse(panel.information_values["Main Thickness"].isVisibleTo(panel.form[0]))
+        with patch.object(App, "openDocument", side_effect=AssertionError("information imported asset")):
+            panel._refresh_alignment()
+        self.assertEqual(self._state(panel), before)
+        panel.form_proxy.combo_size.setCurrentText("TALL")
+        self.assertEqual(panel.information_values["Width"].text(), "20 mm")
+        self.assertEqual(panel.information_values["Height"].text(), "80 mm")
+        panel.form_proxy.combo_family.setCurrentText("Square Hollow")
+        self.assertEqual(panel.information_values["Width"].text(), "40 mm")
+        self.assertEqual(panel.information_values["Main Thickness"].text(), "2 mm")
+        self.assertTrue(panel.information_values["Main Thickness"].isVisibleTo(panel.form[0]))
+        self.assertFalse(panel.information_values["Flange Thickness"].isVisibleTo(panel.form[0]))
+        self.assertEqual(self.doc.Objects, [])
+        self.assertTrue(panel.form_proxy.combo_rotation.isEnabled())
+
+    def test_information_family_semantics_and_dark_capture(self):
+        panel = self._panel()
+        library = panel.profiles["Preview Library"]
+        for alias, canonical, values in (
+            ("Circular alias", "Pipe", {"Height": "50", "Width": "99", "Thickness": "3", "Radius1": "8"}),
+            (
+                "Lipped alias",
+                "C",
+                {
+                    "Height": "80",
+                    "Width": "40",
+                    "Thickness": "2",
+                    "Lip Length": "10",
+                    "Radius1": "4",
+                    "Radius2": "9",
+                    "Flange Thickness": "7",
+                },
+            ),
+        ):
+            library[alias] = {"canonical_family": canonical, "fillet": True, "sizes": {"test": values}}
+            panel.form_proxy.combo_family.addItem(alias)
+        panel.information_button.setChecked(True)
+        panel.form_proxy.combo_family.setCurrentText("Circular alias")
+
+        def shown(name):
+            return panel.information_values[name].isVisibleTo(panel.form[0])
+
+        self.assertTrue(shown("Diameter"))
+        self.assertEqual(panel.information_values["Diameter"].text(), "50 mm")
+        self.assertFalse(shown("Width"))
+        self.assertFalse(shown("Large Radius"))
+        panel.form_proxy.combo_family.setCurrentText("Lipped alias")
+        self.assertTrue(shown("Lip Length"))
+        self.assertTrue(shown("Exterior radius"))
+        self.assertFalse(shown("Flange Thickness"))
+        self.assertFalse(shown("Small Radius"))
+        self.assertEqual(panel.information_values["Exterior radius"].text(), "4 mm")
+        for value in panel.information_values.values():
+            self.assertIsInstance(value, QtWidgets.QLabel)
+        panel.form[0].setStyleSheet("QWidget { background: #282828; color: #eeeeee; } QFrame { border: 0; }")
+        self._show(panel, 420)
+        reports = os.environ["FF_REPORTS"]
+        self.assertTrue(panel.form[0].grab().save(os.path.join(reports, "information-standard-dark.png")))
+        panel.form_proxy.combo_family.setCurrentText("Custom Profile")
+        panel.form_proxy.combo_size.setCurrentText("WIDE")
+        self._show(panel, 420)
+        self.assertTrue(panel.form[0].grab().save(os.path.join(reports, "information-custom-dark.png")))
+
+    def test_information_edit_uses_live_geometry_and_preserves_section(self):
+        obj, source = self._create_resized_local_source()
+        obj.Material = "Unavailable Library"
+        before_shape = source.Shape.exportBrepToString()
+        before = (obj.ProfileWidth, obj.ProfileHeight, obj.MakeFillet, obj.Thickness, obj.RadiusLarge)
+        panel = self._panel(obj)
+        panel.information_button.setChecked(True)
+        self.assertEqual(panel.information_values["Width"].text(), "120 mm")
+        self.assertEqual(panel.information_values["Height"].text(), "30 mm")
+        panel.form_proxy.combo_rotation.setCurrentText("90")
+        self.assertEqual((obj.ProfileWidth, obj.ProfileHeight, obj.MakeFillet, obj.Thickness, obj.RadiusLarge), before)
+        self.assertEqual(source.Shape.exportBrepToString(), before_shape)
+        self.assertEqual(obj.RotationAngle, 90)
+        panel.reject()
+
+    def test_information_spanish_and_existing_standard_edit(self):
+        self._language("Spanish", "es_ES")
+        obj = self.doc.addObject("Part::FeaturePython", "StandardEdit")
+        obj.addExtension("Part::AttachExtensionPython")
+        Profile(
+            obj,
+            40,
+            60,
+            2,
+            0,
+            3,
+            1,
+            500,
+            2,
+            10,
+            True,
+            1,
+            1,
+            "Unavailable Library",
+            "Square Hollow",
+            "old",
+            False,
+            catalog_family="Old alias",
+        )
+        self.doc.recompute()
+        before = (obj.ProfileWidth, obj.ProfileHeight, obj.Thickness, obj.RadiusLarge, obj.RadiusSmall, obj.MakeFillet)
+        panel = self._panel(obj)
+        panel.information_button.setChecked(True)
+        self.assertEqual(panel.information_button.text().strip(), "Información")
+        self.assertEqual(panel.information_labels["Height"].text(), "Altura")
+        self.assertEqual(panel.information_values["Height"].text(), "60 mm")
+        self.assertEqual(panel.information_values["Large Radius"].text(), "3 mm")
+        self.assertFalse(panel.form_proxy.cb_make_fillet.isVisible())
+        panel.form_proxy.sb_length.setValue(650)
+        self.assertEqual(obj.ProfileLength, 650)
+        self.assertEqual(
+            (obj.ProfileWidth, obj.ProfileHeight, obj.Thickness, obj.RadiusLarge, obj.RadiusSmall, obj.MakeFillet),
+            before,
+        )
+        panel.reject()
+
     def test_alignment_create_clicks_apply_cancel_and_source_changes(self):
         panel = self._panel()
         panel.form_proxy.sb_length.setValue(100)
