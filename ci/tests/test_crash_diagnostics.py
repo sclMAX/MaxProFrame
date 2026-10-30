@@ -35,8 +35,10 @@ sys.exit(int(os.environ.get("FAKE_EXIT_CODE", "0")))
 FAKE_GDB = """#!{python}
 import json, os, sys
 with open(os.environ["FAKE_GDB_DUMP"], "w", encoding="utf-8") as f:
-    json.dump({"argv": sys.argv[1:], "ff_test": os.environ.get("FF_TEST"), "ff_reports": os.environ.get("FF_REPORTS")},
-              f)
+    json.dump({"argv": sys.argv[1:], "ff_test": os.environ.get("FF_TEST"), "ff_reports": os.environ.get("FF_REPORTS"),
+               "ff_seed": os.environ.get("FF_SHUFFLE_SEED")}, f)
+if os.environ.get("FAKE_GDB_CRASH"):
+    print("Program received signal SIGSEGV, Segmentation fault.")
 print("#0  fake_native_frame () at fake.c:1")
 print("Current thread 0x1 (most recent call first): File fake.py, line 3")
 sys.exit(int(os.environ.get("FAKE_GDB_EXIT", "0")))
@@ -209,6 +211,55 @@ class TestCrashDiagnosisRunner(unittest.TestCase):
         self.assertEqual(proc.stderr, "")
         self.assertFalse(self.gdb_dump.exists())
         self.assertFalse(self.step_summary.exists())
+
+    def test_seeded_crash_replays_same_seed_and_full_suite(self):
+        baseline = self._run(self._crash_env(), "--shuffle-seed", "41071643172", "--no-crash-rerun")
+        env = self._crash_env(FAKE_GDB_CRASH="1", **self._install_gdb())
+        proc = self._run(env, "--shuffle-seed", "41071643172")
+        self.assertEqual(proc.returncode, baseline.returncode)
+        self.assertNotEqual(proc.returncode, 0)
+        dump = json.loads(self.gdb_dump.read_text(encoding="utf-8"))
+        self.assertEqual(dump["ff_seed"], "41071643172")
+        self.assertIsNone(dump["ff_test"])
+        self.assertIn("seeded suite replay, seed 41071643172", proc.stderr)
+        self.assertIn("seeded suite replay, seed 41071643172", self.step_summary.read_text(encoding="utf-8"))
+        backtrace = (self.reports / "crash-backtrace.txt").read_text(encoding="utf-8")
+        self.assertIn("seeded suite replay, seed 41071643172", backtrace)
+        self.assertNotIn("did not reproduce", backtrace)
+
+    def test_seeded_crash_keeps_original_selection(self):
+        env = self._crash_env(FAKE_GDB_CRASH="1", **self._install_gdb())
+        self._run(env, "--shuffle-seed", "7", "--test", "test_crashy.TestCrashy")
+        dump = json.loads(self.gdb_dump.read_text(encoding="utf-8"))
+        self.assertEqual(dump["ff_test"], "test_crashy.TestCrashy")
+        self.assertEqual(dump["ff_seed"], "7")
+
+    def test_unseeded_crash_reruns_single_test(self):
+        env = self._crash_env(FAKE_GDB_CRASH="1", **self._install_gdb())
+        proc = self._run(env)
+        dump = json.loads(self.gdb_dump.read_text(encoding="utf-8"))
+        self.assertEqual(dump["ff_test"], TEST_ID)
+        self.assertIsNone(dump["ff_seed"])
+        self.assertIn("single test", proc.stderr)
+        self.assertNotIn("seeded suite replay", proc.stderr)
+
+    def test_rerun_without_crash_says_did_not_reproduce(self):
+        for extra in ((), ("--shuffle-seed", "5")):
+            with self.subTest(extra=extra):
+                baseline = self._run(self._crash_env(), *extra, "--no-crash-rerun")
+                proc = self._run(self._crash_env(**self._install_gdb()), *extra)
+                self.assertEqual(proc.returncode, baseline.returncode)
+                self.assertIn("did not reproduce", proc.stderr)
+                self.assertIn("did not reproduce", self.step_summary.read_text(encoding="utf-8"))
+                backtrace = (self.reports / "crash-backtrace.txt").read_text(encoding="utf-8")
+                self.assertIn("did not reproduce", backtrace.splitlines()[1])
+
+    def test_seeded_replay_timeout_is_bounded(self):
+        import crash_diagnosis
+
+        self.assertEqual(crash_diagnosis.seeded_timeout(1), crash_diagnosis.RERUN_TIMEOUT)
+        self.assertGreaterEqual(crash_diagnosis.seeded_timeout(600), 600)
+        self.assertEqual(crash_diagnosis.seeded_timeout(10**6), crash_diagnosis.SEEDED_RERUN_CAP)
 
 
 if __name__ == "__main__":
