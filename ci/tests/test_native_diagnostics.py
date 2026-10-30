@@ -189,7 +189,7 @@ class TestManualMode(unittest.TestCase):
                     directory,
                     "--native-diagnostics",
                     "--target",
-                    "rc",
+                    "weekly",
                     "--timeout",
                     "420",
                 ],

@@ -87,9 +87,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--target",
-        choices=["stable", "rc"],
+        choices=["stable", "weekly"],
         default="stable",
-        help="Target FreeCAD runtime to validate and test: 'stable' (FreeCAD 1.1.4 / Python 3.11, default) or 'rc' (FreeCAD 26.3rc2 / Python 3.13)",
+        help="Target FreeCAD runtime to validate and test: 'stable' (FreeCAD 1.1.4 / Python 3.11, default) or 'weekly' (pinned FreeCAD weekly-2026.10.28 / Python 3.13, informative in CI)",
     )
     parser.add_argument(
         "--native-diagnostics",
