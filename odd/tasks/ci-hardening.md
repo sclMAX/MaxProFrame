@@ -11,7 +11,8 @@ S4. Approved plan item (d) "Workflow nocturno de flakiness: corre la suite nativ
 ## Tasks
 T1 [S1] route=delegated worker mvv0abk4-6-k2xh; status=done; commit=see git log (crash diagnosis); host 84 OK (RED 9F+3E on 12 new); parent e2e forced SIGSEGV: exit 1 preserved, summary + test id + gdb backtrace with Python frame; crash summary + gdb rerun of the crashing test + artifact, test-first in ci/tests.
 T2 [S2,S3] route=inline; status=done; commit=see git log (cache+concurrency); host RED 2 failures -> GREEN 86 OK; existing pin-count test updated 6->7 (cache v6.1.0 verified node24); AppImage cache keyed by sha256 with verification on hit; concurrency group cancelling only non-main refs; policy tests.
-T3 [S4] route=delegated worker; status=pending; commit=pending; `--shuffle-seed` option in ci/run_tests.py (+macro) and `.github/workflows/nightly.yml`; policy tests; docs/ci.md.
+T3 [S4] route=delegated worker mvv13exb-7-erf5; status=done; commit=see git log (nightly); host RED 16F+4E -> GREEN 109 OK; native seed 7 x2 identical order, seed 8 different; workflow not yet run on GitHub; `--shuffle-seed` option in ci/run_tests.py (+macro) and `.github/workflows/nightly.yml`; policy tests; docs/ci.md.
 
 ## Log
 L1. User: "aplica tus recomendaciones de CI, cuales serian los pasos" → plan proposed; user: "si" (plan), then "ok vamos con A :)" (push/PR first, hardening after merge), then "tu" (merge PR #12). PR #12 merged as 5e0e1ca with two green hosted runs (41060766708, 41061618550).
+L2. Slice boundary: T1 (04a1103, ~495 lines incl. 12 host tests + docs) and T2 (629b510) exceed the ~400-line advisory as cohesive units; delivery strategy: one PR for ci/hardening with one commit per task so review can take each commit alone.

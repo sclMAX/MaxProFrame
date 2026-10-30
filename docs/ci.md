@@ -225,6 +225,33 @@ Diagnostics do not dismiss dialogs, synthesize input, skip tests or repair the G
 - **AppImage cache:** each native job restores the FreeCAD AppImage from `actions/cache` under the key `freecad-appimage-<sha256>`, so a pinned build is downloaded once and reused. The download step runs only on a cache miss, and the checksum step always runs, so a cached file is verified against the pinned SHA-256 exactly like a fresh download. Bumping a target's URL and SHA-256 creates a new key automatically.
 - **Superseded runs:** the workflow uses `concurrency` grouped by workflow and ref. A new push to the same branch or PR cancels the older run; runs on `main` are never cancelled, so every `main` commit keeps its own result.
 
+## Nightly flakiness run
+
+`.github/workflows/nightly.yml` ("Nightly native flakiness") looks for tests that fail only sometimes. It runs on a daily schedule (04:17 UTC) and on manual dispatch, with read-only permissions, on `ubuntu-24.04`, against the pinned stable target (FreeCAD 1.1.4, same URL, SHA-256, cache key and action SHAs as `ci.yml`; the checksum is verified on cache hits too).
+
+- **What it runs:** the full native suite `repetitions` times (default 3) in the original order, plus one run in a random order from `--shuffle-seed`. The default seed is the workflow run id and is printed at the start of the shuffled run.
+- **Failures are never hidden:** every run executes even after a failure, there are no automatic retries, and the job fails if any run failed, even once.
+- **Reports:** each run writes to its own directory. The job summary has a table with the run number, order or seed, result, test count and the crashing test (if any). The reports of all failing runs are uploaded as one `nightly-failure-reports` artifact kept for 7 days.
+
+### Replay a failure locally
+
+Use the seed from the failed run's log or job summary. The same seed gives the same order:
+
+```bash
+python3 ci/run_tests.py \
+  --freecad-bin /path/to/squashfs-root/AppRun \
+  --reports /path/to/reports \
+  --timeout 420 \
+  --target stable \
+  --shuffle-seed 123456789
+```
+
+`--shuffle-seed <int>` shuffles the selected tests across modules and classes (it combines with `--test`), prints `run_tests: shuffle seed <int>` at start and repeats `run_tests: replay with --shuffle-seed <int>` when the run fails. Without the option the order is unchanged.
+
+### Dispatch manually
+
+In GitHub, open Actions, select "Nightly native flakiness" and use "Run workflow". Optional inputs: `repetitions` (1-20, default 3) and `seed` (non-negative integer, default the run id). With the GitHub CLI: `gh workflow run nightly.yml -f repetitions=5 -f seed=123456789`.
+
 ## GitHub Actions runner infrastructure and Node 24
 
 GitHub Actions JavaScript actions execute on the runner's internal Node.js runtime. GitHub Actions has updated official actions to Node 24 and flags workflows invoking Node 20 actions with runner deprecation warnings.

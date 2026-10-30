@@ -33,7 +33,34 @@ def valid_test_selector(value: str) -> bool:
     return re.fullmatch(r"test_[A-Za-z0-9_]+(?:\.[A-Za-z_][A-Za-z0-9_]*){0,2}", value) is not None
 
 
-def selected_suite(tests_dir, selector):
+def flatten_suite(suite):
+    """Yield the individual tests of a (nested) suite in execution order."""
+    import unittest
+
+    for item in suite:
+        if isinstance(item, unittest.TestSuite):
+            yield from flatten_suite(item)
+        else:
+            yield item
+
+
+def shuffled(suite, seed):
+    """Deterministically reorder every test across modules and classes for a given seed."""
+    import random
+    import unittest
+
+    tests = list(flatten_suite(suite))
+    random.Random(seed).shuffle(tests)
+    return unittest.TestSuite(tests)
+
+
+def selected_suite(tests_dir, selector, shuffle_seed=None):
+    """Select the suite; with a seed, run it in a reproducible random order."""
+    suite = _selected_suite(tests_dir, selector)
+    return suite if shuffle_seed is None else shuffled(suite, shuffle_seed)
+
+
+def _selected_suite(tests_dir, selector):
     """Discover only the local module; resolve attributes without further imports."""
     import importlib.util
     import types
@@ -104,6 +131,11 @@ def main() -> None:
         "--no-crash-rerun",
         action="store_true",
         help="Skip the diagnostic gdb rerun of the crashing test (the crash summary is still written)",
+    )
+    parser.add_argument(
+        "--shuffle-seed",
+        type=int,
+        help="Run the selected tests in a random order reproducible from this integer seed (default: original order)",
     )
     args = parser.parse_args()
     if args.test is not None and not valid_test_selector(args.test):
@@ -212,6 +244,11 @@ def main() -> None:
         env.pop("FF_TEST", None)
         if args.test is not None:
             env["FF_TEST"] = args.test
+        env.pop("FF_SHUFFLE_SEED", None)
+        if args.shuffle_seed is not None:
+            env["FF_SHUFFLE_SEED"] = str(args.shuffle_seed)
+            sys.stdout.write(f"run_tests: shuffle seed {args.shuffle_seed}\n")
+            sys.stdout.flush()
         env.pop("FF_NATIVE_DIAGNOSTICS", None)
         if args.native_diagnostics:
             env["FF_NATIVE_DIAGNOSTICS"] = "1"
@@ -243,6 +280,10 @@ def main() -> None:
             except RuntimeError as exc:
                 sys.stderr.write(f"run_tests error: {exc}.\n")
                 sys.exit(1)
+
+        def replay_hint():
+            if args.shuffle_seed is not None:
+                sys.stderr.write(f"run_tests: replay with --shuffle-seed {args.shuffle_seed}\n")
 
         timed_out = False
         proc = subprocess.Popen(
@@ -277,6 +318,7 @@ def main() -> None:
             sys.stderr.write(
                 f"run_tests error: FreeCAD process timed out after {args.timeout}s (killed process group).\n"
             )
+            replay_hint()
             sys.exit(124)
 
         def diagnose_crash():
@@ -305,6 +347,7 @@ def main() -> None:
         if proc.returncode != 0:
             sys.stderr.write(f"run_tests error: FreeCAD child process failed with exit code {proc.returncode}.\n")
             diagnose_crash()
+            replay_hint()
             sys.exit(proc.returncode)
 
         # Validate summary report
@@ -312,6 +355,7 @@ def main() -> None:
         if not summary_file.is_file():
             sys.stderr.write("run_tests error: summary.json was not generated.\n")
             diagnose_crash()
+            replay_hint()
             sys.exit(1)
 
         try:
@@ -362,6 +406,7 @@ def main() -> None:
             sys.stderr.write(
                 f"run_tests error: Test suite reported failures ({failures}), errors ({errors}), or successful is False.\n"
             )
+            replay_hint()
             sys.exit(1)
 
     sys.stdout.write(f"run_tests: Test suite succeeded ({tests_run} tests executed).\n")
