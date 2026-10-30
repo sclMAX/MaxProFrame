@@ -1306,6 +1306,27 @@ class BaseProfileTaskPanel(ABC):
     def proceed(self):
         pass
 
+    def _release_layout_item_wrappers(self):
+        # PySide wraps the QWidgetItem/QSpacerItem objects the layouts own, but the wrappers are not
+        # QObjects, so they stay registered after Qt deletes the form with the closed task dialog.
+        # A later widget allocated at the same address then resolves to the stale wrapper and
+        # SIGSEGVs in PySide::getWrapperForQObject. Drop them while the C++ items are still alive.
+        try:
+            from shiboken6 import invalidate
+        except ImportError:
+            return
+        for form in list(getattr(self, "form", [])) + [getattr(self, "_legacy_form", None)]:
+            if form is None:
+                continue
+            try:
+                for layout in form.findChildren(QtWidgets.QLayout):
+                    for index in range(layout.count()):
+                        item = layout.itemAt(index)
+                        if item is not None and not isinstance(item, QtWidgets.QLayout):
+                            invalidate(item)
+            except RuntimeError:
+                continue
+
     @abstractmethod
     def open(self):
         pass
@@ -2191,6 +2212,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
     def clean(self):
         self._preview_closed = True
+        self._release_layout_item_wrappers()
         self._restore_preview_highlight()
         if hasattr(Gui, "Selection"):
             try:
