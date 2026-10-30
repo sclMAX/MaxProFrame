@@ -728,7 +728,7 @@ class BaseProfileTaskPanel(ABC):
             self.form_proxy.combo_rotation.currentTextChanged.connect(self._input_slot("rotation"))
             for ax in range(3):
                 for ay in range(3):
-                    getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}").clicked.connect(self._input_slot("anchor"))
+                    self._connect_anchor_radio(getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}"))
 
             for name in (
                 "sb_width",
@@ -759,6 +759,9 @@ class BaseProfileTaskPanel(ABC):
 
     def _input_slot(self, intent):
         return self.on_input_changed
+
+    def _connect_anchor_radio(self, radio):
+        radio.clicked.connect(self._input_slot("anchor"))
 
     def _on_alignment_clicked(self, ax, ay):
         self.set_anchor(ax, ay)
@@ -1854,8 +1857,20 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def _input_slot(self, intent):
         return lambda *args: self.on_input_changed(intent)
 
+    def _connect_anchor_radio(self, radio):
+        # toggled also fires for set_anchor(), so programmatic changes reach the per-edge state.
+        radio.toggled.connect(self._on_anchor_toggled)
+
+    def _on_anchor_toggled(self, checked):
+        if checked and not getattr(self, "_alignment_click", False):
+            self.on_input_changed("anchor")
+
     def _on_alignment_clicked(self, ax, ay):
-        self.set_anchor(ax, ay)
+        self._alignment_click = True
+        try:
+            self.set_anchor(ax, ay)
+        finally:
+            self._alignment_click = False
         self.on_input_changed("anchor")
 
     def on_cb_make_fillet_changed(self, state):
@@ -2532,6 +2547,10 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self.update_selection()
         # Reconcile paths without treating the newly active row as an edit.
         self.proceed()
+        if self._path_selections() or self.form_proxy.sb_length.value() > 0:
+            self._set_applied_state()
+        else:
+            self._set_initial_state()
 
     def _canvas_pick(self, doc, obj, sub, removed=False):
         if (
@@ -2545,7 +2564,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             self._selection_changed()
             return
         document = App.getDocument(doc)
-        source = document.getObject(obj) if document else None
+        # Observers receive the object name, but legacy callers pass the object itself.
+        source = document.getObject(getattr(obj, "Name", obj)) if document else None
         if source is None:
             self._selection_changed()
             return
@@ -2622,6 +2642,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             # Session previews are editing targets, never new path supports.
             if any(selection.Object == preview for preview in self._objects.values()):
                 continue
+            # A selected object without edges still counts as a selected path.
+            paths.setdefault(selection.Object, [])
             for edge in self._selection_edges(selection):
                 key = (selection.Object, edge)
                 if key not in self._excluded_edges:

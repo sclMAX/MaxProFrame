@@ -1,6 +1,8 @@
 import os
 import unittest
 
+import FreeCAD as App
+import FreeCADGui as Gui
 from PySide import QtCore, QtGui, QtWidgets
 
 from freecad.maxproframe.task_panel_widgets import (
@@ -22,6 +24,23 @@ class TestTaskPanelWidgets(unittest.TestCase):
         os.environ["FREECAD_QT_QPA_PLATFORM"] = "offscreen"
         os.environ["QT_QPA_PLATFORM"] = "offscreen"
         cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
+
+    def setUp(self):
+        # Earlier suites may leave a non-English locale installed; these assertions expect English text.
+        prefs = App.ParamGet("User parameter:BaseApp/Preferences/General")
+        language, locale, default = prefs.GetString("Language", ""), Gui.getLocale(), QtCore.QLocale()
+
+        def restore_language():
+            prefs.SetString("Language", language)
+            Gui.setLocale(locale)
+            Gui.updateLocale()
+            QtCore.QLocale.setDefault(default)
+
+        self.addCleanup(restore_language)
+        prefs.SetString("Language", "English")
+        Gui.setLocale("English")
+        Gui.updateLocale()
+        QtCore.QLocale.setDefault(QtCore.QLocale("en_US"))
 
     def test_icons_creation(self):
         icon_mh = create_mirror_h_icon()
@@ -83,6 +102,12 @@ class TestTaskPanelWidgets(unittest.TestCase):
         edge_list = EdgeListWidget()
         edges = [("e1", "Arista 1 (Edge1)"), ("e2", "Arista 2 (Edge2)")]
         edge_list.set_edges(edges)
+        # Key events only reach the list while its own window is active, not one left active by another suite.
+        edge_list.show()
+        edge_list.activateWindow()
+        edge_list.list_widget.setFocus()
+        self.addCleanup(edge_list.close)
+        self.app.processEvents()
 
         self.assertEqual(edge_list.get_selected_edge(), "e1")
         self.assertEqual(edge_list.list_widget.selectionMode(), QtWidgets.QAbstractItemView.ExtendedSelection)

@@ -32,6 +32,21 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
 
     def setUp(self):
+        # Earlier suites may leave a non-English locale installed; these assertions expect English text.
+        prefs = App.ParamGet("User parameter:BaseApp/Preferences/General")
+        language, locale, default = prefs.GetString("Language", ""), Gui.getLocale(), QtCore.QLocale()
+
+        def restore_language():
+            prefs.SetString("Language", language)
+            Gui.setLocale(locale)
+            Gui.updateLocale()
+            QtCore.QLocale.setDefault(default)
+
+        self.addCleanup(restore_language)
+        prefs.SetString("Language", "English")
+        Gui.setLocale("English")
+        Gui.updateLocale()
+        QtCore.QLocale.setDefault(QtCore.QLocale("en_US"))
         self.test_user_dir = tempfile.mkdtemp(prefix="ff_test_edge_props_")
         self.manager = LibraryManager(user_dir=self.test_user_dir)
         self.doc_count = 0
