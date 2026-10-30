@@ -919,7 +919,11 @@ class TestWorkflowStaticPolicy(unittest.TestCase):
     def test_workflow_cancels_superseded_runs_except_on_main(self):
         """Superseded branch/PR runs are cancelled; every main commit keeps its own result."""
         self.assertIn("concurrency:", self.content)
-        self.assertIn("group: ci-${{ github.workflow }}-${{ github.ref }}", self.content)
+        # A shared main group would still cancel a pending main run, so main commits get unique groups.
+        self.assertIn(
+            "group: ci-${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}",
+            self.content,
+        )
         self.assertIn("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", self.content)
 
     def test_workflow_defines_matrix_for_stable_and_weekly(self):

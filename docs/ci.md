@@ -223,7 +223,7 @@ Diagnostics do not dismiss dialogs, synthesize input, skip tests or repair the G
 ## AppImage cache and superseded runs
 
 - **AppImage cache:** each native job restores the FreeCAD AppImage from `actions/cache` under the key `freecad-appimage-<sha256>`, so a pinned build is downloaded once and reused. The download step runs only on a cache miss, and the checksum step always runs, so a cached file is verified against the pinned SHA-256 exactly like a fresh download. Bumping a target's URL and SHA-256 creates a new key automatically.
-- **Superseded runs:** the workflow uses `concurrency` grouped by workflow and ref. A new push to the same branch or PR cancels the older run; runs on `main` are never cancelled, so every `main` commit keeps its own result.
+- **Superseded runs:** the workflow uses `concurrency` grouped by workflow and ref. A new push to the same branch or PR cancels the older run. On `main` the group is the commit SHA, so no run waits on or replaces another (a shared group would still cancel a pending run) and every `main` commit keeps its own result.
 
 ## Nightly flakiness run
 
