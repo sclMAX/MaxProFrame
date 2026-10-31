@@ -999,5 +999,6 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>1 joint will be created.</source><translation>Se creará 1 unión.</translation></message>
     <message><source>{} joints will be created.</source><translation>Se crearán {} uniones.</translation></message>
     <message><source>Skipped ({:.1f}, {:.1f}, {:.1f}): three or more profiles meet here and are not mitered ({}).</source><translation>Omitido ({:.1f}, {:.1f}, {:.1f}): tres o más perfiles se juntan aquí y no se unen en inglete ({}).</translation></message>
+    <message><source>Update automatically</source><translation>Actualizar automáticamente</translation></message>
 </context>
 </TS>

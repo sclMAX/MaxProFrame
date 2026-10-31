@@ -110,6 +110,32 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="groupBox_preview">
+     <property name="title">
+      <string>Preview</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_preview">
+      <item>
+       <widget class="QCheckBox" name="cb_auto_update">
+        <property name="text">
+         <string>Update automatically</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="status_label">
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QLabel" name="message_label">
      <property name="text">
       <string/>

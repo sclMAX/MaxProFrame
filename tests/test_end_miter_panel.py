@@ -7,6 +7,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtWidgets
 from test_end_miter_geometry import CENTER, CHAINED, MiterFixture
+from test_end_miter_preview import keep_auto_preview
 from test_end_miter_translations import use_language
 
 from freecad.maxproframe import create_end_miter_tool
@@ -36,6 +37,8 @@ class TestEndMiterPanel(MiterFixture):
         super().setUp()
         # Messages are asserted in English, whatever language earlier tests left behind.
         use_language(self, "English", "en_US")
+        # Update automatically starts from its default (checked).
+        keep_auto_preview(self)
         self.doc.UndoMode = 1
         App.setActiveDocument(self.doc.Name)
         Gui.Selection.clearSelection()
@@ -120,6 +123,8 @@ class TestEndMiterPanel(MiterFixture):
         trimmed.TrimmingBoundary = [(p1, ("Face1",))]
         self.doc.recompute()
         panel = self.open_panel()
+        # Without a preview the listed objects themselves stay selected.
+        panel.form.cb_auto_update.setChecked(False)
         Gui.Selection.addSelection(self.doc.Name, p1.Name, "Face3")
         Gui.Selection.addSelection(self.doc.Name, trimmed.Name, "Edge2")
         Gui.Selection.addSelection(self.doc.Name, p1.AttachmentSupport[0][0].Name, "Edge1")

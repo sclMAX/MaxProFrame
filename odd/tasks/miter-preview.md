@@ -15,7 +15,7 @@ Branch: `feat/miter-preview` (on top of `fix/miter-panel-ctrl-click`).
 ## Tasks
 
 - T1 (S1) Ctrl+click and face deselection drop a listed profile. Route: inline. Commit: cabaffb. Done.
-- T2 (S2-S5) Live miter preview with the Update automatically check box, status label, joint/skipped markers, transaction handling, clicks on preview objects map back to their profile, Spanish translations, tutorial/README/CHANGELOG. Route: gentle-ai-worker (parallel, Writer rule). Commit: pending.
+- T2 (S2-S5) Live miter preview with the Update automatically check box, status label, joint/skipped markers, transaction handling, clicks on preview objects map back to their profile, Spanish translations, tutorial/README/CHANGELOG. Route: gentle-ai-worker (parallel, Writer rule). Commit: see git log (L7). Done.
 - T3 (S6) Remove Create Profile's hidden Apply button/group and dead code; docs/commands.md. Route: gentle-ai-worker (parallel, Writer rule). Commit: see git log (L6). Done.
 
 ## Log
@@ -26,3 +26,4 @@ Branch: `feat/miter-preview` (on top of `fix/miter-panel-ctrl-click`).
 - L4. User: "ok, me queda una duda aplicar solo previsualiza o aplica el corte?" Answer: Apply only previews, OK confirms, Cancel discards, as in Create Profile.
 - L5. Correction: Create Profile hides its Apply group (create_profiles_tool.py:389-391) and previews live; docs/commands.md:16 is stale. User: "la 2 pero solo con el checkbox, sin boton actualizar. ademas deberiamos limpiar la ui y eliminar el boton aplizar de crear perfiles si no lo usamos es codigo muerto"
 - L6. T3 (worker): removed `groupBox_apply`/`btn_apply`/`label_apply_status`, the status helpers and the unread pending flag; kept `apply()` (tests use it as "refresh preview now"). Parent removed the leftover guard in edit_profile_tool.py. Before/after: 20 Create Profile modules identical except one deleted Spanish-label test; Edit Profile modules pass. RED not applicable (removal).
+- L7. T2 (worker): RED `test_end_miter_preview` 13 tests (5 failures, 8 errors), translations 2 errors, panel 1 error; GREEN preview 14/14, panel 11/11, translations 4/4, edit 6/6. Preview objects are real End Miters inside one transaction; Cancel aborts and restores visibility; markers via Coin SoMarkerSet. Full native suite on T1-T3: `Ran 729 tests ... OK`. Not verified: real mouse clicks, marker rendering, `closed()` call by FreeCAD.
