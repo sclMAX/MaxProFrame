@@ -57,6 +57,9 @@ set(Namespace_SRCS
         freecad/maxproframe/resources/images/profiles/Metal/T-Slot_3-Slots.png
         freecad/maxproframe/resources/images/profiles/Metal/V-Slot.png
 
+        freecad/maxproframe/resources/help/library-manager.md
+        freecad/maxproframe/resources/help/library-manager.es.md
+
         freecad/maxproframe/resources/ui/create_trimmed_profiles.ui
         freecad/maxproframe/resources/ui/create_profiles.ui
 

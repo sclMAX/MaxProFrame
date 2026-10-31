@@ -22,6 +22,7 @@ from freecad.maxproframe.ff_tools import (
     get_param_group,
     translate,
 )
+from freecad.maxproframe.help_viewer import install_help_shortcut, show_help
 from freecad.maxproframe.library_manager import (
     KNOWN_FAMILIES,
     STANDARD_DENSITIES,
@@ -145,6 +146,7 @@ class NewLibraryDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self._destination_manager = LibraryManager(user_dir=user_dir)
         self._custom_destination = None
+        self._help_topic = "duplicate" if is_duplicate else "new-library"
         self.setWindowTitle(translate("frameforge", title))
         self.resize(380, 160)
 
@@ -208,10 +210,17 @@ class NewLibraryDialog(QtWidgets.QDialog):
         self._update_destination()
 
         # Buttons
-        btn_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        btn_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel | QtWidgets.QDialogButtonBox.Help
+        )
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
+        btn_box.helpRequested.connect(self._on_help)
         layout.addWidget(btn_box)
+        install_help_shortcut(self, self._on_help)
+
+    def _on_help(self):
+        show_help(self, self._help_topic)
 
     def _update_destination(self):
         path = self._custom_destination or self._destination_manager.get_default_library_folder(self.le_name.text())
@@ -283,13 +292,20 @@ class AddFamilyDialog(QtWidgets.QDialog):
         layout.addWidget(self.cb_fillet)
 
         # Buttons
-        btn_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        btn_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel | QtWidgets.QDialogButtonBox.Help
+        )
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
+        btn_box.helpRequested.connect(self._on_help)
         layout.addWidget(btn_box)
+        install_help_shortcut(self, self._on_help)
 
         if self.list_families.count() > 0:
             self.list_families.setCurrentRow(0)
+
+    def _on_help(self):
+        show_help(self, "families")
 
     def select_family(self, fam_key):
         for row in range(self.list_families.count()):
@@ -472,7 +488,15 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         )
         header.setWordWrap(True)
         header.setStyleSheet("padding-bottom: 6px;")
-        main_layout.addWidget(header)
+        header_row = QtWidgets.QHBoxLayout()
+        header_row.addWidget(header, 1)
+        self.btn_help = QtWidgets.QToolButton()
+        self.btn_help.setText("?")
+        self.btn_help.setToolTip(translate("frameforge", "Help (F1)"))
+        self.btn_help.clicked.connect(self._on_help)
+        header_row.addWidget(self.btn_help, 0, QtCore.Qt.AlignTop)
+        main_layout.addLayout(header_row)
+        install_help_shortcut(self, self._on_help)
 
         # Content Splitter (Left: Libraries, Right: Details/Sizes)
         splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
@@ -511,6 +535,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             lib_header.addWidget(button)
         lib_layout.addLayout(lib_header)
         self.list_libraries = QtWidgets.QListWidget()
+        self.list_libraries.setToolTip(
+            translate("frameforge", "Select a library to see its families. [System] libraries are read-only.")
+        )
         self.list_libraries.currentItemChanged.connect(self._on_library_selection_changed)
         self.list_libraries.itemSelectionChanged.connect(self._update_section_buttons)
         lib_layout.addWidget(self.list_libraries, 1)
@@ -527,9 +554,14 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         family_layout.addLayout(family_header)
         self.list_families = QtWidgets.QListWidget()
         self.list_families.setIconSize(QtCore.QSize(60, 30))
+        self.list_families.setToolTip(translate("frameforge", "Select a family to see its profiles."))
         self.list_families.currentItemChanged.connect(self._on_family_selection_changed)
         self.list_families.itemSelectionChanged.connect(self._update_section_buttons)
         family_layout.addWidget(self.list_families, 1)
+        self.lbl_families_empty = QtWidgets.QLabel()
+        self.lbl_families_empty.setWordWrap(True)
+        self.lbl_families_empty.hide()
+        family_layout.addWidget(self.lbl_families_empty)
 
         # Hidden raw-key selector retained for legacy callers; the list is the visible selector.
         self.combo_family = QtWidgets.QComboBox(family_widget)
@@ -582,6 +614,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         meta_row.setContentsMargins(0, 0, 0, 0)
         meta_row.addWidget(QtWidgets.QLabel(translate("frameforge", "Standard / Ref:")))
         self.le_norm = QtWidgets.QLineEdit()
+        self.le_norm.setToolTip(
+            translate("frameforge", "Standard or catalog reference of this family, for example EN 10219.")
+        )
         self.le_norm.textChanged.connect(self._mark_dirty)
         meta_row.addWidget(self.le_norm, 1)
 
@@ -613,6 +648,7 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         self.le_search = QtWidgets.QLineEdit()
         self.le_search.setPlaceholderText(translate("frameforge", "Search this family…"))
         self.le_search.setClearButtonEnabled(True)
+        self.le_search.setToolTip(translate("frameforge", "Filter the profiles of this family by code or description."))
         self.le_search.textChanged.connect(self._filter_profiles)
         search_row.addWidget(self.le_search, 1)
         self.lbl_profile_count = QtWidgets.QLabel()
@@ -620,9 +656,17 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         right_layout.addLayout(search_row)
         self.lbl_profiles_empty = QtWidgets.QLabel()
         right_layout.addWidget(self.lbl_profiles_empty)
+        # Next step for an empty family, kept apart from the empty-state message itself.
+        self.lbl_profiles_hint = QtWidgets.QLabel()
+        self.lbl_profiles_hint.setWordWrap(True)
+        self.lbl_profiles_hint.hide()
+        right_layout.addWidget(self.lbl_profiles_hint)
 
         # Sizes Table
         self.table_sizes = QtWidgets.QTableWidget()
+        self.table_sizes.setToolTip(
+            translate("frameforge", "Profiles of this family: one row per size, dimensions in mm and weight in kg/m.")
+        )
         self.table_sizes.setColumnCount(len(self.TABLE_COLUMNS))
         self.table_sizes.setHorizontalHeaderLabels([translate("frameforge", col[1]) for col in self.TABLE_COLUMNS])
         self.table_sizes.horizontalHeader().setStretchLastSection(True)
@@ -652,13 +696,56 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         self.btn_save = QtWidgets.QPushButton(translate("frameforge", "Save Changes"))
         self.btn_save.setEnabled(False)
+        self.btn_save.setToolTip(translate("frameforge", "Save the pending changes of this library."))
         self.btn_save.clicked.connect(self._on_save_library)
         self.btn_close = QtWidgets.QPushButton(translate("frameforge", "Close"))
+        self.btn_close.setToolTip(translate("frameforge", "Close the library manager."))
         self.btn_close.clicked.connect(self.close)
 
         bottom_layout.addWidget(self.btn_save)
         bottom_layout.addWidget(self.btn_close)
         main_layout.addLayout(bottom_layout)
+
+        # Guide topic per area; help_topic() reads it from the focused widget or its parents.
+        for topic, widgets in (
+            (
+                "libraries",
+                (
+                    self.list_libraries,
+                    self.btn_new_lib,
+                    self.btn_del_lib,
+                    self.btn_import_lib,
+                    self.btn_dup_lib,
+                    self.btn_export_lib,
+                ),
+            ),
+            ("families", (self.list_families, self.btn_add_family, self.btn_del_family, self.le_norm)),
+            ("sizes", (self.table_sizes, self.le_search, self.btn_add_size, self.btn_del_size)),
+            ("custom-profiles", (self.cards_view, self.btn_capture_section, self.btn_import_dxf)),
+            ("saving", (self.btn_save,)),
+        ):
+            for widget in widgets:
+                widget.setProperty("helpTopic", topic)
+
+    def help_topic(self):
+        """Guide topic for the focused area, otherwise for the current selection."""
+        widget = self.focusWidget()
+        while widget is not None and widget is not self:
+            topic = widget.property("helpTopic")
+            if topic:
+                return topic
+            widget = widget.parentWidget()
+        if self.current_family and self.current_family in self.current_lib_data:
+            fam_data = self.current_lib_data[self.current_family]
+            if get_canonical_family(self.current_family, fam_data) == "Custom Profile":
+                return "custom-profiles"
+            return "sizes"
+        if self.current_lib_meta and not self.current_lib_meta.get("is_user"):
+            return "duplicate"
+        return "libraries"
+
+    def _on_help(self):
+        show_help(self, self.help_topic())
 
     def _compact_button(self, icon, tooltip, callback):
         button = QtWidgets.QToolButton()
@@ -919,6 +1006,15 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             row = families.index(select_family) if select_family in families else 0
             self.combo_family.setCurrentIndex(row)
             self.list_families.setCurrentRow(row)
+        if self.current_lib_meta and self.current_lib_meta.get("is_user"):
+            self.lbl_families_empty.setText(
+                translate("frameforge", "This library has no families yet. Add one with +.")
+            )
+        else:
+            self.lbl_families_empty.setText(
+                translate("frameforge", "This system library is read-only. Duplicate it to create your own families.")
+            )
+        self.lbl_families_empty.setVisible(not families)
         self.combo_family.blockSignals(False)
         self.list_families.blockSignals(False)
         self._on_family_changed()
@@ -1181,6 +1277,17 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
             else translate("frameforge", "No matching profiles.")
         )
         self.lbl_profiles_empty.setVisible(not visible)
+        hint = ""
+        if not total and self.current_family and self.current_family in self.current_lib_data:
+            fam_data = self.current_lib_data[self.current_family]
+            if not (self.current_lib_meta and self.current_lib_meta.get("is_user")):
+                hint = translate("frameforge", "Duplicate the library to edit it.")
+            elif get_canonical_family(self.current_family, fam_data) == "Custom Profile":
+                hint = translate("frameforge", "Capture a section or import a DXF to add one.")
+            else:
+                hint = translate("frameforge", "Add a size with +.")
+        self.lbl_profiles_hint.setText(hint)
+        self.lbl_profiles_hint.setVisible(bool(hint))
         self._update_section_buttons()
 
     @staticmethod
