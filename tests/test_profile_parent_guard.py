@@ -7,15 +7,10 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import FreeCAD as App
-import FreeCADGui as Gui
 import Part
 import Sketcher
 
 from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
-
-# Console FreeCAD lacks command registration, which is unrelated to creation.
-with patch.object(Gui, "addCommand", create=True):
-    from freecad.maxproframe import create_custom_profiles_tool as custom_module
 
 
 def source_content(snapshot):
@@ -40,52 +35,40 @@ class TestProfileParentGuard(unittest.TestCase):
             self.section.addGeometry(Part.LineSegment(App.Vector(*start, 0), App.Vector(*end, 0)), False)
         self.doc.recompute()
 
-    def panel(self, custom):
-        if custom:
-            panel = custom_module.CreateCustomProfileTaskPanel.__new__(custom_module.CreateCustomProfileTaskPanel)
-            panel.form = SimpleNamespace(
-                sb_length=Mock(value=Mock(return_value=100)),
-                sb_weight=Mock(value=Mock(return_value=0)),
-                sb_unitprice=Mock(value=Mock(return_value=0)),
-                le_material=Mock(text=Mock(return_value="Steel")),
-            )
-            panel.custom_profile = self.section
-        else:
-            panel = CreateProfileTaskPanel.__new__(CreateProfileTaskPanel)
-            values = {
-                "width": 20,
-                "height": 10,
-                "main_thickness": 1,
-                "flange_thickness": 1,
-                "radius1": 0,
-                "radius2": 0,
-                "length": 100,
-                "weight": 0,
-                "unitprice": 0,
-                "offset_x": 0,
-                "offset_y": 0,
-            }
-            fields = {"sb_" + key: Mock(value=Mock(return_value=value)) for key, value in values.items()}
-            for key in ("pre_extend", "mirror_h", "mirror_v", "make_fillet", "combined_bevel"):
-                fields["cb_" + key] = Mock(isChecked=Mock(return_value=False))
-            for key, value in (("material", "Steel"), ("family", "Flat Sections"), ("size", "20x10")):
-                fields["combo_" + key] = Mock(currentText=Mock(return_value=value))
-            panel.form_proxy = SimpleNamespace(**fields)
-            panel.get_anchor = lambda: (1, 1)
-            panel.get_rotation = lambda: 0.0
-            panel.profiles = {}
-            panel._mutation_depth = 0
-            panel._selection_pending = False
-            panel._selection_signature = lambda: ()
+    def panel(self):
+        panel = CreateProfileTaskPanel.__new__(CreateProfileTaskPanel)
+        values = {
+            "width": 20,
+            "height": 10,
+            "main_thickness": 1,
+            "flange_thickness": 1,
+            "radius1": 0,
+            "radius2": 0,
+            "length": 100,
+            "weight": 0,
+            "unitprice": 0,
+            "offset_x": 0,
+            "offset_y": 0,
+        }
+        fields = {"sb_" + key: Mock(value=Mock(return_value=value)) for key, value in values.items()}
+        for key in ("pre_extend", "mirror_h", "mirror_v", "make_fillet", "combined_bevel"):
+            fields["cb_" + key] = Mock(isChecked=Mock(return_value=False))
+        for key, value in (("material", "Steel"), ("family", "Flat Sections"), ("size", "20x10")):
+            fields["combo_" + key] = Mock(currentText=Mock(return_value=value))
+        panel.form_proxy = SimpleNamespace(**fields)
+        panel.get_anchor = lambda: (1, 1)
+        panel.get_rotation = lambda: 0.0
+        panel.profiles = {}
+        panel._mutation_depth = 0
+        panel._selection_pending = False
+        panel._selection_signature = lambda: ()
         return panel
 
-    def create(self, custom):
-        # Only the GUI-only view provider is substituted; document, attachment and Profile are real.
-        with patch.object(custom_module, "ViewProviderCustomProfile"):
-            self.panel(custom).make_profile(self.path, "Edge1", "Profile")
+    def create(self):
+        self.panel().make_profile(self.path, "Edge1", "Profile")
         profile = self.doc.getObject("Profile")
         self.assertIsNotNone(profile.Proxy)
-        self.assertEqual(profile.Family, "Custom Profile" if custom else "Flat Sections")
+        self.assertEqual(profile.Family, "Flat Sections")
         self.assertEqual(profile.MapMode, "NormalToEdge")
         support = profile.AttachmentSupport
         if isinstance(support, list):
@@ -95,19 +78,16 @@ class TestProfileParentGuard(unittest.TestCase):
         self.assertEqual(tuple(support[1]), ("Edge1",))
         return profile
 
-    def check_parent(self, parent_type, custom):
+    def check_parent(self, parent_type):
         parent = self.doc.addObject(parent_type, "Parent") if parent_type else None
         if parent:
             parent.addObject(self.path)
-            if custom and parent_type == "App::Part":
-                # Keep the separate custom-section link within its existing local scope.
-                parent.addObject(self.section)
         self.doc.recompute()
         before_path = source_content(self.path.dumpContent())
         before_group = tuple(parent.Group) if parent else ()
         before_objects = tuple(self.doc.Objects)
         with patch.object(App.Console, "PrintMessage") as message:
-            profile = self.create(custom)
+            profile = self.create()
             if parent_type == "PartDesign::Body":
                 message.assert_called_once_with(
                     "FrameForge: parent Parent (PartDesign::Body) does not accept Part::FeaturePython, "
@@ -193,7 +173,7 @@ class TestProfileParentGuard(unittest.TestCase):
             self.assertEqual(source_content(self.path.dumpContent()), before)
 
     def test_legacy_local_target_is_not_migrated_on_reopen(self):
-        profile = self.create(False)
+        profile = self.create()
         target = profile.Target
         profile.removeProperty("Target")
         profile.addProperty("App::PropertyLinkSub", "Target", "Base", "Target face").Target = target
@@ -219,7 +199,7 @@ class TestProfileParentGuard(unittest.TestCase):
             App.closeDocument(self.doc.Name)
 
     def preview_panel(self, in_part=True):
-        panel = self.panel(False)
+        panel = self.panel()
         panel._target_doc = self.doc
         panel._objects = {}
         panel._edge_properties = {}
@@ -261,7 +241,7 @@ class TestProfileParentGuard(unittest.TestCase):
     def test_custom_section_outside_part_uses_global_link(self):
         from freecad.maxproframe import create_profiles_tool as module
 
-        panel = self.panel(False)
+        panel = self.panel()
         panel.form_proxy.combo_family.currentText.return_value = "Custom Profile"
         panel.profiles = {"Steel": {"Custom Profile": {"sizes": {"20x10": {"asset_path": "section.FCStd"}}}}}
         panel.library_manager = Mock()
@@ -278,22 +258,13 @@ class TestProfileParentGuard(unittest.TestCase):
         self.assert_parametric_profile(profile, 100)
 
     def test_standard_body_rejection_finishes_profile_at_root(self):
-        self.check_parent("PartDesign::Body", False)
-
-    def test_custom_body_rejection_finishes_profile_at_root(self):
-        self.check_parent("PartDesign::Body", True)
+        self.check_parent("PartDesign::Body")
 
     def test_standard_supported_parent_preserves_creation(self):
-        self.check_parent("App::Part", False)
-
-    def test_custom_supported_parent_preserves_creation(self):
-        self.check_parent("App::Part", True)
+        self.check_parent("App::Part")
 
     def test_standard_absent_parent_preserves_creation(self):
-        self.check_parent(None, False)
-
-    def test_custom_absent_parent_preserves_creation(self):
-        self.check_parent(None, True)
+        self.check_parent(None)
 
 
 if __name__ == "__main__":

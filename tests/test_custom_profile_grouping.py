@@ -1,15 +1,12 @@
 import unittest
-from types import SimpleNamespace
-from unittest.mock import Mock
 
 import FreeCAD as App
 import Part
 import Sketcher
 
 from freecad.maxproframe.create_bom import group_profiles, traverse_assembly
-from freecad.maxproframe.create_custom_profiles_tool import CreateCustomProfileTaskPanel
 from freecad.maxproframe.populate_ids import populate_ids
-from freecad.maxproframe.profile import Profile
+from freecad.maxproframe.profile import Profile, ViewProviderCustomProfile
 
 
 class TestCustomProfileGrouping(unittest.TestCase):
@@ -46,17 +43,35 @@ class TestCustomProfileGrouping(unittest.TestCase):
         path=None,
         edge="Edge1",
     ):
-        panel = CreateCustomProfileTaskPanel.__new__(CreateCustomProfileTaskPanel)
-        panel.form = SimpleNamespace(
-            sb_length=Mock(value=Mock(return_value=float(length))),
-            sb_weight=Mock(value=Mock(return_value=float(weight))),
-            sb_unitprice=Mock(value=Mock(return_value=float(unitprice))),
-            le_material=Mock(text=Mock(return_value=material)),
-        )
-        panel.custom_profile = custom_source
         target_path = path if path is not None else self.path
-        panel.make_profile(target_path, edge, name)
-        obj = self.doc.getObject(name)
+        obj = self.doc.addObject("Part::FeaturePython", name)
+        obj.addExtension("Part::AttachExtensionPython")
+        obj.MapMode = "NormalToEdge"
+        obj.AttachmentSupport = (target_path, edge)
+        obj.MapPathParameter = 1
+        Profile(
+            obj,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            float(length),
+            float(weight),
+            float(unitprice),
+            False,
+            1,
+            1,
+            material,
+            "Custom Profile",
+            "None",
+            False,
+            (target_path, edge),
+            custom_source,
+            init_rotation=0.0,
+        )
+        ViewProviderCustomProfile(obj.ViewObject)
         obj.Label = label
         return obj
 
@@ -96,9 +111,7 @@ class TestCustomProfileGrouping(unittest.TestCase):
         self.assertIn("Instance Beta", grouped_labels)
 
         # 2. Populated ID grouping check (with count suffix)
-        populate_ids(
-            [p1, p2], [], [p1, p2], [], "all_numbers", False, True, True, False, "start_at", start_number="1"
-        )
+        populate_ids([p1, p2], [], [p1, p2], [], "all_numbers", False, True, True, False, "start_at", start_number="1")
         self.assertEqual(p1.PID, "1 x2")
         self.assertEqual(p2.PID, "1 x2")
 
@@ -120,9 +133,7 @@ class TestCustomProfileGrouping(unittest.TestCase):
         p2 = self._create_custom_profile("ProfBetaCountOff", "Instance Beta", self.section)
         self.doc.recompute()
 
-        populate_ids(
-            [p1, p2], [], [p1, p2], [], "all_numbers", False, True, False, False, "start_at", start_number="5"
-        )
+        populate_ids([p1, p2], [], [p1, p2], [], "all_numbers", False, True, False, False, "start_at", start_number="5")
         self.assertEqual(p1.PID, "5")
         self.assertEqual(p2.PID, "5")
 
@@ -143,9 +154,7 @@ class TestCustomProfileGrouping(unittest.TestCase):
         self.assertEqual(len(grouped), 1)
         self.assertEqual(grouped[0]["quantity"], 2)
 
-        populate_ids(
-            [p1, p2], [], [p1, p2], [], "all_numbers", False, True, True, False, "start_at", start_number="1"
-        )
+        populate_ids([p1, p2], [], [p1, p2], [], "all_numbers", False, True, True, False, "start_at", start_number="1")
         self.assertEqual(p1.PID, "1 x2")
         self.assertEqual(p2.PID, "1 x2")
 
@@ -165,9 +174,7 @@ class TestCustomProfileGrouping(unittest.TestCase):
         self.assertEqual(len(grouped), 2)
         self.assertEqual({g["quantity"] for g in grouped}, {1})
 
-        populate_ids(
-            [p1, p2], [], [p1, p2], [], "all_numbers", False, True, True, False, "start_at", start_number="1"
-        )
+        populate_ids([p1, p2], [], [p1, p2], [], "all_numbers", False, True, True, False, "start_at", start_number="1")
         self.assertEqual(p1.PID, "1 x1")
         self.assertEqual(p2.PID, "2 x1")
 
@@ -186,7 +193,17 @@ class TestCustomProfileGrouping(unittest.TestCase):
         _, grouped_len = self._bom_data([p_len1, p_len2])
         self.assertEqual(len(grouped_len), 2)
         populate_ids(
-            [p_len1, p_len2], [], [p_len1, p_len2], [], "all_numbers", False, True, True, False, "start_at", start_number="1"
+            [p_len1, p_len2],
+            [],
+            [p_len1, p_len2],
+            [],
+            "all_numbers",
+            False,
+            True,
+            True,
+            False,
+            "start_at",
+            start_number="1",
         )
         self.assertEqual(p_len1.PID, "1 x1")
         self.assertEqual(p_len2.PID, "2 x1")
@@ -199,7 +216,17 @@ class TestCustomProfileGrouping(unittest.TestCase):
         _, grouped_mat = self._bom_data([p_mat1, p_mat2])
         self.assertEqual(len(grouped_mat), 2)
         populate_ids(
-            [p_mat1, p_mat2], [], [p_mat1, p_mat2], [], "all_numbers", False, True, True, False, "start_at", start_number="1"
+            [p_mat1, p_mat2],
+            [],
+            [p_mat1, p_mat2],
+            [],
+            "all_numbers",
+            False,
+            True,
+            True,
+            False,
+            "start_at",
+            start_number="1",
         )
         self.assertEqual(p_mat1.PID, "1 x1")
         self.assertEqual(p_mat2.PID, "2 x1")
@@ -210,9 +237,7 @@ class TestCustomProfileGrouping(unittest.TestCase):
         p2 = self._create_custom_profile("ProfNoGroup2", "Inst 2", self.section)
         self.doc.recompute()
 
-        populate_ids(
-            [p1, p2], [], [p1, p2], [], "all_numbers", False, False, True, False, "start_at", start_number="1"
-        )
+        populate_ids([p1, p2], [], [p1, p2], [], "all_numbers", False, False, True, False, "start_at", start_number="1")
         self.assertEqual(p1.PID, "1")
         self.assertEqual(p2.PID, "2")
 
@@ -248,9 +273,7 @@ class TestCustomProfileGrouping(unittest.TestCase):
         self.assertEqual(grouped[0]["family"], "Square Hollow (Fillet)")
 
         # In populate_ids: non-custom profiles use Family ('Square Hollow'), not CatalogFamily
-        populate_ids(
-            [obj], [], [obj], [], "all_numbers", False, True, True, False, "start_at", start_number="1"
-        )
+        populate_ids([obj], [], [obj], [], "all_numbers", False, True, True, False, "start_at", start_number="1")
         self.assertEqual(obj.PID, "1 x1")
 
 

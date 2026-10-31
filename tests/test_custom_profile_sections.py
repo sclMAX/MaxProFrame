@@ -1,14 +1,11 @@
 import math
 import unittest
-from types import SimpleNamespace
-from unittest.mock import Mock
 
 import FreeCAD as App
 import Part
 import Sketcher
 
-from freecad.maxproframe.create_custom_profiles_tool import CreateCustomProfileTaskPanel
-from freecad.maxproframe.profile import Profile
+from freecad.maxproframe.profile import Profile, ViewProviderCustomProfile
 
 
 class TestCustomProfileSections(unittest.TestCase):
@@ -35,17 +32,35 @@ class TestCustomProfileSections(unittest.TestCase):
         path=None,
         edge="Edge1",
     ):
-        panel = CreateCustomProfileTaskPanel.__new__(CreateCustomProfileTaskPanel)
-        panel.form = SimpleNamespace(
-            sb_length=Mock(value=Mock(return_value=float(length))),
-            sb_weight=Mock(value=Mock(return_value=float(weight))),
-            sb_unitprice=Mock(value=Mock(return_value=float(unitprice))),
-            le_material=Mock(text=Mock(return_value=material)),
-        )
-        panel.custom_profile = custom_source
         target_path = path if path is not None else self.path
-        panel.make_profile(target_path, edge, name)
-        obj = self.doc.getObject(name)
+        obj = self.doc.addObject("Part::FeaturePython", name)
+        obj.addExtension("Part::AttachExtensionPython")
+        obj.MapMode = "NormalToEdge"
+        obj.AttachmentSupport = (target_path, edge)
+        obj.MapPathParameter = 1
+        Profile(
+            obj,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            float(length),
+            float(weight),
+            float(unitprice),
+            False,
+            1,
+            1,
+            material,
+            "Custom Profile",
+            "None",
+            False,
+            (target_path, edge),
+            custom_source,
+            init_rotation=0.0,
+        )
+        ViewProviderCustomProfile(obj.ViewObject)
         obj.Label = label
         return obj
 

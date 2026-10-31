@@ -2,7 +2,6 @@ set(Namespace_SRCS
         freecad/maxproframe/resources/icons/corner.svg
         freecad/maxproframe/resources/icons/splitcurve.svg
         freecad/maxproframe/resources/icons/warehouse_profiles.svg
-        freecad/maxproframe/resources/icons/warehouse_custom_profiles.svg
         freecad/maxproframe/resources/icons/trim_extend.svg
         freecad/maxproframe/resources/icons/metalwb.svg
         freecad/maxproframe/resources/icons/line.svg
@@ -54,7 +53,6 @@ set(Namespace_SRCS
 
         freecad/maxproframe/resources/ui/create_trimmed_profiles.ui
         freecad/maxproframe/resources/ui/create_profiles.ui
-        freecad/maxproframe/resources/ui/create_custom_profiles.ui
 
         freecad/maxproframe/resources/profiles/metal.json
 
@@ -69,7 +67,6 @@ set(Namespace_SRCS
         freecad/maxproframe/trimmed_profile.py
         freecad/maxproframe/init_gui.py
         freecad/maxproframe/create_profiles_tool.py
-        freecad/maxproframe/create_custom_profiles_tool.py
         freecad/maxproframe/utilities.py
 )
 
