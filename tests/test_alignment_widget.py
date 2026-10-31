@@ -200,10 +200,12 @@ class TestAlignmentWidget(unittest.TestCase):
             self.widget.grab()
         self.widget.set_state((1, 1), 0, False, False)
         point = QtCore.QLocale().decimalPoint()
+        minus = QtCore.QLocale().negativeSign()
         for offset, label in (
-            ((0, -500), "Y -500 mm"),
-            ((-400, 0), "X -400 mm"),
+            ((0, -500), "Y %s500 mm" % minus),
+            ((-400, 0), "X %s400 mm" % minus),
             ((12.5, 600), "X 12%s5 \u00b7 Y 600 mm" % point),
+            ((1000000, 0.25), "X 1000000 \u00b7 Y 0%s25 mm" % point),
         ):
             self.widget.set_offset(offset)
             self.assertTrue(self.widget.edge_clipped(), offset)

@@ -129,7 +129,7 @@ class AlignmentWidget(QtWidgets.QWidget):
         # Edge-frame axes: +X right, +Y up (the view flips Y).
         delta = QtCore.QPointF(-scale * dx, scale * dy)
         inner = QtCore.QRectF(self.rect()).adjusted(12, 12, -12, -12)
-        if inner.contains(anchor + delta):
+        if (not delta.x() and not delta.y()) or inner.contains(anchor + delta):
             return anchor + delta, False
         # Keep the direction and stop where the ray from the anchor leaves the inner border.
         limits = []
@@ -154,9 +154,14 @@ class AlignmentWidget(QtWidgets.QWidget):
         if not self.edge_clipped():
             return None
         locale = QtCore.QLocale()
-        parts = [
-            "%s %s" % (axis, locale.toString(float(value), "g", 6)) for axis, value in zip("XY", self.offset) if value
-        ]
+        locale.setNumberOptions(QtCore.QLocale.OmitGroupSeparator)
+
+        def number(value):
+            # Same two decimals as the offset spin boxes, without trailing zeros or exponent notation.
+            text = locale.toString(float(value), "f", 2)
+            return text.rstrip("0").rstrip(locale.decimalPoint()) if locale.decimalPoint() in text else text
+
+        parts = ["%s %s" % (axis, number(value)) for axis, value in zip("XY", self.offset) if value]
         return " · ".join(parts) + " mm"
 
     def mousePressEvent(self, event):
