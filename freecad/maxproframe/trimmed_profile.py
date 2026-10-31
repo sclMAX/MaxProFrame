@@ -60,6 +60,18 @@ class TrimmedProfile:
             "Perfect fit",
             "Simple fit",
         ]
+        obj.addProperty(
+            "App::PropertyBool",
+            "MiterExtend",
+            "TrimmedProfile",
+            translate("App::Property", "Extend the profile up to the miter plane"),
+        ).MiterExtend = True
+        obj.addProperty(
+            "App::PropertyLength",
+            "MiterGap",
+            "TrimmedProfile",
+            translate("App::Property", "Distance left between the two miter cut faces"),
+        ).MiterGap = 0
 
         # related to Profile
         obj.addProperty("App::PropertyString", "Family", "Profile", "")
@@ -128,6 +140,7 @@ class TrimmedProfile:
             tb.ViewObject.Visibility = False
 
         cut_shapes = []
+        body_shape = fp.TrimmedBody.Shape
 
         if fp.TrimmedProfileType == "End Trim":
             if fp.CutType in ["Perfect fit", "Coped cut"]:  # Keeping Coped cut for retro-compatibility
@@ -151,8 +164,16 @@ class TrimmedProfile:
                             cut_shapes.append(shp)
 
         elif fp.TrimmedProfileType == "End Miter":
-            for plane in self.miter_planes(fp):
-                cut_shapes.append(plane.removal_volume(fp.TrimmedBody.Shape))
+            gap = fp.MiterGap.Value if hasattr(fp, "MiterGap") else 0.0
+            planes = [plane.shifted(gap / 2.0) for plane in self.miter_planes(fp)]
+            if getattr(fp, "MiterExtend", False):
+                for plane in planes:
+                    extension = plane.extension()
+                    if extension is not None:
+                        body_shape = body_shape.fuse(extension)
+                body_shape = body_shape.removeSplitter()
+            for plane in planes:
+                cut_shapes.append(plane.removal_volume(body_shape))
 
         cut_shape = Part.Shape()
         if len(cut_shapes) > 0:
@@ -160,7 +181,7 @@ class TrimmedProfile:
             for sh in cut_shapes[1:]:
                 cut_shape = cut_shape.fuse(sh)
 
-        self.makeShape(fp, cut_shape)
+        self.makeShape(fp, cut_shape, body_shape)
         self._update_structure_data(fp)
 
     def miter_planes(self, fp):
@@ -257,9 +278,11 @@ class TrimmedProfile:
             cv = cv[1]
         return cv
 
-    def makeShape(self, fp, cutshape):
+    def makeShape(self, fp, cutshape, shape=None):
+        if shape is None:
+            shape = fp.TrimmedBody.Shape
         if not cutshape.isNull():
-            fp.Shape = fp.TrimmedBody.Shape.cut(cutshape)
+            fp.Shape = shape.cut(cutshape)
         else:
             # TODO: Do something when cutshape is Null
             print("cut_shape is Null")

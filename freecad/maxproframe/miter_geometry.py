@@ -12,6 +12,8 @@ import FreeCAD as App
 import Part
 
 TOLERANCE = 1e-7
+# Longest extension, in section diagonals, before a joint is refused as too far.
+EXTENSION_LIMIT = 10.0
 
 
 class MiterError(RuntimeError):
@@ -23,28 +25,43 @@ class Member:
 
     def __init__(self, edge, profile_shape):
         self.edge = edge
-        self.offset = _section_offset(edge, profile_shape)
+        self.section = _section(edge, profile_shape)
 
     def end(self, at_start):
         """Point, outward direction (into the member) and section centroid at one end."""
+        point, inward, _ = self._end_frame(at_start)
+        section = self.section_at(at_start)
+        centroid = section.CenterOfMass if section.Faces else section.BoundBox.Center
+        return point, inward, centroid
+
+    def section_at(self, at_start):
+        """The mid-edge section moved to one end of the path."""
+        _, _, placement = self._end_frame(at_start)
+        return self.section.transformed(placement.toMatrix())
+
+    def _end_frame(self, at_start):
         param = self.edge.FirstParameter if at_start else self.edge.LastParameter
         point = self.edge.valueAt(param)
         tangent = self.edge.tangentAt(param).normalize()
-        mid_tangent = self.edge.tangentAt(_mid_parameter(self.edge)).normalize()
+        mid_param = _mid_parameter(self.edge)
+        mid_point = self.edge.valueAt(mid_param)
+        mid_tangent = self.edge.tangentAt(mid_param).normalize()
         # A planar sweep keeps the section offset in the edge frame: turn it with the tangent.
-        centroid = point + App.Rotation(mid_tangent, tangent).multVec(self.offset)
+        rotation = App.Rotation(mid_tangent, tangent)
+        placement = App.Placement(point - rotation.multVec(mid_point), rotation)
         inward = tangent if at_start else -tangent
-        return point, inward, centroid
+        return point, inward, placement
 
 
 class MiterPlane:
     """Plane at ``origin`` with unit ``normal`` pointing into the kept member."""
 
-    def __init__(self, origin, normal, member_end, inward):
+    def __init__(self, origin, normal, member_end, inward, section):
         self.origin = origin
         self.normal = normal
         self.member_end = member_end
         self.inward = inward
+        self.section = section
 
     def cut_angle(self):
         """Angle between the cut and a square cut, in degrees."""
@@ -52,7 +69,25 @@ class MiterPlane:
         return round(math.degrees(math.acos(cosine)), 1)
 
     def shifted(self, distance):
-        return MiterPlane(self.origin + self.normal * distance, self.normal, self.member_end, self.inward)
+        return MiterPlane(self.origin + self.normal * distance, self.normal, self.member_end, self.inward, self.section)
+
+    def extension(self):
+        """Prism that prolongs the member end past the plane, or None when the end already passes it."""
+        if not self.section.Faces:
+            raise MiterError("End Miter: the profile section is not a closed face and cannot be extended.")
+        along = self.normal.dot(self.inward)
+        diagonal = self.section.BoundBox.DiagonalLength
+        needed = (self.section.CenterOfMass - self.origin).dot(self.normal) / along
+        if needed > EXTENSION_LIMIT * diagonal:
+            raise MiterError(
+                f"End Miter: the joint is too far to extend the profile ({needed:.1f} mm, "
+                f"limit {EXTENSION_LIMIT * diagonal:.1f} mm)."
+            )
+        # The farthest section point lies at most one diagonal away from the axis.
+        length = needed + diagonal / along
+        if length <= TOLERANCE:
+            return None
+        return self.section.extrude(-self.inward * length)
 
     def removal_volume(self, shape):
         """Half-space beyond the plane, large enough to cover ``shape``."""
@@ -76,7 +111,7 @@ def miter_plane(member, other):
         raise MiterError("End Miter: profiles overlap in the same direction.")
     normal.normalize()
     origin = _axes_crossing(centroid, inward, other_centroid, other_inward)
-    return MiterPlane(origin, normal, point, inward)
+    return MiterPlane(origin, normal, point, inward, member.section_at(at_start))
 
 
 def _meeting_ends(edge, other):
@@ -109,8 +144,8 @@ def _mid_parameter(edge):
     return (edge.FirstParameter + edge.LastParameter) / 2.0
 
 
-def _section_offset(edge, profile_shape):
-    """Vector from the path at mid-edge to the centroid of the profile section there."""
+def _section(edge, profile_shape):
+    """Profile section at mid-edge: a face, or its wires when they do not bound one."""
     param = _mid_parameter(edge)
     point = edge.valueAt(param)
     tangent = edge.tangentAt(param).normalize()
@@ -121,10 +156,9 @@ def _section_offset(edge, profile_shape):
     nearest = min((w.BoundBox.Center - point).Length for w in wires)
     wires = [w for w in wires if (w.BoundBox.Center - point).Length <= nearest + reach / 2.0]
     try:
-        centroid = Part.makeFace(wires, "Part::FaceMakerBullseye").CenterOfMass
+        return Part.makeFace(wires, "Part::FaceMakerBullseye")
     except Part.OCCError:
-        centroid = Part.Compound(wires).BoundBox.Center
-    return centroid - point
+        return Part.Compound(wires)
 
 
 def _perpendicular(vector):
