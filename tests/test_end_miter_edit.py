@@ -6,6 +6,7 @@ from unittest.mock import patch
 import FreeCAD as App
 import FreeCADGui as Gui
 import Part
+from miter_helpers import use_language
 from PySide import QtWidgets
 from test_end_miter_geometry import CENTER, CHAINED, MiterFixture
 
@@ -55,6 +56,8 @@ class TestEditEndMiter(MiterFixture):
 
     def setUp(self):
         super().setUp()
+        # Messages are asserted in English, whatever language earlier tests left behind.
+        use_language(self, "English", "en_US")
         self.doc.UndoMode = 1
         App.setActiveDocument(self.doc.Name)
         Gui.Selection.clearSelection()
@@ -138,6 +141,27 @@ class TestEditEndMiter(MiterFixture):
             self.assertAlmostEqual(obj.MiterGap.Value, 0.2)
             self.assertAlmostEqual(obj.Shape.Volume, volume, places=5)
         self.assertEqual(self.doc.UndoCount, 0)
+
+    def test_ok_with_a_miter_that_fails_keeps_the_panel_open_and_changes_nothing(self):
+        # The first path ends 4 m away from the corner: extending it is refused as too far.
+        edges = (((5000, 0, 0), (4000, 0, 0)), ((0, 0, 0), (0, 200, 0)))
+        sketches = [self.make_sketch(edge) for edge in edges]
+        p1, p2 = (self.make_profile(sketch, "Edge1", extension=0.0) for sketch in sketches)
+        m1 = create_end_miter_tool.make_end_miter_profile(p1, [p2], extend=False)
+        m2 = create_end_miter_tool.make_end_miter_profile(p2, [p1], extend=False)
+        self.doc.recompute()
+        self.assertEqual(m1.getStatusString(), "Valid")
+        self.doc.clearUndos()
+        panel = self.open_miter_editor(m1)
+        panel.form.cb_extend.setChecked(True)
+        self.assertFalse(panel.accept())
+        self.assertTrue(Gui.Control.activeDialog())
+        self.assertIn("too far", panel.form.message_label.text())
+        self.assertIn("Extend and Gap apply to", panel.form.message_label.text())
+        self.assertEqual(self.doc.UndoCount, 0)
+        for obj in (m1, m2):
+            self.assertFalse(obj.MiterExtend)
+            self.assertEqual(obj.getStatusString(), "Valid")
 
     def test_miters_created_before_extend_and_gap_can_be_edited(self):
         _, (m1, m2) = self.pair(extend=False)

@@ -5,6 +5,7 @@ import unittest
 import FreeCAD as App
 from test_end_miter_geometry import CENTER, CHAINED, MiterFixture
 
+from freecad.maxproframe import create_profiles_tool, create_trimmed_profiles_tool
 from freecad.maxproframe.create_trimmed_profiles_tool import TrimProfileCommand
 
 
@@ -29,6 +30,10 @@ class TestEndTrimContainer(MiterFixture):
         placed = trim.getParentGeoFeatureGroup().getGlobalPlacement().multVec(trim.Shape.BoundBox.Center)
         expected = inner.getGlobalPlacement().multVec(p1.Shape.BoundBox.Center)
         self.assertLess((placed - expected).Length, 60.0)
+
+    def test_trim_tool_places_trims_with_the_create_profile_helper(self):
+        # The End Trim tool depends on Create Profile, not on the End Miter command module.
+        self.assertIs(create_trimmed_profiles_tool.place_in_container_of, create_profiles_tool.place_in_container_of)
 
 
 if __name__ == "__main__":

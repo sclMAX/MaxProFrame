@@ -3,31 +3,11 @@
 import unittest
 
 import FreeCAD as App
-import FreeCADGui as Gui
-from PySide import QtCore, QtWidgets
+from miter_helpers import keep_auto_preview, use_language
+from PySide import QtWidgets
 from test_end_miter_geometry import CENTER, CHAINED, MiterFixture
 
 from freecad.maxproframe.create_end_miter_tool import EndMiterTaskPanel
-from freecad.maxproframe.ff_tools import TRANSLATIONSPATH
-
-
-def use_language(test, language, default):
-    """Switch the GUI language for one test and restore the previous one afterwards."""
-    prefs = App.ParamGet("User parameter:BaseApp/Preferences/General")
-    previous, locale, qt_default = prefs.GetString("Language", ""), Gui.getLocale(), QtCore.QLocale()
-
-    def restore():
-        prefs.SetString("Language", previous)
-        Gui.setLocale(locale)
-        Gui.updateLocale()
-        QtCore.QLocale.setDefault(qt_default)
-
-    test.addCleanup(restore)
-    Gui.addLanguagePath(TRANSLATIONSPATH)
-    prefs.SetString("Language", language)
-    Gui.setLocale(language)
-    Gui.updateLocale()
-    QtCore.QLocale.setDefault(QtCore.QLocale(default))
 
 
 class TestEndMiterTranslations(unittest.TestCase):
@@ -75,8 +55,6 @@ class TestEditEndMiterTranslations(MiterFixture):
         cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
     def test_preview_status_is_spanish(self):
-        from test_end_miter_preview import keep_auto_preview
-
         keep_auto_preview(self)
         sketches = [self.make_sketch(edge) for edge in CHAINED]
         members = [self.make_profile(sketch, "Edge1", **CENTER) for sketch in sketches]
