@@ -26,6 +26,7 @@ class AlignmentWidget(QtWidgets.QWidget):
         self.selected_anchor = (1, 1)
         self.rotation = 0.0
         self.mirrors = (False, False)
+        self.offset = (0.0, 0.0)
 
     def sizeHint(self):
         return QtCore.QSize(220, 180)
@@ -49,13 +50,36 @@ class AlignmentWidget(QtWidgets.QWidget):
         self.mirrors = (bool(mirror_h), bool(mirror_v))
         self.update()
 
+    def set_offset(self, offset):
+        """Set the edge-frame (x, y) displacement; None means unknown (mixed)."""
+        self.offset = (float(offset[0]), float(offset[1])) if offset is not None else None
+        self.update()
+
+    def _edge_from_center(self):
+        """Edge point in edge-frame units relative to the section center, or None."""
+        if self._bounds.isEmpty() or self.selected_anchor is None or self.offset is None:
+            return None
+        ax, ay = self.selected_anchor
+        anchor = (
+            QtGui.QTransform()
+            .rotate(self.rotation)
+            .map(QtCore.QPointF(self._bounds.width() * (ax - 1) / 2.0, self._bounds.height() * (ay - 1) / 2.0))
+        )
+        # The section is displaced by +offset from the edge.
+        return anchor - QtCore.QPointF(*self.offset)
+
     def _view_transform(self):
         center = self._bounds.center()
         rotation = QtGui.QTransform().rotate(self.rotation)
         rotated = rotation.mapRect(self._bounds)
+        half_w, half_h = rotated.width() / 2.0, rotated.height() / 2.0
+        edge = self._edge_from_center()
+        if edge is not None:
+            # Keep the view centered on the section while fitting the edge marker.
+            half_w, half_h = max(half_w, abs(edge.x())), max(half_h, abs(edge.y()))
         scale = min(
-            max(1, self.width() - 32) / max(rotated.width(), 1e-6),
-            max(1, self.height() - 32) / max(rotated.height(), 1e-6),
+            max(1, self.width() - 32) / max(2 * half_w, 1e-6),
+            max(1, self.height() - 32) / max(2 * half_h, 1e-6),
         )
         transform = QtGui.QTransform()
         transform.translate(self.width() / 2.0, self.height() / 2.0)
@@ -86,6 +110,19 @@ class AlignmentWidget(QtWidgets.QWidget):
                 self._bounds.top() + self._bounds.height() * ay / 2.0,
             )
         )
+
+    def edge_position(self):
+        """View position of the path edge, or None when it is unknown."""
+        edge = self._edge_from_center()
+        if edge is None:
+            return None
+        ax, ay = self.selected_anchor
+        anchor = self.anchor_position(ax, ay)
+        transform = self._view_transform()
+        scale = math.hypot(transform.m11(), transform.m12())
+        dx, dy = self.offset
+        # Edge-frame axes: +X right, +Y up (the view flips Y).
+        return anchor + QtCore.QPointF(-scale * dx, scale * dy)
 
     def mousePressEvent(self, event):
         if event.button() == QtCore.Qt.LeftButton and not self._bounds.isEmpty():
@@ -141,4 +178,14 @@ class AlignmentWidget(QtWidgets.QWidget):
                     painter.setPen(QtGui.QPen(palette.color(QtGui.QPalette.Text), 1.5))
                     painter.setBrush(palette.brush(QtGui.QPalette.Highlight if selected else QtGui.QPalette.Base))
                     painter.drawEllipse(self.anchor_position(ax, ay), 6 if selected else 4, 6 if selected else 4)
+            edge = self.edge_position()
+            if edge is not None and self.offset != (0.0, 0.0):
+                highlight = palette.color(QtGui.QPalette.Highlight)
+                painter.setPen(QtGui.QPen(highlight, 1.5, QtCore.Qt.DashLine))
+                painter.drawLine(self.anchor_position(*self.selected_anchor), edge)
+                painter.setPen(QtGui.QPen(highlight, 2))
+                painter.setBrush(QtCore.Qt.NoBrush)
+                painter.drawEllipse(edge, 5, 5)
+                painter.drawLine(edge - QtCore.QPointF(8, 0), edge + QtCore.QPointF(8, 0))
+                painter.drawLine(edge - QtCore.QPointF(0, 8), edge + QtCore.QPointF(0, 8))
         painter.end()

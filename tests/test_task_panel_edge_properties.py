@@ -1181,6 +1181,119 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertEqual(widget.selected_anchor, (0, 2))
         self.assertEqual(clicked, [(2, 1), (0, 2)])
 
+    def test_per_edge_offset_controls(self):
+        """Offset X/Y are per-edge placement values applied to the selected previews only."""
+        doc = self._new_doc("DocEdgeOffset")
+        sk = self._create_rectangle_sketch(doc)
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+        offset_x, offset_y = panel.form_proxy.sb_offset_x, panel.form_proxy.sb_offset_y
+        self.assertEqual((offset_x.value(), offset_y.value()), (0.0, 0.0))
+        self.assertEqual(offset_x.suffix(), " mm")
+        self.assertEqual(offset_x.accessibleName(), "Offset X")
+        self.assertEqual(offset_y.accessibleName(), "Offset Y")
+        self.assertLess(offset_x.minimum(), 0.0)
+        # Values set before any edge is picked seed new edges and their new profiles.
+        offset_x.setValue(4.0)
+        e1, e2 = (sk, "Edge1"), (sk, "Edge2")
+        panel._saved_selection = [
+            type("SelEx", (), {"Object": sk, "ObjectName": sk.Name, "SubElementNames": ["Edge1", "Edge2"]})()
+        ]
+        panel.update_selection()
+        panel.proceed()
+        p1, p2 = panel._objects[e1], panel._objects[e2]
+        self.assertEqual((p1.OffsetX.Value, p1.OffsetY.Value), (4.0, 0.0))
+        self.assertEqual((p2.OffsetX.Value, p2.OffsetY.Value), (4.0, 0.0))
+
+        panel.edge_list_widget.select_edge(e1)
+        sibling = p2.Shape.exportBrepToString()
+        center = p1.Shape.BoundBox.Center
+        offset_x.setValue(10.0)
+        offset_y.setValue(-3.0)
+        props = panel._get_properties_for_edge(*e1)
+        self.assertEqual((props["offset_x"], props["offset_y"]), (10.0, -3.0))
+        self.assertEqual((p1.OffsetX.Value, p1.OffsetY.Value), (10.0, -3.0))
+        self.assertNotEqual(p1.Shape.BoundBox.Center, center)
+        self.assertEqual(p2.Shape.exportBrepToString(), sibling)
+        self.assertEqual((p2.OffsetX.Value, p2.OffsetY.Value), (4.0, 0.0))
+
+        # Switching rows reloads each edge's offsets without editing either profile.
+        panel.edge_list_widget.select_edge(e2)
+        self.assertEqual((offset_x.value(), offset_y.value()), (4.0, 0.0))
+        panel.edge_list_widget.select_edge(e1)
+        self.assertEqual((offset_x.value(), offset_y.value()), (10.0, -3.0))
+        self.assertEqual(panel.alignment_widget.offset, (10.0, -3.0))
+        self.assertEqual((p1.OffsetX.Value, p1.OffsetY.Value), (10.0, -3.0))
+        self.assertEqual((p2.OffsetX.Value, p2.OffsetY.Value), (4.0, 0.0))
+
+        # Mixed X stays per edge while a Y edit reaches every selected edge.
+        panel.edge_list_widget.list_widget.item(1).setSelected(True)
+        self.assertTrue(offset_x.property("mixedValues"))
+        self.assertTrue(offset_y.property("mixedValues"))
+        self.assertEqual((p1.OffsetX.Value, p2.OffsetX.Value), (10.0, 4.0))
+        offset_y.setValue(2.5)
+        self.assertEqual((p1.OffsetX.Value, p1.OffsetY.Value), (10.0, 2.5))
+        self.assertEqual((p2.OffsetX.Value, p2.OffsetY.Value), (4.0, 2.5))
+        self.assertTrue(offset_x.property("mixedValues"))
+        self.assertFalse(offset_y.property("mixedValues"))
+        # The preview cannot place the edge while X differs between edges.
+        self.assertIsNone(panel.alignment_widget.offset)
+
+        panel.edge_list_widget.list_widget.clearSelection()
+        self.assertFalse(offset_x.isEnabled())
+        self.assertFalse(offset_y.isEnabled())
+        panel.edge_list_widget.select_edge(e1)
+        self.assertTrue(offset_x.isEnabled())
+        self.assertEqual((p1.OffsetX.Value, p1.OffsetY.Value), (10.0, 2.5))
+
+        # Accept keeps the per-edge values and does not store the offset as a default.
+        panel.accept()
+        self.app.processEvents()
+        self.assertEqual((p1.OffsetX.Value, p1.OffsetY.Value), (10.0, 2.5))
+        self.assertEqual((p2.OffsetX.Value, p2.OffsetY.Value), (4.0, 2.5))
+        keys = [k for _t, k, _v in get_param_group().GetContents()]
+        self.assertFalse(any("Offset" in k for k in keys))
+
+    def test_edit_panel_loads_and_updates_offsets(self):
+        doc = self._new_doc("DocEditOffset")
+        obj = doc.addObject("Part::FeaturePython", "OffsetProfile")
+        obj.addExtension("Part::AttachExtensionPython")
+        Profile(
+            obj,
+            init_w=40.0,
+            init_h=40.0,
+            init_mt=2.0,
+            init_ft=0.0,
+            init_r1=0.0,
+            init_r2=0.0,
+            init_len=500.0,
+            init_wg=2.0,
+            init_unit_price=10.0,
+            init_mf=False,
+            init_anchor_x=1,
+            init_anchor_y=1,
+            material="Metal",
+            fam="Square Hollow",
+            size_name="40x40x2",
+            bevels_combined=False,
+            catalog_family="Square Hollow",
+            init_offset_x=5.0,
+            init_offset_y=-2.0,
+        )
+        doc.recompute()
+        edit_panel = EditProfileTaskPanel(obj)
+        self.panels.append(edit_panel)
+        edit_panel.initialize_ui()
+        self.assertEqual(edit_panel.form_proxy.sb_offset_x.value(), 5.0)
+        self.assertEqual(edit_panel.form_proxy.sb_offset_y.value(), -2.0)
+        self.assertEqual((obj.OffsetX.Value, obj.OffsetY.Value), (5.0, -2.0))
+        edit_panel.form_proxy.sb_offset_x.setValue(7.0)
+        self.assertEqual((obj.OffsetX.Value, obj.OffsetY.Value), (7.0, -2.0))
+        edit_panel.form_proxy.sb_offset_y.setValue(0.0)
+        self.assertEqual((obj.OffsetX.Value, obj.OffsetY.Value), (7.0, 0.0))
+        self.assertEqual(obj.AttachmentOffset.Base, App.Vector(7.0, 0.0, 0.0))
+
 
 if __name__ == "__main__":
     unittest.main()

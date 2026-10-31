@@ -124,3 +124,62 @@ class TestAlignmentWidget(unittest.TestCase):
         press(QtCore.Qt.Key_Down)
         self.assertEqual(self.widget.selected_anchor, (1, 1))
         self.assertEqual(clicks[-1], (1, 1))
+
+    def test_edge_marker_stays_in_the_edge_frame(self):
+        self.widget.set_state((2, 0), 0, False, False)
+        self.assertEqual(self.widget.offset, (0.0, 0.0))
+        self.assertEqual(self.widget.edge_position(), self.widget.anchor_position(2, 0))
+
+        def direction():
+            delta = self.widget.edge_position() - self.widget.anchor_position(*self.widget.selected_anchor)
+            length = math.hypot(delta.x(), delta.y())
+            return (delta.x() / length, delta.y() / length)
+
+        # The section moves by +offset, so the edge lies at -offset from the anchor.
+        self.widget.set_offset((10, 5))
+        delta = self.widget.edge_position() - self.widget.anchor_position(2, 0)
+        self.assertLess(delta.x(), 0)
+        self.assertGreater(delta.y(), 0)
+        self.assertAlmostEqual(abs(delta.x()), 2 * abs(delta.y()), places=5)
+        baseline = direction()
+        for angle in (37, 90, 180):
+            for mh, mv in ((False, False), (True, False), (False, True), (True, True)):
+                self.widget.set_state((2, 0), angle, mh, mv)
+                for actual, expected in zip(direction(), baseline):
+                    self.assertAlmostEqual(actual, expected, places=5)
+        self.widget.grab()
+
+    def test_large_offset_keeps_edge_inside_and_unknown_offset_hides_it(self):
+        for anchor in ((0, 0), (1, 1), (2, 2)):
+            for offset in ((500, 0), (0, -500), (-500, 500)):
+                self.widget.set_state(anchor, 90, True, False)
+                self.widget.set_offset(offset)
+                edge = self.widget.edge_position()
+                self.assertTrue(QtCore.QRectF(self.widget.rect()).contains(edge), (anchor, offset, edge))
+                for ax in range(3):
+                    for ay in range(3):
+                        point = self.widget.anchor_position(ax, ay)
+                        self.assertTrue(QtCore.QRectF(self.widget.rect()).contains(point))
+        self.widget.set_offset(None)
+        self.assertIsNone(self.widget.offset)
+        self.assertIsNone(self.widget.edge_position())
+        self.widget.grab()
+        self.widget.set_offset((3, 4))
+        self.widget.set_state(None)
+        self.assertIsNone(self.widget.edge_position())
+        self.widget.set_section(None)
+        self.assertIsNone(self.widget.edge_position())
+
+    def test_anchor_clicks_still_select_nine_ids_with_an_offset(self):
+        clicks = []
+        self.widget.anchorClicked.connect(lambda x, y: clicks.append((x, y)))
+        self.widget.set_offset((60, -40))
+        for angle in (0, 90):
+            self.widget.set_state((1, 1), angle, False, True)
+            for ax in range(3):
+                for ay in range(3):
+                    point = self.widget.anchor_position(ax, ay)
+                    _Mouse.mouseClick(self.widget, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, point.toPoint())
+                    self.assertEqual(clicks[-1], (ax, ay))
+                    self.assertEqual(self.widget.selected_anchor, (ax, ay))
+        self.assertEqual(len(clicks), 18)

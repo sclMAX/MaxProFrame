@@ -96,6 +96,11 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
             ay = 1 if getattr(self.profile, "CenteredOnHeight", False) else 0
         self.set_anchor(ax, ay)
         self.set_rotation(getattr(self.profile, "RotationAngle", 0.0))
+        offset_x = getattr(self.profile, "OffsetX", None)
+        offset_y = getattr(self.profile, "OffsetY", None)
+        self.set_offset(
+            offset_x.Value if offset_x is not None else 0.0, offset_y.Value if offset_y is not None else 0.0
+        )
         self.form_proxy.cb_mirror_h.setChecked(getattr(self.profile, "MirrorH", False))
         self.form_proxy.cb_mirror_v.setChecked(getattr(self.profile, "MirrorV", False))
 
