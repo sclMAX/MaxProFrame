@@ -170,10 +170,73 @@ class TestAlignmentWidget(unittest.TestCase):
         self.widget.set_section(None)
         self.assertIsNone(self.widget.edge_position())
 
+    def test_large_offset_keeps_section_readable_and_clips_the_marker(self):
+        def span():
+            delta = self.widget.anchor_position(2, 1) - self.widget.anchor_position(0, 1)
+            return math.hypot(delta.x(), delta.y())
+
+        def direction():
+            delta = self.widget.edge_position() - self.widget.anchor_position(*self.widget.selected_anchor)
+            length = math.hypot(delta.x(), delta.y())
+            return (delta.x() / length, delta.y() / length)
+
+        for angle in (0, 90):
+            self.widget.set_state((1, 1), angle, False, False)
+            self.widget.set_offset((0, 0))
+            full = span()
+            self.widget.set_offset((10, 5))
+            self.assertFalse(self.widget.edge_clipped())
+            self.assertIsNone(self.widget.edge_label())
+            near = direction()
+            self.widget.set_offset((500, 250))
+            # The section never shrinks below half of its offset-free size.
+            self.assertGreaterEqual(span(), full / 2 - 1e-6)
+            self.assertTrue(self.widget.edge_clipped())
+            self.assertTrue(QtCore.QRectF(self.widget.rect()).contains(self.widget.edge_position()))
+            for actual, expected in zip(direction(), near):
+                self.assertAlmostEqual(actual, expected, places=5)
+            # The label repeats the typed X/Y values, never a derived diagonal distance.
+            self.assertEqual(self.widget.edge_label(), "X 500 \u00b7 Y 250 mm")
+            self.widget.grab()
+        self.widget.set_state((1, 1), 0, False, False)
+        point = QtCore.QLocale().decimalPoint()
+        for offset, label in (
+            ((0, -500), "Y -500 mm"),
+            ((-400, 0), "X -400 mm"),
+            ((12.5, 600), "X 12%s5 \u00b7 Y 600 mm" % point),
+        ):
+            self.widget.set_offset(offset)
+            self.assertTrue(self.widget.edge_clipped(), offset)
+            self.assertEqual(self.widget.edge_label(), label)
+        self.widget.set_offset(None)
+        self.assertFalse(self.widget.edge_clipped())
+        self.assertIsNone(self.widget.edge_label())
+
+    def test_edge_marker_color_follows_theme_with_readable_contrast(self):
+        def themed(base, text, highlight):
+            palette = QtGui.QPalette(self.widget.palette())
+            for role, color in (
+                (QtGui.QPalette.Base, base),
+                (QtGui.QPalette.Text, text),
+                (QtGui.QPalette.Highlight, highlight),
+            ):
+                palette.setColor(role, QtGui.QColor(color))
+            # A FreeCAD theme switch reaches the widget as a palette change, not a stylesheet.
+            self.widget.setPalette(palette)
+            self.widget.set_offset((500, 250))
+            self.widget.grab()
+            return self.widget.marker_color()
+
+        # Dark theme whose highlight barely differs from the base: fall back to the text color.
+        self.assertEqual(themed("#232323", "#e6e6e6", "#1d4466"), QtGui.QColor("#e6e6e6"))
+        # Light theme with a readable highlight: keep the theme accent.
+        self.assertEqual(themed("#ffffff", "#1a1a1a", "#1f5fbf"), QtGui.QColor("#1f5fbf"))
+        self.assertEqual(self.widget.styleSheet(), "")
+
     def test_anchor_clicks_still_select_nine_ids_with_an_offset(self):
         clicks = []
         self.widget.anchorClicked.connect(lambda x, y: clicks.append((x, y)))
-        self.widget.set_offset((60, -40))
+        self.widget.set_offset((600, -400))
         for angle in (0, 90):
             self.widget.set_state((1, 1), angle, False, True)
             for ax in range(3):
