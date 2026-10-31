@@ -350,6 +350,40 @@ class TestProfileParentGuard(unittest.TestCase):
         self.assertEqual(set(side.Group), {self.path, profile})
         self.assert_parametric_profile(profile, 100)
 
+    def test_create_part_keeps_a_sketch_inside_its_folder_in_a_reused_part(self):
+        side = self.doc.addObject("App::Part", "Side")
+        folder = self.doc.addObject("App::DocumentObjectGroup", "Folder")
+        side.addObject(folder)
+        folder.addObject(self.path)
+        self.doc.recompute()
+        panel = self.preview_panel(True)
+        panel.proceed()
+        profile = next(iter(panel._objects.values()))
+        # The sketch stays in its folder and the profile joins it there.
+        self.assertEqual(self.parts(), [side])
+        self.assertEqual(folder.Group, [self.path, profile])
+        self.assertEqual(set(side.Group), {folder, self.path, profile})
+        self.assertEqual(profile.getParentGeoFeatureGroup(), side)
+        self.assert_parametric_profile(profile, 100)
+
+    def test_create_part_reuses_a_part_subtype_such_as_an_assembly(self):
+        try:
+            import UtilsAssembly  # noqa: F401  # Registers Assembly::AssemblyObject.
+
+            assembly = self.doc.addObject("Assembly::AssemblyObject", "Assembly")
+        except Exception as error:
+            self.skipTest("Assembly workbench unavailable: %s" % error)
+        self.assertTrue(assembly.isDerivedFrom("App::Part"))
+        assembly.addObject(self.path)
+        self.doc.recompute()
+        panel = self.preview_panel(True)
+        panel.proceed()
+        profile = next(iter(panel._objects.values()))
+        self.assertEqual([obj for obj in self.doc.Objects if obj.isDerivedFrom("App::Part")], [assembly])
+        self.assertEqual(assembly.getParentGeoFeatureGroup(), None)
+        self.assertIn(profile, assembly.Group)
+        self.assert_parametric_profile(profile, 100)
+
     def test_in_place_uses_the_sketch_own_part_not_the_outermost(self):
         chair = self.doc.addObject("App::Part", "Chair")
         side = self.doc.addObject("App::Part", "Side")

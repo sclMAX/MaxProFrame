@@ -2527,7 +2527,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def _part_member(self, source):
         """Object a Part must hold to contain the source: the source, or the Body that owns it."""
         parent = source.getParentGeoFeatureGroup() if hasattr(source, "getParentGeoFeatureGroup") else None
-        if parent is not None and parent.TypeId != "App::Part":
+        if parent is not None and not parent.isDerivedFrom("App::Part"):
             # Moving a sketch out of its Body empties the Body's shape; move the whole Body instead.
             return parent
         return source
@@ -2536,7 +2536,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         """Part that receives a source and its profiles: the one already holding it, else one per session."""
         member = self._part_member(source)
         parent = member.getParentGeoFeatureGroup() if hasattr(member, "getParentGeoFeatureGroup") else None
-        if parent is not None and parent.TypeId == "App::Part":
+        if parent is not None and parent.isDerivedFrom("App::Part"):
             # Later sessions add to the same component instead of splitting it across new Parts.
             return parent
         target_doc = self._profile_target_document()
