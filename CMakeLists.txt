@@ -50,6 +50,12 @@ set(Namespace_SRCS
         freecad/maxproframe/resources/images/profiles/Warehouse.png
         freecad/maxproframe/resources/images/profiles/Custom_Profile.png
         freecad/maxproframe/resources/images/profiles/Metal/Custom_Profile.png
+        freecad/maxproframe/resources/images/profiles/Metal/T-Slot.png
+        freecad/maxproframe/resources/images/profiles/Metal/T-Slot_1-Slot.png
+        freecad/maxproframe/resources/images/profiles/Metal/T-Slot_2-Slots.png
+        freecad/maxproframe/resources/images/profiles/Metal/T-Slot_2-Slots_Opp.png
+        freecad/maxproframe/resources/images/profiles/Metal/T-Slot_3-Slots.png
+        freecad/maxproframe/resources/images/profiles/Metal/V-Slot.png
 
         freecad/maxproframe/resources/ui/create_trimmed_profiles.ui
         freecad/maxproframe/resources/ui/create_profiles.ui
