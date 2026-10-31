@@ -795,7 +795,8 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertEqual(names, ["Edge2", "Edge2", "Vertex1", "Edge999"])
         self.assertEqual(normalize(select(solid, ["Face1", "Vertex1", "Edge1"])), ["Edge1"])
         self.assertEqual(normalize(select(solid, ["Face1", "Vertex1"])), [])
-        self.assertEqual(len(normalize(select(solid, []))), len(solid.Shape.Edges))
+        # A whole solid is not a path; only explicitly picked edges of it are.
+        self.assertEqual(normalize(select(solid, [])), [])
 
     def test_per_edge_face_colors_restore_on_row_mode_and_clean(self):
         doc = self._new_doc("DocFaceColors")

@@ -178,6 +178,8 @@ class TestProfileParentGuard(unittest.TestCase):
         panel._edge_properties = {}
         panel._edge_sections = {}
         panel._excluded_edges = set()
+        panel._part_moves = {}
+        panel._placed_in_part = False
         panel._saved_selection = [SimpleNamespace(Object=self.path, SubElementNames=["Edge1"])]
         panel._mutation_depth = 0
         panel._selection_pending = False
@@ -202,6 +204,184 @@ class TestProfileParentGuard(unittest.TestCase):
         self.assertEqual(set(parts[0].Group), {self.path, profile})
         self.assertEqual(list(panel._objects.values()), [profile])
         self.assert_parametric_profile(profile, 100)
+
+    def test_create_part_reuses_the_part_that_already_holds_the_sketch(self):
+        chair = self.doc.addObject("App::Part", "Chair")
+        side = self.doc.addObject("App::Part", "Side")
+        chair.addObject(side)
+        side.addObject(self.path)
+        self.doc.recompute()
+        panel = self.preview_panel(True)
+        for _ in range(2):
+            panel.proceed()
+        profile = next(iter(panel._objects.values()))
+        parts = [obj for obj in self.doc.Objects if obj.TypeId == "App::Part"]
+        self.assertEqual(set(parts), {chair, side})
+        self.assertEqual(set(side.Group), {self.path, profile})
+        self.assertEqual(chair.Group, [side])
+        self.assert_parametric_profile(profile, 100)
+
+    def body_with_pad(self):
+        body = self.doc.addObject("PartDesign::Body", "Body")
+        body.addObject(self.path)
+        base = body.newObject("Sketcher::SketchObject", "Base")
+        points = [(0, 0), (30, 0), (30, 30), (0, 30), (0, 0)]
+        for start, end in zip(points, points[1:]):
+            base.addGeometry(Part.LineSegment(App.Vector(*start, 0), App.Vector(*end, 0)), False)
+        pad = body.newObject("PartDesign::Pad", "Pad")
+        pad.Profile = base
+        pad.Length = 5
+        self.doc.recompute()
+        self.assertEqual(body.Tip, pad)
+        return body, pad
+
+    def assert_body_intact(self, body, pad):
+        self.assertIn(self.path, body.Group)
+        self.assertEqual(body.Tip, pad)
+        self.assertFalse(body.Shape.isNull())
+        self.assertAlmostEqual(body.Shape.Volume, 30 * 30 * 5)
+
+    def assert_follows_sketch(self, profile):
+        self.assert_parametric_profile(profile, 100)
+        self.path.setDatum(0, App.Units.Quantity("150 mm"))
+        self.doc.recompute()
+        self.assert_parametric_profile(profile, 150)
+
+    def test_create_part_moves_the_whole_body_never_its_sketch(self):
+        body, pad = self.body_with_pad()
+        panel = self.preview_panel(True)
+        panel.proceed()
+        profile = next(iter(panel._objects.values()))
+        parts = [obj for obj in self.doc.Objects if obj.TypeId == "App::Part"]
+        self.assertEqual(len(parts), 1)
+        self.assertEqual(set(parts[0].Group), {body, profile})
+        self.assert_body_intact(body, pad)
+        self.assert_follows_sketch(profile)
+        self.assert_body_intact(body, pad)
+
+    def test_create_part_reuses_the_part_that_holds_the_body(self):
+        body, pad = self.body_with_pad()
+        side = self.doc.addObject("App::Part", "Side")
+        side.addObject(body)
+        self.doc.recompute()
+        panel = self.preview_panel(True)
+        panel.proceed()
+        profile = next(iter(panel._objects.values()))
+        self.assertEqual([obj for obj in self.doc.Objects if obj.TypeId == "App::Part"], [side])
+        self.assertEqual(set(side.Group), {body, profile})
+        self.assert_body_intact(body, pad)
+        self.assert_follows_sketch(profile)
+
+    def test_second_session_adds_to_the_part_created_by_the_first(self):
+        first = self.preview_panel(True)
+        first.proceed()
+        second = self.preview_panel(True)
+        second.proceed()
+        profiles = [next(iter(panel._objects.values())) for panel in (first, second)]
+        parts = [obj for obj in self.doc.Objects if obj.TypeId == "App::Part"]
+        self.assertEqual(len(parts), 1)
+        self.assertEqual(set(parts[0].Group), {self.path, *profiles})
+        for profile in profiles:
+            self.assert_parametric_profile(profile, 100)
+
+    def switch(self, panel, in_part):
+        panel.form_proxy.rb_profiles_in_part.isChecked.return_value = in_part
+        panel.proceed()
+
+    def parts(self):
+        return [obj for obj in self.doc.Objects if obj.TypeId == "App::Part"]
+
+    def test_switch_to_in_place_returns_sketch_and_deletes_session_part(self):
+        panel = self.preview_panel(True)
+        panel.proceed()
+        profile = next(iter(panel._objects.values()))
+        self.assertEqual(len(self.parts()), 1)
+        self.switch(panel, False)
+        self.assertEqual(self.parts(), [])
+        self.assertEqual({obj.Name for obj in self.doc.Objects}, {self.path.Name, self.section.Name, profile.Name})
+        self.assertEqual(self.path.Parents, [])
+        self.assertEqual(profile.Parents, [])
+        self.assertEqual(list(panel._objects.values()), [profile])
+        self.assert_parametric_profile(profile, 100)
+        self.switch(panel, True)
+        self.assertEqual(len(self.parts()), 1)
+        self.assertEqual(set(self.parts()[0].Group), {self.path, profile})
+        self.assert_parametric_profile(profile, 100)
+
+    def test_switch_to_in_place_returns_sketch_to_its_group(self):
+        folder = self.doc.addObject("App::DocumentObjectGroup", "Folder")
+        folder.addObject(self.path)
+        self.doc.recompute()
+        panel = self.preview_panel(True)
+        panel.proceed()
+        profile = next(iter(panel._objects.values()))
+        self.assertIn(self.path, self.parts()[0].Group)
+        self.switch(panel, False)
+        self.assertEqual(self.parts(), [])
+        self.assertEqual(self.path.getParentGroup(), folder)
+        # Previews follow the same rule as a profile created In place.
+        direct = creation_panel().make_profile(self.path, "Edge1", "Direct")
+        self.assertEqual(profile.getParentGroup(), direct.getParentGroup())
+        self.assertEqual(profile.Parents, direct.Parents)
+        self.assert_parametric_profile(profile, 100)
+
+    def test_switch_to_in_place_returns_body_and_keeps_it_intact(self):
+        body, pad = self.body_with_pad()
+        panel = self.preview_panel(True)
+        panel.proceed()
+        profile = next(iter(panel._objects.values()))
+        self.assertEqual(set(self.parts()[0].Group), {body, profile})
+        self.switch(panel, False)
+        self.assertEqual(self.parts(), [])
+        self.assertEqual(body.Parents, [])
+        self.assertEqual(profile.Parents, [])
+        self.assert_body_intact(body, pad)
+        self.assert_follows_sketch(profile)
+
+    def test_switch_to_in_place_never_deletes_a_reused_part(self):
+        side = self.doc.addObject("App::Part", "Side")
+        side.addObject(self.path)
+        self.doc.recompute()
+        panel = self.preview_panel(True)
+        panel.proceed()
+        profile = next(iter(panel._objects.values()))
+        self.switch(panel, False)
+        self.assertEqual(self.parts(), [side])
+        self.assertEqual(set(side.Group), {self.path, profile})
+        self.assert_parametric_profile(profile, 100)
+
+    def test_in_place_uses_the_sketch_own_part_not_the_outermost(self):
+        chair = self.doc.addObject("App::Part", "Chair")
+        side = self.doc.addObject("App::Part", "Side")
+        chair.addObject(side)
+        side.addObject(self.path)
+        self.doc.recompute()
+        profile = creation_panel().make_profile(self.path, "Edge1", "Profile")
+        self.doc.recompute()
+        self.assertEqual(set(side.Group), {self.path, profile})
+        self.assertEqual(chair.Group, [side])
+        self.assertEqual(self.parts(), [chair, side])
+        self.assert_parametric_profile(profile, 100)
+
+    def test_in_place_uses_the_sketch_folder(self):
+        folder = self.doc.addObject("App::DocumentObjectGroup", "Folder")
+        folder.addObject(self.path)
+        self.doc.recompute()
+        profile = creation_panel().make_profile(self.path, "Edge1", "Profile")
+        self.doc.recompute()
+        self.assertEqual(set(folder.Group), {self.path, profile})
+        self.assert_parametric_profile(profile, 100)
+
+    def test_in_place_beside_a_body_goes_to_the_part_holding_it(self):
+        body, pad = self.body_with_pad()
+        side = self.doc.addObject("App::Part", "Side")
+        side.addObject(body)
+        self.doc.recompute()
+        profile = creation_panel().make_profile(self.path, "Edge1", "Profile")
+        self.doc.recompute()
+        self.assertEqual(set(side.Group), {body, profile})
+        self.assert_body_intact(body, pad)
+        self.assert_follows_sketch(profile)
 
     def test_same_place_preview_does_not_create_part(self):
         panel = self.preview_panel(False)

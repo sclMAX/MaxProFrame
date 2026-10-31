@@ -39,6 +39,7 @@
     <message><source>1 edge selected</source><translation>1 arista seleccionada</translation></message>
     <message><source>%s edges selected</source><translation>%s aristas seleccionadas</translation></message>
     <message><source>Select edges or a whole object to use its edges, or enter a positive length.</source><translation>Seleccioná aristas o un objeto completo para usar sus aristas, o ingresá una longitud positiva.</translation></message>
+    <message><source>Ignored %s: select a sketch, wire or specific edges.</source><translation>Se ignoró %s: seleccioná un croquis, un alambre o aristas específicas.</translation></message>
     <message><source>Pending changes</source><translation>Cambios pendientes</translation></message>
     <message><source>Preview updated</source><translation>Previsualización actualizada</translation></message>
     <message><source>Apply: update preview. OK: confirm. Cancel: discard.</source><translation>Aplicar: actualizar la previsualización. OK: confirmar. Cancelar: descartar.</translation></message>

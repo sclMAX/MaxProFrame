@@ -26,6 +26,7 @@ from freecad.maxproframe.ff_tools import (
     translate,
 )
 from freecad.maxproframe.library_manager import LibraryManager, get_canonical_family
+from freecad.maxproframe.parametric_line import ParametricLine
 from freecad.maxproframe.profile import Profile, ViewProviderCustomProfile, ViewProviderProfile
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, release_layout_item_wrappers
 from freecad.maxproframe.section_library import find_existing_section_sketch, get_or_import_section_sketch
@@ -737,6 +738,12 @@ class BaseProfileTaskPanel(ABC):
                 execute_if_has_bool("Default Mirror Horizontally", self.form_proxy.cb_mirror_h.setChecked)
                 execute_if_has_bool("Default Mirror Vertically", self.form_proxy.cb_mirror_v.setChecked)
                 execute_if_has_bool("Default Pre Extend", self.form_proxy.cb_pre_extend.setChecked)
+                execute_if_has_bool(
+                    "Default Profiles In Part",
+                    lambda in_part: (
+                        self.form_proxy.rb_profiles_in_part if in_part else self.form_proxy.rb_profiles_in_place
+                    ).setChecked(True),
+                )
                 keys = [k for t, k, v in param.GetContents()]
                 if "Default AnchorX" in keys:
                     ax = max(0, min(2, param.GetInt("Default AnchorX", 1)))
@@ -1466,6 +1473,31 @@ def _guard_reconciliation(method):
     return guarded
 
 
+def _nearest_group(obj):
+    """Closest group holding obj: a folder (getParentGroup) or else a Part/Body (getParentGeoFeatureGroup)."""
+    folder = obj.getParentGroup() if hasattr(obj, "getParentGroup") else None
+    if folder is not None:
+        return folder
+    return obj.getParentGeoFeatureGroup() if hasattr(obj, "getParentGeoFeatureGroup") else None
+
+
+def _is_container(obj):
+    """Parts, Bodies and groups: their shape's edge names do not resolve to a child."""
+    return hasattr(obj, "hasExtension") and obj.hasExtension("App::GroupExtension")
+
+
+def _is_path_source(obj):
+    """Whole objects that stand for a path: sketches, 2D objects, parametric lines and bare wires."""
+    if _is_container(obj):
+        return False
+    if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Part::Part2DObject"):
+        return True
+    if isinstance(getattr(obj, "Proxy", None), ParametricLine):
+        return True
+    shape = getattr(obj, "Shape", None)
+    return bool(getattr(shape, "Edges", None)) and not shape.Faces and not shape.Solids
+
+
 _SECTION_CONTROLS = (
     "combo_material",
     "combo_family",
@@ -1511,6 +1543,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self._mixed_presenters = {}
         self._presented_selection = None
         self._mixed_spin_edits = set()
+        self._part_moves = {}
+        self._placed_in_part = False
         super().__init__()
 
     @property
@@ -1553,6 +1587,11 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             self.label_editing_edge.setWordWrap(True)
             self.label_editing_edge.hide()
             placement.insertRow(1, self.label_editing_edge)
+            self.label_ignored_selection = QtWidgets.QLabel(gb4)
+            self.label_ignored_selection.setObjectName("label_ignored_selection")
+            self.label_ignored_selection.setWordWrap(True)
+            self.label_ignored_selection.hide()
+            placement.insertRow(2, self.label_ignored_selection)
             self.edge_list_widget.edgeSelected.connect(self._on_edge_selected)
             self.edge_list_widget.selectionChanged.connect(self._on_list_selection_changed)
             self.edge_list_widget.edgeRemoved.connect(self._on_edge_removed)
@@ -1585,6 +1624,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self.edge_list_widget.list_widget.setToolTip(
             translate("frameforge", "Click, Ctrl-click, Shift-click or Ctrl+A to select edges to edit.")
         )
+        for name in ("rb_profiles_in_place", "rb_profiles_in_part", "rb_profiles_in_group"):
+            getattr(self.form_proxy, name).toggled.connect(self._on_container_toggled)
         self._set_initial_state()
 
     def _activate_mixed_combo(self, name):
@@ -1945,6 +1986,19 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self.update_image()
         self.on_input_changed("cb_make_fillet")
 
+    def _on_container_toggled(self, checked):
+        # Only the newly checked radio re-places the previews, so OK commits what is shown.
+        if (
+            not checked
+            or getattr(self, "_initializing", False)
+            or self._reject_called
+            or self._accept_finalizing
+            or self._preview_closed
+        ):
+            return
+        self.proceed()
+        self._profile_target_document().recompute()
+
     @_guard_reconciliation
     def on_input_changed(self, intent=None):
         if (
@@ -1989,7 +2043,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         if not had_edge_properties:
             self.proceed()
 
-        has_sel = len(self._path_selections())
+        has_sel = self._has_path_edges()
         has_len = self.form_proxy.sb_length.value() > 0
         if has_sel or has_len:
             self._set_applied_state()
@@ -2048,7 +2102,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
     def apply(self):
         self._flush_pending_removals()
-        has_sel = len(self._path_selections())
+        has_sel = self._has_path_edges()
         if has_sel or self.form_proxy.sb_length.value() > 0:
             self.proceed()
             self._set_applied_state()
@@ -2122,7 +2176,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
     def accept(self, defer=None):
         self._flush_pending_removals()
-        has_sel = len(self._path_selections())
+        has_sel = self._has_path_edges()
         if not (has_sel or self.form_proxy.sb_length.value() > 0):
             App.Console.PrintMessage(
                 translate("frameforge", "Not Accepting CreateProfile\nSelect Edges or set Length\n")
@@ -2161,6 +2215,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         param.SetBool("Default Mirror Horizontally", self.form_proxy.cb_mirror_h.isChecked())
         param.SetBool("Default Mirror Vertically", self.form_proxy.cb_mirror_v.isChecked())
         param.SetBool("Default Pre Extend", self.form_proxy.cb_pre_extend.isChecked())
+        param.SetBool("Default Profiles In Part", self.form_proxy.rb_profiles_in_part.isChecked())
 
         ax, ay = self.get_anchor()
         param.SetInt("Default AnchorX", ax)
@@ -2358,26 +2413,30 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
         p_name += "000"
 
+        in_part = self.form_proxy.rb_profiles_in_part.isChecked()
+        if not in_part and self._placed_in_part:
+            self._place_previews_in_place()
+
         if len(selection_list):
-            # create part or group and
-            container = None
-            if self.form_proxy.rb_profiles_in_part.isChecked():
-                target_doc = self._profile_target_document()
-                container = getattr(self, "_profile_container", None)
-                if container is None or target_doc.getObject(container.Name) != container:
-                    container = target_doc.addObject("App::Part", "Part")
-                    self._profile_container = container
             # elif self.form_proxy.rb_profiles_in_group.isChecked(): # not working
             #     container = App.activeDocument().addObject('App::DocumentObjectGroup','Group')
 
             # creates profiles
             seen_edges = set()
             for sketch_sel in selection_list:
-                # move the sketch inside the container
-                if container:
-                    container.addObject(sketch_sel.Object)
-
                 edges = self._selection_edges(sketch_sel)
+                if not edges:
+                    # Ignored selections are neither moved nor profiled.
+                    continue
+                container = self._part_for_source(sketch_sel.Object) if in_part else None
+                # move the sketch (or the Body that owns it) inside the container
+                member = self._part_member(sketch_sel.Object)
+                if container and member not in container.Group:
+                    # Switching back to In place returns the member to this group (None: root).
+                    self._part_moves.setdefault(member, member.getParentGroup())
+                    container.addObject(member)
+                if container:
+                    self._placed_in_part = True
 
                 for i, edge in enumerate(edges):
                     key = (sketch_sel.Object, edge)
@@ -2465,6 +2524,63 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
         return key
 
+    def _part_member(self, source):
+        """Object a Part must hold to contain the source: the source, or the Body that owns it."""
+        parent = source.getParentGeoFeatureGroup() if hasattr(source, "getParentGeoFeatureGroup") else None
+        if parent is not None and parent.TypeId != "App::Part":
+            # Moving a sketch out of its Body empties the Body's shape; move the whole Body instead.
+            return parent
+        return source
+
+    def _part_for_source(self, source):
+        """Part that receives a source and its profiles: the one already holding it, else one per session."""
+        member = self._part_member(source)
+        parent = member.getParentGeoFeatureGroup() if hasattr(member, "getParentGeoFeatureGroup") else None
+        if parent is not None and parent.TypeId == "App::Part":
+            # Later sessions add to the same component instead of splitting it across new Parts.
+            return parent
+        target_doc = self._profile_target_document()
+        container = getattr(self, "_profile_container", None)
+        if container is None or target_doc.getObject(container.Name) != container:
+            container = target_doc.addObject("App::Part", "Part")
+            self._profile_container = container
+        return container
+
+    def _place_beside_source(self, profile, source):
+        """In place: a profile joins its source's own group, or the nearest enclosing group that accepts it."""
+        group = _nearest_group(source) if source is not None else None
+        while group is not None:
+            move_profile_to_parent_if_supported(profile, group)
+            if profile in group.Group:
+                return
+            # A Body rejects profiles; climb to the Part or folder that holds it.
+            group = _nearest_group(group)
+
+    @_guard_reconciliation
+    def _place_previews_in_place(self):
+        """Undo Create a Part: moved sources return to their groups, previews sit beside their sources."""
+        for member, group in self._part_moves.items():
+            holder = member.getParentGeoFeatureGroup()
+            if holder is not None:
+                holder.removeObject(member)
+            if group is not None:
+                group.addObject(member)
+        self._part_moves.clear()
+        for (source, _edge), preview in self._objects.items():
+            if source is None:
+                continue
+            holder = preview.getParentGeoFeatureGroup()
+            if holder is not None:
+                holder.removeObject(preview)
+            self._place_beside_source(preview, source)
+        container = getattr(self, "_profile_container", None)
+        target_doc = self._profile_target_document()
+        # Only the Part this session created is removed; reused Parts are never deleted.
+        if container is not None and target_doc.getObject(container.Name) == container and not container.Group:
+            target_doc.removeObject(container.Name)
+            self._profile_container = None
+        self._placed_in_part = False
+
     @_guard_reconciliation
     def make_profile(self, sketch, edge, name):
         material_name = self.form_proxy.combo_material.currentText()
@@ -2516,9 +2632,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 obj.ViewObject.ShapeColor = (0.0, 0.8, 0.0)
 
             # move it to the sketch's parent if possible
-            if sketch is not None and len(sketch.Parents) > 0:
-                sk_parent = sketch.Parents[-1][0]
-                move_profile_to_parent_if_supported(obj, sk_parent)
+            self._place_beside_source(obj, sketch)
 
             if sketch is not None and edge is not None:
                 # Tuple assignment for edge
@@ -2694,11 +2808,14 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def _selection_edges(selection):
         """The same path expansion is used by creation and its placement summary."""
         obj = selection.Object
+        if _is_container(obj):
+            return []
         shape = getattr(obj, "Shape", None)
         edges = [f"Edge{index + 1}" for index, _edge in enumerate(getattr(shape, "Edges", ()))]
         names = selection.SubElementNames
         if not names:
-            return edges
+            # Only path-like objects stand for all their edges; solids need picked edges.
+            return edges if _is_path_source(obj) else []
         # A filled sketch's GUI face can be generated for display and need not
         # exist in Shape.Faces. It denotes the entire sketch outline.
         if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("Sketcher::SketchObject"):
@@ -2707,11 +2824,30 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         valid = set(edges)
         return list(dict.fromkeys(name for name in names if name in valid))
 
+    def _current_selections(self):
+        if self._saved_selection is not None:
+            return self._saved_selection
+        return Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else []
+
+    def _ignored_selections(self):
+        """Whole objects that are not paths, such as Parts, Bodies or solids, contribute no edges."""
+        previews = list(self._objects.values())
+        ignored = [
+            selection.Object
+            for selection in self._current_selections()
+            if not selection.SubElementNames
+            and not _is_path_source(selection.Object)
+            and not any(selection.Object == preview for preview in previews)
+        ]
+        return list(dict.fromkeys(ignored))
+
+    def _has_path_edges(self):
+        """Whether any selection contributes an edge; ignored containers and solids do not count."""
+        return any(selection.SubElementNames for selection in self._path_selections())
+
     def _path_selections(self):
         """Canvas picks add paths; explicit removal forgets them."""
-        selections = self._saved_selection
-        if selections is None:
-            selections = Gui.Selection.getSelectionEx() if hasattr(Gui, "Selection") else []
+        selections = self._current_selections()
         paths = {}
         for obj, edge in self._edge_properties:
             if (obj, edge) not in self._excluded_edges:
@@ -2763,6 +2899,11 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             lbl.setText(text)
         if lbl is not None and hasattr(lbl, "setToolTip"):
             lbl.setToolTip(tooltip)
+        if hasattr(self, "label_ignored_selection"):
+            ignored = self._ignored_selections()
+            notice = translate("frameforge", "Ignored %s: select a sketch, wire or specific edges.")
+            self.label_ignored_selection.setText("\n".join(notice % obj.Label for obj in ignored))
+            self.label_ignored_selection.setVisible(bool(ignored))
 
         edges_list = []
         for selection, (_name, edges) in zip(selections, details):

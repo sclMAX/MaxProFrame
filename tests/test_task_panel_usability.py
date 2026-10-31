@@ -605,6 +605,76 @@ class TestTaskPanelUsability(unittest.TestCase):
                 self.assertTrue(obj.Shape.isValid())
                 self.doc.abortTransaction()
 
+    def test_container_choice_is_remembered_between_sessions(self):
+        param = get_param_group(writable=True)
+        setters = {"Boolean": param.SetBool, "Integer": param.SetInt, "String": param.SetString}
+        saved = param.GetContents() or []
+
+        def restore():
+            param.Clear()
+            for kind, key, value in saved:
+                setters.get(kind, lambda *args: None)(key, value)
+
+        self.addCleanup(restore)
+        param.RemBool("Default Profiles In Part")
+        self.assertTrue(self._create().form_proxy.rb_profiles_in_place.isChecked())
+        for in_part in (True, False):
+            panel = self._create()
+            radio = panel.form_proxy.rb_profiles_in_part if in_part else panel.form_proxy.rb_profiles_in_place
+            radio.setChecked(True)
+            panel.form_proxy.sb_length.setValue(100)
+            self.assertTrue(panel.accept(defer=False))
+            self.assertEqual(get_param_group().GetBool("Default Profiles In Part"), in_part)
+            reopened = self._create()
+            self.assertEqual(reopened.form_proxy.rb_profiles_in_part.isChecked(), in_part)
+            self.assertEqual(reopened.form_proxy.rb_profiles_in_place.isChecked(), not in_part)
+
+    def test_container_switch_replaces_previews_live_and_ok_commits_what_is_shown(self):
+        param = get_param_group(writable=True)
+        setters = {"Boolean": param.SetBool, "Integer": param.SetInt, "String": param.SetString}
+        saved = param.GetContents() or []
+
+        def restore():
+            param.Clear()
+            for kind, key, value in saved:
+                setters.get(kind, lambda *args: None)(key, value)
+
+        self.addCleanup(restore)
+        param.SetBool("Default Profiles In Part", False)
+        sketch = self.doc.addObject("Sketcher::SketchObject", "Path")
+        sketch.addGeometry(Part.LineSegment(App.Vector(0, 0, 0), App.Vector(100, 0, 0)), False)
+        self.doc.recompute()
+        parts = lambda: [obj for obj in self.doc.Objects if obj.TypeId == "App::Part"]
+        for commit in (False, True):
+            with self.subTest(commit=commit):
+                Gui.Selection.clearSelection()
+                Gui.Selection.addSelection(self.doc.Name, sketch.Name)
+                panel = self._create()
+                profile = next(iter(panel._objects.values()))
+                self.assertEqual(parts(), [])
+                for _ in range(2):
+                    panel.form_proxy.rb_profiles_in_part.setChecked(True)
+                    self.assertEqual(len(parts()), 1)
+                    self.assertEqual(set(parts()[0].Group), {sketch, profile})
+                    panel.form_proxy.rb_profiles_in_place.setChecked(True)
+                    self.assertEqual(parts(), [])
+                    self.assertEqual(sketch.Parents, [])
+                    self.assertEqual(profile.Parents, [])
+                self.assertEqual(list(panel._objects.values()), [profile])
+                if commit:
+                    self.assertTrue(panel.accept(defer=False))
+                    self.assertEqual(parts(), [])
+                    self.assertEqual(set(self.doc.Objects), {sketch, profile})
+                    self.assertEqual(profile.Parents, [])
+                    self.assertEqual(profile.Target[0], sketch)
+                    self.assertTrue(profile.Shape.isValid())
+                else:
+                    panel.form_proxy.rb_profiles_in_part.setChecked(True)
+                    self.assertEqual(len(parts()), 1)
+                    self.assertTrue(panel.reject())
+                    self.assertEqual(self.doc.Objects, [sketch])
+                    self.assertEqual(sketch.Parents, [])
+
 
 if __name__ == "__main__":
     unittest.main()
