@@ -9,8 +9,7 @@ from unittest.mock import Mock, patch
 import FreeCAD as App
 import Part
 import Sketcher
-
-from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
+from profile_creation_helpers import creation_panel, make_custom_profile
 
 
 def source_content(snapshot):
@@ -35,40 +34,14 @@ class TestProfileParentGuard(unittest.TestCase):
             self.section.addGeometry(Part.LineSegment(App.Vector(*start, 0), App.Vector(*end, 0)), False)
         self.doc.recompute()
 
-    def panel(self):
-        panel = CreateProfileTaskPanel.__new__(CreateProfileTaskPanel)
-        values = {
-            "width": 20,
-            "height": 10,
-            "main_thickness": 1,
-            "flange_thickness": 1,
-            "radius1": 0,
-            "radius2": 0,
-            "length": 100,
-            "weight": 0,
-            "unitprice": 0,
-            "offset_x": 0,
-            "offset_y": 0,
-        }
-        fields = {"sb_" + key: Mock(value=Mock(return_value=value)) for key, value in values.items()}
-        for key in ("pre_extend", "mirror_h", "mirror_v", "make_fillet", "combined_bevel"):
-            fields["cb_" + key] = Mock(isChecked=Mock(return_value=False))
-        for key, value in (("material", "Steel"), ("family", "Flat Sections"), ("size", "20x10")):
-            fields["combo_" + key] = Mock(currentText=Mock(return_value=value))
-        panel.form_proxy = SimpleNamespace(**fields)
-        panel.get_anchor = lambda: (1, 1)
-        panel.get_rotation = lambda: 0.0
-        panel.profiles = {}
-        panel._mutation_depth = 0
-        panel._selection_pending = False
-        panel._selection_signature = lambda: ()
-        return panel
-
-    def create(self):
-        self.panel().make_profile(self.path, "Edge1", "Profile")
+    def create(self, custom):
+        if custom:
+            make_custom_profile(self.path, "Edge1", "Profile", self.section)
+        else:
+            creation_panel().make_profile(self.path, "Edge1", "Profile")
         profile = self.doc.getObject("Profile")
         self.assertIsNotNone(profile.Proxy)
-        self.assertEqual(profile.Family, "Flat Sections")
+        self.assertEqual(profile.Family, "Custom Profile" if custom else "Flat Sections")
         self.assertEqual(profile.MapMode, "NormalToEdge")
         support = profile.AttachmentSupport
         if isinstance(support, list):
@@ -78,7 +51,7 @@ class TestProfileParentGuard(unittest.TestCase):
         self.assertEqual(tuple(support[1]), ("Edge1",))
         return profile
 
-    def check_parent(self, parent_type):
+    def check_parent(self, parent_type, custom):
         parent = self.doc.addObject(parent_type, "Parent") if parent_type else None
         if parent:
             parent.addObject(self.path)
@@ -87,7 +60,7 @@ class TestProfileParentGuard(unittest.TestCase):
         before_group = tuple(parent.Group) if parent else ()
         before_objects = tuple(self.doc.Objects)
         with patch.object(App.Console, "PrintMessage") as message:
-            profile = self.create()
+            profile = self.create(custom)
             if parent_type == "PartDesign::Body":
                 message.assert_called_once_with(
                     "FrameForge: parent Parent (PartDesign::Body) does not accept Part::FeaturePython, "
@@ -173,7 +146,7 @@ class TestProfileParentGuard(unittest.TestCase):
             self.assertEqual(source_content(self.path.dumpContent()), before)
 
     def test_legacy_local_target_is_not_migrated_on_reopen(self):
-        profile = self.create()
+        profile = self.create(False)
         target = profile.Target
         profile.removeProperty("Target")
         profile.addProperty("App::PropertyLinkSub", "Target", "Base", "Target face").Target = target
@@ -199,7 +172,7 @@ class TestProfileParentGuard(unittest.TestCase):
             App.closeDocument(self.doc.Name)
 
     def preview_panel(self, in_part=True):
-        panel = self.panel()
+        panel = creation_panel()
         panel._target_doc = self.doc
         panel._objects = {}
         panel._edge_properties = {}
@@ -239,17 +212,9 @@ class TestProfileParentGuard(unittest.TestCase):
         self.assert_parametric_profile(next(iter(panel._objects.values())), 100)
 
     def test_custom_section_outside_part_uses_global_link(self):
-        from freecad.maxproframe import create_profiles_tool as module
-
-        panel = self.panel()
-        panel.form_proxy.combo_family.currentText.return_value = "Custom Profile"
-        panel.profiles = {"Steel": {"Custom Profile": {"sizes": {"20x10": {"asset_path": "section.FCStd"}}}}}
-        panel.library_manager = Mock()
-        panel.library_manager._get_registered_folder.return_value = "unused"
         part = self.doc.addObject("App::Part", "Part")
         part.addObject(self.path)
-        with patch.object(module, "get_or_import_section_sketch", return_value=self.section):
-            profile = panel.make_profile(self.path, "Edge1", "Profile")
+        profile = make_custom_profile(self.path, "Edge1", "Profile", self.section)
         self.doc.recompute()
         self.assertEqual(profile.getTypeIdOfProperty("CustomProfile"), "App::PropertyLinkGlobal")
         self.assertEqual(profile.CustomProfile, self.section)
@@ -258,13 +223,22 @@ class TestProfileParentGuard(unittest.TestCase):
         self.assert_parametric_profile(profile, 100)
 
     def test_standard_body_rejection_finishes_profile_at_root(self):
-        self.check_parent("PartDesign::Body")
+        self.check_parent("PartDesign::Body", False)
+
+    def test_custom_body_rejection_finishes_profile_at_root(self):
+        self.check_parent("PartDesign::Body", True)
 
     def test_standard_supported_parent_preserves_creation(self):
-        self.check_parent("App::Part")
+        self.check_parent("App::Part", False)
+
+    def test_custom_supported_parent_preserves_creation(self):
+        self.check_parent("App::Part", True)
 
     def test_standard_absent_parent_preserves_creation(self):
-        self.check_parent(None)
+        self.check_parent(None, False)
+
+    def test_custom_absent_parent_preserves_creation(self):
+        self.check_parent(None, True)
 
 
 if __name__ == "__main__":

@@ -4,8 +4,7 @@ import unittest
 import FreeCAD as App
 import Part
 import Sketcher
-
-from freecad.maxproframe.profile import Profile, ViewProviderCustomProfile
+from profile_creation_helpers import make_custom_profile
 
 
 class TestCustomProfileSections(unittest.TestCase):
@@ -32,35 +31,16 @@ class TestCustomProfileSections(unittest.TestCase):
         path=None,
         edge="Edge1",
     ):
-        target_path = path if path is not None else self.path
-        obj = self.doc.addObject("Part::FeaturePython", name)
-        obj.addExtension("Part::AttachExtensionPython")
-        obj.MapMode = "NormalToEdge"
-        obj.AttachmentSupport = (target_path, edge)
-        obj.MapPathParameter = 1
-        Profile(
-            obj,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            float(length),
-            float(weight),
-            float(unitprice),
-            False,
-            1,
-            1,
-            material,
-            "Custom Profile",
-            "None",
-            False,
-            (target_path, edge),
+        obj = make_custom_profile(
+            path if path is not None else self.path,
+            edge,
+            name,
             custom_source,
-            init_rotation=0.0,
+            length=length,
+            material=material,
+            weight=weight,
+            unitprice=unitprice,
         )
-        ViewProviderCustomProfile(obj.ViewObject)
         obj.Label = label
         return obj
 
