@@ -12,7 +12,7 @@ Branch: `fix/miter-review-followups`.
 
 ## Tasks
 
-- T1 (S1, S3, S4) Geometry/joints/TrimmedProfile findings: A R2-001, A R2-003, A R2-004, A R2-005, A R2-006, A R3-002, A R3-003, A R3-005. Surfaces: miter_geometry.py, miter_joints.py, trimmed_profile.py, _utils.py, tests/test_miter_followups_geometry.py. Route: gentle-ai-worker (parallel, Writer rule). Commit: pending.
+- T1 (S1, S3, S4) Geometry/joints/TrimmedProfile findings: A R2-001, A R2-003, A R2-004, A R2-005, A R2-006, A R3-002, A R3-003, A R3-005. Surfaces: miter_geometry.py, miter_joints.py, trimmed_profile.py, _utils.py, tests/test_miter_followups_geometry.py. Route: gentle-ai-worker (parallel, Writer rule). Commit: see git log (L4). Done.
 - T2 (S1, S2, S4) Panel/tools/tests/catalog findings: A R2-002, A R2-007, A R3-004, A R3-006, B R2-001..R2-004, C (3), D (all). Surfaces: create_end_miter_tool.py, create_trimmed_profiles_tool.py, create_profiles_tool.py, create_end_miter.ui, translations, tests/test_end_miter_*.py, tests/miter_helpers.py. Route: gentle-ai-worker (parallel, Writer rule). Commit: pending.
 
 ## Log
@@ -20,3 +20,4 @@ Branch: `fix/miter-review-followups`.
 - L1. User: "ENcaremos todos esos puntos menos el nodo de 3"
 - L2. Advisory IDs and locations: review A (c6564d6) R2-001..R2-007, R3-002..R3-006; review B (03d4127) R2-001..R2-004; review C (cabaffb) R3-ctrl-toggle-coverage, R3-deselect-test-bypasses-observer, R3-sub-guard-removed; review D (ef541cb) R2-001..R2-005, R3-accept-failure-stale-status, R3-alive-document-deleted, R3-closed-leaves-preview, R3-markers-during-dispatch, R3-undo-disabled-untested, R4-closed-leaks-preview-transaction, R4-live-rebuild-no-rollback, R4-recompute-per-keystroke. Their text was not stored; only ID, lens, severity and location.
 - L3. Reconstruction by gentle-ai-explore (task mvwpvozq-6-jnqy), pasted into the worker handoffs; mappings for A R2-002, A R3-004/R3-006 and B R2-001 are low-confidence (old line layout estimated).
+- L4. T1 (worker): all 8 findings fixed. RED `test_miter_followups_geometry` 6 tests (4 failures, 1 error: 5 degree V valid, trapezoid skipped point, near-parallel joint, cut_angle 64.9, legacy AttributeError); GREEN 6/6; geometry/extend_gap/anchors/edit/panel/pid/migration/cutout pass. Behavior changes: the panel finds a joint only when the path ends are within the two section diagonals (about 141 mm for a 50x50 tube); Extend refuses V joints narrower than about 11.5 degrees (whole prism length bounded at ten diagonals).

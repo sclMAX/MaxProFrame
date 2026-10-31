@@ -12,6 +12,8 @@ import FreeCAD as App
 import Part
 
 TOLERANCE = 1e-7
+# Squared sine of the angle below which two unit axes count as parallel.
+PARALLEL_TOLERANCE = 1e-7
 # Longest extension, in section diagonals, before a joint is refused as too far.
 EXTENSION_LIMIT = 10.0
 
@@ -28,7 +30,7 @@ class Member:
         self.section = _section(edge, profile_shape)
 
     def end(self, at_start):
-        """Point, outward direction (into the member) and section centroid at one end."""
+        """Point, inward direction (into the member) and section centroid at one end."""
         point, inward, _ = self._end_frame(at_start)
         section = self.section_at(at_start)
         centroid = section.CenterOfMass if section.Faces else section.BoundBox.Center
@@ -40,36 +42,33 @@ class Member:
         return self.section.transformed(placement.toMatrix())
 
     def _end_frame(self, at_start):
-        param = self.edge.FirstParameter if at_start else self.edge.LastParameter
-        point = self.edge.valueAt(param)
-        tangent = self.edge.tangentAt(param).normalize()
+        point, inward = path_end(self.edge, at_start)
+        tangent = inward if at_start else -inward
         mid_param = _mid_parameter(self.edge)
         mid_point = self.edge.valueAt(mid_param)
         mid_tangent = self.edge.tangentAt(mid_param).normalize()
         # A planar sweep keeps the section offset in the edge frame: turn it with the tangent.
         rotation = App.Rotation(mid_tangent, tangent)
         placement = App.Placement(point - rotation.multVec(mid_point), rotation)
-        inward = tangent if at_start else -tangent
         return point, inward, placement
 
 
 class MiterPlane:
     """Plane at ``origin`` with unit ``normal`` pointing into the kept member."""
 
-    def __init__(self, origin, normal, member_end, inward, section):
+    def __init__(self, origin, normal, inward, section):
         self.origin = origin
         self.normal = normal
-        self.member_end = member_end
         self.inward = inward
         self.section = section
 
     def cut_angle(self):
         """Angle between the cut and a square cut, in degrees."""
         cosine = min(1.0, abs(self.normal.dot(self.inward)))
-        return round(math.degrees(math.acos(cosine)), 1)
+        return math.degrees(math.acos(cosine))
 
     def shifted(self, distance):
-        return MiterPlane(self.origin + self.normal * distance, self.normal, self.member_end, self.inward, self.section)
+        return MiterPlane(self.origin + self.normal * distance, self.normal, self.inward, self.section)
 
     def extension(self):
         """Prism that prolongs the member end past the plane, or None when the end already passes it."""
@@ -78,13 +77,14 @@ class MiterPlane:
         along = self.normal.dot(self.inward)
         diagonal = self.section.BoundBox.DiagonalLength
         needed = (self.section.CenterOfMass - self.origin).dot(self.normal) / along
-        if needed > EXTENSION_LIMIT * diagonal:
+        # The farthest section point lies at most one diagonal away from the axis; a sharp
+        # angle (small ``along``) stretches that margin, so the limit bounds the whole prism.
+        length = needed + diagonal / along
+        if length > EXTENSION_LIMIT * diagonal:
             raise MiterError(
-                f"End Miter: the joint is too far to extend the profile ({needed:.1f} mm, "
+                f"End Miter: the joint is too far to extend the profile ({length:.1f} mm, "
                 f"limit {EXTENSION_LIMIT * diagonal:.1f} mm)."
             )
-        # The farthest section point lies at most one diagonal away from the axis.
-        length = needed + diagonal / along
         if length <= TOLERANCE:
             return None
         return self.section.extrude(-self.inward * length)
@@ -102,19 +102,26 @@ class MiterPlane:
 
 def miter_plane(member, other):
     """Plane that cuts ``member`` where it meets ``other``."""
-    at_start, other_at_start = _meeting_ends(member.edge, other.edge)
-    point, inward, centroid = member.end(at_start)
+    at_start, other_at_start = meeting_ends(member.edge, other.edge)
+    _, inward, centroid = member.end(at_start)
     _, other_inward, other_centroid = other.end(other_at_start)
 
     normal = inward - other_inward
     if normal.Length < TOLERANCE:
         raise MiterError("End Miter: profiles overlap in the same direction.")
     normal.normalize()
-    origin = _axes_crossing(centroid, inward, other_centroid, other_inward)
-    return MiterPlane(origin, normal, point, inward, member.section_at(at_start))
+    origin = axes_crossing(centroid, inward, other_centroid, other_inward)
+    return MiterPlane(origin, normal, inward, member.section_at(at_start))
 
 
-def _meeting_ends(edge, other):
+def path_end(edge, at_start):
+    """Path end point and the unit direction from it into the member."""
+    param = edge.FirstParameter if at_start else edge.LastParameter
+    tangent = edge.tangentAt(param).normalize()
+    return edge.valueAt(param), (tangent if at_start else -tangent)
+
+
+def meeting_ends(edge, other):
     """(member at start, other at start) for the closest pair of path ends."""
     pairs = []
     for at_start in (True, False):
@@ -126,13 +133,19 @@ def _meeting_ends(edge, other):
     return at_start, other_at_start
 
 
-def _axes_crossing(p1, d1, p2, d2):
+def parallel(d1, d2):
+    """Whether two unit directions are parallel, in the same or the opposite sense."""
+    b = d1.dot(d2)
+    return 1.0 - b * b < PARALLEL_TOLERANCE
+
+
+def axes_crossing(p1, d1, p2, d2):
     """Midpoint of the closest points of two lines; the midpoint of p1 and p2 when parallel."""
+    if parallel(d1, d2):
+        return (p1 + p2) * 0.5
     w0 = p1 - p2
     b = d1.dot(d2)
     denominator = 1.0 - b * b
-    if denominator < TOLERANCE:
-        return (p1 + p2) * 0.5
     d = d1.dot(w0)
     e = d2.dot(w0)
     s = (b * e - d) / denominator
