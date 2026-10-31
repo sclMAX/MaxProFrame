@@ -387,9 +387,7 @@ class TestTaskPanelUsability(unittest.TestCase):
 
     def test_s5_english_preview_states_and_action_guidance(self):
         panel = self._create()
-        self.assertTrue(
-            panel.form_proxy.groupBox_apply.isHidden(), "Apply group box must be hidden in live preview mode."
-        )
+        self.assertNotIn("groupBox_apply", panel.form_proxy.members, "Live preview has no Apply group box.")
         panel.form_proxy.sb_length.setValue(500)
         self.app.processEvents()
         self.assertEqual(len(self.doc.Objects), 1, "Setting length must immediately generate live 3D preview.")
@@ -412,7 +410,7 @@ class TestTaskPanelUsability(unittest.TestCase):
         self.assertEqual(panel.form[0].label_2.text(), "Perfil")
         panel.form_proxy.combo_family.setCurrentText("Square Hollow")
         panel.form_proxy.combo_material.setCurrentText("Panel Library")
-        self.assertTrue(panel.form_proxy.groupBox_apply.isHidden())
+        self.assertNotIn("groupBox_apply", panel.form_proxy.members)
         panel.form_proxy.sb_length.setValue(500)
         self.app.processEvents()
         self.assertEqual(len(self.doc.Objects), 1, "Configuración válida debe generar previsualización 3D en vivo.")
@@ -592,7 +590,7 @@ class TestTaskPanelUsability(unittest.TestCase):
                 before = self._snapshot()
                 self._show(panel)
                 self.assertEqual(self._snapshot(), before)
-                self.assertTrue(panel.form_proxy.groupBox_apply.isHidden())
+                self.assertNotIn("groupBox_apply", panel.form_proxy.members)
                 self.assertFalse(panel.form_proxy.groupBox_5.isEnabled())
                 for name in ("cb_sketch_in_name", "cb_family_in_name", "cb_size_in_name", "cb_prefix_profile_in_name"):
                     widget = getattr(panel.form_proxy, name)

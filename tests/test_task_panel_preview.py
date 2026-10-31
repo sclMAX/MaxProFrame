@@ -561,7 +561,6 @@ class TestTaskPanelPreview(unittest.TestCase):
             ),
             get_param_group().GetContents(),
             self._files(),
-            panel.form_proxy.label_apply_status.text(),
             panel.form_proxy.sb_length.value(),
         )
 
@@ -726,7 +725,7 @@ class TestTaskPanelPreview(unittest.TestCase):
                 panel.form_proxy.label_image.grab()
             self.assertEqual(self._state(panel), before, state)
         panel.form_proxy.combo_size.setCurrentText("TALL")
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Preview updated")
+        self.assertEqual([o.SizeName for o in self.doc.Objects if hasattr(o, "SizeName")], ["TALL"])
 
     def test_s4_whole_standard_image_fits_without_stretch_or_crop(self):
         panel = self._panel()
@@ -820,7 +819,7 @@ class TestTaskPanelPreview(unittest.TestCase):
                 self.assertEqual(self._state(panel), before)
                 self.assertEqual(panel.form_proxy.combo_size.currentText(), "TALL")
                 self.assertFalse(panel.form_proxy.groupBox_5.isEnabled())
-                self.assertTrue(panel.form_proxy.groupBox_apply.isHidden())
+                self.assertNotIn("groupBox_apply", panel.form_proxy.members)
                 pixmap = panel.form_proxy.label_image.pixmap()
                 expected = render_custom_section_thumbnail(
                     self.folder if material == "Preview Library" else None,

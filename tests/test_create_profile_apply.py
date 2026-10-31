@@ -193,8 +193,8 @@ class TestCreateProfileApply(unittest.TestCase):
 
     # --- S2: Accepted interaction table ---
 
-    def test_s2_initial_and_pending_state_display(self):
-        """S2: Visible state marks initial 'No preview', 'Unapplied changes' on edit, and 'Applied' after Apply."""
+    def test_s2_no_apply_controls_and_live_preview(self):
+        """S2: The panel has no Apply group, button or status; edits update the preview live."""
         doc = self._new_doc("DocState")
         App.setActiveDocument(doc.Name)
         path = self._create_line_path(doc, "PathState", length=100.0)
@@ -203,23 +203,21 @@ class TestCreateProfileApply(unittest.TestCase):
         self.panels.append(panel)
         panel.open()
 
-        self.assertIn("label_apply_status", panel.form_proxy.members, "Form must have label_apply_status.")
-        # Initial state on open
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "No preview"))
+        for name in ("groupBox_apply", "btn_apply", "label_apply_status"):
+            self.assertNotIn(name, panel.form_proxy.members)
+            self.assertIsNone(panel.form[0].findChild(QtCore.QObject, name), name)
+        buttons = [button.text() for button in panel.form[0].findChildren(QtWidgets.QPushButton)]
+        self.assertNotIn(translate("frameforge", "Apply"), buttons)
 
-        # Select edge: marks preview updated in live preview mode
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
         panel.addSelection(doc.Name, path, "Edge1", None)
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Preview updated"))
+        profiles = self._get_profiles(doc)
+        self.assertEqual(len(profiles), 1, "Selecting a path must create the preview live.")
 
-        # Apply: marks preview updated
-        panel.apply()
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Preview updated"))
-
-        # Modify a field: live updates preview
         panel.form_proxy.sb_width.setValue(80.0)
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), translate("frameforge", "Preview updated"))
+        self.assertEqual(self._get_profiles(doc), profiles, "Edits must update the same preview.")
+        self.assertEqual(profiles[0].ProfileWidth, 80.0, "Edits must update the preview live.")
 
     def test_s2_accept_applies_current_values_without_prior_apply(self):
         """S2: Accept applies current form values and confirms even if Apply was never clicked."""
@@ -404,38 +402,6 @@ class TestCreateProfileApply(unittest.TestCase):
                 if cls._translator is not None:
                     self.app.removeTranslator(cls._translator)
 
-    def test_s2_spanish_translation_of_apply_and_status(self):
-        """S2, S3: Spanish catalog faithfully translates Apply button and pending/applied states."""
-        from freecad.maxproframe.ff_tools import TRANSLATIONSPATH
-
-        translator = QtCore.QTranslator()
-        qm_path = os.path.join(TRANSLATIONSPATH, "frameforge_es.qm")
-        self.assertTrue(translator.load(qm_path), f"Failed to load {qm_path}")
-        self.app.installTranslator(translator)
-        self.addCleanup(self.app.removeTranslator, translator)
-
-        doc = self._new_doc("DocSpanish")
-        App.setActiveDocument(doc.Name)
-        path = self._create_line_path(doc, "PathEs", length=100.0)
-
-        panel = CreateProfileTaskPanel()
-        self.panels.append(panel)
-        panel.open()
-
-        # Check button text and initial status
-        self.assertEqual(panel.form_proxy.btn_apply.text(), "Aplicar")
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Sin previsualización")
-
-        # Edit input -> applied state in live preview
-        Gui.Selection.clearSelection()
-        Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")
-        panel.addSelection(doc.Name, path, "Edge1", None)
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Previsualización actualizada")
-
-        # Apply -> applied state
-        panel.apply()
-        self.assertEqual(panel.form_proxy.label_apply_status.text(), "Previsualización actualizada")
-
     # --- S3: Edit Profile preservation ---
 
     def test_s3_edit_profile_panel_preserves_live_update_behavior(self):
@@ -449,11 +415,9 @@ class TestCreateProfileApply(unittest.TestCase):
         self.panels.append(edit_panel)
         edit_panel.open()
 
-        # In edit panel, groupBox_apply / btn_apply must be hidden if present
-        if "btn_apply" in edit_panel.form_proxy.members:
-            self.assertFalse(
-                edit_panel.form_proxy.btn_apply.isVisible(), "Apply button must not be visible in Edit panel."
-            )
+        # The shared form no longer has an Apply group or button.
+        self.assertNotIn("groupBox_apply", edit_panel.form_proxy.members)
+        self.assertNotIn("btn_apply", edit_panel.form_proxy.members)
 
         # Changing width in edit panel must update profile live (without clicking any Apply)
         edit_panel.form_proxy.sb_width.setValue(initial_w + 30.0)
