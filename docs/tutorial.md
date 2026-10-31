@@ -184,26 +184,29 @@ Let's show the other base frame ...
 
 ![alt text](images/50-base-config.png)
 
-We first must add offsets to the existing profiles...  (offsets adds up to the dimension of the edge !)
-
-1. add Offset (One profile by one, Or selecting all the profiles and change the offset.)
+Offsets are optional: with **Extend** (on by default) a profile that stops short of the corner is lengthened up to the miter. You can still add offsets (they add up to the dimension of the edge), one profile at a time or by selecting all the profiles and changing the offset.
 
 ![alt text](images/51-add-offset.png)
 
-2. Unselect all objects, then select two touching Profiles. (**select faces in the 3D view, not objects in the tree view**)
-
-![alt text](images/52-select-touching-profiles.png)
-
-1. Click on the Create Miter End Command
+1. Click on the Create Miter End Command. The button is always active, with or without a selection; profiles already selected are added to the panel.
 
 ![alt text](images/53-create-miter-end.png)
 
-**And voila !** You have two "TrimmedProfile"
+2. Click two or more profiles in the 3D view. A click selects the whole profile, not only the face under the cursor. To drop a profile, select it in the list and press **Remove**.
+
+![alt text](images/52-select-touching-profiles.png)
+
+3. The panel tells how many joints will be created. Every corner formed by the selected profiles is mitered: two profiles meeting at both ends get both corners, and a whole frame can be selected at once. A point where three or more selected profiles meet is skipped and listed in the panel; it is not mitered.
+
+4. Set the options and press **OK**:
+   - **Extend profiles up to the miter** (on by default): lengthens a profile that does not reach the miter plane. The extension is limited to ten times the section diagonal, to avoid runaway extensions with nearly parallel profiles.
+   - **Gap**: distance left between the two cut faces of each joint, for example 0.5 mm. Each profile is cut back half of it.
+
+**And voila !** Each profile gets one "TrimmedProfile" holding all its corners, placed next to the profile, in the same folder or Part. A single Undo removes them all.
 
 ![alt text](images/54-miter-end.png)
 
-
-Do that again for others profiles of the top frame
+To change a miter later, double-click it in the tree. The panel lists the profile and its boundaries and shows its current Extend and Gap. **OK** applies the values to this miter and to the miters of its partner profiles that cut against it, in one Undo step, so the gap of the joint stays the value shown; **Cancel** leaves everything unchanged. A partner miter that holds other corners gets the new values at those corners too.
 
 ### Via End Trim Command
 

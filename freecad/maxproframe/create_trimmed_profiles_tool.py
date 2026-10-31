@@ -9,6 +9,7 @@ import FreeCADGui as Gui
 import Part
 from PySide import QtCore, QtGui
 
+from freecad.maxproframe.create_end_miter_tool import place_in_container_of
 from freecad.maxproframe.ff_tools import (
     ICONPATH,
     PROFILEIMAGES_PATH,
@@ -81,8 +82,7 @@ class CreateTrimmedProfileTaskPanel:
             App.Console.PrintMessage(translate("frameforge", f"Set Trimmed body: {trimmed_body.Name}\n"))
             self.fp.TrimmedBody = trimmed_body
 
-            if len(trimmed_body.Parents) > 0:
-                trimmed_body.Parents[-1][0].addObject(self.fp)
+            place_in_container_of(self.fp, trimmed_body)
 
         self.update_view_and_model()
 
@@ -241,8 +241,8 @@ class TrimProfileCommand:
         name = "TrimmedProfile" if trimmedBody is None else f"{trimmedBody.Name}_Tr"
         trimmed_profile = doc.addObject("Part::FeaturePython", name)
 
-        if trimmedBody is not None and len(trimmedBody.Parents) > 0:
-            trimmedBody.Parents[-1][0].addObject(trimmed_profile)
+        if trimmedBody is not None:
+            place_in_container_of(trimmed_profile, trimmedBody)
 
         TrimmedProfile(trimmed_profile)
 

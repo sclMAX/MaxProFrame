@@ -153,6 +153,8 @@ def get_profiles_and_links_from_document():
 def get_profile_from_trimmedbody(obj):
     if is_trimmedbody(obj):
         return get_profile_from_trimmedbody(obj.TrimmedBody)
+    elif is_extrudedcutout(obj):
+        return get_profile_from_extrudedcutout(obj)
     else:
         return obj
 
@@ -208,13 +210,11 @@ def get_trimmedprofile_from_extrudedcutout(obj):
 def get_trimmed_profile_all_cutting_angles(trimmed_profile):
     """Retourne récursivement la liste des angles de coupe (en degrés)
     d'un TrimmedProfile, y compris ceux de ses parents/enfants imbriqués."""
-    doc = FreeCAD.ActiveDocument
-
     angles = []
 
     def resolve_edge(link):
         target = trimmed_profile.Proxy.getTarget(link)
-        return doc.getObject(target[0].Name).getSubObject(target[1][0])
+        return target[0].getSubObject(target[1][0])
 
     edge = resolve_edge(trimmed_profile.TrimmedBody)
     dir_vec = (edge.Vertexes[-1].Point.sub(edge.Vertexes[0].Point)).normalize()
@@ -239,31 +239,7 @@ def get_trimmed_profile_all_cutting_angles(trimmed_profile):
             raise ValueError("Unknown CutType")
 
     elif trimmed_profile.TrimmedProfileType == "End Miter":
-        doc = FreeCAD.activeDocument()
-        precision = 0.001
-        target1 = trimmed_profile.Proxy.getTarget(trimmed_profile.TrimmedBody)
-        edge1 = doc.getObject(target1[0].Name).getSubObject(target1[1][0])
-        bounds_target = []
-        for bound in trimmed_profile.TrimmingBoundary:
-            bounds_target.append(trimmed_profile.Proxy.getTarget(bound[0]))
-        trimming_boundary_edges = []
-        for target in bounds_target:
-            trimming_boundary_edges.append(doc.getObject(target[0].Name).getSubObject(target[1][0]))
-        for edge2 in trimming_boundary_edges:
-            end1 = edge1.Vertexes[-1].Point
-            start1 = edge1.Vertexes[0].Point
-            end2 = edge2.Vertexes[-1].Point
-            start2 = edge2.Vertexes[0].Point
-            vec1 = start1.sub(end1)
-            vec2 = start2.sub(end2)
-
-            angle = math.degrees(vec1.getAngle(vec2))
-
-            if end1.distanceToPoint(start2) < precision or start1.distanceToPoint(end2) < precision:
-                angle = 180 - angle
-
-            bisect = angle / 2.0
-            angles.append(90.0 - bisect)
+        angles.extend(plane.cut_angle() for plane in trimmed_profile.Proxy.miter_planes(trimmed_profile))
 
     else:
         raise ValueError("Unknown TrimmedProfileType")
