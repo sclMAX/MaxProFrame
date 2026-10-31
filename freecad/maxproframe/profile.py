@@ -84,6 +84,8 @@ class Profile:
         init_offset_b=0.0,
         catalog_family=None,
         init_lip_length=0.0,
+        init_offset_x=0.0,
+        init_offset_y=0.0,
     ):
         """
         Constructor. Add properties to FreeCAD Profile object. Profile object have 11 nominal properties associated
@@ -243,6 +245,18 @@ class Profile:
         # Apply rotation via AttachmentOffset (Angle in degrees)
         obj.setExpression(".AttachmentOffset.Rotation.Angle", "RotationAngle")
 
+        # Edge offsets drive AttachmentOffset.Base, which a Placement applies after its rotation:
+        # the displacement stays in the edge frame (X in the sketch plane, Y along its normal)
+        # whatever the section rotation or mirrors.
+        obj.addProperty(
+            "App::PropertyDistance", "OffsetX", "Profile", "Displacement from the path edge, in the sketch plane"
+        ).OffsetX = float(init_offset_x)
+        obj.addProperty(
+            "App::PropertyDistance", "OffsetY", "Profile", "Displacement from the path edge, along the sketch normal"
+        ).OffsetY = float(init_offset_y)
+        obj.setExpression(".AttachmentOffset.Base.x", "OffsetX")
+        obj.setExpression(".AttachmentOffset.Base.y", "OffsetY")
+
         if link_sub:
             # A profile may stay at document root while its sketch belongs to a Body.
             obj.addProperty("App::PropertyLinkSubGlobal", "Target", "Base", "Target face").Target = link_sub
@@ -315,6 +329,8 @@ class Profile:
         init_rotation=0.0,
         catalog_family=None,
         init_lip_length=None,
+        init_offset_x=None,
+        init_offset_y=None,
     ):
         self.run_compatibility_migrations(obj)
 
@@ -378,6 +394,10 @@ class Profile:
         obj.MirrorH = bool(init_mirror_h)
         obj.MirrorV = bool(init_mirror_v)
         obj.RotationAngle = float(init_rotation)
+        if init_offset_x is not None:
+            obj.OffsetX = float(init_offset_x)
+        if init_offset_y is not None:
+            obj.OffsetY = float(init_offset_y)
 
         # obj.OffsetA = .0  # Property for structure
         # obj.OffsetB = .0  # Property for structure
