@@ -62,6 +62,8 @@ class TestProfileParentGuard(unittest.TestCase):
                 "length": 100,
                 "weight": 0,
                 "unitprice": 0,
+                "offset_x": 0,
+                "offset_y": 0,
             }
             fields = {"sb_" + key: Mock(value=Mock(return_value=value)) for key, value in values.items()}
             for key in ("pre_extend", "mirror_h", "mirror_v", "make_fillet", "combined_bevel"):

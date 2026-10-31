@@ -884,6 +884,7 @@ class BaseProfileTaskPanel(ABC):
             self.form_proxy.cb_mirror_h.isChecked(),
             self.form_proxy.cb_mirror_v.isChecked(),
         )
+        self.alignment_widget.set_offset(self.get_offset())
         self._refresh_information()
 
     def _refresh_information(self):
@@ -1753,9 +1754,13 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 )
             rotations = [self._edge_properties[key]["rotation"] for key in keys]
             self._mixed_presenters["combo_rotation"].set_mixed(len(set(rotations)) > 1)
+            offset_mixed = False
             for name, intent in _PLACEMENT_SPINS.items():
                 values = [self._edge_properties[key].get(intent, 0.0) for key in keys]
                 self._mixed_presenters[name].set_mixed(len(set(values)) > 1)
+                offset_mixed = offset_mixed or len(set(values)) > 1
+            # The preview cannot place one edge marker for differing offsets.
+            self.alignment_widget.set_offset(None if offset_mixed else self.get_offset())
             for name, caption in (("mirror_h", "Mirror H"), ("mirror_v", "Mirror V"), ("pre_extend", "Extend")):
                 button = getattr(self.form_proxy, "cb_" + name)
                 values = [self._edge_properties[key][name] for key in keys]

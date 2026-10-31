@@ -1223,6 +1223,7 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertEqual((offset_x.value(), offset_y.value()), (4.0, 0.0))
         panel.edge_list_widget.select_edge(e1)
         self.assertEqual((offset_x.value(), offset_y.value()), (10.0, -3.0))
+        self.assertEqual(panel.alignment_widget.offset, (10.0, -3.0))
         self.assertEqual((p1.OffsetX.Value, p1.OffsetY.Value), (10.0, -3.0))
         self.assertEqual((p2.OffsetX.Value, p2.OffsetY.Value), (4.0, 0.0))
 
@@ -1236,6 +1237,8 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertEqual((p2.OffsetX.Value, p2.OffsetY.Value), (4.0, 2.5))
         self.assertTrue(offset_x.property("mixedValues"))
         self.assertFalse(offset_y.property("mixedValues"))
+        # The preview cannot place the edge while X differs between edges.
+        self.assertIsNone(panel.alignment_widget.offset)
 
         panel.edge_list_widget.list_widget.clearSelection()
         self.assertFalse(offset_x.isEnabled())
