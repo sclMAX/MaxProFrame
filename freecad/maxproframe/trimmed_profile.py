@@ -21,6 +21,24 @@ from freecad.maxproframe.miter_geometry import Member, miter_plane
 from freecad.maxproframe.version import __version__ as ff_version
 
 
+def add_miter_properties(obj, extend):
+    """Add MiterExtend and MiterGap when missing; miters made before them did not extend."""
+    if not hasattr(obj, "MiterExtend"):
+        obj.addProperty(
+            "App::PropertyBool",
+            "MiterExtend",
+            "TrimmedProfile",
+            translate("App::Property", "Extend the profile up to the miter plane"),
+        ).MiterExtend = extend
+    if not hasattr(obj, "MiterGap"):
+        obj.addProperty(
+            "App::PropertyLength",
+            "MiterGap",
+            "TrimmedProfile",
+            translate("App::Property", "Distance left between the two miter cut faces"),
+        ).MiterGap = 0
+
+
 class TrimmedProfile:
     def __init__(self, obj):
         obj.addProperty(
@@ -60,18 +78,7 @@ class TrimmedProfile:
             "Perfect fit",
             "Simple fit",
         ]
-        obj.addProperty(
-            "App::PropertyBool",
-            "MiterExtend",
-            "TrimmedProfile",
-            translate("App::Property", "Extend the profile up to the miter plane"),
-        ).MiterExtend = True
-        obj.addProperty(
-            "App::PropertyLength",
-            "MiterGap",
-            "TrimmedProfile",
-            translate("App::Property", "Distance left between the two miter cut faces"),
-        ).MiterGap = 0
+        add_miter_properties(obj, extend=True)
 
         # related to Profile
         obj.addProperty("App::PropertyString", "Family", "Profile", "")

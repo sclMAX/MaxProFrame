@@ -139,6 +139,29 @@ class TestEditEndMiter(MiterFixture):
             self.assertAlmostEqual(obj.Shape.Volume, volume, places=5)
         self.assertEqual(self.doc.UndoCount, 0)
 
+    def test_miters_created_before_extend_and_gap_can_be_edited(self):
+        _, (m1, m2) = self.pair(extend=False)
+        volumes = [m1.Shape.Volume, m2.Shape.Volume]
+        for obj in (m1, m2):
+            obj.removeProperty("MiterExtend")
+            obj.removeProperty("MiterGap")
+        self.doc.recompute()
+        self.doc.clearUndos()
+        panel = self.open_miter_editor(m1)
+        self.assertFalse(panel.form.cb_extend.isChecked())
+        self.assertAlmostEqual(panel.form.sb_gap.value(), 0.0)
+        panel.form.sb_gap.setValue(0.5)
+        self.assertTrue(panel.accept())
+        for obj in (m1, m2):
+            self.assertEqual(obj.getStatusString(), "Valid")
+            self.assertFalse(obj.MiterExtend)
+            self.assertAlmostEqual(obj.MiterGap.Value, 0.5)
+        self.assertAlmostEqual(m1.Shape.distToShape(m2.Shape)[0], 0.5, places=5)
+        self.doc.undo()
+        self.doc.recompute()
+        for obj, volume in zip((m1, m2), volumes):
+            self.assertAlmostEqual(obj.Shape.Volume, volume, places=5)
+
     def test_editing_an_end_trim_still_opens_the_trim_panel(self):
         (p1, p2), _ = self.pair()
         trim = create_trimmed_profiles_tool.TrimProfileCommand().make_trimmed_profile(p1, [(p2, ("Face1",))])

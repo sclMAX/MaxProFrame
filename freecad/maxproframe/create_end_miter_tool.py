@@ -10,7 +10,7 @@ from freecad.maxproframe.ff_tools import ICONPATH, UIPATH, add_command, move_pro
 from freecad.maxproframe.miter_geometry import Member
 from freecad.maxproframe.miter_joints import find_joints
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
-from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrimmedProfile
+from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrimmedProfile, add_miter_properties
 
 
 def _base_profile(obj):
@@ -99,8 +99,8 @@ class EndMiterTaskPanel:
             self.form.setWindowTitle(translate("frameforge", "Edit Miter"))
             self.form.hint_label.setText(translate("frameforge", "Profile and boundaries of this miter."))
             self.form.remove_button.hide()
-            self.form.cb_extend.setChecked(edited.MiterExtend)
-            self.form.sb_gap.setValue(edited.MiterGap.Value)
+            self.form.cb_extend.setChecked(getattr(edited, "MiterExtend", False))
+            self.form.sb_gap.setValue(edited.MiterGap.Value if hasattr(edited, "MiterGap") else 0.0)
             self.members = [edited.TrimmedBody] + [link[0] for link in edited.TrimmingBoundary]
         for obj in members:
             self.add_member(obj)
@@ -240,6 +240,7 @@ class EndMiterTaskPanel:
         try:
             # The joint gap is shared: each side of the joint cuts back half of it.
             for obj in miters_to_edit(self.edited):
+                add_miter_properties(obj, extend=False)
                 obj.MiterExtend = extend
                 obj.MiterGap = gap
             doc.recompute()
