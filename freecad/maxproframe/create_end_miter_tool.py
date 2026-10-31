@@ -34,6 +34,26 @@ def _alive(obj):
         return False
 
 
+def place_in_container_of(trimmed_profile, body):
+    """Put a trim in the closest folder or Part/Body holding ``body``, like Create Profile does."""
+    group = _nearest_group(body)
+    if group is not None:
+        move_profile_to_parent_if_supported(trimmed_profile, group)
+
+
+def miters_to_edit(edited):
+    """``edited`` and the End Miters of its boundaries that miter back against it."""
+    partners = [link[0] for link in edited.TrimmingBoundary]
+    back = [edited, edited.TrimmedBody]
+    found = [edited]
+    for obj in edited.Document.Objects:
+        if obj is edited or getattr(obj, "TrimmedProfileType", None) != "End Miter":
+            continue
+        if obj.TrimmedBody in partners and any(link[0] in back for link in obj.TrimmingBoundary):
+            found.append(obj)
+    return found
+
+
 def make_end_miter_profile(trimmed_body=None, trimming_boundary=None, extend=True, gap=0.0):
     """End Miter of ``trimmed_body`` against every boundary, placed in the body's own container."""
     doc = trimmed_body.Document if trimmed_body is not None else App.ActiveDocument
@@ -41,9 +61,8 @@ def make_end_miter_profile(trimmed_body=None, trimming_boundary=None, extend=Tru
     name = "TrimmedProfile" if trimmed_body is None else f"{trimmed_body.Name}_Mt"
     trimmed_profile = doc.addObject("Part::FeaturePython", name)
 
-    group = _nearest_group(trimmed_body) if trimmed_body is not None else None
-    if group is not None:
-        move_profile_to_parent_if_supported(trimmed_profile, group)
+    if trimmed_body is not None:
+        place_in_container_of(trimmed_profile, trimmed_body)
 
     TrimmedProfile(trimmed_profile)
 
@@ -59,9 +78,13 @@ def make_end_miter_profile(trimmed_body=None, trimming_boundary=None, extend=Tru
 
 
 class EndMiterTaskPanel:
-    """Collects whole profiles from canvas clicks and miters every corner they form."""
+    """Collects whole profiles from canvas clicks and miters every corner they form.
 
-    def __init__(self, members=()):
+    With ``edited`` (an existing End Miter) the panel only changes Extend and Gap of that
+    miter and of the partner miters that cut back against it.
+    """
+
+    def __init__(self, members=(), edited=None):
         ui_file = os.path.join(UIPATH, "create_end_miter.ui")
         self.form = keep_alive_until_destroyed(Gui.PySideUic.loadUi(ui_file))
         self.form.setWindowTitle(translate("frameforge", "Miter Ends"))
@@ -69,8 +92,16 @@ class EndMiterTaskPanel:
         self.form.remove_button.clicked.connect(self.remove_selected)
 
         self.members = []
+        self.edited = edited
         self._closed = False
         self._syncing = False
+        if edited is not None:
+            self.form.setWindowTitle(translate("frameforge", "Edit Miter"))
+            self.form.hint_label.setText(translate("frameforge", "Profile and boundaries of this miter."))
+            self.form.remove_button.hide()
+            self.form.cb_extend.setChecked(edited.MiterExtend)
+            self.form.sb_gap.setValue(edited.MiterGap.Value)
+            self.members = [edited.TrimmedBody] + [link[0] for link in edited.TrimmingBoundary]
         for obj in members:
             self.add_member(obj)
         self.refresh()
@@ -108,6 +139,11 @@ class EndMiterTaskPanel:
         self.form.members_list.clear()
         for obj in self.members:
             self.form.members_list.addItem(f"{obj.Label} ({obj.Name})")
+
+        if self.edited is not None:
+            names = ", ".join(obj.Label for obj in miters_to_edit(self.edited))
+            self.form.message_label.setText(translate("frameforge", "Extend and Gap apply to {}.").format(names))
+            return
 
         usable, joints, skipped, errors = self.analysis()
         lines = []
@@ -147,7 +183,7 @@ class EndMiterTaskPanel:
             self._syncing = False
 
     def addSelection(self, doc, obj, sub, other):
-        if self._syncing or self._closed:
+        if self._syncing or self._closed or self.edited is not None:
             return
         document = App.getDocument(doc)
         source = document.getObject(getattr(obj, "Name", obj)) if document else None
@@ -159,7 +195,7 @@ class EndMiterTaskPanel:
         QtCore.QTimer.singleShot(0, self._highlight_members)
 
     def removeSelection(self, doc, obj, sub):
-        if self._syncing or self._closed or sub:
+        if self._syncing or self._closed or sub or self.edited is not None:
             return
         document = App.getDocument(doc)
         source = document.getObject(getattr(obj, "Name", obj)) if document else None
@@ -184,11 +220,41 @@ class EndMiterTaskPanel:
         except Exception:
             pass
 
+    def _close_edit(self):
+        gui_doc = Gui.getDocument(self.edited.Document.Name)
+        if gui_doc is not None and gui_doc.getInEdit() is not None:
+            gui_doc.resetEdit()
+
     def reject(self):
         self.clean()
+        if self.edited is not None:
+            # Nothing is changed before OK, so there is nothing to restore.
+            self._close_edit()
+        return True
+
+    def accept_edit(self):
+        extend = self.form.cb_extend.isChecked()
+        gap = self.form.sb_gap.value()
+        doc = self.edited.Document
+        doc.openTransaction("Edit End Miter")
+        try:
+            # The joint gap is shared: each side of the joint cuts back half of it.
+            for obj in miters_to_edit(self.edited):
+                obj.MiterExtend = extend
+                obj.MiterGap = gap
+            doc.recompute()
+        except Exception:
+            doc.abortTransaction()
+            raise
+        doc.commitTransaction()
+        self.clean()
+        self._close_edit()
         return True
 
     def accept(self):
+        if self.edited is not None:
+            return self.accept_edit()
+
         usable, joints, _, _ = self.analysis()
         if not joints:
             return False

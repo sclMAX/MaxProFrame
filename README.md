@@ -124,7 +124,12 @@ the legacy zero-length Pipe face still represents its outer disk (not its bore).
 
 ### 3. Apply Miters and Trims
 
-- Use **End Miter** to create 45° corner joins between intersecting profiles.
+- Use **End Miter** to miter the corners between profiles. The button is always active: click it, then click two or more profiles in the 3D view (a click selects the whole profile, not a face) and press **OK**.
+  - Every corner formed by the selected profiles is mitered, and each profile gets one miter object holding all its corners. Two selected profiles meeting at both ends get both corners.
+  - A point where three or more selected profiles meet is skipped and reported in the panel; it is not mitered.
+  - **Extend** (on by default) lengthens a profile that stops short of the miter plane, so both cut faces meet. The extension is limited to ten times the section diagonal, so nearly parallel profiles do not grow without bound.
+  - **Gap** leaves that distance between the two cut faces of a joint; each profile is cut back half of it.
+  - Double-click an existing miter in the tree to change Extend and Gap: the new values apply to that miter and to the partner miters that cut against it, so the gap of the joint stays the value shown.
 - Use **Trim Profiles** to cut a profile flush against the face of another beam.
 - Use **Extruded Cutout** to cut notches, holes, or clearances from an attached sketch.
 

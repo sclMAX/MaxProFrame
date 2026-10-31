@@ -153,6 +153,8 @@ def get_profiles_and_links_from_document():
 def get_profile_from_trimmedbody(obj):
     if is_trimmedbody(obj):
         return get_profile_from_trimmedbody(obj.TrimmedBody)
+    elif is_extrudedcutout(obj):
+        return get_profile_from_extrudedcutout(obj)
     else:
         return obj
 

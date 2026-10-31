@@ -293,6 +293,8 @@ class TrimmedProfile:
                 return link.Target
             elif hasattr(link, "TrimmedProfileType"):
                 link = link.TrimmedBody
+            elif getattr(link, "baseObject", None):
+                link = link.baseObject[0]
             else:
                 raise RuntimeError(f"{getattr(link, 'Name', link)} is not a profile or a trimmed profile.")
 
@@ -391,11 +393,16 @@ class ViewProviderTrimmedProfile:
         if mode != 0:
             return None
 
-        import freecad.maxproframe.create_trimmed_profiles_tool
+        if self.Object.TrimmedProfileType == "End Miter":
+            import freecad.maxproframe.create_end_miter_tool
 
-        taskd = freecad.maxproframe.create_trimmed_profiles_tool.CreateTrimmedProfileTaskPanel(
-            self.Object, mode="edition"
-        )
+            taskd = freecad.maxproframe.create_end_miter_tool.EndMiterTaskPanel(edited=self.Object)
+        else:
+            import freecad.maxproframe.create_trimmed_profiles_tool
+
+            taskd = freecad.maxproframe.create_trimmed_profiles_tool.CreateTrimmedProfileTaskPanel(
+                self.Object, mode="edition"
+            )
         Gui.Control.showDialog(taskd)
         return True
 
@@ -407,4 +414,4 @@ class ViewProviderTrimmedProfile:
         return True
 
     def edit(self):
-        FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
+        Gui.ActiveDocument.setEdit(self.Object, 0)
