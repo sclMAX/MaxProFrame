@@ -124,7 +124,7 @@ the legacy zero-length Pipe face still represents its outer disk (not its bore).
 
 ### 3. Apply Miters and Trims
 
-- Use **End Miter** to miter the corners between profiles. The button is always active: click it, then click two or more profiles in the 3D view (a click selects the whole profile, not a face) and press **OK**.
+- Use **End Miter** to miter the corners between profiles. The button is always active: click it, then click two or more profiles in the 3D view (a click selects the whole profile, not a face; Ctrl+click drops it) and press **OK**.
   - Every corner formed by the selected profiles is mitered, and each profile gets one miter object holding all its corners. Two selected profiles meeting at both ends get both corners.
   - A point where three or more selected profiles meet is skipped and reported in the panel; it is not mitered.
   - **Extend** (on by default) lengthens a profile that stops short of the miter plane, so both cut faces meet. The extension is limited to ten times the section diagonal, so nearly parallel profiles do not grow without bound.

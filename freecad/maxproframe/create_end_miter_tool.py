@@ -2,7 +2,7 @@ import os
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtCore, QtGui
+from PySide import QtCore, QtGui, QtWidgets
 
 from freecad.maxproframe._utils import is_extrudedcutout, is_profile, is_trimmedbody
 from freecad.maxproframe.create_profiles_tool import _nearest_group
@@ -75,6 +75,10 @@ def make_end_miter_profile(trimmed_body=None, trimming_boundary=None, extend=Tru
 
     trimmed_profile.TrimmedProfileType = "End Miter"
     return trimmed_profile
+
+
+def _ctrl_held():
+    return bool(QtWidgets.QApplication.keyboardModifiers() & QtCore.Qt.KeyboardModifier.ControlModifier)
 
 
 class EndMiterTaskPanel:
@@ -196,19 +200,25 @@ class EndMiterTaskPanel:
         source = document.getObject(getattr(obj, "Name", obj)) if document else None
         if source is None or _base_profile(source) is None:
             return
-        if self.add_member(source):
+        if _ctrl_held() and source in self.members:
+            # Ctrl+click toggles: a listed profile leaves the list.
+            self.members.remove(source)
+            self.refresh()
+        elif self.add_member(source):
             self.refresh()
         # Never change the selection during FreeCAD's observer dispatch.
         QtCore.QTimer.singleShot(0, self._highlight_members)
 
     def removeSelection(self, doc, obj, sub):
-        if self._syncing or self._closed or sub or self.edited is not None:
+        # Deselecting the whole profile or any of its faces removes it from the list.
+        if self._syncing or self._closed or self.edited is not None:
             return
         document = App.getDocument(doc)
         source = document.getObject(getattr(obj, "Name", obj)) if document else None
         if source in self.members:
             self.members.remove(source)
             self.refresh()
+            QtCore.QTimer.singleShot(0, self._highlight_members)
 
     def clearSelection(self, other):
         pass

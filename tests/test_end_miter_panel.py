@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtWidgets
+from PySide import QtCore, QtWidgets
 from test_end_miter_geometry import CENTER, CHAINED, MiterFixture
 from test_end_miter_translations import use_language
 
@@ -127,6 +127,29 @@ class TestEndMiterPanel(MiterFixture):
         self.assertEqual(panel.members, [p1, trimmed])
         selected = {s.ObjectName: s.SubElementNames for s in Gui.Selection.getSelectionEx()}
         self.assertEqual(selected, {p1.Name: (), trimmed.Name: ()})
+
+    def test_ctrl_click_on_a_listed_profile_removes_it(self):
+        _, (p1, p2) = self.profiles(CHAINED)
+        panel = self.open_panel([p1, p2])
+        QtWidgets.QApplication.processEvents()
+        ctrl = QtCore.Qt.KeyboardModifier.ControlModifier
+        with patch.object(QtWidgets.QApplication, "keyboardModifiers", return_value=ctrl):
+            Gui.Selection.addSelection(self.doc.Name, p1.Name, "Face3")
+            QtWidgets.QApplication.processEvents()
+        self.assertEqual(panel.members, [p2])
+        self.assertEqual(panel.form.members_list.count(), 1)
+        selected = {s.ObjectName: s.SubElementNames for s in Gui.Selection.getSelectionEx()}
+        self.assertEqual(selected, {p2.Name: ()})
+
+    def test_deselecting_a_face_of_a_listed_profile_removes_it(self):
+        _, (p1, p2) = self.profiles(CHAINED)
+        panel = self.open_panel([p1, p2])
+        QtWidgets.QApplication.processEvents()
+        panel.removeSelection(self.doc.Name, p2.Name, "Face3")
+        QtWidgets.QApplication.processEvents()
+        self.assertEqual(panel.members, [p1])
+        selected = {s.ObjectName: s.SubElementNames for s in Gui.Selection.getSelectionEx()}
+        self.assertEqual(selected, {p1.Name: ()})
 
     def test_rectangle_creates_one_trim_per_profile_with_perfect_joints(self):
         _, members = self.profiles(RECTANGLE)

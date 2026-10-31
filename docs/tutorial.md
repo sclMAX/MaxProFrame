@@ -192,7 +192,7 @@ Offsets are optional: with **Extend** (on by default) a profile that stops short
 
 ![alt text](images/53-create-miter-end.png)
 
-2. Click two or more profiles in the 3D view. A click selects the whole profile, not only the face under the cursor. To drop a profile, select it in the list and press **Remove**.
+2. Click two or more profiles in the 3D view. A click selects the whole profile, not only the face under the cursor. To drop a profile, Ctrl+click it in the 3D view, or select it in the list and press **Remove**.
 
 ![alt text](images/52-select-touching-profiles.png)
 
