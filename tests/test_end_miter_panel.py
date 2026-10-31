@@ -7,6 +7,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtWidgets
 from test_end_miter_geometry import CENTER, CHAINED, MiterFixture
+from test_end_miter_translations import use_language
 
 from freecad.maxproframe import create_end_miter_tool
 from freecad.maxproframe.trimmed_profile import TrimmedProfile
@@ -33,6 +34,8 @@ class TestEndMiterPanel(MiterFixture):
 
     def setUp(self):
         super().setUp()
+        # Messages are asserted in English, whatever language earlier tests left behind.
+        use_language(self, "English", "en_US")
         self.doc.UndoMode = 1
         App.setActiveDocument(self.doc.Name)
         Gui.Selection.clearSelection()

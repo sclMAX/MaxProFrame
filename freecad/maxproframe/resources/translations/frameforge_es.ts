@@ -985,5 +985,19 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
         <source>Discard the current profile edit? Earlier library changes will be kept.</source>
         <translation>¿Descartar la edición actual del perfil? Se conservarán los cambios anteriores de la biblioteca.</translation>
     </message>
+    <message><source>Miter Ends</source><translation>Ingletes</translation></message>
+    <message><source>Edit Miter</source><translation>Editar inglete</translation></message>
+    <message><source>Profiles</source><translation>Perfiles</translation></message>
+    <message><source>Click the profiles to miter (two or more).</source><translation>Hacé clic en los perfiles a unir en inglete (dos o más).</translation></message>
+    <message><source>Remove</source><translation>Quitar</translation></message>
+    <message><source>Miter</source><translation>Inglete</translation></message>
+    <message><source>Extend profiles up to the miter</source><translation>Extender los perfiles hasta el inglete</translation></message>
+    <message><source>Gap</source><translation>Separación</translation></message>
+    <message><source>Profile and boundaries of this miter.</source><translation>Perfil y límites de este inglete.</translation></message>
+    <message><source>Extend and Gap apply to {}.</source><translation>Extender y Separación se aplican a {}.</translation></message>
+    <message><source>Select two or more profiles to miter.</source><translation>Seleccioná dos o más perfiles para unir en inglete.</translation></message>
+    <message><source>1 joint will be created.</source><translation>Se creará 1 unión.</translation></message>
+    <message><source>{} joints will be created.</source><translation>Se crearán {} uniones.</translation></message>
+    <message><source>Skipped ({:.1f}, {:.1f}, {:.1f}): three or more profiles meet here and are not mitered ({}).</source><translation>Omitido ({:.1f}, {:.1f}, {:.1f}): tres o más perfiles se juntan aquí y no se unen en inglete ({}).</translation></message>
 </context>
 </TS>

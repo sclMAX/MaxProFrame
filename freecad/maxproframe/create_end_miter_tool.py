@@ -88,6 +88,13 @@ class EndMiterTaskPanel:
         ui_file = os.path.join(UIPATH, "create_end_miter.ui")
         self.form = keep_alive_until_destroyed(Gui.PySideUic.loadUi(ui_file))
         self.form.setWindowTitle(translate("frameforge", "Miter Ends"))
+        # Designer strings are not in the catalog: translate them here.
+        self.form.groupBox_members.setTitle(translate("frameforge", "Profiles"))
+        self.form.hint_label.setText(translate("frameforge", "Click the profiles to miter (two or more)."))
+        self.form.remove_button.setText(translate("frameforge", "Remove"))
+        self.form.groupBox_options.setTitle(translate("frameforge", "Miter"))
+        self.form.cb_extend.setText(translate("frameforge", "Extend profiles up to the miter"))
+        self.form.gap_label.setText(translate("frameforge", "Gap"))
         self.form.remove_button.setIcon(QtGui.QIcon(os.path.join(ICONPATH, "list-remove.svg")))
         self.form.remove_button.clicked.connect(self.remove_selected)
 
