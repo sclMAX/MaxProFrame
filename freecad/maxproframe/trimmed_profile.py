@@ -17,6 +17,7 @@ from freecad.maxproframe._utils import (
     length_along_normal,
 )
 from freecad.maxproframe.ff_tools import ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, translate
+from freecad.maxproframe.miter_geometry import Member, miter_plane
 from freecad.maxproframe.version import __version__ as ff_version
 
 
@@ -150,77 +151,10 @@ class TrimmedProfile:
                             cut_shapes.append(shp)
 
         elif fp.TrimmedProfileType == "End Miter":
-            doc = App.activeDocument()
-            precision = 0.001
-            target1 = self.getTarget(fp.TrimmedBody)
-            edge1 = doc.getObject(target1[0].Name).getSubObject(target1[1][0])
-            profile1 = get_profile_from_trimmedbody(fp.TrimmedBody)
-            shape1 = fp.TrimmedBody.Shape
-            bound_shapes = []
-            bound_profiles = []
-            bounds_target = []
-            for bound in fp.TrimmingBoundary:
-                bound_shapes.append(bound[0].Shape)
-                bound_profiles.append(get_profile_from_trimmedbody(bound[0]))
-                bounds_target.append(self.getTarget(bound[0]))
-            trimming_boundary_edges = []
-            for target in bounds_target:
-                trimming_boundary_edges.append(doc.getObject(target[0].Name).getSubObject(target[1][0]))
-            for i, edge2 in enumerate(trimming_boundary_edges):
-                shape2 = bound_shapes[i]
-                profile2 = bound_profiles[i]
-                end1 = edge1.Vertexes[-1].Point
-                start1 = edge1.Vertexes[0].Point
-                end2 = edge2.Vertexes[-1].Point
-                start2 = edge2.Vertexes[0].Point
-                vec1 = start1.sub(end1)
-                vec2 = start2.sub(end2)
+            for plane in self.miter_planes(fp):
+                cut_shapes.append(plane.removal_volume(fp.TrimmedBody.Shape))
 
-                angle = math.degrees(vec1.getAngle(vec2))
-
-                if end1.distanceToPoint(start2) < precision or start1.distanceToPoint(end2) < precision:
-                    angle = 180 - angle
-
-                bisect = angle / 2.0
-
-                if start1.distanceToPoint(start2) < precision:
-                    p1 = start1
-                    p2 = end1
-                    p3 = end2
-                elif start1.distanceToPoint(end2) < precision:
-                    p1 = start1
-                    p2 = end1
-                    p3 = start2
-                elif end1.distanceToPoint(start2) < precision:
-                    p1 = end1
-                    p2 = start1
-                    p3 = end2
-                elif end1.distanceToPoint(end2) < precision:
-                    p1 = end1
-                    p2 = start1
-                    p3 = start2
-                else:
-                    raise RuntimeError("End Miter: edges not aligned. Ensure they meet at a common endpoint.")
-
-                normal = Part.Plane(p1, p2, p3).toShape().normalAt(0, 0)
-                use_intersection_center = (
-                    getattr(profile1, "AnchorX", None),
-                    getattr(profile1, "AnchorY", None),
-                ) != (
-                    getattr(profile2, "AnchorX", None),
-                    getattr(profile2, "AnchorY", None),
-                )
-                cut_origin = p1
-                if use_intersection_center:
-                    intersection = shape1.common(shape2)
-                    if intersection.isNull():
-                        raise RuntimeError("End Miter: profiles don't intersect. You can add offsets.")
-                    cut_origin = intersection.BoundBox.Center
-
-                cutplane = Part.makePlane(10, 10, cut_origin, vec1, normal)
-                cutplane.rotate(cut_origin, normal, -90 + bisect)
-                cut_shapes.append(self.getOutsideCV(cutplane, fp.TrimmedBody.Shape))
-
+        cut_shape = Part.Shape()
         if len(cut_shapes) > 0:
             cut_shape = Part.Shape(cut_shapes[0])
             for sh in cut_shapes[1:]:
@@ -228,6 +162,16 @@ class TrimmedProfile:
 
         self.makeShape(fp, cut_shape)
         self._update_structure_data(fp)
+
+    def miter_planes(self, fp):
+        """One miter plane per trimming boundary, from the real profile positions."""
+        member = self._miter_member(fp.TrimmedBody)
+        return [miter_plane(member, self._miter_member(bound[0])) for bound in fp.TrimmingBoundary]
+
+    def _miter_member(self, body):
+        target = self.getTarget(body)
+        edge = target[0].getSubObject(target[1][0])
+        return Member(edge, get_profile_from_trimmedbody(body).Shape)
 
     def _update_structure_data(self, obj):
         prof = get_profile_from_trimmedbody(obj)
@@ -326,6 +270,8 @@ class TrimmedProfile:
                 return link.Target
             elif hasattr(link, "TrimmedProfileType"):
                 link = link.TrimmedBody
+            else:
+                raise RuntimeError(f"{getattr(link, 'Name', link)} is not a profile or a trimmed profile.")
 
 
 class ViewProviderTrimmedProfile:
