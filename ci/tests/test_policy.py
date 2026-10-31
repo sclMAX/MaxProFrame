@@ -1192,7 +1192,7 @@ class TestDocumentationPolicy(unittest.TestCase):
         from unittest import mock
 
         fake_fc = types.ModuleType("FreeCAD")
-        fake_fc.Qt = types.SimpleNamespace(translate=lambda ctx, txt: txt)
+        fake_fc.Qt = types.SimpleNamespace(translate=lambda ctx, txt: txt, QT_TRANSLATE_NOOP=lambda ctx, txt: txt)
         fake_gui = types.ModuleType("FreeCADGui")
         fake_gui.Workbench = object
         fake_gui.addLanguagePath = lambda p: None
