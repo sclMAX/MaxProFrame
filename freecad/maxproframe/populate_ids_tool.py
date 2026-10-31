@@ -47,6 +47,7 @@ from freecad.maxproframe.ff_tools import (
     ICONPATH,
     PROFILEIMAGES_PATH,
     PROFILESPATH,
+    QT_TRANSLATE_NOOP,
     UIPATH,
     add_command,
     get_param_group,
@@ -182,14 +183,11 @@ class PopulateIDsCommand:
     def GetResources(self):
         return {
             "Pixmap": os.path.join(ICONPATH, "populate-ids.svg"),
-            "MenuText": translate("FrameForge", "Populate IDs"),
+            "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_PopulateIDs", "Populate IDs"),
             "Accel": "M, B",
-            "ToolTip": translate(
-                "FrameForge",
-                "<html><head/><body><p><b>Populate IDs of selected Frameforge objects</b> \
-                    <br><br> \
-                    select profiles, links or groups, parts \
-                    </p></body></html>",
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_PopulateIDs",
+                "<b>Populate IDs of selected MaxProFrame objects</b><br><br>Select profiles, links, groups or parts.",
             ),
         }
 
@@ -220,14 +218,11 @@ class ResetIDsCommand:
     def GetResources(self):
         return {
             "Pixmap": os.path.join(ICONPATH, "reset-ids.svg"),
-            "MenuText": translate("FrameForge", "Reset IDs"),
+            "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_ResetIDs", "Reset IDs"),
             "Accel": "M, B",
-            "ToolTip": translate(
-                "FrameForge",
-                "<html><head/><body><p><b>Reset IDs of selected Frameforge objects</b> \
-                    <br><br> \
-                    select profiles, links or groups, parts \
-                    </p></body></html>",
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_ResetIDs",
+                "<b>Reset IDs of selected MaxProFrame objects</b><br><br>Select profiles, links, groups or parts.",
             ),
         }
 

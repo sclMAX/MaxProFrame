@@ -14,7 +14,15 @@ from freecad.maxproframe._utils import (
     is_profile,
     is_trimmedbody,
 )
-from freecad.maxproframe.ff_tools import add_command, ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, translate
+from freecad.maxproframe.ff_tools import (
+    ICONPATH,
+    PROFILEIMAGES_PATH,
+    PROFILESPATH,
+    QT_TRANSLATE_NOOP,
+    UIPATH,
+    add_command,
+    translate,
+)
 
 
 def place_balloon(balloon, move_balloon=False):
@@ -75,14 +83,11 @@ class CreateBalloonsCommand:
     def GetResources(self):
         return {
             "Pixmap": os.path.join(ICONPATH, "create-balloons.svg"),
-            "MenuText": translate("FrameForge", "Create Balloons"),
+            "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_CreateBalloons", "Create Balloons"),
             "Accel": "M, B",
-            "ToolTip": translate(
-                "FrameForge",
-                "<html><head/><body><p><b>Automatically Create balloons for selected Profiles/Links</b> \
-                    <br><br> \
-                    select profiles, links \
-                    </p></body></html>",
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_CreateBalloons",
+                "<b>Automatically create balloons for selected profiles and links</b><br><br>Select profiles and links.",
             ),
         }
 
@@ -153,12 +158,11 @@ class ResfreshBalloonsCommand:
     def GetResources(self):
         return {
             "Pixmap": os.path.join(ICONPATH, "refresh-balloons.svg"),
-            "MenuText": translate("FrameForge", "Resfresh Balloons"),
+            "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_RefreshBalloons", "Refresh Balloons"),
             "Accel": "M, B",
-            "ToolTip": translate(
-                "FrameForge",
-                "<html><head/><body><p><b>Refresh selected balloons</b> \
-                    </p></body></html>",
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_RefreshBalloons",
+                "<b>Refresh selected balloons</b>",
             ),
         }
 

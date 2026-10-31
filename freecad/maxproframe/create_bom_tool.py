@@ -25,6 +25,7 @@ from freecad.maxproframe.ff_tools import (
     ICONPATH,
     PROFILEIMAGES_PATH,
     PROFILESPATH,
+    QT_TRANSLATE_NOOP,
     UIPATH,
     add_command,
     get_param_group,
@@ -160,14 +161,11 @@ class CreateBOMCommand:
     def GetResources(self):
         return {
             "Pixmap": os.path.join(ICONPATH, "bom.svg"),
-            "MenuText": translate("MetalWB", "Create BOM"),
+            "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_CreateBOM", "Create BOM"),
             "Accel": "M, B",
-            "ToolTip": translate(
-                "MetalWB",
-                "<html><head/><body><p><b>Create Spreadsheet with profiles</b> \
-                    <br><br> \
-                    select fusions or profiles. First select existing BOM and cutlist to update existing spreadsheet \
-                    </p></body></html>",
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_CreateBOM",
+                "<b>Create a spreadsheet with profiles</b><br><br>Select fusions or profiles. To update an existing spreadsheet, first select the existing BOM and cut list.",
             ),
         }
 

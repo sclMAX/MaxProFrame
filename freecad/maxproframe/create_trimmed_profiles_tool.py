@@ -14,6 +14,7 @@ from freecad.maxproframe.ff_tools import (
     ICONPATH,
     PROFILEIMAGES_PATH,
     PROFILESPATH,
+    QT_TRANSLATE_NOOP,
     UIPATH,
     add_command,
     get_param_group,
@@ -187,14 +188,11 @@ class TrimProfileCommand:
     def GetResources(self):
         return {
             "Pixmap": os.path.join(ICONPATH, "corner-end-trim.svg"),
-            "MenuText": translate("MetalWB", "Trim Profile"),
+            "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_TrimProfiles", "Trim Profile"),
             "Accel": "M, C",
-            "ToolTip": translate(
-                "MetalWB",
-                "<html><head/><body><p><b>Trim a profile</b> \
-                    <br><br> \
-                    Select a profile then another profile's faces. \
-                    </p></body></html>",
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_TrimProfiles",
+                "<b>Trim a profile</b><br><br>Select a profile, then faces of another profile.",
             ),
         }
 

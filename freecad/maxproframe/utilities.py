@@ -7,7 +7,15 @@ import TechDrawGui
 from PySide import QtCore, QtGui
 
 import freecad.maxproframe._utils as ffu
-from freecad.maxproframe.ff_tools import add_command, ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, translate
+from freecad.maxproframe.ff_tools import (
+    ICONPATH,
+    PROFILEIMAGES_PATH,
+    PROFILESPATH,
+    QT_TRANSLATE_NOOP,
+    UIPATH,
+    add_command,
+    translate,
+)
 
 # TechDraw PDF Gen
 
@@ -16,11 +24,11 @@ class ExportTechDrawCommand:
     def GetResources(self):
         return {
             "Pixmap": os.path.join(ICONPATH, "gen_techdraw.svg"),
-            "MenuText": translate("MetalWB", "Export all TechDraw Pages as PDF"),
+            "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_ExportTechDraw", "Export all TechDraw Pages as PDF"),
             "Accel": "M, T",
-            "ToolTip": translate(
-                "MetalWB",
-                "<html><head/><body><p>Export all TechDraw Pages as PDF</p></body></html>",
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_ExportTechDraw",
+                "Export all TechDraw Pages as PDF",
             ),
         }
 
@@ -58,11 +66,14 @@ class RecomputeFrameForgeObjectsCommand:
     def GetResources(self):
         return {
             "Pixmap": os.path.join(ICONPATH, "recompute.svg"),
-            "MenuText": translate("MetalWB", "recursivly recompute all profiles and related FF Objects"),
+            "MenuText": QT_TRANSLATE_NOOP(
+                "MaxProFrame_RecomputeFrameForgeObjects",
+                "Recursively recompute all profiles and related MaxProFrame objects",
+            ),
             "Accel": "M, R",
-            "ToolTip": translate(
-                "MetalWB",
-                "<html><head/><body><p>recursivly recompute all profiles and related FF Objects</p></body></html>",
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_RecomputeFrameForgeObjects",
+                "Recursively recompute all profiles and related MaxProFrame objects",
             ),
         }
 

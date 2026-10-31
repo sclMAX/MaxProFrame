@@ -13,7 +13,7 @@ if App.GuiUp:
     import FreeCADGui as Gui
 
 from freecad.maxproframe import _utils
-from freecad.maxproframe.ff_tools import add_command, ICONPATH
+from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command
 
 TOOL_ICON = os.path.join(ICONPATH, "line.svg")
 
@@ -95,8 +95,11 @@ class CreateParametricLineCommand:
     def GetResources(self):
         return {
             "Pixmap": TOOL_ICON,
-            "MenuText": "Create a Parametric Line",
-            "ToolTip": "Create a Parametric Line from two Vertex<br><br>Select two vertex then run this command",
+            "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_ParametricLine", "Create a Parametric Line"),
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_ParametricLine",
+                "Create a parametric line between two vertices.<br><br>Select two vertices, then run this command.",
+            ),
         }
 
 
