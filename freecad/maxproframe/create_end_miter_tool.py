@@ -124,6 +124,8 @@ class EndMiterTaskPanel:
     def __init__(self, members=(), edited=None):
         ui_file = os.path.join(UIPATH, "create_end_miter.ui")
         self.form = keep_alive_until_destroyed(Gui.PySideUic.loadUi(ui_file))
+        # FreeCAD may close the dialog without OK, Cancel or closed(): the form is then deleted.
+        self.form.destroyed.connect(self._form_gone)
         self._translate_form()
         self.form.remove_button.setIcon(QtGui.QIcon(os.path.join(ICONPATH, "list-remove.svg")))
         self.form.remove_button.clicked.connect(self.remove_selected)
@@ -288,9 +290,22 @@ class EndMiterTaskPanel:
         self._show_status()
         self._gap_timer.start()
 
+    def _active(self):
+        """Whether the panel still runs; a form FreeCAD already dropped closes the panel."""
+        if self._closed:
+            return False
+        if self.form is None:
+            self._form_gone()
+            return False
+        return True
+
+    def _form_gone(self, *args):
+        if not self._closed:
+            self.closed()
+
     def _update_preview(self, *args, force=False):
         """Make the preview match the panel when Update automatically is checked (or ``force``)."""
-        if self._closed or self.edited is not None:
+        if not self._active() or self.edited is not None:
             return
         if (force or self.form.cb_auto_update.isChecked()) and self._previewed != self._wanted():
             self._rebuild_preview()
@@ -446,7 +461,7 @@ class EndMiterTaskPanel:
         return any(selection.Object in shown for selection in Gui.Selection.getSelectionEx("*"))
 
     def addSelection(self, doc, obj, sub, other):
-        if self._syncing or self._closed or self.edited is not None:
+        if self._syncing or not self._active() or self.edited is not None:
             return
         document = App.getDocument(doc)
         source = document.getObject(getattr(obj, "Name", obj)) if document else None
@@ -464,13 +479,15 @@ class EndMiterTaskPanel:
         QtCore.QTimer.singleShot(0, self._after_selection)
 
     def _after_selection(self):
+        if not self._active():
+            return
         self._draw_markers()
         self._update_preview()
         self._highlight_members()
 
     def removeSelection(self, doc, obj, sub):
         # A profile leaves the list once neither it nor its preview has anything selected.
-        if self._syncing or self._closed or self.edited is not None:
+        if self._syncing or not self._active() or self.edited is not None:
             return
         document = App.getDocument(doc)
         source = self._member_of(document.getObject(getattr(obj, "Name", obj)) if document else None)

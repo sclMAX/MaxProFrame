@@ -316,6 +316,46 @@ class TestEndMiterPreview(MiterFixture):
         self.assertEqual(self.doc.UndoCount, 0)
         self.assertEqual(panel.markers(), [])
 
+    def test_freecad_closing_the_dialog_stops_the_panel(self):
+        # FreeCAD can close the task dialog without OK, Cancel or closed(), and then sets form to None.
+        members = self.profiles(RECTANGLE)
+        names = sorted(obj.Name for obj in self.doc.Objects)
+        panel = self.run_command(members)
+        self.assertEqual(len(self.trims()), 4)
+        Gui.Control.closeDialog()
+        QtWidgets.QApplication.processEvents()
+        panel.form = None
+        self.click(members[0])
+        self.wait(0.1)
+        self.assertTrue(panel._closed)
+        self.assertEqual(sorted(obj.Name for obj in self.doc.Objects), names)
+        self.assertTrue(all(member.ViewObject.Visibility for member in members))
+        self.assertEqual(self.doc.UndoCount, 0)
+
+    def test_a_pending_gap_update_after_freecad_closed_the_dialog_does_nothing(self):
+        p1, p2 = self.profiles(CHAINED)
+        panel = self.run_command([p1, p2])
+        panel.form.sb_gap.setValue(0.4)
+        Gui.Control.closeDialog()
+        panel.form = None
+        with patch.object(panel, "_rebuild_preview") as rebuild:
+            self.wait(0.6)
+        rebuild.assert_not_called()
+        self.assertTrue(panel._closed)
+        self.assertEqual(self.trims(), [])
+
+    def test_deleting_the_panel_form_cleans_up(self):
+        members = self.profiles(RECTANGLE)
+        names = sorted(obj.Name for obj in self.doc.Objects)
+        panel = self.open_panel(members)
+        self.assertEqual(len(self.trims()), 4)
+        panel.form.deleteLater()
+        QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+        QtWidgets.QApplication.processEvents()
+        self.assertTrue(panel._closed)
+        self.assertEqual(sorted(obj.Name for obj in self.doc.Objects), names)
+        self.assertTrue(all(member.ViewObject.Visibility for member in members))
+
     def test_closing_the_dialog_after_ok_keeps_the_miters(self):
         p1, p2 = self.profiles(CHAINED)
         panel = self.open_panel([p1, p2])
