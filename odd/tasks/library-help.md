@@ -33,3 +33,4 @@ Native runner: `/usr/bin/python3 ci/run_tests.py --freecad-bin .git/ci-policy-ru
 - L5. Full native suite: `Ran 760 tests in 269.873s / OK`.
 - L6. Native review review-78d99acf7169c691 (readability + reliability) approved and acknowledged; non-blocking advisories: R2-changelog-unbacked-entry (CHANGELOG.md:5), R2-duplicated-state-predicates (library_manager_dialog.py:1281-1288), R2-shortcut-name-is-event-filter (help_viewer.py:101-105), R3-empty-families-label-without-library (library_manager_dialog.py:1009-1017), R3-help-window-outlives-manager-untested (help_viewer.py:114-115), R3-spanish-deeplinks-static-only (tests/test_library_help.py:47-54). 
 - L7. User manual check in FreeCAD: "todo ok". Push, PR and merge.
+- L8. User: "si" to fixing R2-changelog-unbacked-entry before merge: the thumbnails entry now credits PR #25, which shipped them without a changelog line.
