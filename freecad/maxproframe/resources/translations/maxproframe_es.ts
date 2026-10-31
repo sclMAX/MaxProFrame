@@ -1000,5 +1000,30 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>{} joints will be created.</source><translation>Se crearán {} uniones.</translation></message>
     <message><source>Skipped ({:.1f}, {:.1f}, {:.1f}): three or more profiles meet here and are not mitered ({}).</source><translation>Omitido ({:.1f}, {:.1f}, {:.1f}): tres o más perfiles se juntan aquí y no se unen en inglete ({}).</translation></message>
     <message><source>Update automatically</source><translation>Actualizar automáticamente</translation></message>
+    <message><source>Profile Library Manager</source><translation>Gestor de bibliotecas de perfiles</translation></message>
+    <message><source>Libraries</source><translation>Bibliotecas</translation></message>
+    <message><source>Create a library</source><translation>Crear una biblioteca</translation></message>
+    <message><source>Duplicate a system library</source><translation>Duplicar una biblioteca del sistema</translation></message>
+    <message><source>Share a library</source><translation>Compartir una biblioteca</translation></message>
+    <message><source>Families</source><translation>Familias</translation></message>
+    <message><source>Profiles and sizes</source><translation>Perfiles y medidas</translation></message>
+    <message><source>Custom profiles</source><translation>Perfiles personalizados</translation></message>
+    <message><source>Save your changes</source><translation>Guardar los cambios</translation></message>
+    <message><source>Use your profiles in a model</source><translation>Usar los perfiles en un modelo</translation></message>
+    <message><source>library-manager.md</source><translation>library-manager.es.md</translation></message>
+    <message><source>MaxProFrame Help</source><translation>Ayuda de MaxProFrame</translation></message>
+    <message><source>Help (F1)</source><translation>Ayuda (F1)</translation></message>
+    <message><source>Select a library to see its families. [System] libraries are read-only.</source><translation>Seleccioná una biblioteca para ver sus familias. Las bibliotecas [Sistema] son de solo lectura.</translation></message>
+    <message><source>Select a family to see its profiles.</source><translation>Seleccioná una familia para ver sus perfiles.</translation></message>
+    <message><source>Standard or catalog reference of this family, for example EN 10219.</source><translation>Norma o referencia de catálogo de esta familia, por ejemplo EN 10219.</translation></message>
+    <message><source>Filter the profiles of this family by code or description.</source><translation>Filtra los perfiles de esta familia por código o descripción.</translation></message>
+    <message><source>Profiles of this family: one row per size, dimensions in mm and weight in kg/m.</source><translation>Perfiles de esta familia: una fila por medida, dimensiones en mm y peso en kg/m.</translation></message>
+    <message><source>Save the pending changes of this library.</source><translation>Guarda los cambios pendientes de esta biblioteca.</translation></message>
+    <message><source>Close the library manager.</source><translation>Cierra el gestor de bibliotecas.</translation></message>
+    <message><source>This library has no families yet. Add one with +.</source><translation>Esta biblioteca todavía no tiene familias. Agregá una con +.</translation></message>
+    <message><source>This system library is read-only. Duplicate it to create your own families.</source><translation>Esta biblioteca del sistema es de solo lectura. Duplicala para crear tus propias familias.</translation></message>
+    <message><source>Add a size with +.</source><translation>Agregá una medida con +.</translation></message>
+    <message><source>Capture a section or import a DXF to add one.</source><translation>Capturá una sección o importá un DXF para agregar uno.</translation></message>
+    <message><source>Duplicate the library to edit it.</source><translation>Duplicá la biblioteca para editarla.</translation></message>
 </context>
 </TS>

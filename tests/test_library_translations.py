@@ -29,6 +29,7 @@ def library_sources():
         "dxf_section_dialog.py",
         "sketch_section_dialog.py",
         "custom_profile_editor.py",
+        "help_viewer.py",
     ):
         tree = ast.parse((ROOT / filename).read_text(encoding="utf-8"))
         for node in ast.walk(tree):
