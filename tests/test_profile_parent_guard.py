@@ -7,15 +7,9 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import FreeCAD as App
-import FreeCADGui as Gui
 import Part
 import Sketcher
-
-from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
-
-# Console FreeCAD lacks command registration, which is unrelated to creation.
-with patch.object(Gui, "addCommand", create=True):
-    from freecad.maxproframe import create_custom_profiles_tool as custom_module
+from profile_creation_helpers import creation_panel, make_custom_profile
 
 
 def source_content(snapshot):
@@ -40,49 +34,11 @@ class TestProfileParentGuard(unittest.TestCase):
             self.section.addGeometry(Part.LineSegment(App.Vector(*start, 0), App.Vector(*end, 0)), False)
         self.doc.recompute()
 
-    def panel(self, custom):
-        if custom:
-            panel = custom_module.CreateCustomProfileTaskPanel.__new__(custom_module.CreateCustomProfileTaskPanel)
-            panel.form = SimpleNamespace(
-                sb_length=Mock(value=Mock(return_value=100)),
-                sb_weight=Mock(value=Mock(return_value=0)),
-                sb_unitprice=Mock(value=Mock(return_value=0)),
-                le_material=Mock(text=Mock(return_value="Steel")),
-            )
-            panel.custom_profile = self.section
-        else:
-            panel = CreateProfileTaskPanel.__new__(CreateProfileTaskPanel)
-            values = {
-                "width": 20,
-                "height": 10,
-                "main_thickness": 1,
-                "flange_thickness": 1,
-                "radius1": 0,
-                "radius2": 0,
-                "length": 100,
-                "weight": 0,
-                "unitprice": 0,
-                "offset_x": 0,
-                "offset_y": 0,
-            }
-            fields = {"sb_" + key: Mock(value=Mock(return_value=value)) for key, value in values.items()}
-            for key in ("pre_extend", "mirror_h", "mirror_v", "make_fillet", "combined_bevel"):
-                fields["cb_" + key] = Mock(isChecked=Mock(return_value=False))
-            for key, value in (("material", "Steel"), ("family", "Flat Sections"), ("size", "20x10")):
-                fields["combo_" + key] = Mock(currentText=Mock(return_value=value))
-            panel.form_proxy = SimpleNamespace(**fields)
-            panel.get_anchor = lambda: (1, 1)
-            panel.get_rotation = lambda: 0.0
-            panel.profiles = {}
-            panel._mutation_depth = 0
-            panel._selection_pending = False
-            panel._selection_signature = lambda: ()
-        return panel
-
     def create(self, custom):
-        # Only the GUI-only view provider is substituted; document, attachment and Profile are real.
-        with patch.object(custom_module, "ViewProviderCustomProfile"):
-            self.panel(custom).make_profile(self.path, "Edge1", "Profile")
+        if custom:
+            make_custom_profile(self.path, "Edge1", "Profile", self.section)
+        else:
+            creation_panel().make_profile(self.path, "Edge1", "Profile")
         profile = self.doc.getObject("Profile")
         self.assertIsNotNone(profile.Proxy)
         self.assertEqual(profile.Family, "Custom Profile" if custom else "Flat Sections")
@@ -99,9 +55,6 @@ class TestProfileParentGuard(unittest.TestCase):
         parent = self.doc.addObject(parent_type, "Parent") if parent_type else None
         if parent:
             parent.addObject(self.path)
-            if custom and parent_type == "App::Part":
-                # Keep the separate custom-section link within its existing local scope.
-                parent.addObject(self.section)
         self.doc.recompute()
         before_path = source_content(self.path.dumpContent())
         before_group = tuple(parent.Group) if parent else ()
@@ -219,7 +172,7 @@ class TestProfileParentGuard(unittest.TestCase):
             App.closeDocument(self.doc.Name)
 
     def preview_panel(self, in_part=True):
-        panel = self.panel(False)
+        panel = creation_panel()
         panel._target_doc = self.doc
         panel._objects = {}
         panel._edge_properties = {}
@@ -259,17 +212,9 @@ class TestProfileParentGuard(unittest.TestCase):
         self.assert_parametric_profile(next(iter(panel._objects.values())), 100)
 
     def test_custom_section_outside_part_uses_global_link(self):
-        from freecad.maxproframe import create_profiles_tool as module
-
-        panel = self.panel(False)
-        panel.form_proxy.combo_family.currentText.return_value = "Custom Profile"
-        panel.profiles = {"Steel": {"Custom Profile": {"sizes": {"20x10": {"asset_path": "section.FCStd"}}}}}
-        panel.library_manager = Mock()
-        panel.library_manager._get_registered_folder.return_value = "unused"
         part = self.doc.addObject("App::Part", "Part")
         part.addObject(self.path)
-        with patch.object(module, "get_or_import_section_sketch", return_value=self.section):
-            profile = panel.make_profile(self.path, "Edge1", "Profile")
+        profile = make_custom_profile(self.path, "Edge1", "Profile", self.section)
         self.doc.recompute()
         self.assertEqual(profile.getTypeIdOfProperty("CustomProfile"), "App::PropertyLinkGlobal")
         self.assertEqual(profile.CustomProfile, self.section)

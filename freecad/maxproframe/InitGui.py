@@ -16,6 +16,7 @@ class MaxProFrame(Gui.Workbench):
     """
 
     import os as _os
+
     from freecad.maxproframe.ff_tools import ICONPATH as _ICONPATH
 
     MenuText = "MaxProFrame"
@@ -26,7 +27,6 @@ class MaxProFrame(Gui.Workbench):
 
     toolbox_maxproframe = [
         "MaxProFrame_CreateProfiles",
-        "MaxProFrame_CreateCustomProfiles",
         "MaxProFrame_ManageProfileLibraries",
         "MaxProFrame_TrimProfiles",
         "MaxProFrame_EndMiter",
@@ -57,7 +57,6 @@ class MaxProFrame(Gui.Workbench):
         """
         from freecad.maxproframe import (
             create_bom_tool,
-            create_custom_profiles_tool,
             create_edit_balloons_tool,
             create_end_miter_tool,
             create_extruded_cutout_tool,

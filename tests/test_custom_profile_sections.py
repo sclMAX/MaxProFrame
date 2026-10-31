@@ -1,14 +1,10 @@
 import math
 import unittest
-from types import SimpleNamespace
-from unittest.mock import Mock
 
 import FreeCAD as App
 import Part
 import Sketcher
-
-from freecad.maxproframe.create_custom_profiles_tool import CreateCustomProfileTaskPanel
-from freecad.maxproframe.profile import Profile
+from profile_creation_helpers import make_custom_profile
 
 
 class TestCustomProfileSections(unittest.TestCase):
@@ -35,17 +31,16 @@ class TestCustomProfileSections(unittest.TestCase):
         path=None,
         edge="Edge1",
     ):
-        panel = CreateCustomProfileTaskPanel.__new__(CreateCustomProfileTaskPanel)
-        panel.form = SimpleNamespace(
-            sb_length=Mock(value=Mock(return_value=float(length))),
-            sb_weight=Mock(value=Mock(return_value=float(weight))),
-            sb_unitprice=Mock(value=Mock(return_value=float(unitprice))),
-            le_material=Mock(text=Mock(return_value=material)),
+        obj = make_custom_profile(
+            path if path is not None else self.path,
+            edge,
+            name,
+            custom_source,
+            length=length,
+            material=material,
+            weight=weight,
+            unitprice=unitprice,
         )
-        panel.custom_profile = custom_source
-        target_path = path if path is not None else self.path
-        panel.make_profile(target_path, edge, name)
-        obj = self.doc.getObject(name)
         obj.Label = label
         return obj
 

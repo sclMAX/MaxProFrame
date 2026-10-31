@@ -1,12 +1,12 @@
 # Custom Profiles
 
-Create Custom Profile allows creating structural profiles from any valid single-connected 2D sketch or face, including hollow tubes and multi-hole sections.
+Custom profiles extrude any valid single-connected 2D sketch or face along a path, including hollow tubes and multi-hole sections. They are created with the standard Create Profile tool from the `Custom Profile` family of a folder library.
 
 ## Quick path
 
 1. **Draw section:** Create a Sketch with a closed outer boundary and any number of closed interior holes.
-2. **Select in tool:** Open Create Custom Profile (`Shift+C`), click **Select a Profile**, and pick the sketch (or an `App::Link` pointing to it).
-3. **Generate:** Select the path edge(s) or set a length, then accept. The resulting profile extrudes the section along the path.
+2. **Add to a library:** In the Profile Library Manager, select a `Custom Profile` family of a folder library, then click **Capture Section** with the sketch selected (or use **Import DXF**) and save the library. See [Folder Libraries](folder-libraries.md).
+3. **Generate:** Open Create Profile, choose that library, the `Custom Profile` family and the section size, select the path edge(s) or set a length, then accept. The resulting profile extrudes the section along the path.
 4. **Edit the profile:** Double-click the generated profile in the tree to open the profile editor, including for custom sections selected from a folder library. Accept commits profile changes; Cancel restores the previous state. Editing length keeps the section source and its holes intact.
 5. **Parametric updates:** Editing the source sketch (e.g. resizing holes or contours) automatically updates the profile on recompute.
 
@@ -37,4 +37,4 @@ FrameForge uses native `Part.makeFace` with `Part::FaceMakerBullseye` to validat
 - **Parametric Edits:** Changing sketch dimensions or modifying hole positions updates the profile volume and geometry on `doc.recompute()`.
 - **Fault Tolerance:** If a sketch is modified into an invalid topology (e.g. an open contour or disconnected islands), profile execution halts with a deterministic diagnostic in `obj.getStatusString()`, leaving the previous valid shape, placement, and properties intact. Fixing the sketch restores the profile to `Valid` status.
 - **Direct Acceptance Confirmation:** In the Create Profile dialog, clicking **OK** confirms the custom profile without requiring a prior click on **Apply**. First-time custom section imports run after the native confirmation callback returns, avoiding the RC crash during dialog closure. Creation errors are reported and the profile transaction is rolled back.
-- **Scope:** Custom profiles are user-defined sections and are not registered into catalog libraries. Extrusion follows the standard FrameForge path normal mapping without arbitrary section-plane reorientation.
+- **Scope:** Extrusion follows the standard FrameForge path normal mapping without arbitrary section-plane reorientation.
