@@ -1478,6 +1478,13 @@ def _nearest_group(obj):
     return obj.getParentGeoFeatureGroup() if hasattr(obj, "getParentGeoFeatureGroup") else None
 
 
+def place_in_container_of(obj, source):
+    """Put ``obj`` in the closest folder or Part/Body holding ``source``, like Create Profile does."""
+    group = _nearest_group(source)
+    if group is not None:
+        move_profile_to_parent_if_supported(obj, group)
+
+
 def _is_container(obj):
     """Parts, Bodies and groups: their shape's edge names do not resolve to a child."""
     return hasattr(obj, "hasExtension") and obj.hasExtension("App::GroupExtension")

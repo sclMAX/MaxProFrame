@@ -239,7 +239,8 @@ def get_trimmed_profile_all_cutting_angles(trimmed_profile):
             raise ValueError("Unknown CutType")
 
     elif trimmed_profile.TrimmedProfileType == "End Miter":
-        angles.extend(plane.cut_angle() for plane in trimmed_profile.Proxy.miter_planes(trimmed_profile))
+        # Geometry keeps the raw angle; the readable angles show one decimal.
+        angles.extend(round(plane.cut_angle(), 1) for plane in trimmed_profile.Proxy.miter_planes(trimmed_profile))
 
     else:
         raise ValueError("Unknown TrimmedProfileType")

@@ -1,17 +1,18 @@
 """Miter joints found among selected members from their path ends.
 
-Two members form a joint when the closest pair of their path ends meet: the crossing
-of both end axes lies within the extension limit of each end, and the members are not
-parallel in the same direction. A member end claimed by two or more joints is a point
-where three or more members meet; those joints are skipped and the point is reported.
+Two members form a joint when the closest pair of their path ends meet: those ends lie
+within the sum of both section diagonals of each other, the crossing of both end axes
+reaches each end as a corner, and the members are not parallel in the same direction.
+A member end claimed by two or more joints is a point where three or more members
+meet; those joints are skipped and the point is reported.
 """
 
 import itertools
 
-from freecad.maxproframe.miter_geometry import EXTENSION_LIMIT, _axes_crossing, _meeting_ends
+from freecad.maxproframe.miter_geometry import EXTENSION_LIMIT, axes_crossing, meeting_ends, parallel, path_end
 
-# Unit-vector cross product below which two axes count as parallel.
-PARALLEL_TOLERANCE = 1e-7
+# Deepest crossing inside a member, in section diagonals, that still counts as a corner.
+CORNER_DEPTH = 1.0
 # Distance, in mm, below which two parallel axes count as collinear.
 COLLINEAR_TOLERANCE = 1e-6
 
@@ -56,35 +57,37 @@ def find_joints(members):
     return joints, skipped
 
 
-def end_frame(edge, at_start):
-    """Path end point and the unit direction from it into the member."""
-    param = edge.FirstParameter if at_start else edge.LastParameter
-    tangent = edge.tangentAt(param).normalize()
-    return edge.valueAt(param), tangent if at_start else -tangent
-
-
 def _joint(first, first_member, second, second_member):
     edge, diagonal = first_member
     other_edge, other_diagonal = second_member
-    at_start, other_at_start = _meeting_ends(edge, other_edge)
-    point, inward = end_frame(edge, at_start)
-    other_point, other_inward = end_frame(other_edge, other_at_start)
+    at_start, other_at_start = meeting_ends(edge, other_edge)
+    point, inward = path_end(edge, at_start)
+    other_point, other_inward = path_end(other_edge, other_at_start)
 
-    if inward.cross(other_inward).Length < PARALLEL_TOLERANCE:
+    # Closest ends farther apart than both sections belong to opposite members of a frame.
+    if (other_point - point).Length > diagonal + other_diagonal:
+        return None
+    if parallel(inward, other_inward):
         if inward.dot(other_inward) > 0:
             return None
         # Opposite directions only meet end to end on a common line.
         if (other_point - point).cross(inward).Length > COLLINEAR_TOLERANCE:
             return None
 
-    crossing = _axes_crossing(point, inward, other_point, other_inward)
-    for end, direction, size in ((point, inward, diagonal), (other_point, other_inward, other_diagonal)):
-        if (crossing - end).Length > EXTENSION_LIMIT * size:
-            return None
-        # A crossing deep inside a member is a T or a cross, not a corner.
-        if (crossing - end).dot(direction) > size:
-            return None
+    crossing = axes_crossing(point, inward, other_point, other_inward)
+    if not _reaches_corner(point, inward, diagonal, crossing):
+        return None
+    if not _reaches_corner(other_point, other_inward, other_diagonal, crossing):
+        return None
     return Joint(first, at_start, second, other_at_start, crossing)
+
+
+def _reaches_corner(end, inward, diagonal, crossing):
+    """Whether ``crossing`` is a corner for the member end: within reach and not deep inside it."""
+    if (crossing - end).Length > EXTENSION_LIMIT * diagonal:
+        return False
+    # A crossing deep inside a member is a T or a cross, not a corner.
+    return (crossing - end).dot(inward) <= CORNER_DEPTH * diagonal
 
 
 def _skipped_points(joints, members):
@@ -106,7 +109,7 @@ def _skipped_points(joints, members):
 
     skipped = []
     for ends in groups.values():
-        points = [end_frame(members[index][0], at_start)[0] for index, at_start in ends]
+        points = [path_end(members[index][0], at_start)[0] for index, at_start in ends]
         center = sum(points[1:], points[0]) * (1.0 / len(points))
         skipped.append(SkippedPoint(center, sorted({index for index, _ in ends})))
     return skipped

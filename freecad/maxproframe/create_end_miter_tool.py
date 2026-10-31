@@ -1,17 +1,17 @@
 import os
+from collections import namedtuple
 
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtGui, QtWidgets
 
 from freecad.maxproframe._utils import is_extrudedcutout, is_profile, is_trimmedbody
-from freecad.maxproframe.create_profiles_tool import _nearest_group
+from freecad.maxproframe.create_profiles_tool import place_in_container_of
 from freecad.maxproframe.ff_tools import (
     ICONPATH,
     UIPATH,
     add_command,
     get_param_group,
-    move_profile_to_parent_if_supported,
     translate,
 )
 from freecad.maxproframe.miter_geometry import Member
@@ -21,8 +21,15 @@ from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrim
 
 # Remembered state of the panel's "Update automatically" check box.
 AUTO_PREVIEW_PARAM = "Miter Auto Preview"
-JOINT_COLOR = (0.0, 0.6, 1.0)
-SKIPPED_COLOR = (1.0, 0.0, 0.0)
+# Marker kinds: a joint that is mitered, a point where three or more profiles meet and are skipped.
+JOINT = "joint"
+SKIPPED = "skipped"
+MARKER_COLORS = {JOINT: (0.0, 0.6, 1.0), SKIPPED: (1.0, 0.0, 0.0)}
+# Typing a Gap fires once per keystroke: the preview waits this long for the next one.
+GAP_DELAY_MS = 250
+
+# The End Miter previewing a member, and whether the member was visible before it.
+_Preview = namedtuple("_Preview", ("obj", "member", "visible"))
 
 
 def _base_profile(obj):
@@ -47,14 +54,15 @@ def _alive(obj):
 
 
 def _alive_document(doc):
-    return doc is not None and doc.Name in App.listDocuments()
+    try:
+        return doc is not None and doc.Name in App.listDocuments()
+    except Exception:
+        return False
 
 
-def place_in_container_of(trimmed_profile, body):
-    """Put a trim in the closest folder or Part/Body holding ``body``, like Create Profile does."""
-    group = _nearest_group(body)
-    if group is not None:
-        move_profile_to_parent_if_supported(trimmed_profile, group)
+def _failures(objects):
+    """One line per object that failed to recompute, with FreeCAD's reason; "" when all are valid."""
+    return "\n".join(f"{obj.Label}: {obj.getStatusString()}" for obj in objects if not obj.isValid())
 
 
 def miters_to_edit(edited):
@@ -116,16 +124,9 @@ class EndMiterTaskPanel:
     def __init__(self, members=(), edited=None):
         ui_file = os.path.join(UIPATH, "create_end_miter.ui")
         self.form = keep_alive_until_destroyed(Gui.PySideUic.loadUi(ui_file))
-        self.form.setWindowTitle(translate("frameforge", "Miter Ends"))
-        # Designer strings are not in the catalog: translate them here.
-        self.form.groupBox_members.setTitle(translate("frameforge", "Profiles"))
-        self.form.hint_label.setText(translate("frameforge", "Click the profiles to miter (two or more)."))
-        self.form.remove_button.setText(translate("frameforge", "Remove"))
-        self.form.groupBox_options.setTitle(translate("frameforge", "Miter"))
-        self.form.cb_extend.setText(translate("frameforge", "Extend profiles up to the miter"))
-        self.form.gap_label.setText(translate("frameforge", "Gap"))
-        self.form.groupBox_preview.setTitle(translate("frameforge", "Preview"))
-        self.form.cb_auto_update.setText(translate("frameforge", "Update automatically"))
+        # FreeCAD may close the dialog without OK, Cancel or closed(): the form is then deleted.
+        self.form.destroyed.connect(self._form_gone)
+        self._translate_form()
         self.form.remove_button.setIcon(QtGui.QIcon(os.path.join(ICONPATH, "list-remove.svg")))
         self.form.remove_button.clicked.connect(self.remove_selected)
 
@@ -134,14 +135,21 @@ class EndMiterTaskPanel:
         self._closed = False
         self._syncing = False
         self.doc = App.ActiveDocument
-        # Live preview: member name -> its End Miter, and member name -> (member, visibility before).
+        # Live preview: member name -> _Preview.
         self._previews = {}
-        self._shown = {}
         self._planned = []
         self._previewed = ()
         self._transaction_open = False
+        # Message area: the plan, then the last preview or OK failure.
+        self._lines = []
+        self._error = ""
+        # (document point, JOINT or SKIPPED) of the planned markers, and the node drawing them.
         self._markers = []
         self._marker_node = None
+        self._gap_timer = QtCore.QTimer()
+        self._gap_timer.setSingleShot(True)
+        self._gap_timer.setInterval(GAP_DELAY_MS)
+        self._gap_timer.timeout.connect(self._update_preview)
         if edited is not None:
             self.form.setWindowTitle(translate("frameforge", "Edit Miter"))
             self.form.hint_label.setText(translate("frameforge", "Profile and boundaries of this miter."))
@@ -159,8 +167,24 @@ class EndMiterTaskPanel:
             self.form.cb_auto_update.setChecked(get_param_group().GetBool(AUTO_PREVIEW_PARAM, True))
             self.form.cb_auto_update.toggled.connect(self._on_auto_update_toggled)
             self.form.cb_extend.toggled.connect(self._update_preview)
-            self.form.sb_gap.valueChanged.connect(self._update_preview)
+            self.form.sb_gap.valueChanged.connect(self._on_gap_changed)
             self._update_preview()
+
+    def _translate_form(self):
+        """Designer strings are not in the catalog: set their translations here."""
+        form = self.form
+        for setter, text in (
+            (form.setWindowTitle, translate("frameforge", "Miter Ends")),
+            (form.groupBox_members.setTitle, translate("frameforge", "Profiles")),
+            (form.hint_label.setText, translate("frameforge", "Click the profiles to miter (two or more).")),
+            (form.remove_button.setText, translate("frameforge", "Remove")),
+            (form.groupBox_options.setTitle, translate("frameforge", "Miter")),
+            (form.cb_extend.setText, translate("frameforge", "Extend profiles up to the miter")),
+            (form.gap_label.setText, translate("frameforge", "Gap")),
+            (form.groupBox_preview.setTitle, translate("frameforge", "Preview")),
+            (form.cb_auto_update.setText, translate("frameforge", "Update automatically")),
+        ):
+            setter(text)
 
     def add_member(self, obj):
         if obj is None or _base_profile(obj) is None or obj in self.members:
@@ -170,9 +194,9 @@ class EndMiterTaskPanel:
 
     def _member_of(self, obj):
         """The member a preview object of this session stands for, else ``obj`` itself."""
-        for name, preview in self._previews.items():
-            if preview == obj:
-                return self._shown[name][0]
+        for preview in self._previews.values():
+            if preview.obj == obj:
+                return preview.member
         return obj
 
     def remove_selected(self):
@@ -183,7 +207,7 @@ class EndMiterTaskPanel:
         self._highlight_members()
 
     def analysis(self):
-        """(joints, skipped points, errors); joints and points refer to ``usable`` members."""
+        """(usable members, joints, skipped points, errors); joints and points index ``usable``."""
         usable, measured, errors = [], [], []
         for obj in self.members:
             try:
@@ -199,14 +223,21 @@ class EndMiterTaskPanel:
         return usable, joints, skipped, errors
 
     def refresh(self):
+        self._plan()
+        self._draw_markers()
+
+    def _plan(self):
+        """List the members, plan their joints and describe them; the 3D view is left alone."""
         self.members = [obj for obj in self.members if _alive(obj)]
         self.form.members_list.clear()
         for obj in self.members:
             self.form.members_list.addItem(f"{obj.Label} ({obj.Name})")
+        self._error = ""
 
         if self.edited is not None:
             names = ", ".join(obj.Label for obj in miters_to_edit(self.edited))
-            self.form.message_label.setText(translate("frameforge", "Extend and Gap apply to {}.").format(names))
+            self._lines = [translate("frameforge", "Extend and Gap apply to {}.").format(names)]
+            self._show_messages()
             return
 
         usable, joints, skipped, errors = self.analysis()
@@ -216,10 +247,9 @@ class EndMiterTaskPanel:
             partners.setdefault(joint.second, []).append(usable[joint.first])
         # Whole objects: a miter boundary is the partner profile, not one of its faces.
         self._planned = [(usable[index], partners[index]) for index in sorted(partners)]
-        self._show_markers(
-            [(_global_point(usable[joint.first], joint.point), JOINT_COLOR) for joint in joints]
-            + [(_global_point(usable[point.members[0]], point.point), SKIPPED_COLOR) for point in skipped]
-        )
+        self._markers = [(_global_point(usable[joint.first], joint.point), JOINT) for joint in joints] + [
+            (_global_point(usable[point.members[0]], point.point), SKIPPED) for point in skipped
+        ]
 
         lines = []
         if len(self.members) < 2:
@@ -238,7 +268,11 @@ class EndMiterTaskPanel:
                 ).format(x, y, z, names)
             )
         lines.extend(errors)
-        self.form.message_label.setText("\n".join(lines))
+        self._lines = lines
+        self._show_messages()
+
+    def _show_messages(self):
+        self.form.message_label.setText("\n".join(self._lines + ([self._error] if self._error else [])))
 
     def _wanted(self):
         """What the preview must show for the current members, Extend and Gap; () for nothing."""
@@ -252,15 +286,33 @@ class EndMiterTaskPanel:
         self._update_preview()
         self._highlight_members()
 
+    def _on_gap_changed(self, value):
+        self._show_status()
+        self._gap_timer.start()
+
+    def _active(self):
+        """Whether the panel still runs; a form FreeCAD already dropped closes the panel."""
+        if self._closed:
+            return False
+        if self.form is None:
+            self._form_gone()
+            return False
+        return True
+
+    def _form_gone(self, *args):
+        if not self._closed:
+            self.closed()
+
     def _update_preview(self, *args, force=False):
         """Make the preview match the panel when Update automatically is checked (or ``force``)."""
-        if self._closed or self.edited is not None:
+        if not self._active() or self.edited is not None:
             return
         if (force or self.form.cb_auto_update.isChecked()) and self._previewed != self._wanted():
             self._rebuild_preview()
         self._show_status()
 
     def _rebuild_preview(self):
+        """Update the preview miters; when one fails, discard the whole preview and show why."""
         extend = self.form.cb_extend.isChecked()
         gap = self.form.sb_gap.value()
         wanted = {member.Name: (member, partners) for member, partners in self._planned}
@@ -270,7 +322,7 @@ class EndMiterTaskPanel:
                 self.doc = self._planned[0][0].Document
             self.doc.openTransaction("Make End Miter Profile")
             self._transaction_open = True
-        doc = self.doc
+        self._error = ""
         # Removing a selected preview notifies the observer: it is not a user deselection.
         self._syncing = True
         try:
@@ -278,38 +330,49 @@ class EndMiterTaskPanel:
                 self._drop_preview(name)
             for name, (member, partners) in wanted.items():
                 preview = self._previews.get(name)
-                if preview is None or not _alive(preview):
+                if preview is None or not _alive(preview.obj):
                     view = getattr(member, "ViewObject", None)
-                    self._shown[name] = (member, view.Visibility if view is not None else None)
-                    self._previews[name] = make_end_miter_profile(member, partners, extend, gap)
+                    visible = view.Visibility if view is not None else None
+                    obj = make_end_miter_profile(member, partners, extend, gap)
+                    self._previews[name] = _Preview(obj, member, visible)
                     continue
-                preview.TrimmingBoundary = partners
-                preview.MiterExtend = extend
-                preview.MiterGap = gap
-            doc.recompute()
+                preview.obj.TrimmingBoundary = partners
+                preview.obj.MiterExtend = extend
+                preview.obj.MiterGap = gap
+            # A miter that fails to recompute does not raise: its status tells.
+            self.doc.recompute()
+            self._error = _failures(preview.obj for preview in self._previews.values())
+        except Exception as error:
+            self._error = str(error)
         finally:
             self._syncing = False
-        self._previewed = self._wanted()
+        if self._error:
+            self._discard_preview()
+        else:
+            self._previewed = self._wanted()
+        self._show_messages()
 
     def _drop_preview(self, name):
         """Remove the preview of member ``name`` and show the member as it was before."""
         preview = self._previews.pop(name, None)
-        if preview is not None and _alive(preview):
-            preview.Document.removeObject(preview.Name)
-        member, visible = self._shown.pop(name, (None, None))
-        if member is not None and visible is not None and _alive(member):
-            member.ViewObject.Visibility = visible
+        if preview is None:
+            return
+        if _alive(preview.obj):
+            preview.obj.Document.removeObject(preview.obj.Name)
+        if preview.visible is not None and _alive(preview.member):
+            preview.member.ViewObject.Visibility = preview.visible
 
     def _discard_preview(self):
         """Abort the preview transaction; leftovers (undo disabled) are removed by hand."""
-        if self._transaction_open and _alive_document(self.doc):
-            try:
-                self.doc.abortTransaction()
-            except Exception:
-                pass
-        self._transaction_open = False
+        # Aborting deletes selected previews: those deselections are not the user's.
         self._syncing = True
         try:
+            if self._transaction_open and _alive_document(self.doc):
+                try:
+                    self.doc.abortTransaction()
+                except Exception:
+                    pass
+            self._transaction_open = False
             for name in list(self._previews):
                 self._drop_preview(name)
         finally:
@@ -326,15 +389,13 @@ class EndMiterTaskPanel:
         self.form.status_label.setText(text)
 
     def markers(self):
-        """(document point, color) of every marker shown: joints and skipped points."""
+        """(document point, JOINT or SKIPPED) of every marker shown."""
         return list(self._markers)
 
-    def _show_markers(self, markers):
-        self._remove_markers()
-        if self._closed:
-            return
-        self._markers = markers
-        if not markers:
+    def _draw_markers(self):
+        """Draw the planned markers over the 3D view in place of the previous ones."""
+        self._remove_marker_node()
+        if self._closed or not self._markers:
             return
         try:
             from pivy import coin
@@ -348,8 +409,8 @@ class EndMiterTaskPanel:
             index = coin.SoMarkerSet.CIRCLE_FILLED_9_9
         # An annotation is drawn over the shapes, so markers inside a profile stay visible.
         node = coin.SoAnnotation()
-        for color in (JOINT_COLOR, SKIPPED_COLOR):
-            points = [point for point, marker_color in markers if marker_color == color]
+        for kind, color in MARKER_COLORS.items():
+            points = [point for point, marker_kind in self._markers if marker_kind == kind]
             if not points:
                 continue
             group = coin.SoSeparator()
@@ -365,8 +426,7 @@ class EndMiterTaskPanel:
         scene.addChild(node)
         self._marker_node = (scene, node)
 
-    def _remove_markers(self):
-        self._markers = []
+    def _remove_marker_node(self):
         if self._marker_node is not None:
             scene, node = self._marker_node
             self._marker_node = None
@@ -383,7 +443,8 @@ class EndMiterTaskPanel:
         try:
             Gui.Selection.clearSelection()
             for member in self.members:
-                obj = self._previews.get(member.Name, member)
+                preview = self._previews.get(member.Name)
+                obj = preview.obj if preview is not None else member
                 parents = obj.Parents
                 if parents:
                     top, path = parents[0]
@@ -393,8 +454,14 @@ class EndMiterTaskPanel:
         finally:
             self._syncing = False
 
+    def _still_selected(self, member):
+        """Whether ``member`` or its preview keeps any entry in the selection."""
+        preview = self._previews.get(member.Name)
+        shown = [member] + ([preview.obj] if preview is not None else [])
+        return any(selection.Object in shown for selection in Gui.Selection.getSelectionEx("*"))
+
     def addSelection(self, doc, obj, sub, other):
-        if self._syncing or self._closed or self.edited is not None:
+        if self._syncing or not self._active() or self.edited is not None:
             return
         document = App.getDocument(doc)
         source = document.getObject(getattr(obj, "Name", obj)) if document else None
@@ -405,25 +472,28 @@ class EndMiterTaskPanel:
         if _ctrl_held() and source in self.members:
             # Ctrl+click toggles: a listed profile leaves the list.
             self.members.remove(source)
-            self.refresh()
+            self._plan()
         elif self.add_member(source):
-            self.refresh()
-        # Never change the selection or the document during FreeCAD's observer dispatch.
+            self._plan()
+        # Never change the selection, the document or the 3D view during FreeCAD's observer dispatch.
         QtCore.QTimer.singleShot(0, self._after_selection)
 
     def _after_selection(self):
+        if not self._active():
+            return
+        self._draw_markers()
         self._update_preview()
         self._highlight_members()
 
     def removeSelection(self, doc, obj, sub):
-        # Deselecting the whole profile or any of its faces removes it from the list.
-        if self._syncing or self._closed or self.edited is not None:
+        # A profile leaves the list once neither it nor its preview has anything selected.
+        if self._syncing or not self._active() or self.edited is not None:
             return
         document = App.getDocument(doc)
         source = self._member_of(document.getObject(getattr(obj, "Name", obj)) if document else None)
-        if source in self.members:
+        if source in self.members and not self._still_selected(source):
             self.members.remove(source)
-            self.refresh()
+            self._plan()
             QtCore.QTimer.singleShot(0, self._after_selection)
 
     def clearSelection(self, other):
@@ -433,11 +503,16 @@ class EndMiterTaskPanel:
         self._highlight_members()
 
     def closed(self):
+        # FreeCAD can close the dialog without OK or Cancel (document closed, another dialog shown).
         self.clean()
+        if self.edited is None:
+            self._discard_preview()
 
     def clean(self):
         self._closed = True
-        self._remove_markers()
+        self._gap_timer.stop()
+        self._markers = []
+        self._remove_marker_node()
         try:
             Gui.Selection.removeObserver(self)
         except Exception:
@@ -465,17 +540,25 @@ class EndMiterTaskPanel:
         extend = self.form.cb_extend.isChecked()
         gap = self.form.sb_gap.value()
         doc = self.edited.Document
+        miters = miters_to_edit(self.edited)
         doc.openTransaction("Edit End Miter")
         try:
             # The joint gap is shared: each side of the joint cuts back half of it.
-            for obj in miters_to_edit(self.edited):
+            for obj in miters:
                 add_miter_properties(obj, extend=False)
                 obj.MiterExtend = extend
                 obj.MiterGap = gap
+            # A miter that fails to recompute does not raise: its status tells.
             doc.recompute()
-        except Exception:
+            self._error = _failures(miters)
+        except Exception as error:
+            self._error = str(error)
+        if self._error:
+            # Keep the panel open with the miters as they were before OK.
             doc.abortTransaction()
-            raise
+            doc.recompute()
+            self._show_messages()
+            return False
         doc.commitTransaction()
         self.clean()
         self._close_edit()
@@ -487,16 +570,21 @@ class EndMiterTaskPanel:
 
         if not self._planned:
             return False
-        try:
-            # OK keeps the current values even when the preview is out of date.
-            self._update_preview(force=True)
-        except Exception:
+        # OK keeps the current values even when the preview is out of date or a Gap edit is pending.
+        self._gap_timer.stop()
+        self._update_preview(force=True)
+        if not self._error:
+            # A preview already up to date is not recomputed again: it must still be valid.
+            self._error = _failures(preview.obj for preview in self._previews.values())
+        if self._error:
+            # Nothing invalid is kept: the panel stays open with the error.
             self._discard_preview()
-            raise
+            self._show_messages()
+            self._show_status()
+            return False
         self.doc.commitTransaction()
         self._transaction_open = False
         self._previews.clear()
-        self._shown.clear()
         self.clean()
         return True
 

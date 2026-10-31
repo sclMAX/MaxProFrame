@@ -171,9 +171,8 @@ class TrimmedProfile:
                             cut_shapes.append(shp)
 
         elif fp.TrimmedProfileType == "End Miter":
-            gap = fp.MiterGap.Value if hasattr(fp, "MiterGap") else 0.0
-            planes = [plane.shifted(gap / 2.0) for plane in self.miter_planes(fp)]
-            if getattr(fp, "MiterExtend", False):
+            planes = [plane.shifted(fp.MiterGap.Value / 2.0) for plane in self.miter_planes(fp)]
+            if fp.MiterExtend:
                 for plane in planes:
                     extension = plane.extension()
                     if extension is not None:
@@ -276,6 +275,8 @@ class TrimmedProfile:
                 "Profile",
                 "Frameforge Version used to create the profile",
             ).FrameforgeVersion = ff_version
+
+        add_miter_properties(obj, extend=False)
 
     def getOutsideCV(self, cutplane, shape):
         cv = ArchCommands.getCutVolume(cutplane, shape, clip=False, depth=0.0)

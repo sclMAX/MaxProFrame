@@ -9,7 +9,7 @@ import FreeCADGui as Gui
 import Part
 from PySide import QtCore, QtGui
 
-from freecad.maxproframe.create_end_miter_tool import place_in_container_of
+from freecad.maxproframe.create_profiles_tool import place_in_container_of
 from freecad.maxproframe.ff_tools import (
     ICONPATH,
     PROFILEIMAGES_PATH,
