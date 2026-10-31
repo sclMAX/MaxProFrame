@@ -15,9 +15,9 @@ Native runner: `/usr/bin/python3 ci/run_tests.py --freecad-bin .git/ci-policy-ru
 
 - T1. [S1] English guide `resources/help/library-manager.md` with stable topic headings; linked from README/docs — route: inline — commit: de378ae
 - T2. [S1, S2] Spanish guide `resources/help/library-manager.es.md` — route: inline — commit: de378ae
-- T3. [S2, S3] Help viewer module with topic navigation; "?" button, F1 and sub-dialog Help — route: inline, test-first — commit: this slice
-- T4. [S4, S5] Tooltips and empty-state guidance — route: inline, test-first — commit: this slice
-- T5. [S1-S5] Spanish catalogs, CMake install list, docs; full native suite — route: inline — commit: this slice
+- T3. [S2, S3] Help viewer module with topic navigation; "?" button, F1 and sub-dialog Help — route: inline, test-first — commit: e2d9798
+- T4. [S4, S5] Tooltips and empty-state guidance — route: inline, test-first — commit: e2d9798
+- T5. [S1-S5] Spanish catalogs, CMake install list, docs; full native suite — route: inline — commit: e2d9798
 
 ## Log
 
@@ -31,3 +31,5 @@ Native runner: `/usr/bin/python3 ci/run_tests.py --freecad-bin .git/ci-policy-ru
   - Spanish: add every new source to BOTH `frameforge_es.ts` and `maxproframe_es.ts`, including the topic headings (their Spanish must equal the `##`/`#` headings in `library-manager.es.md`) and `library-manager.md`→`library-manager.es.md`; run `python3 freecad/maxproframe/compile_translations.py`. Add `help_viewer.py` to the file list in `tests/test_library_translations.py`.
 - L4. Worker mvwzreb7-1-9g4b finished T3/T4 test-first (RED: ImportError, then 20 failures/16 errors; GREEN `test_library_help: Ran 9 tests ... OK`; regressions OK: library_usability 13, library_manager_dialog 14, library_translations 3, custom_profile_cards 8, folder_library_dialog 16, library_translation_runtime 6). Deviations: F1 is a window event filter (a QShortcut on HelpContents never fired with a QLineEdit focused in FreeCAD 1.1.4); the empty-family next step is a separate `lbl_profiles_hint` under the unchanged "This family has no profiles." (pinned by test_library_usability). Parent fix: the help window closes when the dialog that opened it finishes (RED `AssertionError: True is not false`, GREEN 9/9).
 - L5. Full native suite: `Ran 760 tests in 269.873s / OK`.
+- L6. Native review review-78d99acf7169c691 (readability + reliability) approved and acknowledged; non-blocking advisories: R2-changelog-unbacked-entry (CHANGELOG.md:5), R2-duplicated-state-predicates (library_manager_dialog.py:1281-1288), R2-shortcut-name-is-event-filter (help_viewer.py:101-105), R3-empty-families-label-without-library (library_manager_dialog.py:1009-1017), R3-help-window-outlives-manager-untested (help_viewer.py:114-115), R3-spanish-deeplinks-static-only (tests/test_library_help.py:47-54). 
+- L7. User manual check in FreeCAD: "todo ok". Push, PR and merge.
