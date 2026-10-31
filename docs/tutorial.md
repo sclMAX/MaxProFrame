@@ -192,15 +192,19 @@ Offsets are optional: with **Extend** (on by default) a profile that stops short
 
 ![alt text](images/53-create-miter-end.png)
 
-2. Click two or more profiles in the 3D view. A click selects the whole profile, not only the face under the cursor. To drop a profile, select it in the list and press **Remove**.
+2. Click two or more profiles in the 3D view. A click selects the whole profile, not only the face under the cursor. To drop a profile, Ctrl+click it in the 3D view, or select it in the list and press **Remove**.
 
 ![alt text](images/52-select-touching-profiles.png)
 
-3. The panel tells how many joints will be created. Every corner formed by the selected profiles is mitered: two profiles meeting at both ends get both corners, and a whole frame can be selected at once. A point where three or more selected profiles meet is skipped and listed in the panel; it is not mitered.
+3. The panel tells how many joints will be created. Every corner formed by the selected profiles is mitered: two profiles meeting at both ends get both corners, and a whole frame can be selected at once. A point where three or more selected profiles meet is skipped and listed in the panel; it is not mitered. The 3D view marks each joint with a small dot and each skipped point with a red dot.
 
-4. Set the options and press **OK**:
+4. The miters are previewed live in the 3D view, like Create Profile does: the preview replaces the mitered profiles. Clicking a previewed miter stands for its profile, so Ctrl+click on it drops that profile. With **Update automatically** (on by default, remembered between sessions) the preview follows every change: adding or dropping a profile, Extend and Gap. Uncheck it to keep the preview as it is while you change things on a heavy frame; the panel then shows **Pending changes**, and checking it again updates the preview.
+
+5. Set the options and press **OK**:
    - **Extend profiles up to the miter** (on by default): lengthens a profile that does not reach the miter plane. The extension is limited to ten times the section diagonal, to avoid runaway extensions with nearly parallel profiles.
    - **Gap**: distance left between the two cut faces of each joint, for example 0.5 mm. Each profile is cut back half of it.
+
+**OK** always creates the miters for the current profiles and values, even when the preview is out of date. **Cancel** removes the preview and leaves the document as it was.
 
 **And voila !** Each profile gets one "TrimmedProfile" holding all its corners, placed next to the profile, in the same folder or Part. A single Undo removes them all.
 

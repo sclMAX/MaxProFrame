@@ -386,9 +386,6 @@ class BaseProfileTaskPanel(ABC):
                 lbl_img.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
             if hasattr(lbl_img, "hide"):
                 lbl_img.hide()
-        gb_apply = _safe_unwrap_widget(getattr(first, "groupBox_apply", None))
-        if gb_apply is not None and hasattr(gb_apply, "hide"):
-            gb_apply.hide()
         # The metadata block no longer needs expansion spacers.
         metadata = getattr(first, "verticalLayout", None)
         if hasattr(metadata, "layout") and callable(metadata.layout):
@@ -1521,7 +1518,6 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def __init__(self):
         self._session_imported_sketches = set()
         self._target_doc = None
-        self._has_pending_changes = False
         self._accept_finalizing = False
         self._reject_called = False
         self._saved_anchor = None
@@ -1547,34 +1543,11 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self._placed_in_part = False
         super().__init__()
 
-    @property
-    def btn_apply(self):
-        if "btn_apply" in self.form_proxy.members:
-            return self.form_proxy.btn_apply
-        return None
-
-    @property
-    def label_apply_status(self):
-        if "label_apply_status" in self.form_proxy.members:
-            return self.form_proxy.label_apply_status
-        return None
-
     def initialize_ui(self):
         super().initialize_ui()
         # The mode-specific notice/list already presents the selected edges.
         self.form[0].label_14.hide()
         self.form_proxy.label_attach.hide()
-        if "btn_apply" in self.form_proxy.members:
-            self.form_proxy.btn_apply.setText(translate("frameforge", "Apply"))
-            self.form_proxy.btn_apply.setToolTip(translate("frameforge", "Apply changes and update preview"))
-            self.form_proxy.btn_apply.clicked.connect(self.apply)
-        if "groupBox_apply" in self.form_proxy.members:
-            self.form_proxy.groupBox_apply.setTitle(translate("frameforge", "Preview"))
-        self.action_guidance = QtWidgets.QLabel(
-            translate("frameforge", "Apply: update preview. OK: confirm. Cancel: discard."), self.form[0]
-        )
-        self.action_guidance.setWordWrap(True)
-        self.form_proxy.groupBox_apply.layout().addWidget(self.action_guidance)
 
         gb4 = _safe_unwrap_widget(getattr(self.form[0], "groupBox_4", None))
         placement = gb4.layout() if gb4 is not None and hasattr(gb4, "layout") else None
@@ -1626,7 +1599,6 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         )
         for name in ("rb_profiles_in_place", "rb_profiles_in_part", "rb_profiles_in_group"):
             getattr(self.form_proxy, name).toggled.connect(self._on_container_toggled)
-        self._set_initial_state()
 
     def _activate_mixed_combo(self, name):
         if getattr(self.form_proxy, name).property("mixedValues"):
@@ -1948,21 +1920,6 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             "offset_y": self.form_proxy.sb_offset_y.value(),
         }
 
-    def _set_initial_state(self):
-        self._has_pending_changes = False
-        if "label_apply_status" in self.form_proxy.members:
-            self.form_proxy.label_apply_status.setText(translate("frameforge", "No preview"))
-
-    def _set_pending_state(self):
-        self._has_pending_changes = True
-        if "label_apply_status" in self.form_proxy.members:
-            self.form_proxy.label_apply_status.setText(translate("frameforge", "Pending changes"))
-
-    def _set_applied_state(self):
-        self._has_pending_changes = False
-        if "label_apply_status" in self.form_proxy.members:
-            self.form_proxy.label_apply_status.setText(translate("frameforge", "Preview updated"))
-
     def _input_slot(self, intent):
         return lambda *args: self.on_input_changed(intent)
 
@@ -2043,12 +2000,6 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         if not had_edge_properties:
             self.proceed()
 
-        has_sel = self._has_path_edges()
-        has_len = self.form_proxy.sb_length.value() > 0
-        if has_sel or has_len:
-            self._set_applied_state()
-        else:
-            self._set_initial_state()
         self._refresh_selection_presentation()
         self._refresh_edge_editor()
 
@@ -2068,7 +2019,6 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
         self.update_selection()
         self.proceed()
-        self._set_initial_state()
 
     def reject(self):
         self._reject_called = True
@@ -2105,7 +2055,6 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         has_sel = self._has_path_edges()
         if has_sel or self.form_proxy.sb_length.value() > 0:
             self.proceed()
-            self._set_applied_state()
             return True
         else:
             App.Console.PrintMessage(translate("frameforge", "Select Edges or set Length to create a profile\n"))
@@ -2739,10 +2688,6 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self.update_selection()
         # Reconcile paths without treating the newly active row as an edit.
         self.proceed()
-        if self._path_selections() or self.form_proxy.sb_length.value() > 0:
-            self._set_applied_state()
-        else:
-            self._set_initial_state()
 
     def _canvas_pick(self, doc, obj, sub, removed=False):
         if (

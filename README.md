@@ -124,9 +124,10 @@ the legacy zero-length Pipe face still represents its outer disk (not its bore).
 
 ### 3. Apply Miters and Trims
 
-- Use **End Miter** to miter the corners between profiles. The button is always active: click it, then click two or more profiles in the 3D view (a click selects the whole profile, not a face) and press **OK**.
+- Use **End Miter** to miter the corners between profiles. The button is always active: click it, then click two or more profiles in the 3D view (a click selects the whole profile, not a face; Ctrl+click drops it) and press **OK**.
   - Every corner formed by the selected profiles is mitered, and each profile gets one miter object holding all its corners. Two selected profiles meeting at both ends get both corners.
-  - A point where three or more selected profiles meet is skipped and reported in the panel; it is not mitered.
+  - A point where three or more selected profiles meet is skipped and reported in the panel; it is not mitered. The 3D view marks each joint, and each skipped point in red.
+  - The miters are previewed live in the 3D view; a click on a previewed miter stands for its profile. **Update automatically** (on by default, remembered) recalculates the preview on every change; unchecked, the preview stays as it is and the panel shows **Pending changes**. **OK** always applies the current values in one Undo step, and **Cancel** removes the preview.
   - **Extend** (on by default) lengthens a profile that stops short of the miter plane, so both cut faces meet. The extension is limited to ten times the section diagonal, so nearly parallel profiles do not grow without bound.
   - **Gap** leaves that distance between the two cut faces of a joint; each profile is cut back half of it.
   - Double-click an existing miter in the tree to change Extend and Gap: the new values apply to that miter and to the partner miters that cut against it, so the gap of the joint stays the value shown.

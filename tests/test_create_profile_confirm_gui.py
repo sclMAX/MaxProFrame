@@ -442,8 +442,8 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
         remaining_profiles = [o for o in doc.Objects if getattr(getattr(o, "Proxy", None), "Type", None) == "Profile"]
         self.assertEqual(len(remaining_profiles), 0, "Undoing must remove the committed profile.")
 
-    def test_apply_then_real_ok_click_preserves_previous_behavior(self):
-        """Preserve previous behavior: Clicking Apply, then clicking real OK button confirms profile."""
+    def test_live_preview_then_real_ok_click_preserves_previous_behavior(self):
+        """Preserve previous behavior: the live preview, then clicking real OK button confirms profile."""
         doc = self._new_doc("DocApplyThenOk")
         App.setActiveDocument(doc.Name)
 
@@ -454,13 +454,9 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
 
         self._select_profile(panel, self.folder_lib_name, "Custom Profile", "CP-HOLE1")
         panel.form_proxy.sb_length.setValue(100.0)
-
-        # Click Apply first
-        self.assertIsNotNone(panel.btn_apply, "Apply button must exist.")
-        panel.btn_apply.click()
         self._pump_events(50)
 
-        # Preview profile created with preview transparency
+        # Preview profile created live with preview transparency
         profiles_after_apply = [o for o in doc.Objects if getattr(getattr(o, "Proxy", None), "Type", None) == "Profile"]
         self.assertEqual(len(profiles_after_apply), 1)
         preview_prof = profiles_after_apply[0]
@@ -519,7 +515,6 @@ class TestCreateProfileConfirmGui(unittest.TestCase):
 
         self._select_profile(panel, self.folder_lib_name, "Custom Profile", "CP-HOLE1")
         panel.form_proxy.sb_length.setValue(100.0)
-        panel.btn_apply.click()
         self._pump_events(50)
 
         # Preview profile exists
