@@ -153,6 +153,8 @@ MaxProFrame supports storing custom profile sections directly in user-managed fo
 4. For DXF, confirm the actual units, review the fixed centered XY sketch, enter a unique code and click **Add as Custom**. Weight uses the library material/density; canceling leaves the library unchanged.
 5. Click **Save Changes** to publish the staged section, then reuse it without the original sketch or DXF. See [DXF section import](docs/dxf-section-import.md) for supported input and unit overrides.
 
+Click **?** or press **F1** in the Profile Library Manager to open its built-in guide at the section for what you are doing. The same guide is available in [English](freecad/maxproframe/resources/help/library-manager.md) and [Spanish](freecad/maxproframe/resources/help/library-manager.es.md).
+
 For more details on custom libraries and architecture, see [docs/folder-libraries.md](docs/folder-libraries.md).
 
 ---
