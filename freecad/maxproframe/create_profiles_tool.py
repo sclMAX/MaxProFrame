@@ -430,6 +430,35 @@ class BaseProfileTaskPanel(ABC):
             if placement is not None and hasattr(placement, "addRow"):
                 placement.addRow(sec_rot)
 
+        # Edge-frame displacement: X in the sketch plane, Y along the sketch normal.
+        self.widget_offset = QtWidgets.QWidget(parent_placement)
+        self.widget_offset.setObjectName("widget_offset")
+        offset_row = QtWidgets.QHBoxLayout(self.widget_offset)
+        offset_row.setContentsMargins(0, 0, 0, 0)
+        offset_row.setSpacing(6)
+        self.label_offset = QtWidgets.QLabel(translate("frameforge", "Offset"), self.widget_offset)
+        self.label_offset.setObjectName("label_offset")
+        offset_row.addWidget(self.label_offset)
+        for axis, tip in (
+            ("x", "Displacement from the edge, in the sketch plane"),
+            ("y", "Displacement from the edge, along the sketch normal"),
+        ):
+            spin = QtWidgets.QDoubleSpinBox(self.widget_offset)
+            spin.setObjectName(f"sb_offset_{axis}")
+            spin.setRange(-100000.0, 100000.0)
+            spin.setDecimals(2)
+            spin.setPrefix(f"{axis.upper()} ")
+            spin.setSuffix(" mm")
+            spin.setKeyboardTracking(False)
+            spin.setAccessibleName(f"{translate('frameforge', 'Offset')} {axis.upper()}")
+            spin.setToolTip(translate("frameforge", tip))
+            spin.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+            offset_row.addWidget(spin, 1)
+            setattr(first, spin.objectName(), spin)
+            self.form_proxy.members[spin.objectName()] = first
+        if placement is not None and hasattr(placement, "addRow"):
+            placement.addRow(self.widget_offset)
+
         # Leave legacy checkboxes in second, hidden without cross-form reparenting
         sec_mh = _safe_unwrap_widget(getattr(second, "cb_mirror_h", None))
         sec_mv = _safe_unwrap_widget(getattr(second, "cb_mirror_v", None))
@@ -637,6 +666,8 @@ class BaseProfileTaskPanel(ABC):
         self.form_proxy.cb_mirror_h.blockSignals(not enable)
         self.form_proxy.cb_mirror_v.blockSignals(not enable)
         self.form_proxy.combo_rotation.blockSignals(not enable)
+        self.form_proxy.sb_offset_x.blockSignals(not enable)
+        self.form_proxy.sb_offset_y.blockSignals(not enable)
         if hasattr(self, "btn_mirror_h"):
             self.btn_mirror_h.blockSignals(not enable)
         if hasattr(self, "btn_mirror_v"):
@@ -729,6 +760,8 @@ class BaseProfileTaskPanel(ABC):
             self.form_proxy.cb_mirror_v.stateChanged.connect(self._input_slot("mirror_v"))
             self.form_proxy.cb_pre_extend.stateChanged.connect(self._input_slot("pre_extend"))
             self.form_proxy.combo_rotation.currentTextChanged.connect(self._input_slot("rotation"))
+            self.form_proxy.sb_offset_x.valueChanged.connect(self._input_slot("offset_x"))
+            self.form_proxy.sb_offset_y.valueChanged.connect(self._input_slot("offset_y"))
             for ax in range(3):
                 for ay in range(3):
                     self._connect_anchor_radio(getattr(self.form_proxy, f"rb_anchor_{ax}_{ay}"))
@@ -989,6 +1022,14 @@ class BaseProfileTaskPanel(ABC):
             return float(self.form_proxy.combo_rotation.currentText())
         except (TypeError, ValueError):
             return 0.0
+
+    def get_offset(self):
+        """Return the (x, y) edge-frame displacement in mm."""
+        return (self.form_proxy.sb_offset_x.value(), self.form_proxy.sb_offset_y.value())
+
+    def set_offset(self, offset_x, offset_y):
+        self.form_proxy.sb_offset_x.setValue(float(offset_x))
+        self.form_proxy.sb_offset_y.setValue(float(offset_y))
 
     def set_rotation(self, degrees):
         t = str(int(degrees) if degrees == int(degrees) else degrees)
@@ -1283,6 +1324,9 @@ class BaseProfileTaskPanel(ABC):
         kwargs["init_mirror_h"] = props.get("mirror_h", self.form_proxy.cb_mirror_h.isChecked())
         kwargs["init_mirror_v"] = props.get("mirror_v", self.form_proxy.cb_mirror_v.isChecked())
         kwargs["init_rotation"] = props.get("rotation", self.get_rotation())
+        offset_x, offset_y = self.get_offset()
+        kwargs["init_offset_x"] = props.get("offset_x", offset_x)
+        kwargs["init_offset_y"] = props.get("offset_y", offset_y)
         ax, ay = props.get("anchor", self.get_anchor())
 
         profile.Proxy.set_properties(
@@ -1436,6 +1480,9 @@ _SECTION_CONTROLS = (
     "cb_make_fillet",
 )
 
+# Placement spin boxes and the per-edge property each one edits.
+_PLACEMENT_SPINS = {"sb_offset_x": "offset_x", "sb_offset_y": "offset_y"}
+
 
 class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def __init__(self):
@@ -1513,6 +1560,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             "combo_material",
             "combo_size",
             "combo_rotation",
+            "sb_offset_x",
+            "sb_offset_y",
             "sb_width",
             "sb_height",
             "sb_main_thickness",
@@ -1545,7 +1594,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         edited = name in self._mixed_spin_edits
         self._mixed_spin_edits.discard(name)
         if edited and getattr(self.form_proxy, name).property("mixedValues"):
-            self.on_input_changed(name)
+            self.on_input_changed(_PLACEMENT_SPINS.get(name, name))
 
     def _snapshot_section(self):
         snapshot = _SnapshotFormProxy(self.form_proxy)
@@ -1613,6 +1662,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             if edge_key in self._edge_sections:
                 self._restore_section_controls(self._edge_sections[edge_key])
             self.set_rotation(props.get("rotation", 0.0))
+            self.set_offset(props.get("offset_x", 0.0), props.get("offset_y", 0.0))
             ax, ay = props.get("anchor", (1, 1))
             self.set_anchor(ax, ay)
             self.form_proxy.cb_mirror_h.setChecked(props.get("mirror_h", False))
@@ -1638,6 +1688,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             "combo_family",
             "combo_size",
             "combo_rotation",
+            "sb_offset_x",
+            "sb_offset_y",
             "sb_width",
             "sb_height",
             "sb_main_thickness",
@@ -1701,6 +1753,9 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 )
             rotations = [self._edge_properties[key]["rotation"] for key in keys]
             self._mixed_presenters["combo_rotation"].set_mixed(len(set(rotations)) > 1)
+            for name, intent in _PLACEMENT_SPINS.items():
+                values = [self._edge_properties[key].get(intent, 0.0) for key in keys]
+                self._mixed_presenters[name].set_mixed(len(set(values)) > 1)
             for name, caption in (("mirror_h", "Mirror H"), ("mirror_v", "Mirror V"), ("pre_extend", "Extend")):
                 button = getattr(self.form_proxy, "cb_" + name)
                 values = [self._edge_properties[key][name] for key in keys]
@@ -1843,6 +1898,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             "mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
             "mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
             "pre_extend": self.form_proxy.cb_pre_extend.isChecked(),
+            "offset_x": self.form_proxy.sb_offset_x.value(),
+            "offset_y": self.form_proxy.sb_offset_y.value(),
         }
 
     def _set_initial_state(self):
@@ -1904,6 +1961,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             "mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
             "mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
             "pre_extend": self.form_proxy.cb_pre_extend.isChecked(),
+            "offset_x": self.form_proxy.sb_offset_x.value(),
+            "offset_y": self.form_proxy.sb_offset_y.value(),
         }
         section = self._snapshot_section()
         for key in keys:
@@ -2481,6 +2540,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 "init_mirror_h": props.get("mirror_h", self.form_proxy.cb_mirror_h.isChecked()),
                 "init_mirror_v": props.get("mirror_v", self.form_proxy.cb_mirror_v.isChecked()),
                 "init_rotation": props.get("rotation", self.get_rotation()),
+                "init_offset_x": props.get("offset_x", self.form_proxy.sb_offset_x.value()),
+                "init_offset_y": props.get("offset_y", self.form_proxy.sb_offset_y.value()),
                 "init_offset_a": init_offset,
                 "init_offset_b": init_offset,
                 "catalog_family": selected_family,
@@ -2723,6 +2784,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                             "mirror_h": self.form_proxy.cb_mirror_h.isChecked(),
                             "mirror_v": self.form_proxy.cb_mirror_v.isChecked(),
                             "pre_extend": self.form_proxy.cb_pre_extend.isChecked(),
+                            "offset_x": self.form_proxy.sb_offset_x.value(),
+                            "offset_y": self.form_proxy.sb_offset_y.value(),
                         }
                     )
 
