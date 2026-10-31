@@ -7,7 +7,16 @@ import FreeCADGui as Gui
 from PySide import QtCore, QtGui
 
 from freecad.maxproframe.extruded_cutout import ExtrudedCutout, ViewProviderExtrudedCutout
-from freecad.maxproframe.ff_tools import add_command, ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, FormProxy, translate
+from freecad.maxproframe.ff_tools import (
+    ICONPATH,
+    PROFILEIMAGES_PATH,
+    PROFILESPATH,
+    QT_TRANSLATE_NOOP,
+    UIPATH,
+    FormProxy,
+    add_command,
+    translate,
+)
 from freecad.maxproframe.frameforge_exceptions import FrameForgeException
 
 
@@ -108,14 +117,11 @@ class AddExtrudedCutoutCommandClass:
         return {
             # The name of a svg file available in the resources.
             "Pixmap": os.path.join(ICONPATH, "extruded-cutout.svg"),
-            "MenuText": translate("FrameForge", "Extruded Cutout"),
+            "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_AddExtrudeCutout", "Extruded Cutout"),
             "Accel": "E, C",
-            "ToolTip": translate(
-                "FrameForge",
-                "Extruded cutout from sketch extrusion\n"
-                "1. Select a face of the sheet metal part (must not be the thickness face) and\n"
-                "2. Select a sketch for the extruded cut (the sketch must be closed).\n"
-                "3. Use Property editor to modify other parameters",
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_AddExtrudeCutout",
+                "<b>Extruded cutout from a sketch extrusion</b><br><br>1. Select a face of the part (not a thickness face).<br>2. Select a closed sketch for the extruded cut.<br>3. Use the Property editor to adjust the other parameters.",
             ),
         }
 

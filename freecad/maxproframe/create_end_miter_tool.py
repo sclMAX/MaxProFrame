@@ -9,6 +9,7 @@ from freecad.maxproframe._utils import is_extrudedcutout, is_profile, is_trimmed
 from freecad.maxproframe.create_profiles_tool import place_in_container_of
 from freecad.maxproframe.ff_tools import (
     ICONPATH,
+    QT_TRANSLATE_NOOP,
     UIPATH,
     add_command,
     get_param_group,
@@ -593,14 +594,11 @@ class CreateEndMiterCommand:
     def GetResources(self):
         return {
             "Pixmap": os.path.join(ICONPATH, "corner-end-miter.svg"),
-            "MenuText": translate("MetalWB", "Create Miter Ends"),
+            "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_EndMiter", "Create Miter Ends"),
             "Accel": "M, C",
-            "ToolTip": translate(
-                "MetalWB",
-                "<html><head/><body><p><b>Create Miter Ends</b> \
-                    <br><br> \
-                    Click two or more profiles to miter the corners they form. \
-                    </p></body></html>",
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_EndMiter",
+                "<b>Create Miter Ends</b><br><br>Click two or more profiles to miter the corners they form.",
             ),
         }
 

@@ -17,6 +17,7 @@ from freecad.maxproframe.dxf_section_import import import_dxf_section, inspect_d
 from freecad.maxproframe.ff_tools import (
     ICONPATH,
     PROFILEIMAGES_PATH,
+    QT_TRANSLATE_NOOP,
     TRANSLATIONSPATH,
     add_command,
     get_param_group,
@@ -2871,8 +2872,11 @@ class ManageProfileLibrariesCommand:
     def GetResources(self):
         return {
             "Pixmap": os.path.join(ICONPATH, "manage_profile_libraries.svg"),
-            "MenuText": translate("frameforge", "Manage Profile Libraries"),
-            "ToolTip": translate("frameforge", "Create, edit and manage custom profile libraries and dimensions"),
+            "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_ManageProfileLibraries", "Manage Profile Libraries"),
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_ManageProfileLibraries",
+                "Create, edit and manage custom profile libraries and dimensions",
+            ),
         }
 
     def Activated(self):

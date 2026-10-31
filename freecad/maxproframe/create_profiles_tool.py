@@ -18,6 +18,7 @@ from freecad.maxproframe.ff_tools import (
     ICONPATH,
     PROFILEIMAGES_PATH,
     PROFILESPATH,
+    QT_TRANSLATE_NOOP,
     UIPATH,
     FormProxy,
     add_command,
@@ -2921,8 +2922,11 @@ class CreateProfilesCommand:
         return {
             "Pixmap": os.path.join(ICONPATH, "warehouse_profiles.svg"),
             "Accel": "Shift+S",  # a default shortcut (optional)
-            "MenuText": "Create Profile",
-            "ToolTip": "Create new profiles from Edges",
+            "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_CreateProfiles", "Create Profile"),
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_CreateProfiles",
+                "Create new profiles from edges",
+            ),
         }
 
     def Activated(self):

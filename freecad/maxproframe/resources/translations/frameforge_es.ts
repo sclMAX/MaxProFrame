@@ -1026,4 +1026,72 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Capture a section or import a DXF to add one.</source><translation>Capturá una sección o importá un DXF para agregar uno.</translation></message>
     <message><source>Duplicate the library to edit it.</source><translation>Duplicá la biblioteca para editarla.</translation></message>
 </context>
+<context>
+    <name>MaxProFrame_ParametricLine</name>
+    <message><source>Create a Parametric Line</source><translation>Crear línea paramétrica</translation></message>
+    <message><source>Create a parametric line between two vertices.&lt;br&gt;&lt;br&gt;Select two vertices, then run this command.</source><translation>Crea una línea paramétrica entre dos vértices.&lt;br&gt;&lt;br&gt;Seleccioná dos vértices y ejecutá este comando.</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_CreateProfiles</name>
+    <message><source>Create Profile</source><translation>Crear perfil</translation></message>
+    <message><source>Create new profiles from edges</source><translation>Crea perfiles nuevos a partir de aristas</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_ManageProfileLibraries</name>
+    <message><source>Manage Profile Libraries</source><translation>Gestionar Bibliotecas de Perfiles</translation></message>
+    <message><source>Create, edit and manage custom profile libraries and dimensions</source><translation>Crear, editar y gestionar bibliotecas y dimensiones de perfiles personalizados</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_TrimProfiles</name>
+    <message><source>Trim Profile</source><translation>Recortar perfil</translation></message>
+    <message><source>&lt;b&gt;Trim a profile&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a profile, then faces of another profile.</source><translation>&lt;b&gt;Recortar un perfil&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná un perfil y luego caras de otro perfil.</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_EndMiter</name>
+    <message><source>Create Miter Ends</source><translation>Crear ingletes</translation></message>
+    <message><source>&lt;b&gt;Create Miter Ends&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click two or more profiles to miter the corners they form.</source><translation>&lt;b&gt;Crear ingletes&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en dos o más perfiles para unir en inglete las esquinas que forman.</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_AddExtrudeCutout</name>
+    <message><source>Extruded Cutout</source><translation>Corte extruido</translation></message>
+    <message><source>&lt;b&gt;Extruded cutout from a sketch extrusion&lt;/b&gt;&lt;br&gt;&lt;br&gt;1. Select a face of the part (not a thickness face).&lt;br&gt;2. Select a closed sketch for the extruded cut.&lt;br&gt;3. Use the Property editor to adjust the other parameters.</source><translation>&lt;b&gt;Corte extruido a partir de un croquis&lt;/b&gt;&lt;br&gt;&lt;br&gt;1. Seleccioná una cara de la pieza (que no sea la del espesor).&lt;br&gt;2. Seleccioná un croquis cerrado para el corte extruido.&lt;br&gt;3. Ajustá los demás parámetros en el editor de propiedades.</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_Link</name>
+    <message><source>Attached Link</source><translation>Enlace anclado</translation></message>
+    <message><source>Create a link with attachment</source><translation>Crea un enlace con anclaje</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_PopulateIDs</name>
+    <message><source>Populate IDs</source><translation>Asignar IDs</translation></message>
+    <message><source>&lt;b&gt;Populate IDs of selected MaxProFrame objects&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select profiles, links, groups or parts.</source><translation>&lt;b&gt;Asignar IDs a los objetos MaxProFrame seleccionados&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná perfiles, enlaces, grupos o piezas.</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_ResetIDs</name>
+    <message><source>Reset IDs</source><translation>Restablecer IDs</translation></message>
+    <message><source>&lt;b&gt;Reset IDs of selected MaxProFrame objects&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select profiles, links, groups or parts.</source><translation>&lt;b&gt;Restablecer los IDs de los objetos MaxProFrame seleccionados&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná perfiles, enlaces, grupos o piezas.</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_CreateBalloons</name>
+    <message><source>Create Balloons</source><translation>Crear globos</translation></message>
+    <message><source>&lt;b&gt;Automatically create balloons for selected profiles and links&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select profiles and links.</source><translation>&lt;b&gt;Crear globos automáticamente para los perfiles y enlaces seleccionados&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná perfiles y enlaces.</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_RefreshBalloons</name>
+    <message><source>Refresh Balloons</source><translation>Actualizar globos</translation></message>
+    <message><source>&lt;b&gt;Refresh selected balloons&lt;/b&gt;</source><translation>&lt;b&gt;Actualizar los globos seleccionados&lt;/b&gt;</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_CreateBOM</name>
+    <message><source>Create BOM</source><translation>Crear lista de materiales</translation></message>
+    <message><source>&lt;b&gt;Create a spreadsheet with profiles&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select fusions or profiles. To update an existing spreadsheet, first select the existing BOM and cut list.</source><translation>&lt;b&gt;Crear una hoja de cálculo con los perfiles&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná fusiones o perfiles. Para actualizar una hoja existente, seleccioná primero la lista de materiales y la lista de cortes existentes.</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_RecomputeFrameForgeObjects</name>
+    <message><source>Recursively recompute all profiles and related MaxProFrame objects</source><translation>Recalcular recursivamente todos los perfiles y objetos MaxProFrame relacionados</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_ExportTechDraw</name>
+    <message><source>Export all TechDraw Pages as PDF</source><translation>Exportar todas las páginas TechDraw a PDF</translation></message>
+</context>
 </TS>

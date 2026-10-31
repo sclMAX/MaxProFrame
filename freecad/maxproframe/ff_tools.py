@@ -13,6 +13,8 @@ TRANSLATIONSPATH = os.path.join(RESSOURCESPATH, "translations")
 
 
 translate = FreeCAD.Qt.translate
+# Marks command texts; FreeCAD translates them with the command name as context.
+QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 
 
 class _PreferencesProxy:

@@ -5,7 +5,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 
 from freecad.maxproframe._utils import getRootObject
-from freecad.maxproframe.ff_tools import add_command, ICONPATH
+from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command
 from freecad.maxproframe.version import __version__ as ff_version
 
 
@@ -40,8 +40,11 @@ class LinkCommand:
     def GetResources(self):
         return {
             "Pixmap": os.path.join(ICONPATH, "link.svg"),
-            "MenuText": "Attached Link",
-            "ToolTip": "Create a link with Attachment",
+            "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_Link", "Attached Link"),
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_Link",
+                "Create a link with attachment",
+            ),
         }
 
     def IsActive(self):
