@@ -206,7 +206,8 @@ class TestCustomProfileCards(unittest.TestCase):
         App.closeDocument(doc_name)
         if doc_name in self.owned_docs:
             self.owned_docs.remove(doc_name)
-        return os.path.join("sections", filename)
+        # Manifest form: portable libraries store "/" on every OS.
+        return f"sections/{filename}"
 
     def _select_family(self, family_name):
         self.dialog.current_lib_data.setdefault(
@@ -765,7 +766,7 @@ class TestCustomProfileCards(unittest.TestCase):
 
         sections_dir = os.path.join(self.folder_lib_path, "sections")
         os.makedirs(sections_dir, exist_ok=True)
-        corrupt_rel = os.path.join("sections", "sec_s4_corrupt.FCStd")
+        corrupt_rel = "sections/sec_s4_corrupt.FCStd"
         corrupt_full = os.path.join(self.folder_lib_path, corrupt_rel)
         with open(corrupt_full, "wb") as f:
             f.write(b"NOT_A_VALID_FREECAD_FILE_CORRUPT_HEADER_0xDEADBEEF\n")
