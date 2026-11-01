@@ -144,6 +144,15 @@ class ExtrudedCutout:
             selected_face = selected_object.Shape.getElement(face_name)
             normal_vector = selected_face.normalAt(0, 0)
 
+            # Create face from sketch: only closed wires bound a cut.
+            myFacesList = [Part.Face(wire) for wire in cutSketch.Shape.Wires if wire.isClosed()]
+
+            if not myFacesList:
+                # An empty sketch, or one still being drawn, leaves the body uncut.
+                fp.Shape = selected_object.Shape.copy()
+                self._update_structure_data(fp)
+                return
+
             if fp.CutType == "Distance":
                 ExtLength = fp.ExtrusionLength.Value
             else:
@@ -153,13 +162,6 @@ class ExtrudedCutout:
                 TotalLength = selected_object.Shape.BoundBox.DiagonalLength + distance.Length
 
                 ExtLength = TotalLength
-
-            # Create face from sketch
-            skWiresList = cutSketch.Shape.Wires
-            myFacesList = []
-            for wire in skWiresList:
-                myFace = Part.Face(wire)
-                myFacesList.append(myFace)
 
             compFaces = Part.Compound(myFacesList)
 

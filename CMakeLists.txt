@@ -57,6 +57,7 @@ set(Namespace_SRCS
         freecad/maxproframe/resources/help/library-manager.md
         freecad/maxproframe/resources/help/library-manager.es.md
 
+        freecad/maxproframe/resources/ui/create_cutout.ui
         freecad/maxproframe/resources/ui/extend_cut.ui
 
         freecad/maxproframe/resources/profiles/metal.json

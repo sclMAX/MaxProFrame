@@ -1047,6 +1047,15 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Select the target profile.</source><translation>Seleccioná el perfil destino.</translation></message>
     <message><source>Select the profiles to notch.</source><translation>Seleccioná los perfiles a encastrar.</translation></message>
     <message><source>Target in orange, profiles in blue.</source><translation>Destino en naranja, perfiles en azul.</translation></message>
+    <message><source>Cutout / Hole</source><translation>Calado</translation></message>
+    <message><source>Face</source><translation>Cara</translation></message>
+    <message><source>OK creates a sketch on the face and opens it to draw the cutout.</source><translation>Aceptar crea un croquis en la cara y lo abre para dibujar el calado.</translation></message>
+    <message><source>Click a planar face of a profile, a trimmed profile or a cutout.</source><translation>Hacé clic en una cara plana de un perfil, un perfil recortado o un calado.</translation></message>
+    <message><source>Select a planar face of a profile, a trimmed profile or a cutout.</source><translation>Seleccioná una cara plana de un perfil, un perfil recortado o un calado.</translation></message>
+    <message><source>{}: pick one of its faces</source><translation>{}: elegí una de sus caras</translation></message>
+    <message><source>{}: {} is not planar</source><translation>{}: {} no es plana</translation></message>
+    <message><source>{}: {} is an end face (wall thickness)</source><translation>{}: {} es una cara de extremo (espesor de pared)</translation></message>
+    <message><source>{}: {} is not used, a cutout takes one face</source><translation>{}: {} no se usa, un calado lleva una sola cara</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ParametricLine</name>
