@@ -212,7 +212,7 @@ Offsets are optional: with **Extend** (on by default) a profile that stops short
 
 To change a miter later, double-click it in the tree. The panel lists the profile and its boundaries and shows its current Extend and Gap. **OK** applies the values to this miter and to the miters of its partner profiles that cut against it, in one Undo step, so the gap of the joint stays the value shown; **Cancel** leaves everything unchanged. A partner miter that holds other corners gets the new values at those corners too.
 
-### Via End Trim Command
+### Via Notch Command
 
 Let's finish the 3 others corners of the second frame...
 
@@ -222,32 +222,40 @@ Let's finish the 3 others corners of the second frame...
 
 When everything is showed again, you can see the vertical profiles are not cut as they should...
 
-Let's open again the corner manager, selecting "end trim"
+**Notch** cuts a profile so it fits against another profile, copying its shape: an I beam ending on another I beam, or a tube ending on a rotated tube, gets the exact outline of the target. It replaces the former Trim Profile command; a straight cut at a plane is made with [Extend / Cut](#via-extend--cut-command). The screenshots of the former Trim Profile panel no longer match the Notch panel and were removed.
 
-![alt text](images/62-endtrim.png)
+1. Click on the **Notch** command (shortcut `M, C`). The button is always active while a document is open.
+2. Pick the target first: click any face of the target profile, or select it in the tree. The whole target profile is used, whatever face was clicked.
+3. Then click the profiles to notch. A click adds the whole profile; Ctrl+click drops a listed one. The target itself, and the profiles it is built on, cannot be added, and an object that is not a profile is refused: the panel says why.
+4. **OK** creates one Notch per profile, each named after its profile and placed next to it in the same folder or Part, in one Undo step. **Cancel** leaves the document unchanged.
 
+While the panel is open the target is outlined in orange and the profiles to notch in blue, as the panel says; the outline is only drawn over the 3D view and never changes the colors of the objects. The notches can be previewed live, as in Extend / Cut below, but **Update automatically** is off by default for Notch (a notch is a heavy boolean operation): check it to see the result before **OK**. The choice is remembered for Notch on its own.
 
-![alt text](images/62-endtrim-task.png)
+Each profile keeps the piece that reaches its far end, the end of its axis farthest from the target; everything past the target, and the part inside it, is removed. To notch both ends of a profile, notch the result again against the second target: the two notches are chained. If the target does not touch the profile, the profile is kept uncut and a warning is shown in the Report view.
 
-1. Select the vertical profile first, add it to the trimmed object with the plus (+) button
+You can also select the target and then the profiles before clicking the command: the panel starts with them.
 
-![alt text](images/63-select-trimmed-body-1.png)
-![alt text](images/63-select-trimmed-body-2.png)
+To change a Notch later, double-click it in the tree: click another profile to change the target and press **OK** (one Undo step). **Cancel** leaves it unchanged, with no Undo step.
 
-2. Select the face of the profile you want to cut with.. (here, I add to move the view and select the bottom **face**)
+In the BOM, a notched end shows the cutting angle `P`: it follows the target shape instead of a single angle.
 
-![alt text](images/64-select-trimming-boundaries-1.png)
-![alt text](images/64-select-trimming-boundaries-2.png)
+### Via Extend / Cut Command
 
-You can change the cut type: straight or following the other profile. (for notch) for instance
+**Extend / Cut** brings the end of one or several profiles to a target: each profile gets one trim object, and its end nearest the target ends exactly on the target plane. A profile that stops short is extended (at most ten times its section diagonal, as End Miter); a profile that goes past is cut.
 
-![alt text](images/64-select-cuttype-1.png)
-![alt text](images/64-select-cuttype-2.png)
+1. Click on the **Extend / Cut** command. The button is always active while a document is open.
+2. Pick the target first: click a planar face (of a profile or of any other object), or select a whole profile in the tree. With a whole profile, each profile uses the face of the target it meets first, seen from its other end.
+3. Then click the profiles to extend or cut. A click adds the whole profile; Ctrl+click drops a listed one. The target itself, and the profiles it is built on, cannot be added: the panel says why.
+4. Set **Gap** to leave that distance between the profile ends and the target plane.
+5. **OK** creates the trims, each next to its profile in the same folder or Part, in one Undo step. If one of them cannot be made (the target face is not planar, the target plane is parallel to a profile, or a profile does not point at the target), nothing is created and the panel stays open with the reason. **Cancel** leaves the document unchanged.
 
+The trims are previewed live in the 3D view: the preview replaces each profile, and clicking a previewed trim stands for its profile, so Ctrl+click on it drops that profile. With **Update automatically** (on by default for Extend / Cut, remembered between sessions) the preview follows every change (target, profiles, Ctrl+click, Gap) once you pause; uncheck it to keep the preview as it is, the panel then shows **Pending changes** and checking it again updates the preview. **OK** always creates the current values, even when the preview is out of date. While the panel is open the target is outlined in orange and the profiles (or their previews) in blue; the outline is only drawn over the 3D view, so the colors of the objects are never changed.
 
-And you also can add faces related to the other side of the trimmed profile.
+You can also select the target and then the profiles before clicking the command: the panel starts with them.
 
-You can speed up your development process by first selecting the TrimmedObject, THEN the Trimming Boundaries (faces of profiles to cut with), then click on Trim Profile command; it will fill the "Trim Primitives"
+To change an Extend / Cut later, double-click it in the tree: click another face to change the target, change the Gap, and press **OK** (one Undo step). **Cancel** leaves it unchanged, with no Undo step. Editing has no live preview; the target and the edited trim are outlined in orange and blue.
+
+In the BOM, the cutting angle of the moved end is the angle between the target plane and a square cut.
 
 ## Organizing Objects
 

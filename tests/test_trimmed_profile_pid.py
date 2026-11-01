@@ -44,8 +44,7 @@ class TestTrimmedProfilePID(unittest.TestCase):
         TrimmedProfile(self.trimmed)
         self.trimmed.TrimmedBody = self.base
         self.trimmed.TrimmingBoundary = [(plane, ("Face1",))]
-        self.trimmed.TrimmedProfileType = "End Trim"
-        self.trimmed.CutType = "Simple fit"
+        self.trimmed.TrimmedProfileType = "Extend Cut"
         self.doc.recompute()
         self.assertEqual(self.trimmed.getStatusString(), "Valid")
         self.doc.clearUndos()
@@ -56,8 +55,17 @@ class TestTrimmedProfilePID(unittest.TestCase):
         source_fields = {
             name: getattr(self.base, name)
             for name in (
-                "Family", "CatalogFamily", "SizeName", "Material", "LinearWeight", "ApproxWeight",
-                "ProfileWidth", "ProfileHeight", "ProfileLength", "UnitPrice", "Price",
+                "Family",
+                "CatalogFamily",
+                "SizeName",
+                "Material",
+                "LinearWeight",
+                "ApproxWeight",
+                "ProfileWidth",
+                "ProfileHeight",
+                "ProfileLength",
+                "UnitPrice",
+                "Price",
             )
         }
         self.base.touch()
@@ -77,7 +85,8 @@ class TestTrimmedProfilePID(unittest.TestCase):
             self.assertEqual(getattr(self.trimmed, name), getattr(self.base, name))
         self.assertEqual(self.trimmed.Width.Value, 50.0)
         self.assertEqual(self.trimmed.Height.Value, 50.0)
-        self.assertEqual(self.trimmed.Length.Value, 200.0)
+        # Measured on the cut solid: exact up to floating point noise.
+        self.assertAlmostEqual(self.trimmed.Length.Value, 200.0, places=9)
         self.assertFalse(self.trimmed.Shape.isNull())
         self.assertTrue(self.trimmed.Shape.isValid())
         self.assertAlmostEqual(self.trimmed.Shape.Volume, 76800.0, places=5)

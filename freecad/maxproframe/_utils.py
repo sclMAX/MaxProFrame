@@ -5,11 +5,9 @@ __author__ = "Christophe Grellier (Chris_G)"
 __license__ = "LGPL 2.1"
 __doc__ = "Curves workbench utilities common to all tools."
 
-import math
 from numbers import Number
 
 import FreeCAD
-import Part
 
 
 def getRootObject(obj):
@@ -212,35 +210,17 @@ def get_trimmed_profile_all_cutting_angles(trimmed_profile):
     d'un TrimmedProfile, y compris ceux de ses parents/enfants imbriqués."""
     angles = []
 
-    def resolve_edge(link):
-        target = trimmed_profile.Proxy.getTarget(link)
-        return target[0].getSubObject(target[1][0])
-
-    edge = resolve_edge(trimmed_profile.TrimmedBody)
-    dir_vec = (edge.Vertexes[-1].Point.sub(edge.Vertexes[0].Point)).normalize()
-
-    if trimmed_profile.TrimmedProfileType == "End Trim":
-        if trimmed_profile.CutType in ["Simple fit", "Simple cut"]:
-            for bound in trimmed_profile.TrimmingBoundary:
-                for sub in bound[1]:  # sous-objets (souvent "FaceX")
-                    face = bound[0].getSubObject(sub)
-                    if isinstance(face.Surface, Part.Plane):
-                        normal = face.normalAt(0.5, 0.5).normalize()
-                        angle = math.degrees(dir_vec.getAngle(normal))
-
-                        if angle > 90:
-                            angle = 180 - angle
-
-                        angles.append(angle)
-        elif trimmed_profile.CutType in ["Perfect fit", "Coped cut"]:
-            angles.append("P")
-
-        else:
-            raise ValueError("Unknown CutType")
+    if trimmed_profile.TrimmedProfileType == "Notch":
+        # A notch copies the target shape: no single cutting angle, "P" marks it in the BOM.
+        angles.append("P")
 
     elif trimmed_profile.TrimmedProfileType == "End Miter":
         # Geometry keeps the raw angle; the readable angles show one decimal.
         angles.extend(round(plane.cut_angle(), 1) for plane in trimmed_profile.Proxy.miter_planes(trimmed_profile))
+
+    elif trimmed_profile.TrimmedProfileType == "Extend Cut":
+        # The angle between the profile axis and the target plane normal; one decimal as End Miter.
+        angles.append(round(trimmed_profile.Proxy.extend_cut_plane(trimmed_profile).cut_angle(), 1))
 
     else:
         raise ValueError("Unknown TrimmedProfileType")

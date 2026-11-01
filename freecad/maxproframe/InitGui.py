@@ -28,7 +28,8 @@ class MaxProFrame(Gui.Workbench):
     toolbox_maxproframe = [
         "MaxProFrame_CreateProfiles",
         "MaxProFrame_ManageProfileLibraries",
-        "MaxProFrame_TrimProfiles",
+        "MaxProFrame_Notch",
+        "MaxProFrame_ExtendCut",
         "MaxProFrame_EndMiter",
         "MaxProFrame_AddExtrudeCutout",
     ]
@@ -59,10 +60,11 @@ class MaxProFrame(Gui.Workbench):
             create_bom_tool,
             create_edit_balloons_tool,
             create_end_miter_tool,
+            create_extend_cut_tool,
             create_extruded_cutout_tool,
             create_link,
+            create_notch_tool,
             create_profiles_tool,
-            create_trimmed_profiles_tool,
             edit_profile_tool,
             library_manager_dialog,
             parametric_line,

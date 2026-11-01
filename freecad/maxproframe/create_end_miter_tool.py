@@ -18,7 +18,7 @@ from freecad.maxproframe.ff_tools import (
 from freecad.maxproframe.miter_geometry import Member
 from freecad.maxproframe.miter_joints import find_joints
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
-from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrimmedProfile, add_miter_properties
+from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrimmedProfile
 
 # Remembered state of the panel's "Update automatically" check box.
 AUTO_PREVIEW_PARAM = "Miter Auto Preview"
@@ -59,6 +59,24 @@ def _alive_document(doc):
         return doc is not None and doc.Name in App.listDocuments()
     except Exception:
         return False
+
+
+def scene_graph(doc):
+    """The scene graph of the 3D view of ``doc``, or None (offscreen or another view type)."""
+    try:
+        return Gui.getDocument(doc.Name).ActiveView.getSceneGraph()
+    except Exception:
+        return None
+
+
+def remove_overlay(overlay):
+    """Remove an overlay node added to a scene graph, given as (scene, node) or None."""
+    if overlay is not None:
+        scene, node = overlay
+        try:
+            scene.removeChild(node)
+        except Exception:
+            pass
 
 
 def _failures(objects):
@@ -398,12 +416,11 @@ class EndMiterTaskPanel:
         self._remove_marker_node()
         if self._closed or not self._markers:
             return
-        try:
-            from pivy import coin
-
-            scene = Gui.getDocument(self.doc.Name).ActiveView.getSceneGraph()
-        except Exception:
+        scene = scene_graph(self.doc)
+        if scene is None:
             return  # No 3D view (offscreen or another view type): the data is still kept.
+        from pivy import coin
+
         try:
             index = Gui.getMarkerIndex("CIRCLE_FILLED", 9)
         except Exception:
@@ -428,13 +445,8 @@ class EndMiterTaskPanel:
         self._marker_node = (scene, node)
 
     def _remove_marker_node(self):
-        if self._marker_node is not None:
-            scene, node = self._marker_node
-            self._marker_node = None
-            try:
-                scene.removeChild(node)
-            except Exception:
-                pass
+        remove_overlay(self._marker_node)
+        self._marker_node = None
 
     def _highlight_members(self):
         """Show every listed member, or its preview, selected as a whole object, never as a face."""
@@ -546,7 +558,6 @@ class EndMiterTaskPanel:
         try:
             # The joint gap is shared: each side of the joint cuts back half of it.
             for obj in miters:
-                add_miter_properties(obj, extend=False)
                 obj.MiterExtend = extend
                 obj.MiterGap = gap
             # A miter that fails to recompute does not raise: its status tells.
