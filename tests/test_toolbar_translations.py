@@ -10,6 +10,7 @@ from freecad.maxproframe import (  # noqa: F401  (importing registers the comman
     create_bom_tool,
     create_edit_balloons_tool,
     create_end_miter_tool,
+    create_extend_cut_tool,
     create_extruded_cutout_tool,
     create_link,
     create_profiles_tool,
@@ -42,6 +43,11 @@ EXPECTED = {
         "Trim Profile",
         "Recortar perfil",
         "Seleccioná un perfil y luego caras de otro perfil.",
+    ),
+    "MaxProFrame_ExtendCut": (
+        "Extend / Cut",
+        "Extender / cortar",
+        "Seleccioná una cara o un perfil destino y luego los perfiles a extender o cortar hasta él.",
     ),
     "MaxProFrame_EndMiter": (
         "Create Miter Ends",

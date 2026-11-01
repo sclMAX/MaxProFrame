@@ -251,6 +251,22 @@ You can speed up your development process by first selecting the TrimmedObject, 
 
 The Trim Profile command is always available while a document is open. The profile to trim can be picked whole in the tree or by any of its faces or edges; the trimming boundaries must be faces. Anything the panel cannot use (an object that is not a profile, an edge or a whole object as a boundary, or a face of the trimmed profile itself) is left out and explained in the panel, and the valid items are kept. **OK** creates the trim in one Undo step, **Cancel** leaves the document unchanged, with no Undo step. If the trimming faces cut nothing, the profile is kept uncut and a warning is shown in the Report view.
 
+### Via Extend / Cut Command
+
+**Extend / Cut** brings the end of one or several profiles to a target: each profile gets one trim object, and its end nearest the target ends exactly on the target plane. A profile that stops short is extended (at most ten times its section diagonal, as End Miter); a profile that goes past is cut.
+
+1. Click on the **Extend / Cut** command. The button is always active while a document is open.
+2. Pick the target first: click a planar face (of a profile or of any other object), or select a whole profile in the tree. With a whole profile, each profile uses the face of the target it meets first, seen from its other end.
+3. Then click the profiles to extend or cut. A click adds the whole profile; Ctrl+click drops a listed one. The target itself, and the profiles it is built on, cannot be added: the panel says why.
+4. Set **Gap** to leave that distance between the profile ends and the target plane.
+5. **OK** creates the trims, each next to its profile in the same folder or Part, in one Undo step. If one of them cannot be made (the target face is not planar, the target plane is parallel to a profile, or a profile does not point at the target), nothing is created and the panel stays open with the reason. **Cancel** leaves the document unchanged.
+
+You can also select the target and then the profiles before clicking the command: the panel starts with them.
+
+To change an Extend / Cut later, double-click it in the tree: click another face to change the target, change the Gap, and press **OK** (one Undo step). **Cancel** leaves it unchanged, with no Undo step.
+
+In the BOM, the cutting angle of the moved end is the angle between the target plane and a square cut.
+
 ## Organizing Objects
 
 Now, you should have something like this:
