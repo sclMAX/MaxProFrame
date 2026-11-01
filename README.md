@@ -11,7 +11,7 @@
 
 It is made for metal workshops, makers and engineers who build frames in steel, aluminium extrusion or wood.
 
-<!-- hero-frame.png: finished frame, added when available -->
+<p align="center"><img src="docs/images/readme/hero-frame.png" alt="Armchair frame built from rectangular tubes with mitered corners" width="720"></p>
 
 ## Features
 
@@ -24,6 +24,10 @@ It is made for metal workshops, makers and engineers who build frames in steel, 
 
 ## Screenshots
 
+**Live placement preview**: edit the rotation, mirrors and offsets of each edge and see the profile move in the 3D view before you press OK.
+
+![Create Profiles on three sketch edges with the live preview of an aluminium extrusion offset by 50 mm](docs/images/readme/placement-preview.png)
+
 | Create Profiles | Profile Library Manager |
 |---|---|
 | ![Create Profiles task panel with the alignment preview](docs/images/readme/create-profiles-panel.png) | ![Profile Library Manager with custom profile cards](docs/images/readme/library-manager-cards.png) |
@@ -32,7 +36,11 @@ It is made for metal workshops, makers and engineers who build frames in steel, 
 |---|---|
 | ![Add Family dialog with preview](docs/images/readme/add-family.png) | ![Library manager guide open at Families](docs/images/readme/library-manager-help.png) |
 
-<!-- end-miter.png, bom-cutlist.png, techdraw-balloons.png and workflow.gif are added when available -->
+| Miter Ends with live preview | Mitered corners |
+|---|---|
+| ![Miter Ends task panel previewing two joints between three aluminium extrusions](docs/images/readme/end-miter.png) | ![Three aluminium extrusions joined with mitered corners](docs/images/readme/end-miter-result.png) |
+
+<!-- bom-cutlist.png, techdraw-balloons.png and workflow.gif are added when available -->
 
 ## Installation
 
