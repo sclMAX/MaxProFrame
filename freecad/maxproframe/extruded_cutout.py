@@ -19,6 +19,82 @@ from freecad.maxproframe.ff_tools import ICONPATH, PROFILEIMAGES_PATH, PROFILESP
 from freecad.maxproframe.frameforge_exceptions import FrameForgeException
 from freecad.maxproframe.version import __version__ as ff_version
 
+# Cut types, in property order: new ones go last so saved documents keep their index.
+CUT_TYPES = ["Through All", "Distance", "One wall"]
+# Distance below which two points along the cut direction are the same.
+TOLERANCE = 1e-6
+# Sample points per side of a sketch region where One wall measures the wall.
+WALL_SAMPLES = 5
+
+
+def _wall_samples(face):
+    """Points inside ``face``: its center of mass and a grid over it, else its vertices."""
+    umin, umax, vmin, vmax = face.ParameterRange
+    grid = [
+        face.valueAt(umin + (umax - umin) * (i + 0.5) / WALL_SAMPLES, vmin + (vmax - vmin) * (j + 0.5) / WALL_SAMPLES)
+        for i in range(WALL_SAMPLES)
+        for j in range(WALL_SAMPLES)
+    ]
+    inside = [point for point in [face.CenterOfMass] + grid if face.isInside(point, TOLERANCE, True)]
+    return inside or [vertex.Point for vertex in face.Vertexes]
+
+
+def _material_along(shape, points, direction):
+    """For each of ``points``, the material of ``shape`` on a line along ``direction``.
+
+    Each item is a sorted list of (start, end) distances from the point along ``direction``,
+    touching pieces merged. One boolean with every line at once.
+    """
+    length = shape.BoundBox.DiagonalLength + max((point - shape.BoundBox.Center).Length for point in points)
+    lines = Part.Compound([Part.makeLine(point - direction * length, point + direction * length) for point in points])
+    segments = [[] for _ in points]
+    for edge in shape.common(lines).Edges:
+        ends = [vertex.Point for vertex in edge.Vertexes]
+        if len(ends) != 2:
+            continue
+
+        def off_line(point):
+            offset = ends[0] - point
+            return (offset - direction * offset.dot(direction)).Length
+
+        index = min(range(len(points)), key=lambda i: off_line(points[i]))
+        segments[index].append(tuple(sorted((end - points[index]).dot(direction) for end in ends)))
+    merged = []
+    for pieces in segments:
+        joined = []
+        for start, end in sorted(pieces):
+            if joined and start - joined[-1][1] < TOLERANCE:
+                joined[-1] = (joined[-1][0], max(joined[-1][1], end))
+            else:
+                joined.append((start, end))
+        merged.append(joined)
+    return merged
+
+
+def one_wall_depth(shape, face, direction):
+    """How deep ``face`` cuts ``shape`` along ``direction`` to go through one wall, or None.
+
+    The wall is the material that starts at the sketch plane, measured on lines through points
+    of ``face``: its thinnest reading, so a point over a perpendicular wall (a hole across a
+    corner) does not make it run through the profile, and a point over a void (an older hole)
+    or off the profile is not read. The cut runs past the inner face of the wall by half the
+    wall, or half the gap to the next material when it is closer. None: no wall under ``face``.
+    """
+    readings = []
+    for pieces in _material_along(shape, _wall_samples(face), direction):
+        # The first piece that reaches past the plane, starting on it (not across a void).
+        wall = next(((start, end) for start, end in pieces if end > TOLERANCE), None)
+        if wall is None or wall[0] > TOLERANCE:
+            continue
+        thickness = wall[1]
+        following = [start for start, _ in pieces if start > thickness + TOLERANCE]
+        gap = following[0] - thickness if following else math.inf
+        readings.append((thickness, gap))
+    if not readings:
+        return None
+    thickness, gap = min(readings)
+    return thickness + min(thickness, gap) / 2
+
 
 class ExtrudedCutout:
     def __init__(self, obj, sketch, selected_face):
@@ -63,10 +139,7 @@ class ExtrudedCutout:
         # CutType property
         obj.addProperty(
             "App::PropertyEnumeration", "CutType", "ExtrudedCutout", translate("FrameForge", "Cut type")
-        ).CutType = [
-            "Through All",
-            "Distance",
-        ]
+        ).CutType = list(CUT_TYPES)
         obj.CutType = "Through All"
 
         # related to Profile
@@ -118,6 +191,13 @@ class ExtrudedCutout:
 
         obj.Proxy = self
 
+    def onDocumentRestored(self, obj):
+        """Cutouts saved before One wall gain it, keeping their cut type."""
+        if obj.getEnumerationsOfProperty("CutType") != CUT_TYPES:
+            current = obj.CutType
+            obj.CutType = list(CUT_TYPES)
+            obj.CutType = current
+
     def onChanged(self, fp, prop):
         """Respond to property changes."""
         if prop == "CutType":
@@ -144,27 +224,42 @@ class ExtrudedCutout:
             selected_face = selected_object.Shape.getElement(face_name)
             normal_vector = selected_face.normalAt(0, 0)
 
-            if fp.CutType == "Distance":
-                ExtLength = fp.ExtrusionLength.Value
+            # Create face from sketch: only closed wires bound a cut.
+            myFacesList = [Part.Face(wire) for wire in cutSketch.Shape.Wires if wire.isClosed()]
+
+            if not myFacesList:
+                # An empty sketch, or one still being drawn, leaves the body uncut.
+                fp.Shape = selected_object.Shape.copy()
+                self._update_structure_data(fp)
+                return
+
+            if fp.CutType == "One wall":
+                # Each region goes through the wall under it, as deep as that wall.
+                tools = []
+                for face in myFacesList:
+                    depth = one_wall_depth(selected_object.Shape, face, -normal_vector)
+                    if depth is not None:
+                        tools.append(face.extrude(-normal_vector * depth))
+                if not tools:
+                    fp.Shape = selected_object.Shape.copy()
+                    self._update_structure_data(fp)
+                    return
+                extruded_shape = Part.Compound(tools)
             else:
-                skCenter = cutSketch.Shape.BoundBox.Center
-                objCenter = selected_object.Shape.BoundBox.Center
-                distance = skCenter - objCenter
-                TotalLength = selected_object.Shape.BoundBox.DiagonalLength + distance.Length
+                if fp.CutType == "Distance":
+                    ExtLength = fp.ExtrusionLength.Value
+                else:
+                    skCenter = cutSketch.Shape.BoundBox.Center
+                    objCenter = selected_object.Shape.BoundBox.Center
+                    distance = skCenter - objCenter
+                    TotalLength = selected_object.Shape.BoundBox.DiagonalLength + distance.Length
 
-                ExtLength = TotalLength
+                    ExtLength = TotalLength
 
-            # Create face from sketch
-            skWiresList = cutSketch.Shape.Wires
-            myFacesList = []
-            for wire in skWiresList:
-                myFace = Part.Face(wire)
-                myFacesList.append(myFace)
+                compFaces = Part.Compound(myFacesList)
 
-            compFaces = Part.Compound(myFacesList)
-
-            # Extrusion
-            extruded_shape = compFaces.extrude(-normal_vector * ExtLength)
+                # Extrusion
+                extruded_shape = compFaces.extrude(-normal_vector * ExtLength)
 
             # Soustraction (Cut)
             cut_shape = selected_object.Shape.cut(extruded_shape)

@@ -19,7 +19,7 @@ It is made for metal workshops, makers and engineers who build frames in steel, 
 - **Your own sections**: capture any closed Sketcher section or import a DXF into a portable folder library, with weight calculated from area and material density.
 - **Profile Library Manager**: create, duplicate, share (ZIP or shared folder) and edit libraries, with section cards and a built-in English and Spanish guide.
 - **Placement control**: nine alignment anchors, rotation, mirrors and X/Y offsets per edge, with a live preview of the section.
-- **Joints**: end miters with live preview, extension and gap; **Notch** to fit profiles against the shape of another profile; **Extend / Cut** to bring several profiles up to a face; extruded cutouts for holes and clearances.
+- **Joints**: end miters with live preview, extension and gap; **Notch** to fit profiles against the shape of another profile; **Extend / Cut** to bring several profiles up to a face; **Cutout / Hole** for holes and clearances drawn on a face.
 - **Fabrication output**: bill of materials and cut list with cutting angles, stock length and blade kerf; part IDs and TechDraw balloons.
 
 ## Screenshots
@@ -74,7 +74,7 @@ The Addon Manager shows an update when a new version is published on the `releas
 1. **Draw the skeleton.** Switch to the **MaxProFrame** workbench, create a sketch and draw the frame lines. Each edge becomes one profile.
 2. **Create profiles.** Click **Create Profiles**, choose the library, family and size, then select the sketch edges in the 3D view. The profiles are previewed as you change the settings; adjust the alignment, rotation or offset per edge and click **OK**.
 3. **Miter the corners.** Click **End Miter** and click the profiles that meet (Ctrl+click removes one). Every corner they form is previewed; **Extend** closes short ends and **Gap** leaves room between the cut faces. Click **OK**.
-4. **Fit the other joints.** Use **Notch** to fit several profiles against a target profile, copying its shape (for example an I beam ending on another I beam), and **Extend / Cut** to extend or cut several profiles up to a face, with an optional gap. Use **Extruded Cutout** for holes and clearances from a sketch.
+4. **Fit the other joints.** Use **Notch** to fit several profiles against a target profile, copying its shape (for example an I beam ending on another I beam), and **Extend / Cut** to extend or cut several profiles up to a face, with an optional gap. Use **Cutout / Hole** for holes and clearances: click a face, draw them on the sketch it opens, and close the sketch.
 5. **Get the cut list.** Click **Create BOM**, select the frame, choose grouping, stock length and kerf, and the cut list with lengths and angles is written to a spreadsheet.
 
 The [tutorial](docs/tutorial.md) walks through a complete frame step by step, and the [profile task panel reference](docs/commands.md) explains alignment, offsets and per-edge settings.
