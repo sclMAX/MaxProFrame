@@ -4,6 +4,10 @@
 
   - Rework **Extruded Cutout** into **Cutout / Hole** (Spanish *Calado*), with a new icon: a tube with a hole and a slot (see the [tutorial](docs/tutorial.md#cutout--hole)). The command is always active and opens a panel asking for one planar face of a profile, trim or cutout, explaining every selected item it cannot use. OK creates, in one Undo step, a sketch attached to the face in the profile's Part or folder, with the face outline as construction geometry to dimension against, plus the cutout, and opens the sketch; closing it cuts the profile. An empty or unfinished sketch leaves the profile uncut instead of failing. The new **One wall** cut type, the default of this flow, cuts only the wall under the face, as deep as that wall: a hole on the top of a rectangular tube no longer goes through the bottom wall. Selecting one face and one sketch still creates the cutout directly, with **Through All**.
 
+  **Fixes**
+  - Store sections captured into folder libraries as `sections/<file>` on every operating system. On Windows they were stored as `sections\<file>`, so the library could not be exported to ZIP and its custom profiles did not open on Linux or macOS. Libraries already saved that way are read as `sections/<file>` everywhere: they open, export to ZIP and duplicate on every operating system, and saving the library or duplicating it writes `asset_path` with `/` without changing any other value. Deleting a profile from such a library on Linux or macOS now also removes its unused section file on save (see [folder libraries](docs/folder-libraries.md)).
+  - Show custom profile card thumbnails on Windows without opening each section document: the section shape is now read in memory instead of through a temporary file that Windows cannot reopen while it is open.
+
 * v1.0.0 (2026-11-01)
 
   First release of MaxProFrame as an independent workbench. It can be installed side by side with FrameForge; neither replaces the other's modules, commands or settings.

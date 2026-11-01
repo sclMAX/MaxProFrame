@@ -15,6 +15,7 @@ except ImportError:
     from PySide2 import QtCore, QtGui, QtWidgets
 
 import Part
+from elision_helpers import font_ellipsis
 
 from freecad.maxproframe.custom_profile_cards import (
     CustomProfileCard,
@@ -41,8 +42,10 @@ class TestNativeCardTheme(unittest.TestCase):
         self.dirty = []
         self.selected = []
         dialog = SimpleNamespace(
-            current_lib_meta={"is_user": True}, table_sizes=self.table,
-            palette=self.host.palette, _mark_dirty=lambda: self.dirty.append(True),
+            current_lib_meta={"is_user": True},
+            table_sizes=self.table,
+            palette=self.host.palette,
+            _mark_dirty=lambda: self.dirty.append(True),
         )
 
         def select(row):
@@ -50,8 +53,13 @@ class TestNativeCardTheme(unittest.TestCase):
             self.card.setSelected(True)
 
         self.card = CustomProfileCard(
-            0, "CP2", "10.31", {"Description": "Native description"}, dialog,
-            SimpleNamespace(select_card=select), self.host,
+            0,
+            "CP2",
+            "10.31",
+            {"Description": "Native description"},
+            dialog,
+            SimpleNamespace(select_card=select),
+            self.host,
         )
         self.layout.addWidget(self.card)
         self.reference = QtWidgets.QLabel("CP2", self.host)
@@ -100,8 +108,7 @@ class TestNativeCardTheme(unittest.TestCase):
             "QWidget { background-color: %s; color: %s; } "
             "QLabel { background-color: %s; color: %s; } "
             "QLineEdit { background-color: %s; color: %s; selection-background-color: #9362bd; } "
-            "QToolButton { background-color: %s; color: %s; }"
-            % ((self.surface.name(), self.ink.name()) * 4)
+            "QToolButton { background-color: %s; color: %s; }" % ((self.surface.name(), self.ink.name()) * 4)
         )
         self.polish()
 
@@ -126,15 +133,18 @@ class TestNativeCardTheme(unittest.TestCase):
                     points.append((x, y))
         self.assertTrue(points, "No visible theme-colored text/glyph ink")
         ratio = image.devicePixelRatio()
-        return ((max(x for x, _ in points) - min(x for x, _ in points) + 1) / ratio,
-                (max(y for _, y in points) - min(y for _, y in points) + 1) / ratio)
+        return (
+            (max(x for x, _ in points) - min(x for x, _ in points) + 1) / ratio,
+            (max(y for _, y in points) - min(y for _, y in points) + 1) / ratio,
+        )
 
     def assert_title_ink(self):
         actual = self.ink_bounds(self.image(self.card.code_edit))
         native = self.ink_bounds(self.image(self.reference))
         for measured, expected in zip(actual, native):
-            self.assertAlmostEqual(measured, expected, delta=3,
-                                   msg="Visible title ink must match locally styled native label")
+            self.assertAlmostEqual(
+                measured, expected, delta=3, msg="Visible title ink must match locally styled native label"
+            )
 
     def capture(self, name):
         reports = os.environ.get("FF_REPORTS")
@@ -168,17 +178,30 @@ class TestNativeCardTheme(unittest.TestCase):
         expected = self.ink_bounds(expected_image)
         try:
             for dimension, measured, native in zip(("width", "height"), actual, expected):
-                self.assertAlmostEqual(measured, native, delta=3,
-                                       msg="%s %s; display=%r; font=%s; actual/native state=%r/%r" % (
-                                           field.objectName(), dimension, displayed, field.font().toString(),
-                                           self.label_state(field), self.label_state(reference)))
+                self.assertAlmostEqual(
+                    measured,
+                    native,
+                    delta=3,
+                    msg="%s %s; display=%r; font=%s; actual/native state=%r/%r"
+                    % (
+                        field.objectName(),
+                        dimension,
+                        displayed,
+                        field.font().toString(),
+                        self.label_state(field),
+                        self.label_state(reference),
+                    ),
+                )
         except AssertionError:
             reports = os.environ.get("FF_REPORTS")
             if reports:
                 # Preserve both complete images, including surfaces and any frame,
                 # so a false ink mask can be distinguished from different glyphs.
-                state = "%s-%s-%s" % (field.objectName(), self.surface.name()[1:],
-                                         "multiline" if "\n" in displayed else "single")
+                state = "%s-%s-%s" % (
+                    field.objectName(),
+                    self.surface.name()[1:],
+                    "multiline" if "\n" in displayed else "single",
+                )
                 self.assertTrue(actual_image.save(os.path.join(reports, state + "-actual.png")))
                 self.assertTrue(expected_image.save(os.path.join(reports, state + "-native.png")))
             raise
@@ -190,9 +213,12 @@ class TestNativeCardTheme(unittest.TestCase):
     def label_state(label):
         resolved = QtGui.QFontInfo(label.font())
         return {
-            "textFormat": str(label.textFormat()), "wordWrap": label.wordWrap(),
-            "alignment": str(label.alignment()), "indent": label.indent(),
-            "margin": label.margin(), "frameWidth": label.frameWidth(),
+            "textFormat": str(label.textFormat()),
+            "wordWrap": label.wordWrap(),
+            "alignment": str(label.alignment()),
+            "indent": label.indent(),
+            "margin": label.margin(),
+            "frameWidth": label.frameWidth(),
             "fontHeight": label.fontMetrics().height(),
             "resolvedFont": (resolved.family(), resolved.pixelSize(), resolved.weight()),
             "foreground": label.palette().color(label.foregroundRole()).name(),
@@ -202,10 +228,13 @@ class TestNativeCardTheme(unittest.TestCase):
         widget = self.card.thumbnail_label
         point = QtCore.QPointF(6, widget.height() / 2)
         previous = list(self.selected)
-        for kind, buttons in ((QtCore.QEvent.MouseButtonPress, QtCore.Qt.LeftButton),
-                              (QtCore.QEvent.MouseButtonRelease, QtCore.Qt.NoButton)):
-            QtWidgets.QApplication.sendEvent(widget, QtGui.QMouseEvent(
-                kind, point, QtCore.Qt.LeftButton, buttons, QtCore.Qt.NoModifier))
+        for kind, buttons in (
+            (QtCore.QEvent.MouseButtonPress, QtCore.Qt.LeftButton),
+            (QtCore.QEvent.MouseButtonRelease, QtCore.Qt.NoButton),
+        ):
+            QtWidgets.QApplication.sendEvent(
+                widget, QtGui.QMouseEvent(kind, point, QtCore.Qt.LeftButton, buttons, QtCore.Qt.NoModifier)
+            )
         self.polish()
         self.assertEqual(self.selected, previous + [0])
 
@@ -242,19 +271,26 @@ class TestNativeCardTheme(unittest.TestCase):
                 preview = self.card.thumbnail_label
                 reference = self.image(self.preview_reference)
                 self.ink_bounds(reference)  # Prove this theme's native label is readable.
-                for pixmap in (create_placeholder_pixmap(text="No Preview"),
-                               render_face_silhouette(Part.makePlane(20, 12))):
+                for pixmap in (
+                    create_placeholder_pixmap(text="No Preview"),
+                    render_face_silhouette(Part.makePlane(20, 12)),
+                ):
                     self.card.update_thumbnail(pixmap)
                     rendered = self.image(preview)
-                    self.assertLess(self.distance(
-                        self.sample(rendered, 5, preview.height() // 2),
-                        self.sample(reference, 5, 50)), 3,
-                        "Preview must use the effective native surface, not fixed gray")
+                    self.assertLess(
+                        self.distance(self.sample(rendered, 5, preview.height() // 2), self.sample(reference, 5, 50)),
+                        3,
+                        "Preview must use the effective native surface, not fixed gray",
+                    )
                     # Inspect the unobstructed preview strip, excluding overlay ink.
                     ratio = rendered.devicePixelRatio()
                     safe = preview.contentsRect()
-                    glyph = rendered.copy(round(safe.x() * ratio), round(safe.y() * ratio),
-                                          round(safe.width() * ratio), round(safe.height() * ratio))
+                    glyph = rendered.copy(
+                        round(safe.x() * ratio),
+                        round(safe.y() * ratio),
+                        round(safe.width() * ratio),
+                        round(safe.height() * ratio),
+                    )
                     glyph.setDevicePixelRatio(ratio)
                     self.ink_bounds(glyph)
                 self.assert_native_field_ink(self.card.weight_edit)
@@ -263,8 +299,14 @@ class TestNativeCardTheme(unittest.TestCase):
                 self.ink = QtGui.QColor("#b65b92")
                 self.polish()
                 rendered = self.image(preview)
-                self.ink_bounds(rendered.copy(round(safe.x() * ratio), round(safe.y() * ratio),
-                                              round(safe.width() * ratio), round(safe.height() * ratio)))
+                self.ink_bounds(
+                    rendered.copy(
+                        round(safe.x() * ratio),
+                        round(safe.y() * ratio),
+                        round(safe.width() * ratio),
+                        round(safe.height() * ratio),
+                    )
+                )
                 self.capture("native-card-custom-%s" % ("dark" if dark else "light"))
 
     def test_pencil_uses_effective_toolbutton_ink_after_qss_replacement(self):
@@ -277,9 +319,12 @@ class TestNativeCardTheme(unittest.TestCase):
                 image = self.image(button)
                 ratio = image.devicePixelRatio()
                 center = button.rect().center()
-                pencil = image.copy(round((center.x() - 8) * ratio),
-                                    round((center.y() - 8) * ratio),
-                                    round(16 * ratio), round(16 * ratio))
+                pencil = image.copy(
+                    round((center.x() - 8) * ratio),
+                    round((center.y() - 8) * ratio),
+                    round(16 * ratio),
+                    round(16 * ratio),
+                )
                 self.ink_bounds(pencil)
                 self.assertEqual(button.isEnabled(), editable)
 
@@ -305,14 +350,17 @@ class TestNativeCardTheme(unittest.TestCase):
         self.assertEqual(self.table.item(0, 0).text(), title)
         self.assertEqual(self.card.code_edit.text(), title)
         self.assertEqual(self.card.code_edit.toolTip(), title)
-        self.assertTrue(self.card.code_edit._display_lines()[0].endswith("…"))
+        code_line = self.card.code_edit._display_lines()[0]
+        self.assertLess(len(code_line), len(title))
+        self.assertTrue(code_line.endswith(font_ellipsis(self.card.code_edit.fontMetrics())), code_line)
         height = self.card.sizeHint().height()
         description = "A description with multiple words to wrap and elide " * 12
         self.card.description_edit.setText(description)
         self.polish()
         lines = self.card.description_edit._display_lines()
         self.assertEqual(len(lines), 2)
-        self.assertTrue(lines[-1].endswith("…"))
+        self.assertLess(len(" ".join(lines)), len(description))
+        self.assertTrue(lines[-1].endswith(font_ellipsis(self.card.description_edit.fontMetrics())), lines)
         self.assertEqual(self.card.description_edit.text(), description)
         self.assert_native_field_ink(self.card.description_edit)
         self.assertEqual(self.table.item(0, 0).data(QtCore.Qt.UserRole)["Description"], description)

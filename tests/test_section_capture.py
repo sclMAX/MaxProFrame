@@ -26,6 +26,7 @@ class TestSectionCapture(unittest.TestCase):
                     pass
         # Clean up test directories created during tests
         import shutil
+
         for d in self.temp_dirs:
             if os.path.exists(d):
                 try:
@@ -419,6 +420,8 @@ class TestSectionCapture(unittest.TestCase):
         self.assertIn("object_name", meta)
         self.assertIn("asset_id", meta)
         self.assertTrue(meta["asset_path"].startswith("sections/"))
+        # Portable manifest form on every OS: never the native Windows separator.
+        self.assertNotIn("\\", meta["asset_path"])
         self.assertFalse(os.path.isabs(meta["asset_path"]))
 
         full_asset_path = os.path.join(lib_root, meta["asset_path"])

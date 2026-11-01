@@ -259,7 +259,8 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         os.makedirs(sections_dir, exist_ok=True)
         aid = asset_id or f"sec_{size_code.lower()}"
         filename = f"{aid}.FCStd"
-        rel_path = os.path.join("sections", filename)
+        # Manifest form, as save_section_asset writes it on every OS.
+        rel_path = f"sections/{filename}"
         full_path = os.path.join(lib_folder, rel_path)
 
         # Save autonomous asset document
@@ -288,7 +289,7 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
             "Width": f"{width:.1f}",
             "Weight": f"{weight:.2f}",
             "Area": area,
-            "asset_path": rel_path.replace("\\", "/"),
+            "asset_path": rel_path,
             "object_name": actual_name,
             "asset_id": aid,
         }

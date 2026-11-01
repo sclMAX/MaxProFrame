@@ -208,10 +208,14 @@ def capture_section_sketch(source, target_doc=None, name="Section"):
         tgt_face = build_custom_section_face(target_sketch)
 
         if abs(tgt_face.Area - src_face.Area) > 1e-4:
-            raise ValueError(f"Captured section area ({tgt_face.Area:.4f}) does not match source area ({src_face.Area:.4f})")
+            raise ValueError(
+                f"Captured section area ({tgt_face.Area:.4f}) does not match source area ({src_face.Area:.4f})"
+            )
 
         if len(tgt_face.Wires) != len(src_face.Wires):
-            raise ValueError(f"Captured section wire count ({len(tgt_face.Wires)}) does not match source wire count ({len(src_face.Wires)})")
+            raise ValueError(
+                f"Captured section wire count ({len(tgt_face.Wires)}) does not match source wire count ({len(src_face.Wires)})"
+            )
 
         src_local_shape = source.Shape.copy()
         src_local_shape.Placement = App.Placement()
@@ -231,7 +235,9 @@ def capture_section_sketch(source, target_doc=None, name="Section"):
 
         # Independence verification
         if getattr(target_sketch, "OutList", None):
-            raise ValueError(f"Captured sketch still has external object dependencies: {[o.Name for o in target_sketch.OutList]}")
+            raise ValueError(
+                f"Captured sketch still has external object dependencies: {[o.Name for o in target_sketch.OutList]}"
+            )
 
         if getattr(target_sketch, "ExternalGeometry", None):
             raise ValueError("Captured sketch still has external geometry links")
@@ -287,7 +293,9 @@ def save_section_asset(library_root, source, name="Section"):
         except ValueError:
             common = None
         if common != canonical_root:
-            raise ValueError(f"Sections directory '{sections_dir}' is a symlink escaping library root '{canonical_root}'.")
+            raise ValueError(
+                f"Sections directory '{sections_dir}' is a symlink escaping library root '{canonical_root}'."
+            )
 
     if not os.path.exists(sections_dir):
         os.makedirs(sections_dir, exist_ok=True)
@@ -344,12 +352,14 @@ def save_section_asset(library_root, source, name="Section"):
         # Clean up ONLY the owned private workspace and its contents
         if temp_dir is not None and os.path.exists(temp_dir):
             import shutil
+
             try:
                 shutil.rmtree(temp_dir)
             except OSError:
                 pass
 
-    rel_path = os.path.join("sections", filename)
+    # Manifests are portable: always "/", never the OS separator ("\" on Windows).
+    rel_path = f"sections/{filename}"
     return {
         "asset_path": rel_path,
         "object_name": actual_object_name,

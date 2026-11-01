@@ -184,7 +184,8 @@ class TestFolderSectionManagement(unittest.TestCase):
         App.closeDocument(doc_name)
         if doc_name in self.doc_names:
             self.doc_names.remove(doc_name)
-        return os.path.join("sections", filename)
+        # Manifest form: portable libraries store "/" on every OS.
+        return f"sections/{filename}"
 
     # --- Rule 1: Capture from Gui.Selection creates asset and geometry row ---
 

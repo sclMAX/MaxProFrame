@@ -248,17 +248,15 @@ def _extract_custom_section_face_from_fcstd(fcstd_path, object_name=None):
 
             brp_data = archive.read(brp_file)
 
-        with tempfile.NamedTemporaryFile(suffix=".brp") as tf:
-            tf.write(brp_data)
-            tf.flush()
-            shape = Part.Shape()
-            shape.read(tf.name)
-            wires = list(shape.Wires)
-            if not wires:
-                return None
-            face = Part.makeFace(wires, "Part::FaceMakerBullseye")
-            if face is not None and face.isValid() and face.Area > 0:
-                return face
+        # Load from memory: Windows cannot reopen an open temporary file by name.
+        shape = Part.Shape()
+        shape.importBrepFromString(brp_data.decode("utf-8"), False)
+        wires = list(shape.Wires)
+        if not wires:
+            return None
+        face = Part.makeFace(wires, "Part::FaceMakerBullseye")
+        if face is not None and face.isValid() and face.Area > 0:
+            return face
     except Exception:
         return None
     return None

@@ -8,6 +8,8 @@ try:
 except ImportError:
     from PySide2 import QtCore, QtGui, QtWidgets
 
+from elision_helpers import font_ellipsis
+
 from freecad.maxproframe.custom_profile_cards import CustomProfileCard
 
 
@@ -22,8 +24,13 @@ class TestCustomProfileCardTheme(unittest.TestCase):
         self.parent.setAttribute(QtCore.Qt.WA_DontShowOnScreen, True)
         self.selected = []
         self.card = CustomProfileCard(
-            2, "CP2", "10.31", {}, SimpleNamespace(current_lib_meta={"is_user": True}),
-            SimpleNamespace(select_card=self.selected.append), self.parent,
+            2,
+            "CP2",
+            "10.31",
+            {},
+            SimpleNamespace(current_lib_meta={"is_user": True}),
+            SimpleNamespace(select_card=self.selected.append),
+            self.parent,
         )
         QtWidgets.QVBoxLayout(self.parent).addWidget(self.card)
 
@@ -117,16 +124,16 @@ class TestCustomProfileCardTheme(unittest.TestCase):
         try:
             self._polish_and_layout()
             reference.resize(self.card.size())
+
             def surface(image):
                 ratio = image.devicePixelRatio()
                 return image.pixelColor(round(6 * ratio), round(6 * ratio))
-            self.assertEqual(surface(self.card.grab().toImage()),
-                             surface(reference.grab().toImage()))
+
+            self.assertEqual(surface(self.card.grab().toImage()), surface(reference.grab().toImage()))
             for dark in (False, True, False):
                 # Local ancestor QSS exercises real style replacement without
                 # changing the application's stylesheet or forcing palettes.
-                background, ink = (("#303030", "#eeeeee") if dark
-                                   else ("#eeeeee", "#202020"))
+                background, ink = ("#303030", "#eeeeee") if dark else ("#eeeeee", "#202020")
                 for phase in ("parent", "qss"):
                     if phase == "parent":
                         inherited = QtGui.QPalette(self.parent.palette())
@@ -136,11 +143,11 @@ class TestCustomProfileCardTheme(unittest.TestCase):
                     else:
                         self.parent.setStyleSheet(
                             "QFrame#custom_card { background-color: %s; color: %s; }"
-                            "QLabel#card_code { color: %s; }" % (background, ink, ink))
+                            "QLabel#card_code { color: %s; }" % (background, ink, ink)
+                        )
                     for editable in (True, False):
                         for selected in (False, True):
-                            with self.subTest(dark=dark, phase=phase,
-                                              editable=editable, selected=selected):
+                            with self.subTest(dark=dark, phase=phase, editable=editable, selected=selected):
                                 self.card.set_editable(editable)
                                 self.card.setSelected(selected)
                                 self._polish_and_layout()
@@ -152,9 +159,16 @@ class TestCustomProfileCardTheme(unittest.TestCase):
                                 actual_text = self.card.code_edit.grab().toImage()
                                 native_text = title.grab().toImage()
                                 self.assertEqual(actual_text, native_text)
-                                self.assertGreater(len({native_text.pixel(x, y)
-                                                        for y in range(native_text.height())
-                                                        for x in range(native_text.width())}), 1)
+                                self.assertGreater(
+                                    len(
+                                        {
+                                            native_text.pixel(x, y)
+                                            for y in range(native_text.height())
+                                            for x in range(native_text.width())
+                                        }
+                                    ),
+                                    1,
+                                )
                                 self.assertEqual(self.card.styleSheet(), "")
                                 self.assertEqual(self.card.code_edit.styleSheet(), "")
                                 self.assertEqual(self.card.code_edit.text(), "CP2")
@@ -184,15 +198,15 @@ class TestCustomProfileCardTheme(unittest.TestCase):
         try:
             self._polish_and_layout()
             reference.resize(self.card.thumbnail_label.size())
+
             def surface(image):
                 ratio = image.devicePixelRatio()
                 return image.pixelColor(round(5 * ratio), round(64 * ratio))
-            self.assertEqual(surface(self.card.thumbnail_label.grab().toImage()),
-                             surface(reference.grab().toImage()))
+
+            self.assertEqual(surface(self.card.thumbnail_label.grab().toImage()), surface(reference.grab().toImage()))
             for dark in (False, True, False):
                 background = "#303030" if dark else "#eeeeee"
-                self.parent.setStyleSheet(
-                    "QLabel#card_thumbnail { background-color: %s; }" % background)
+                self.parent.setStyleSheet("QLabel#card_thumbnail { background-color: %s; }" % background)
                 for editable in (True, False):
                     for selected in (True, False):
                         with self.subTest(dark=dark, editable=editable, selected=selected):
@@ -205,8 +219,9 @@ class TestCustomProfileCardTheme(unittest.TestCase):
                             # Below the overlays and inside the selection border.
                             ratio = preview.devicePixelRatio()
                             actual = preview.pixelColor(round(5 * ratio), round(64 * ratio))
-                            expected = native.pixelColor(round(5 * native.devicePixelRatio()),
-                                                         round(64 * native.devicePixelRatio()))
+                            expected = native.pixelColor(
+                                round(5 * native.devicePixelRatio()), round(64 * native.devicePixelRatio())
+                            )
                             self.assertEqual(actual, expected)
                             self.assertEqual(self.card.thumbnail_label.styleSheet(), "")
                             self.assertEqual(self.card.code_edit.text(), "CP2")
@@ -233,8 +248,10 @@ class TestCustomProfileCardTheme(unittest.TestCase):
                     ratio = image.devicePixelRatio()
                     slot = self.card.description_slot
                     point = slot.mapTo(self.card, QtCore.QPoint(slot.width() - 10, 4))
-                    self.assertEqual(image.pixelColor(round(point.x() * ratio), round(point.y() * ratio)),
-                                     image.pixelColor(round(6 * ratio), round(6 * ratio)))
+                    self.assertEqual(
+                        image.pixelColor(round(point.x() * ratio), round(point.y() * ratio)),
+                        image.pixelColor(round(6 * ratio), round(6 * ratio)),
+                    )
 
     def test_thumbnail_badge_and_icon_replace_footer_without_covering_profile(self):
         self._polish_and_layout()
@@ -263,23 +280,39 @@ class TestCustomProfileCardTheme(unittest.TestCase):
         self.assertEqual(self.card.layout().indexOf(badge), -1)
         self.assertEqual(badge._display_lines(), ["10.31 kg/m"])
         self.selected.clear()
-        QtWidgets.QApplication.sendEvent(badge, QtGui.QMouseEvent(
-            QtCore.QEvent.MouseButtonPress, QtCore.QPointF(3, 3),
-            QtCore.Qt.LeftButton, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier))
+        QtWidgets.QApplication.sendEvent(
+            badge,
+            QtGui.QMouseEvent(
+                QtCore.QEvent.MouseButtonPress,
+                QtCore.QPointF(3, 3),
+                QtCore.Qt.LeftButton,
+                QtCore.Qt.LeftButton,
+                QtCore.Qt.NoModifier,
+            ),
+        )
         self.assertEqual(self.selected, [2])
 
     def test_public_mouse_dispatch_selects_once_and_preserves_focus_selection(self):
         self.card.description_edit.setText("Description")
         self._polish_and_layout()
-        for widget in (self.card, self.card.thumbnail_label, self.card.code_edit,
-                       self.card.weight_edit, self.card.description_edit, self.card.description_slot):
+        for widget in (
+            self.card,
+            self.card.thumbnail_label,
+            self.card.code_edit,
+            self.card.weight_edit,
+            self.card.description_edit,
+            self.card.description_slot,
+        ):
             for button in (QtCore.Qt.LeftButton, QtCore.Qt.RightButton):
                 with self.subTest(widget=widget.objectName(), button=button):
                     self.selected.clear()
-                    for kind, buttons in ((QtCore.QEvent.MouseButtonPress, button),
-                                          (QtCore.QEvent.MouseButtonRelease, QtCore.Qt.NoButton)):
-                        QtWidgets.QApplication.sendEvent(widget, QtGui.QMouseEvent(
-                            kind, QtCore.QPointF(3, 3), button, buttons, QtCore.Qt.NoModifier))
+                    for kind, buttons in (
+                        (QtCore.QEvent.MouseButtonPress, button),
+                        (QtCore.QEvent.MouseButtonRelease, QtCore.Qt.NoButton),
+                    ):
+                        QtWidgets.QApplication.sendEvent(
+                            widget, QtGui.QMouseEvent(kind, QtCore.QPointF(3, 3), button, buttons, QtCore.Qt.NoModifier)
+                        )
                     self.assertEqual(self.selected, [2] if button == QtCore.Qt.LeftButton else [])
         self.selected.clear()
         QtWidgets.QApplication.sendEvent(self.card.code_edit, QtGui.QFocusEvent(QtCore.QEvent.FocusIn))
@@ -290,8 +323,12 @@ class TestCustomProfileCardTheme(unittest.TestCase):
         for field in (self.card.code_edit, self.card.description_edit, self.card.weight_edit):
             self.assertIsInstance(field, QtWidgets.QLabel)
         self.assertTrue(self.card.code_edit.font().bold())
-        self.assertGreater(self.card.code_edit.fontMetrics().height(), self.card.description_edit.fontMetrics().height())
-        self.assertGreater(self.card.description_edit.fontMetrics().height(), self.card.weight_edit.fontMetrics().height())
+        self.assertGreater(
+            self.card.code_edit.fontMetrics().height(), self.card.description_edit.fontMetrics().height()
+        )
+        self.assertGreater(
+            self.card.description_edit.fontMetrics().height(), self.card.weight_edit.fontMetrics().height()
+        )
         self.assertTrue(self.card.description_edit.isHidden())
         height = self.card.sizeHint().height()
         self.card.description_edit.setText("A description long enough to wrap over two lines " * 6)
@@ -300,14 +337,18 @@ class TestCustomProfileCardTheme(unittest.TestCase):
         self.assertEqual(self.card.sizeHint().height(), height)
         lines = self.card.description_edit._display_lines()
         self.assertEqual(len(lines), 2)
-        self.assertTrue(lines[-1].endswith("…"), lines)
-        self.assertGreaterEqual(self.card.description_edit.contentsRect().height(),
-                                self.card.description_edit.fontMetrics().height() * 2)
+        self.assertLess(len(" ".join(lines)), len(self.card.description_edit.text()))
+        self.assertTrue(lines[-1].endswith(font_ellipsis(self.card.description_edit.fontMetrics())), lines)
+        self.assertGreaterEqual(
+            self.card.description_edit.contentsRect().height(), self.card.description_edit.fontMetrics().height() * 2
+        )
         self.assertEqual(self.card.description_edit.toolTip(), self.card.description_edit.text())
         title = "A very long profile code " * 8
         self.card.code_edit.setText(title)
         self.assertEqual(self.card.code_edit.toolTip(), title)
-        self.assertTrue(self.card.code_edit._display_lines()[0].endswith("…"))
+        code_line = self.card.code_edit._display_lines()[0]
+        self.assertLess(len(code_line), len(title))
+        self.assertTrue(code_line.endswith(font_ellipsis(self.card.code_edit.fontMetrics())), code_line)
         self.assertEqual(self.card.weight_edit._display_lines(), ["10.31 kg/m"])
         self.assertEqual(self.card.weight_edit.text(), "10.31")
         self.card.description_edit.clear()

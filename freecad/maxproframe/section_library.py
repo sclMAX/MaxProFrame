@@ -19,6 +19,26 @@ from freecad.maxproframe.custom_section_geometry import build_custom_section_fac
 from freecad.maxproframe.section_capture import capture_section_sketch, save_section_asset
 
 
+def portable_asset_path(asset_path):
+    """Returns asset_path in manifest form, with "/" separators.
+
+    MaxProFrame 1.0.0 on Windows stored captured sections as 'sections\\<file>'.
+    """
+    return asset_path.replace("\\", "/")
+
+
+def portable_catalog_asset_paths(data):
+    """Rewrites every string asset_path in catalog data in place to manifest form."""
+    if not isinstance(data, dict):
+        return
+    for family, props in data.items():
+        if family.startswith("_") or not isinstance(props, dict) or not isinstance(props.get("sizes"), dict):
+            continue
+        for values in props["sizes"].values():
+            if isinstance(values, dict) and isinstance(values.get("asset_path"), str):
+                values["asset_path"] = portable_asset_path(values["asset_path"])
+
+
 def resolve_and_validate_asset_path(library_root, asset_path):
     """Resolves and validates that asset_path is safely confined within library_root/sections.
 
@@ -53,8 +73,8 @@ def resolve_and_validate_asset_path(library_root, asset_path):
     if not os.path.isdir(canonical_root):
         raise ValueError(f"Library root does not exist or is not a directory: {library_root}")
 
-    # Normalize relative path
-    norm_rel = os.path.normpath(asset_path)
+    # Normalize relative path; manifests written on Windows may use "\" separators
+    norm_rel = os.path.normpath(portable_asset_path(asset_path))
     if norm_rel.startswith("..") or "/.." in norm_rel or "\\.." in norm_rel:
         raise ValueError(f"Asset path contains parent directory traversal: {asset_path}")
 
@@ -253,7 +273,7 @@ def purge_unreferenced_assets(library_root, staged_asset_paths, catalog_data):
             continue
 
         canonical_target = resolve_and_validate_asset_path(canonical_root, rel_path)
-        full_staged = os.path.join(canonical_root, os.path.normpath(rel_path))
+        full_staged = os.path.join(canonical_root, os.path.normpath(portable_asset_path(rel_path)))
 
         # Check if the canonical target is still referenced anywhere in catalog
         if canonical_target in referenced_canonical:
@@ -266,7 +286,8 @@ def purge_unreferenced_assets(library_root, staged_asset_paths, catalog_data):
                     if fam_k.startswith("_") or not isinstance(fam_v, dict):
                         continue
                     for s_k, s_v in fam_v.get("sizes", {}).items():
-                        if isinstance(s_v, dict) and s_v.get("asset_path") == rel_path:
+                        stored = s_v.get("asset_path") if isinstance(s_v, dict) else None
+                        if isinstance(stored, str) and portable_asset_path(stored) == portable_asset_path(rel_path):
                             symlink_referenced = True
                             break
                     if symlink_referenced:

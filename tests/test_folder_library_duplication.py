@@ -477,6 +477,57 @@ class TestFolderLibraryDuplication(unittest.TestCase):
         # Registry untouched
         self.assertEqual(_file_hash(self.reg_path), reg_before)
 
+    def test_duplicate_folder_library_windows_backslash_asset_paths_copy_portably(self):
+        """MaxProFrame 1.0.0 on Windows stored 'sections\\<file>'; duplicating it works on every OS."""
+        manifest_path = os.path.join(self.source_folder, "library.json")
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest_data = json.load(f)
+        manifest_data["Custom Profile"]["sizes"]["Rect_100x50"]["asset_path"] = "sections\\sec_rect_100x50.FCStd"
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest_data, f, indent=2)
+        source_hash = _file_hash(manifest_path)
+        src_asset = os.path.join(self.source_folder, "sections", "sec_rect_100x50.FCStd")
+
+        dest_folder = os.path.join(self.test_root, "WindowsDupDest")
+        self.manager.duplicate_library(
+            "SourceFolderLib",
+            "WindowsDupLib",
+            target_folder_path=dest_folder,
+            target_material="Aluminium",
+            target_density=2.70,
+            recalculate_weights=True,
+        )
+
+        self.assertEqual(sorted(os.listdir(dest_folder)), ["library.json", "sections"])
+        self.assertEqual(os.listdir(os.path.join(dest_folder, "sections")), ["sec_rect_100x50.FCStd"])
+        dest_asset = os.path.join(dest_folder, "sections", "sec_rect_100x50.FCStd")
+        self.assertEqual(_file_hash(dest_asset), _file_hash(src_asset))
+        with open(os.path.join(dest_folder, "library.json"), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        size = data["Custom Profile"]["sizes"]["Rect_100x50"]
+        self.assertEqual(size["asset_path"], "sections/sec_rect_100x50.FCStd")
+        # Weight recalculated from the copied asset's actual face (100 x 50 mm at 2.70 g/cm3).
+        self.assertAlmostEqual(float(size["Weight"]), 5000.0 * 2.70 / 1000.0, places=1)
+        self.assertEqual(_file_hash(manifest_path), source_hash)
+
+        # Escapes written with Windows separators stay rejected before any write.
+        outside = os.path.join(self.test_root, "outside.FCStd")
+        shutil.copyfile(src_asset, outside)
+        for escape in ("..\\outside.FCStd", "sections\\..\\..\\outside.FCStd", "\\outside.FCStd", "C:\\outside.FCStd"):
+            with self.subTest(escape=escape):
+                manifest_data["Custom Profile"]["sizes"]["Rect_100x50"]["asset_path"] = escape
+                with open(manifest_path, "w", encoding="utf-8") as f:
+                    json.dump(manifest_data, f, indent=2)
+                escaped_hash = _file_hash(manifest_path)
+                reg_before = _file_hash(self.reg_path)
+                dest = os.path.join(self.test_root, "EscapeDest")
+                os.makedirs(dest, exist_ok=True)
+                with self.assertRaises(ValueError):
+                    self.manager.duplicate_library("SourceFolderLib", "EscapeDupLib", target_folder_path=dest)
+                self.assertEqual(os.listdir(dest), [])
+                self.assertEqual(_file_hash(self.reg_path), reg_before)
+                self.assertEqual(_file_hash(manifest_path), escaped_hash)
+
     def test_duplicate_folder_library_internal_aliases_materialize_as_portable_copies(self):
         """Rule 8: Internal relative symlinks/aliases in source materialize as portable
         standalone copies in destination that survive source deletion.
@@ -773,6 +824,7 @@ def load_tests(loader, tests, pattern):
         "test_duplicate_folder_library_rejects_name_and_path_collisions",
         "test_duplicate_folder_library_no_blanket_copy_and_preserves_unrelated_files",
         "test_duplicate_folder_library_rejects_malformed_traversal_and_symlink_escapes",
+        "test_duplicate_folder_library_windows_backslash_asset_paths_copy_portably",
         "test_duplicate_folder_library_internal_aliases_materialize_as_portable_copies",
         "test_duplicate_folder_library_rollback_on_registration_failure",
         "test_duplicate_folder_library_material_recalc_false_preserves_nominal",

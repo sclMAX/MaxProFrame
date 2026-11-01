@@ -1,6 +1,7 @@
 # FreeCAD Macro: run-tests.FCMacro
 # Runs full test suite in official FreeCAD 1.1.4 Linux GUI offscreen runner.
 
+import gc
 import importlib.util
 import json
 import os
@@ -20,6 +21,27 @@ def log_startup(marker: str) -> None:
             f.write(f"[startup] {marker}\n")
     except Exception:
         pass
+
+
+def hard_exit(code: int) -> None:
+    """End FreeCAD now with code, skipping interpreter and library teardown.
+
+    On Windows os._exit still runs DLL detach routines, where the portable FreeCAD
+    build aborts with 0xC0000409 after the suite has finished, so terminate the process.
+    """
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        # HANDLE is 64-bit: without these declarations ctypes passes the -1 pseudo-handle as a
+        # 32-bit int, TerminateProcess fails and os._exit aborts in the DLL teardown.
+        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+        kernel32.TerminateProcess.argtypes = (wintypes.HANDLE, wintypes.UINT)
+        kernel32.TerminateProcess.restype = wintypes.BOOL
+        if not kernel32.TerminateProcess(kernel32.GetCurrentProcess(), code):
+            log_startup(f"terminate-process-failed: winerror {ctypes.get_last_error()}")
+    os._exit(code)
 
 
 try:
@@ -62,7 +84,7 @@ try:
         log_startup(f"error-targets: {type(exc).__name__}")
         sys.stderr.write(f"ERROR: Cannot read ci/targets.json: {type(exc).__name__}: {exc}\n")
         sys.stderr.flush()
-        os._exit(1)
+        hard_exit(1)
 
     if target not in targets:
         expected_names = " or ".join(repr(name) for name in targets)
@@ -70,7 +92,7 @@ try:
         log_startup(f"error-target: {target}")
         sys.stderr.write(msg)
         sys.stderr.flush()
-        os._exit(1)
+        hard_exit(1)
 
     fc_version = FreeCAD.Version()
     py_ver = sys.version_info[:2]
@@ -97,7 +119,7 @@ try:
         log_startup(f"error-version: {fc_version} target: {target}")
         sys.stderr.write(msg)
         sys.stderr.flush()
-        os._exit(1)
+        hard_exit(1)
 
     if py_ver != expected_py:
         msg = (
@@ -107,7 +129,7 @@ try:
         log_startup(f"error-python: {py_ver} target: {target}")
         sys.stderr.write(msg)
         sys.stderr.flush()
-        os._exit(1)
+        hard_exit(1)
 
     log_startup(
         f"validated-version: {'.'.join(expected_fc)} python: {expected_py[0]}.{expected_py[1]} target: {target}"
@@ -145,6 +167,9 @@ try:
         )
         runner = unittest.TextTestRunner(stream=stream, verbosity=2)
         result = runner.run(suite)
+        # Objects left by the tests (views without a GL context on Windows offscreen) must not be
+        # finalized after the verdict: no garbage collection until the process ends.
+        gc.disable()
         summary = {
             "tests": result.testsRun,
             "failures": len(result.failures),
@@ -162,6 +187,7 @@ try:
         sys.stdout.write(json.dumps(summary) + "\n")
         sys.stdout.flush()
 
+    log_startup("exit-flush")
     sys.stdout.flush()
     sys.stderr.flush()
     if diagnostic_session is not None:
@@ -169,11 +195,12 @@ try:
             diagnostic_session.stop()
         except Exception:
             pass
-    os._exit(exit_code)
+    log_startup(f"exit-now: {exit_code}")
+    hard_exit(exit_code)
 
 except BaseException as exc:
     log_startup(f"unhandled-exception: {exc}")
     traceback.print_exc()
     sys.stderr.flush()
     sys.stdout.flush()
-    os._exit(1)
+    hard_exit(1)

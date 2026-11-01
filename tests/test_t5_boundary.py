@@ -210,7 +210,9 @@ class Boundary(helper.TestPortableLibraryProfileInstantiation):
             (
                 {"asset_path": missing_path},
                 FileNotFoundError,
-                "Asset file '" + os.path.join(self.folder_lib_path, missing_path) + "' does not exist.",
+                "Asset file '"
+                + os.path.realpath(os.path.join(self.folder_lib_path, os.path.normpath(missing_path)))
+                + "' does not exist.",
             ),
             (
                 {"asset_path": "../outside.FCStd"},
@@ -253,10 +255,10 @@ class Boundary(helper.TestPortableLibraryProfileInstantiation):
         root_b = os.path.join(self.test_root, "OtherRoot")
         shutil.copytree(self.folder_lib_path, root_b)
         manifest = os.path.join(root_b, "library.json")
-        with open(manifest) as stream:
+        with open(manifest, encoding="utf-8") as stream:
             data = json.load(stream)
         data["_metadata"]["name"] = "OtherRoot"
-        with open(manifest, "w") as stream:
+        with open(manifest, "w", encoding="utf-8") as stream:
             json.dump(data, stream)
         self.manager.register_folder_library(root_b)
         asset = App.openDocument(os.path.join(self.folder_lib_path, self.a[0]))
