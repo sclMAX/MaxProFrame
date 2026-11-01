@@ -105,10 +105,10 @@ class Profile:
 
         obj.addProperty(
             "App::PropertyString",
-            "FrameforgeVersion",
+            "MaxProFrameVersion",
             "Profile",
-            "Frameforge Version used to create the profile",
-        ).FrameforgeVersion = ff_version
+            "MaxProFrame version used to create the object",
+        ).MaxProFrameVersion = ff_version
 
         obj.addProperty(
             "App::PropertyString",
@@ -1300,231 +1300,6 @@ class Profile:
         obj.CuttingAngleB = cut_angles[1]
 
     def run_compatibility_migrations(self, obj):
-        if not hasattr(obj, "FrameforgeVersion"):  # previous that 0.1.7
-            if not hasattr(obj, "PID"):
-                obj.addProperty(
-                    "App::PropertyString",
-                    "PID",
-                    "Profile",
-                    "Profile ID",
-                ).PID = ""
-
-            # add Family atttribute
-            if not hasattr(obj, "Family"):
-                App.Console.PrintMessage(f"Frameforge::object migration : adding Family to {obj.Label}\n")
-                obj.addProperty(
-                    "App::PropertyString",
-                    "Family",
-                    "Profile",
-                    "",
-                ).Family = self.fam
-
-            if not hasattr(obj, "SizeName"):
-                obj.addProperty(
-                    "App::PropertyString",
-                    "SizeName",
-                    "Profile",
-                    "",
-                ).SizeName = "?"
-
-            if not hasattr(obj, "Material"):
-                obj.addProperty(
-                    "App::PropertyString",
-                    "Material",
-                    "Profile",
-                    "",
-                ).Material = ""
-
-            # add CustomProfile atttribute
-            if not hasattr(obj, "CustomProfile"):
-                obj.addProperty("App::PropertyLink", "CustomProfile", "Profile", "Target profile").CustomProfile = None
-
-            # add LinearWeight attribute (<= 0.1.7)
-            if not hasattr(obj, "LinearWeight"):
-                App.Console.PrintMessage(
-                    f"Frameforge::object migration : adding LinearWeight ({self.WM}) to {obj.Label}\n"
-                )
-                obj.addProperty("App::PropertyFloat", "LinearWeight", "Base", "Linear weight in kg/m").LinearWeight = (
-                    self.WM
-                )
-                obj.setEditorMode("ApproxWeight", 1)
-
-            # add prices
-            if not hasattr(obj, "UnitPrice"):
-                obj.addProperty("App::PropertyFloat", "UnitPrice", "Base", "Approximate linear price").UnitPrice = 0.0
-            if not hasattr(obj, "Price"):
-                obj.addProperty("App::PropertyFloat", "Price", "Base", "Profile Price").Price = 0.0
-                obj.setEditorMode("Price", 1)
-
-            # double the thickness if pipe
-            if obj.Family == "Pipe":
-                obj.Thickness = 2 * obj.Thickness
-
-            obj.addProperty("App::PropertyBool", "Cutout", "Structure", "Has Cutout").Cutout = False
-            obj.setEditorMode("Cutout", 1)
-
-            # update properties (bevels and offset)
-            bsc1 = obj.BevelStartCut1
-            bsc2 = obj.BevelStartCut2
-            bec1 = obj.BevelEndCut1
-            bec2 = obj.BevelEndCut2
-            obj.addProperty(
-                "App::PropertyFloat", "BevelACutY", "Profile", "Bevel on First axle at the start of the profile"
-            ).BevelACutY = bsc1
-            obj.addProperty(
-                "App::PropertyFloat",
-                "BevelACutX",
-                "Profile",
-                "Rotate the cut on Second axle at the start of the profile",
-            ).BevelACutX = bsc2
-            obj.addProperty(
-                "App::PropertyFloat", "BevelBCutY", "Profile", "Bevel on First axle at the end of the profile"
-            ).BevelBCutY = bec1
-            obj.addProperty(
-                "App::PropertyFloat",
-                "BevelBCutX",
-                "Profile",
-                "Rotate the cut on Second axle at the end of the profile",
-            ).BevelBCutX = bec2
-
-            obj.removeProperty("BevelStartCut1")
-            obj.removeProperty("BevelStartCut2")
-            obj.removeProperty("BevelEndCut1")
-            obj.removeProperty("BevelEndCut2")
-
-            off_a = obj.OffsetA
-            off_b = obj.OffsetB
-
-            obj.removeProperty("OffsetA")
-            obj.removeProperty("OffsetB")
-
-            obj.addProperty("App::PropertyFloat", "OffsetA", "Profile", "Parameter for structure").OffsetA = off_a
-
-            obj.addProperty("App::PropertyFloat", "OffsetB", "Profile", "Parameter for structure").OffsetB = off_b
-
-            obj.setExpression(".AttachmentOffset.Base.z", None)
-            obj.AttachmentOffset.Base.z = 0.0
-
-            obj.addProperty(
-                "App::PropertyString",
-                "CuttingAngleA",
-                "Structure",
-                "Cutting Angle A",
-            )
-            obj.setEditorMode("CuttingAngleA", 1)
-            obj.addProperty(
-                "App::PropertyString",
-                "CuttingAngleB",
-                "Structure",
-                "Cutting Angle B",
-            )
-            obj.setEditorMode("CuttingAngleB", 1)
-
-            # Anchor: CenteredOn* -> AnchorX/AnchorY (enum)
-            if not hasattr(obj, "AnchorX") or not hasattr(obj, "AnchorY"):
-                obj.addProperty(
-                    "App::PropertyEnumeration", "AnchorX", "Profile", "Path alignment (horizontal)"
-                ).AnchorX = ANCHOR_X
-                obj.AnchorX = "Center" if getattr(obj, "CenteredOnWidth", False) else "Left"
-                obj.addProperty(
-                    "App::PropertyEnumeration", "AnchorY", "Profile", "Path alignment (vertical)"
-                ).AnchorY = ANCHOR_Y
-                obj.AnchorY = "Center" if getattr(obj, "CenteredOnHeight", False) else "Bottom"
-                if hasattr(obj, "CenteredOnWidth"):
-                    obj.removeProperty("CenteredOnWidth")
-                if hasattr(obj, "CenteredOnHeight"):
-                    obj.removeProperty("CenteredOnHeight")
-
-            # RotationAngle: add if missing (driven by AttachmentOffset expression)
-            if not hasattr(obj, "RotationAngle"):
-                obj.addProperty(
-                    "App::PropertyFloat",
-                    "RotationAngle",
-                    "Profile",
-                    "Rotation of cross-section around path axis (degrees)",
-                ).RotationAngle = math.degrees(obj.AttachmentOffset.Rotation.Angle)
-                obj.setExpression(".AttachmentOffset.Rotation.Angle", "RotationAngle")
-
-            # MirrorH / MirrorV: add if missing
-            if not hasattr(obj, "MirrorH"):
-                obj.addProperty(
-                    "App::PropertyBool", "MirrorH", "Profile", "Mirror cross-section horizontally (flip X)"
-                ).MirrorH = False
-            if not hasattr(obj, "MirrorV"):
-                obj.addProperty(
-                    "App::PropertyBool", "MirrorV", "Profile", "Mirror cross-section vertically (flip Y)"
-                ).MirrorV = False
-
-            if obj.MapReversed:
-                # MirrorH/MirrorV are more flexible than "Reverse attachment"
-                obj.MirrorH = not obj.MirrorH
-                obj.MapReversed = False
-                obj.MapPathParameter = 1.0 - obj.MapPathParameter
-
-            # cleaning UPN/IPN related properties
-            if hasattr(obj, "UPN"):
-                obj.removeProperty("UPN")
-            if hasattr(obj, "IPN"):
-                obj.removeProperty("IPN")
-            if hasattr(obj, "FlangeAngle"):
-                obj.removeProperty("FlangeAngle")
-
-            # add version
-            obj.addProperty(
-                "App::PropertyString",
-                "FrameforgeVersion",
-                "Profile",
-                "Frameforge Version used to create the profile",
-            ).FrameforgeVersion = ff_version
-
-        else:
-            if obj.FrameforgeVersion == "0.2.0":
-                # exemple: perform migration. Something like that ?
-                # if ff_version == "0.2.1":
-                #       obj.AProperty = ...
-                #       obj.FrameforgeVersion = ff_version # don't forget to update the version !
-                pass
-
-            # should help migrate projects create with the dev version between 0.1.7 and 0.2.0,
-            if obj.FrameforgeVersion == "0.1.8":
-                # Anchor: CenteredOn* -> AnchorX/AnchorY (enum)
-                if not hasattr(obj, "AnchorX") or not hasattr(obj, "AnchorY"):
-                    obj.addProperty(
-                        "App::PropertyEnumeration", "AnchorX", "Profile", "Path alignment (horizontal)"
-                    ).AnchorX = ANCHOR_X
-                    obj.AnchorX = "Center" if getattr(obj, "CenteredOnWidth", False) else "Left"
-                    obj.addProperty(
-                        "App::PropertyEnumeration", "AnchorY", "Profile", "Path alignment (vertical)"
-                    ).AnchorY = ANCHOR_Y
-                    obj.AnchorY = "Center" if getattr(obj, "CenteredOnHeight", False) else "Bottom"
-                    if hasattr(obj, "CenteredOnWidth"):
-                        obj.removeProperty("CenteredOnWidth")
-                    if hasattr(obj, "CenteredOnHeight"):
-                        obj.removeProperty("CenteredOnHeight")
-
-                # RotationAngle: add if missing (driven by AttachmentOffset expression)
-                if not hasattr(obj, "RotationAngle"):
-                    obj.addProperty(
-                        "App::PropertyFloat",
-                        "RotationAngle",
-                        "Profile",
-                        "Rotation of cross-section around path axis (degrees)",
-                    ).RotationAngle = math.degrees(obj.AttachmentOffset.Rotation.Angle)
-                    obj.setExpression(".AttachmentOffset.Rotation.Angle", "RotationAngle")
-
-                # MirrorH / MirrorV: add if missing
-                if not hasattr(obj, "MirrorH"):
-                    obj.addProperty(
-                        "App::PropertyBool", "MirrorH", "Profile", "Mirror cross-section horizontally (flip X)"
-                    ).MirrorH = False
-                if not hasattr(obj, "MirrorV"):
-                    obj.addProperty(
-                        "App::PropertyBool", "MirrorV", "Profile", "Mirror cross-section vertically (flip Y)"
-                    ).MirrorV = False
-
-                # update version
-                obj.FrameforgeVersion = ff_version
-
         if getattr(obj, "Family", None) == "C" and not hasattr(obj, "LipLength"):
             obj.addProperty(
                 "App::PropertyFloat",
@@ -1863,7 +1638,7 @@ class ViewProviderProfile:
             return None
 
         if Gui.Control.activeDialog():
-            App.Console.PrintMessage("FrameForge: close the active task dialog before editing a profile.\n")
+            App.Console.PrintMessage("MaxProFrame: close the active task dialog before editing a profile.\n")
             return False
 
         import freecad.maxproframe.edit_profile_tool

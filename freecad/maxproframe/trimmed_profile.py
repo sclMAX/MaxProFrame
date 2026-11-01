@@ -24,10 +24,10 @@ class TrimmedProfile:
     def __init__(self, obj):
         obj.addProperty(
             "App::PropertyString",
-            "FrameforgeVersion",
+            "MaxProFrameVersion",
             "Profile",
-            "Frameforge Version used to create the profile",
-        ).FrameforgeVersion = ff_version
+            "MaxProFrame version used to create the object",
+        ).MaxProFrameVersion = ff_version
 
         obj.addProperty(
             "App::PropertyString",

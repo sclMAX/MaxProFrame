@@ -38,7 +38,7 @@ def move_profile_to_parent_if_supported(obj, parent):
         parent.addObject(obj)
     except ValueError:
         FreeCAD.Console.PrintMessage(
-            f"FrameForge: parent {parent.Label} ({parent.TypeId}) does not accept {obj.TypeId}, "
+            f"MaxProFrame: parent {parent.Label} ({parent.TypeId}) does not accept {obj.TypeId}, "
             "keeping at document root\n"
         )
 

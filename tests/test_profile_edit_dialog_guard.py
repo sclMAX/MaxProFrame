@@ -7,7 +7,7 @@ import FreeCAD as App
 from freecad.maxproframe import profile as profile_module
 from freecad.maxproframe.profile import ViewProviderCustomProfile, ViewProviderProfile
 
-NOTICE = "FrameForge: close the active task dialog before editing a profile.\n"
+NOTICE = "MaxProFrame: close the active task dialog before editing a profile.\n"
 
 
 class TestProfileEditDialogGuard(unittest.TestCase):

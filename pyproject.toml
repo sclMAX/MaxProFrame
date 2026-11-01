@@ -1,6 +1,6 @@
 [project]
 name = "maxproframe"
-version = "0.2.1"
+version = "1.0.0"
 description = "MaxProFrame is dedicated to creating Frames, Profiles and Beams, and applying operations (miter cuts, trim cuts, custom sketch profiles, portable libraries) in FreeCAD."
 authors = [
     {name = "sclMAX", email = "maxi.indumatics@gmail.com"}
