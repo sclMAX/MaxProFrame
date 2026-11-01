@@ -127,10 +127,6 @@ class TrimmedProfile:
         if len(fp.TrimmingBoundary) == 0:
             return
 
-        # hide trimmed body
-        for tb in get_childrens_from_trimmedbody(fp.TrimmedBody):
-            tb.ViewObject.Visibility = False
-
         cut_shapes = []
         body_shape = fp.TrimmedBody.Shape
 
@@ -231,8 +227,10 @@ class TrimmedProfile:
         if not cutshape.isNull():
             fp.Shape = shape.cut(cutshape)
         else:
-            # TODO: Do something when cutshape is Null
-            print("cut_shape is Null")
+            fp.Shape = shape
+            App.Console.PrintWarning(
+                translate("frameforge", "{}: no trimming face cuts the profile, it is left uncut.\n").format(fp.Label)
+            )
 
     def getTarget(self, link):
         while True:
@@ -263,6 +261,9 @@ class ViewProviderTrimmedProfile:
         if prop == "TrimmedBody":
             if fp.TrimmedBody:
                 self.ViewObject.ShapeColor = fp.TrimmedBody.ViewObject.ShapeColor
+                # The trim replaces its body in the 3D view.
+                for body in get_childrens_from_trimmedbody(fp.TrimmedBody):
+                    body.ViewObject.Visibility = False
         return
 
     def getDisplayModes(self, obj):
