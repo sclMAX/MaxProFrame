@@ -72,7 +72,7 @@ Captures `source` and serializes it as an isolated `.FCStd` asset inside `<libra
 - Returns relative metadata dictionary: `{"asset_path": "sections/<filename>", "object_name": actual_sketch_name, "asset_id": "<id>"}` where `object_name` reflects the native sanitized `Sketch.Name` and user display input is preserved in `Sketch.Label`.
 
 ### `resolve_and_validate_asset_path(library_root, asset_path)`
-Validates that `asset_path` is relative, resides under `sections/`, does not escape `library_root` via traversal (`..`) or symlinks, and ensures the `sections/` directory itself is confined within `library_root`.
+Validates that `asset_path` is relative, resides under `sections/`, does not escape `library_root` via traversal (`..`) or symlinks, and ensures the `sections/` directory itself is confined within `library_root`. `\` separators, written by MaxProFrame 1.0.0 on Windows, are read as `/`; traversal and absolute paths written with `\` are still rejected.
 
 ### `compute_sketch_dimensions_and_weight(sketch, density_g_cm3=7.85)`
 Computes `(Height, Width, Weight, Area)` directly from native face geometry and material density.

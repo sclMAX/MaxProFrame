@@ -51,7 +51,11 @@ provenance from its in-memory catalog copy because folder duplication may record
 machine-local source location there. Original source and duplicate manifests remain
 unchanged; all other catalog semantics are retained. Absolute local paths in every
 remaining catalog value are still rejected rather than exported, and asset confinement
-validation is unchanged. Source symlinks are refused for ZIP export.
+validation is unchanged. Source symlinks are refused for ZIP export. The archive's
+`library.json` always uses `/` in `asset_path`: libraries saved by MaxProFrame 1.0.0
+on Windows with `sections\<file>` export as `sections/<file>` while their source
+manifest keeps its stored text. Import still rejects archive members and catalog
+asset paths that use `\`.
 
 Cross-drive and UNC confinement boundaries are regression-tested using Windows path
 semantics with real local archive IO on Linux; actual Windows filesystem execution

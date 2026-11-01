@@ -53,8 +53,8 @@ def resolve_and_validate_asset_path(library_root, asset_path):
     if not os.path.isdir(canonical_root):
         raise ValueError(f"Library root does not exist or is not a directory: {library_root}")
 
-    # Normalize relative path
-    norm_rel = os.path.normpath(asset_path)
+    # Normalize relative path; manifests written on Windows may use "\" separators
+    norm_rel = os.path.normpath(asset_path.replace("\\", "/"))
     if norm_rel.startswith("..") or "/.." in norm_rel or "\\.." in norm_rel:
         raise ValueError(f"Asset path contains parent directory traversal: {asset_path}")
 

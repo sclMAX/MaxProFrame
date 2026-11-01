@@ -1060,6 +1060,49 @@ class TestCustomProfileCards(unittest.TestCase):
             self.assertIsNotNone(pixmap)
             self.assertFalse(pixmap.isNull())
 
+    def test_extract_custom_section_face_without_reopening_an_open_temporary_file(self):
+        """Windows cannot reopen an open NamedTemporaryFile by name; the face is still built directly."""
+        from freecad.maxproframe import custom_profile_cards
+
+        rel_asset = self._create_published_asset("sec_open_temp", width=80.0, height=40.0, with_hole=True)
+        full_path = os.path.join(self.folder_lib_path, rel_asset)
+        unreadable = os.path.join(self.test_root, "open-temporary.brp")
+
+        class OpenTemporaryFile:
+            # Behaves like Windows: writes succeed but the name cannot be opened again.
+            name = unreadable
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc_info):
+                return False
+
+            def write(self, data):
+                return len(data)
+
+            def flush(self):
+                pass
+
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(custom_profile_cards.tempfile, "NamedTemporaryFile", OpenTemporaryFile))
+            stack.enter_context(
+                patch.object(App, "openDocument", side_effect=AssertionError("App.openDocument must not be called"))
+            )
+            face = custom_profile_cards._extract_custom_section_face_from_fcstd(full_path, "Section")
+            self.assertIsNotNone(face)
+            self.assertTrue(face.isValid())
+            self.assertAlmostEqual(face.BoundBox.XLength, 80.0)
+            self.assertAlmostEqual(face.BoundBox.YLength, 40.0)
+            pixmap = custom_profile_cards.render_custom_section_thumbnail(
+                self.folder_lib_path, rel_asset, "Section", width=160, height=100
+            )
+            self.assertFalse(pixmap.isNull())
+        self.assertFalse(os.path.exists(unreadable))
+
 
 if __name__ == "__main__":
     unittest.main()
