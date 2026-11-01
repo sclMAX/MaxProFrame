@@ -229,6 +229,8 @@ When everything is showed again, you can see the vertical profiles are not cut a
 3. Then click the profiles to notch. A click adds the whole profile; Ctrl+click drops a listed one. The target itself, and the profiles it is built on, cannot be added, and an object that is not a profile is refused: the panel says why.
 4. **OK** creates one Notch per profile, each named after its profile and placed next to it in the same folder or Part, in one Undo step. **Cancel** leaves the document unchanged.
 
+While the panel is open the target is outlined in orange and the profiles to notch in blue, as the panel says; the outline is only drawn over the 3D view and never changes the colors of the objects. The notches can be previewed live, as in Extend / Cut below, but **Update automatically** is off by default for Notch (a notch is a heavy boolean operation): check it to see the result before **OK**. The choice is remembered for Notch on its own.
+
 Each profile keeps the piece that reaches its far end, the end of its axis farthest from the target; everything past the target, and the part inside it, is removed. To notch both ends of a profile, notch the result again against the second target: the two notches are chained. If the target does not touch the profile, the profile is kept uncut and a warning is shown in the Report view.
 
 You can also select the target and then the profiles before clicking the command: the panel starts with them.
@@ -247,9 +249,11 @@ In the BOM, a notched end shows the cutting angle `P`: it follows the target sha
 4. Set **Gap** to leave that distance between the profile ends and the target plane.
 5. **OK** creates the trims, each next to its profile in the same folder or Part, in one Undo step. If one of them cannot be made (the target face is not planar, the target plane is parallel to a profile, or a profile does not point at the target), nothing is created and the panel stays open with the reason. **Cancel** leaves the document unchanged.
 
+The trims are previewed live in the 3D view: the preview replaces each profile, and clicking a previewed trim stands for its profile, so Ctrl+click on it drops that profile. With **Update automatically** (on by default for Extend / Cut, remembered between sessions) the preview follows every change (target, profiles, Ctrl+click, Gap) once you pause; uncheck it to keep the preview as it is, the panel then shows **Pending changes** and checking it again updates the preview. **OK** always creates the current values, even when the preview is out of date. While the panel is open the target is outlined in orange and the profiles (or their previews) in blue; the outline is only drawn over the 3D view, so the colors of the objects are never changed.
+
 You can also select the target and then the profiles before clicking the command: the panel starts with them.
 
-To change an Extend / Cut later, double-click it in the tree: click another face to change the target, change the Gap, and press **OK** (one Undo step). **Cancel** leaves it unchanged, with no Undo step.
+To change an Extend / Cut later, double-click it in the tree: click another face to change the target, change the Gap, and press **OK** (one Undo step). **Cancel** leaves it unchanged, with no Undo step. Editing has no live preview; the target and the edited trim are outlined in orange and blue.
 
 In the BOM, the cutting angle of the moved end is the angle between the target plane and a square cut.
 

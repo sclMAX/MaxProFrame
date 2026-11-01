@@ -25,6 +25,9 @@ class NotchTaskPanel(ExtendCutTaskPanel):
 
     joint = "Notch"
     has_gap = False
+    auto_preview_param = "Notch Auto Preview"
+    # A notch is a heavy boolean: its preview waits until asked for.
+    auto_preview_default = False
 
     def texts(self):
         return {

@@ -1046,6 +1046,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Click the target profile, or select it in the tree.</source><translation>Hacé clic en el perfil destino o seleccionalo en el árbol.</translation></message>
     <message><source>Select the target profile.</source><translation>Seleccioná el perfil destino.</translation></message>
     <message><source>Select the profiles to notch.</source><translation>Seleccioná los perfiles a encastrar.</translation></message>
+    <message><source>Target in orange, profiles in blue.</source><translation>Destino en naranja, perfiles en azul.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ParametricLine</name>

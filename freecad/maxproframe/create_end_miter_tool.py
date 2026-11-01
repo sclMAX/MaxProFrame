@@ -61,6 +61,24 @@ def _alive_document(doc):
         return False
 
 
+def scene_graph(doc):
+    """The scene graph of the 3D view of ``doc``, or None (offscreen or another view type)."""
+    try:
+        return Gui.getDocument(doc.Name).ActiveView.getSceneGraph()
+    except Exception:
+        return None
+
+
+def remove_overlay(overlay):
+    """Remove an overlay node added to a scene graph, given as (scene, node) or None."""
+    if overlay is not None:
+        scene, node = overlay
+        try:
+            scene.removeChild(node)
+        except Exception:
+            pass
+
+
 def _failures(objects):
     """One line per object that failed to recompute, with FreeCAD's reason; "" when all are valid."""
     return "\n".join(f"{obj.Label}: {obj.getStatusString()}" for obj in objects if not obj.isValid())
@@ -398,12 +416,11 @@ class EndMiterTaskPanel:
         self._remove_marker_node()
         if self._closed or not self._markers:
             return
-        try:
-            from pivy import coin
-
-            scene = Gui.getDocument(self.doc.Name).ActiveView.getSceneGraph()
-        except Exception:
+        scene = scene_graph(self.doc)
+        if scene is None:
             return  # No 3D view (offscreen or another view type): the data is still kept.
+        from pivy import coin
+
         try:
             index = Gui.getMarkerIndex("CIRCLE_FILLED", 9)
         except Exception:
@@ -428,13 +445,8 @@ class EndMiterTaskPanel:
         self._marker_node = (scene, node)
 
     def _remove_marker_node(self):
-        if self._marker_node is not None:
-            scene, node = self._marker_node
-            self._marker_node = None
-            try:
-                scene.removeChild(node)
-            except Exception:
-                pass
+        remove_overlay(self._marker_node)
+        self._marker_node = None
 
     def _highlight_members(self):
         """Show every listed member, or its preview, selected as a whole object, never as a face."""
