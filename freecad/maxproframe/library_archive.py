@@ -141,18 +141,6 @@ def _stage(manager, archive, root):
     return data
 
 
-def _portable_asset_paths(data):
-    # MaxProFrame 1.0.0 on Windows stored 'sections\\<file>'; archives always use '/'.
-    if not isinstance(data, dict):
-        return
-    for family, props in data.items():
-        if family.startswith("_") or not isinstance(props, dict) or not isinstance(props.get("sizes"), dict):
-            continue
-        for values in props["sizes"].values():
-            if isinstance(values, dict) and isinstance(values.get("asset_path"), str):
-                values["asset_path"] = values["asset_path"].replace("\\", "/")
-
-
 def export_library_zip(manager, name_or_path, archive_path):
     root = manager.get_folder_library_path(name_or_path)
     if root is None:
@@ -174,7 +162,10 @@ def export_library_zip(manager, name_or_path, archive_path):
     # Keep stored manifests untouched and validate every remaining value normally.
     if isinstance(data, dict) and isinstance(data.get("_metadata"), dict):
         data["_metadata"].pop("cloned_from", None)
-    _portable_asset_paths(data)
+    # Archives always use '/', also for manifests saved by 1.0.0 on Windows.
+    from freecad.maxproframe.section_library import portable_catalog_asset_paths
+
+    portable_catalog_asset_paths(data)
     assets = _catalog(manager, data, Path(root))
     for relative, resolved in assets.items():
         # Even internal symlinks are refused for exchange, without changing duplication.

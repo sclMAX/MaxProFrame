@@ -53,8 +53,8 @@ unchanged; all other catalog semantics are retained. Absolute local paths in eve
 remaining catalog value are still rejected rather than exported, and asset confinement
 validation is unchanged. Source symlinks are refused for ZIP export. The archive's
 `library.json` always uses `/` in `asset_path`: libraries saved by MaxProFrame 1.0.0
-on Windows with `sections\<file>` export as `sections/<file>` while their source
-manifest keeps its stored text. Import still rejects archive members and catalog
+on Windows with `sections\<file>` export as `sections/<file>`; exporting does not
+change the source manifest (saving the library writes `/`). Import still rejects archive members and catalog
 asset paths that use `\`.
 
 Cross-drive and UNC confinement boundaries are regression-tested using Windows path

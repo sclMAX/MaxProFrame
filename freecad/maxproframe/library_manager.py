@@ -881,6 +881,10 @@ class LibraryManager:
 
         manifest_data["_metadata"]["name"] = proposed_name
         manifest_data["_metadata"]["is_folder"] = True
+        # Saving rewrites asset paths stored by 1.0.0 on Windows ('sections\\<file>') with '/'.
+        from freecad.maxproframe.section_library import portable_catalog_asset_paths
+
+        portable_catalog_asset_paths(manifest_data)
 
         if material is not None:
             manifest_data["_metadata"]["material"] = str(material)
@@ -1153,6 +1157,10 @@ class LibraryManager:
                 raise ValueError(f"Cannot read source manifest '{src_manifest_path}': {err}")
 
             cloned_data = copy.deepcopy(source_data)
+            # Copies and the new manifest use '/', also from manifests saved by 1.0.0 on Windows.
+            from freecad.maxproframe.section_library import portable_catalog_asset_paths
+
+            portable_catalog_asset_paths(cloned_data)
             self._validate_folder_catalog_data(
                 cloned_data, material=target_material, density=target_density, require_name=False
             )

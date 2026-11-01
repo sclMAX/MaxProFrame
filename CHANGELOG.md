@@ -3,7 +3,7 @@
 * Unreleased
 
   **Fixes**
-  - Store sections captured into folder libraries as `sections/<file>` on every operating system. On Windows they were stored as `sections\<file>`, so the library could not be exported to ZIP and its custom profiles did not open on Linux or macOS. Libraries already saved that way are read as `sections/<file>` everywhere and export to ZIP; their `library.json` is not rewritten (see [folder libraries](docs/folder-libraries.md)).
+  - Store sections captured into folder libraries as `sections/<file>` on every operating system. On Windows they were stored as `sections\<file>`, so the library could not be exported to ZIP and its custom profiles did not open on Linux or macOS. Libraries already saved that way are read as `sections/<file>` everywhere: they open, export to ZIP and duplicate on every operating system, and saving the library or duplicating it writes `asset_path` with `/` without changing any other value. Deleting a profile from such a library on Linux or macOS now also removes its unused section file on save (see [folder libraries](docs/folder-libraries.md)).
   - Show custom profile card thumbnails on Windows without opening each section document: the section shape is now read in memory instead of through a temporary file that Windows cannot reopen while it is open.
 
 * v1.0.0 (2026-11-01)

@@ -323,13 +323,7 @@ class TestFolderLibraries(unittest.TestCase):
             density=2.70,
         )
 
-        update_data = {
-            "Square Hollow": {
-                "sizes": {
-                    "20x20x2": {"Height": "20", "Width": "20", "Thickness": "2"}
-                }
-            }
-        }
+        update_data = {"Square Hollow": {"sizes": {"20x20x2": {"Height": "20", "Width": "20", "Thickness": "2"}}}}
 
         # Saving by registered folder library name should route to folder library.json
         saved_path = self.manager.save_user_library("Routing Lib", update_data)
@@ -351,6 +345,61 @@ class TestFolderLibraries(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             self.manager.save_user_library("Routing Lib", update_data, material="Steel")
         self.assertIn("immutable", str(ctx.exception).lower())
+
+    def test_save_writes_windows_backslash_asset_paths_with_forward_slashes(self):
+        folder_dir = os.path.join(self.test_libraries_root, "WindowsLib")
+        windows_data = {
+            "Custom Profile": {
+                "canonical_family": "Custom Profile",
+                "sizes": {
+                    "CP-1": {
+                        "asset_path": "sections\\a.FCStd",
+                        "object_name": "Section",
+                        "asset_id": "a",
+                        "Weight": "1.5",
+                        "Description": "Keeps C:\\notes\\a as typed",
+                    },
+                    "CP-2": {"asset_path": "sections/nested\\b.FCStd", "Weight": "2.5"},
+                },
+            },
+            "Square Hollow": {"sizes": {"20x20x2": {"Height": "20", "Width": "20", "Thickness": "2"}}},
+        }
+        manifest_path = self.manager.create_folder_library(
+            folder_path=folder_dir, name="Windows Lib", material="Steel", density=7.85, data=windows_data
+        )
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+        before_save = json.loads(json.dumps(loaded))
+
+        self.manager.save_folder_library("Windows Lib", loaded)
+
+        self.assertEqual(loaded, before_save, "The caller's catalog must not be mutated.")
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            saved = json.load(f)
+        expected = json.loads(json.dumps(before_save))
+        sizes = expected["Custom Profile"]["sizes"]
+        sizes["CP-1"]["asset_path"] = "sections/a.FCStd"
+        sizes["CP-2"]["asset_path"] = "sections/nested/b.FCStd"
+        # Only the asset_path separator changes; every other stored value is kept as is.
+        self.assertEqual(saved, expected)
+
+    def test_purge_removes_unreferenced_windows_backslash_assets_only(self):
+        from freecad.maxproframe.section_library import purge_unreferenced_assets
+
+        root = os.path.join(self.test_libraries_root, "PurgeLib")
+        os.makedirs(os.path.join(root, "sections"))
+        for name in ("a.FCStd", "b.FCStd"):
+            with open(os.path.join(root, "sections", name), "wb") as f:
+                f.write(name.encode())
+        catalog = {"Custom Profile": {"sizes": {"B": {"asset_path": "sections\\b.FCStd"}}}}
+
+        deleted = purge_unreferenced_assets(root, ["sections\\a.FCStd", "sections\\b.FCStd"], catalog)
+
+        self.assertEqual(deleted, ["sections\\a.FCStd"])
+        self.assertEqual(os.listdir(os.path.join(root, "sections")), ["b.FCStd"])
+        with self.assertRaises(ValueError):
+            purge_unreferenced_assets(root, ["sections\\..\\..\\b.FCStd"], catalog)
+        self.assertEqual(os.listdir(os.path.join(root, "sections")), ["b.FCStd"])
 
     def test_save_failure_leaves_catalog_and_registry_intact(self):
         folder_dir = os.path.join(self.test_libraries_root, "AtomicFolder")
@@ -432,11 +481,7 @@ class TestFolderLibraries(unittest.TestCase):
             folder_path=bundle_v1,
             name="Portable Bundle",
             material="Aluminium",
-            data={
-                "Square Hollow": {
-                    "sizes": {"60x60x3": {"Height": "60", "Width": "60", "Thickness": "3"}}
-                }
-            },
+            data={"Square Hollow": {"sizes": {"60x60x3": {"Height": "60", "Width": "60", "Thickness": "3"}}}},
         )
         self.manager.unregister_folder_library("Portable Bundle")
 
@@ -461,11 +506,7 @@ class TestFolderLibraries(unittest.TestCase):
             name="Folder Profiles",
             material="Copper",
             density=8.96,
-            data={
-                "Round Bar": {
-                    "sizes": {"RB20": {"Width": "20", "Height": "20", "Thickness": "0"}}
-                }
-            },
+            data={"Round Bar": {"sizes": {"RB20": {"Width": "20", "Height": "20", "Thickness": "0"}}}},
         )
 
         all_profiles = self.manager.get_all_profiles()
