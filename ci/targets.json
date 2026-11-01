@@ -5,6 +5,7 @@
     "sha256": "f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434",
     "timeout": 420,
     "blocking": true,
+    "shards": 2,
     "expected_freecad": ["1", "1", "4"],
     "expected_python": [3, 11]
   },
@@ -14,6 +15,7 @@
     "sha256": "34d6b2fa3d6686fce67ed8b3013fa7526da4051ac61012a8b34a8214682a5b2b",
     "timeout": 480,
     "blocking": false,
+    "shards": 2,
     "expected_freecad": ["27", "1", "0"],
     "expected_python": [3, 13]
   }

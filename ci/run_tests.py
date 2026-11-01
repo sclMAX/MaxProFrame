@@ -6,6 +6,7 @@ environment, unsetting display variables and setting offscreen configuration.
 Extracted AppRun inputs resolve to the bundled binary with equivalent bootstrap
 variables, without vendor platform overrides or unsupported Qt CLI options.
 Enforces process-group timeouts (exit 124) and validates summary.json.
+With --shard INDEX/COUNT only that shard of the discovered tests runs.
 """
 
 import argparse
@@ -42,6 +43,18 @@ def valid_test_selector(value: str) -> bool:
     return re.fullmatch(r"test_[A-Za-z0-9_]+(?:\.[A-Za-z_][A-Za-z0-9_]*){0,2}", value) is not None
 
 
+SHARD_PATTERN = re.compile(r"([1-9][0-9]*)/([1-9][0-9]*)")
+SHARD_ERROR = "--shard must be INDEX/COUNT with 1 <= INDEX <= COUNT, e.g. 1/2"
+
+
+def parse_shard(value):
+    """Return (index, count) for INDEX/COUNT, both positive and index <= count; raise ValueError otherwise."""
+    match = SHARD_PATTERN.fullmatch(value)
+    if match is None or int(match.group(1)) > int(match.group(2)):
+        raise ValueError(SHARD_ERROR)
+    return int(match.group(1)), int(match.group(2))
+
+
 def flatten_suite(suite):
     """Yield the individual tests of a (nested) suite in execution order."""
     import unittest
@@ -63,9 +76,20 @@ def shuffled(suite, seed):
     return unittest.TestSuite(tests)
 
 
-def selected_suite(tests_dir, selector, shuffle_seed=None):
-    """Select the suite; with a seed, run it in a reproducible random order."""
+def sharded(suite, index, count):
+    """Every COUNT-th test of the discovery order from INDEX (1-based): the shards run each test exactly once."""
+    import unittest
+
+    if count == 1:
+        return suite
+    return unittest.TestSuite(list(flatten_suite(suite))[index - 1 :: count])
+
+
+def selected_suite(tests_dir, selector, shuffle_seed=None, shard=None):
+    """Select the suite, keep only SHARD (index, count) and, with a seed, shuffle it reproducibly."""
     suite = _selected_suite(tests_dir, selector)
+    if shard is not None:
+        suite = sharded(suite, *shard)
     return suite if shuffle_seed is None else shuffled(suite, shuffle_seed)
 
 
@@ -146,9 +170,20 @@ def main() -> None:
         type=int,
         help="Run the selected tests in a random order reproducible from this integer seed (default: original order)",
     )
+    parser.add_argument(
+        "--shard",
+        metavar="INDEX/COUNT",
+        help="Run only shard INDEX of COUNT (e.g. 1/2): every COUNT-th selected test from INDEX in discovery order, "
+        "so each test runs in exactly one shard (default: all selected tests)",
+    )
     args = parser.parse_args()
     if args.test is not None and not valid_test_selector(args.test):
         parser.error("--test must be test_module[.Class[.method]] using ASCII identifiers, without paths")
+    if args.shard is not None:
+        try:
+            parse_shard(args.shard)
+        except ValueError as exc:
+            parser.error(str(exc))
     if args.native_diagnostics and (args.target != "stable" or args.timeout <= 160):
         parser.error("--native-diagnostics requires --target stable and --timeout greater than 160")
 
@@ -253,6 +288,11 @@ def main() -> None:
         env.pop("FF_TEST", None)
         if args.test is not None:
             env["FF_TEST"] = args.test
+        env.pop("FF_SHARD", None)
+        if args.shard is not None:
+            env["FF_SHARD"] = args.shard
+            sys.stdout.write(f"run_tests: shard {args.shard}\n")
+            sys.stdout.flush()
         env.pop("FF_SHUFFLE_SEED", None)
         if args.shuffle_seed is not None:
             env["FF_SHUFFLE_SEED"] = str(args.shuffle_seed)

@@ -35,6 +35,9 @@ python3 ci/run_tests.py \
   --target weekly
 ```
 
+Add `--shard 1/2` (then `--shard 2/2`) to run one half of the suite, as one CI shard job does;
+see "Parallel shards" below.
+
 ### Run one test for investigation
 
 Add `--test test_create_profile_confirm_gui.TestCreateProfileConfirmGui.test_snapshot_form_proxy_raises_attribute_error_on_unknown`
@@ -58,10 +61,10 @@ not evidence that the full suite passes; CI continues to run full discovery.
 | **S1** | Compatibility | Minimum supported: **FreeCAD 1.1.4**. Pinned matrix targets: **stable FreeCAD 1.1.4** (Python 3.11) and **weekly FreeCAD weekly-2026.10.28** (reports Version 27.1.0, Python 3.13). Never `latest`. Versions validated strictly per-target. The weekly job is informative only (see "Weekly target policy"); stable is blocking. |
 | **S2** | Formatting | **Black + isort**, 120-column limit, pinned tool versions. Enforced strictly on **new or modified Python files** (no retroactive repository reformatting). |
 | **S3** | Tests | Full test suite executed on changes to code, tests, runtime resources, or execution configs. Native tests are skipped for purely documentation changes. |
-| **S4** | Failure | Formatting and native test targets run in **independent matrix jobs** (`fail-fast: false`). Any test failure, error, or timeout fails CI immediately without automatic retries. |
+| **S4** | Failure | Formatting and native test targets run in **independent matrix jobs** (`fail-fast: false`), each target split into parallel shards. Any test failure, error, or timeout fails CI immediately without automatic retries. |
 | **S5** | Triggers | Active on Pull Requests targeting `main`, pushes to `main`, and manual execution via `workflow_dispatch`. Standard Ubuntu runner. |
 | **S6** | Security | Minimal read-only permissions (`contents: read`). No secrets passed to tests. No automated commits, releases, or package publications. |
-| **S7** | Evidence | Small failure reports preserved as unique target-specific artifacts (`test-failure-reports-${{ matrix.target }}`) for **7 days**. Validated on Linux x86_64; Windows/macOS compatibility is not yet proven. |
+| **S7** | Evidence | Small failure reports preserved as unique per-shard artifacts (`test-failure-reports-<target>-shard-<n>`) for **7 days**. Validated on Linux x86_64; Windows/macOS compatibility is not yet proven. |
 | **S8** | Scope | Pinned CI scripts, workflow, tests and supporting documentation. A separately authorized importer correction preserves caller transactions (S9); packaging metadata declares minimum 1.1.4. |
 
 ## Change detection and diff logic
@@ -157,18 +160,46 @@ a native modal escaping the existing offscreen fixture remains unproven.
 
 ## Pinned targets (`ci/targets.json`)
 
-`ci/targets.json` is the single source of truth for both native targets, `stable` and `weekly`. Each entry holds `label`, `url`, `sha256`, `timeout`, `blocking`, `expected_freecad` (the three strings of `FreeCAD.Version()[:3]`) and `expected_python` (major, minor). Everything else reads it:
+`ci/targets.json` is the single source of truth for both native targets, `stable` and `weekly`. Each entry holds `label`, `url`, `sha256`, `timeout`, `blocking`, `shards` (parallel jobs, see "Parallel shards"), `expected_freecad` (the three strings of `FreeCAD.Version()[:3]`) and `expected_python` (major, minor). Everything else reads it:
 
-- `ci.yml`: the `targets` job turns the file into the matrix, and `Native FreeCAD (<target>)` runs `strategy.matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}`. Check names do not change.
+- `ci.yml`: the `targets` job turns the file into two matrices: one job per target shard (`Native FreeCAD (<target>, shard <n>/<count>)`, `strategy.matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}`) and one gate job per target (`Native FreeCAD (<target>)`, `${{ fromJSON(needs.targets.outputs.gates) }}`). The required check names do not change.
 - `nightly.yml`: reads the `stable` URL and SHA-256.
 - `ci/run-tests.FCMacro`: validates the runtime against `expected_freecad` and `expected_python` of the selected target.
 - `ci/run_tests.py`: `--target` accepts the names in the file (default `stable`).
 
-The `weekly` entry is **informative**: the job sets `continue-on-error: ${{ !matrix.blocking }}`, so a weekly failure is visible in the run (and its reports are uploaded) but does not turn the workflow red. `stable` (`blocking: true`) stays blocking. The weekly build is pinned to an exact release URL and SHA-256 (never `latest`).
+The `weekly` entry is **informative**: its shard jobs set `continue-on-error: ${{ !matrix.blocking }}`, so a weekly failure is visible in the run (and its reports are uploaded) but does not turn the workflow red, and its gate job never fails. `stable` (`blocking: true`) stays blocking. The weekly build is pinned to an exact release URL and SHA-256 (never `latest`).
 
 The pin is kept out of `.github/` on purpose: the default `GITHUB_TOKEN` cannot push changes to workflow files, so the automatic bump could not open its pull request if the pin lived there.
 
 To bump the weekly pin by hand, edit **only** `ci/targets.json` (the `weekly` entry: `label`, `url`, `sha256` verified with `sha256sum` of the downloaded AppImage, `expected_freecad`, `expected_python`) and refresh the current-state references in this document (tag, version, Python, SHA-256). `ci/bump_weekly.py apply` does both.
+
+## Parallel shards
+
+The native suite of each target is split into `shards` parallel jobs (`ci/targets.json`: stable 2, weekly 2). Each job sets up its own runtime (about one minute: apt packages, cached AppImage, extraction) and runs one shard, so wall time drops while the total of minutes grows slightly. Measured before sharding, the whole stable job took 3m34s and weekly 4m31s; with two shards each job runs about half of the tests after the same setup. More shards would mostly add setup time.
+
+`python3 ci/run_tests.py --shard INDEX/COUNT` runs shard INDEX of COUNT: every COUNT-th test of the discovery order, starting at test INDEX (1-based). Each discovered test runs in exactly one shard, and the COUNT shards together run the whole suite (or the `--test` selection). The partition does not depend on the machine or on `--shuffle-seed`, which only reorders the tests inside the shard. `--shard 1/1` is the unsharded run. Values other than `INDEX/COUNT` with `1 <= INDEX <= COUNT` (for example `0/2`, `3/2`, `a/b`, `1/0`) are rejected before launching FreeCAD, with exit 2. A shard with no tests fails like any run that executes zero tests.
+
+Run one shard locally exactly like CI does:
+
+```bash
+python3 ci/run_tests.py \
+  --freecad-bin /path/to/squashfs-root/AppRun \
+  --reports /path/to/reports \
+  --timeout 420 \
+  --target stable \
+  --shard 1/2
+```
+
+When a shard crashes, the gdb rerun of the single crashing test runs that test alone (outside the shard); a seeded replay (`--shuffle-seed`) replays the same shard and seed.
+
+### Required checks and gate jobs
+
+Branch protection on `main` requires exactly `Native FreeCAD (stable)` and `Code Formatting (Black & isort)`. Shard jobs have their own names, so `Native FreeCAD (<target>)` is now a small gate job per target that `needs` the targets job and every shard job and runs with `if: always()`: a skipped required check would count as passed, so the gate always runs and decides itself.
+
+- A blocking target's gate fails unless `needs.test.result` is `success`. Shards of non-blocking targets run with `continue-on-error`, so their failures do not change `needs.test.result`; only a failed, cancelled or skipped blocking shard does. With more than one blocking target, a failure in any of them fails every blocking gate.
+- A non-blocking target's gate never fails; it points to its shard jobs, which show the target's real result.
+
+Each shard uploads its own reports on failure as `test-failure-reports-<target>-shard-<n>`.
 
 ## Automatic weekly bump
 
@@ -245,7 +276,7 @@ rerun is also skipped under `--native-diagnostics`, which already runs under gdb
 ## Explicit manual native investigation (stable only)
 
 Dispatch CI with the boolean `native_diagnostics` enabled (default: false).
-Only the stable job passes `--native-diagnostics`; PR, push,
+Only the stable shard jobs pass `--native-diagnostics`; PR, push,
 Weekly and ordinary manual runs retain the normal launch path and deadlines.
 Locally, add `--native-diagnostics --target stable --timeout 420` to the native
 runner command above. GDB must already be installed; timeouts <=160 are rejected.
@@ -271,7 +302,7 @@ Additional reports:
 - `qt-events.jsonl`: bounded structural observer evidence described above.
 
 The stable report artifact is uploaded for this explicit mode even on success,
-using the existing `test-failure-reports-stable` name and seven-day retention.
+as `test-failure-reports-stable-shard-<n>` (every stable shard runs this mode) with seven-day retention.
 Missing/empty native frames or Qt events cannot exclude a modal or prove a cause.
 Diagnostics do not dismiss dialogs, synthesize input, skip tests or repair the GUI.
 

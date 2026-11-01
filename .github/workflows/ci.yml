@@ -75,6 +75,7 @@ jobs:
       contents: read
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
+      gates: ${{ steps.matrix.outputs.gates }}
 
     steps:
       - name: Checkout code
@@ -92,12 +93,19 @@ jobs:
           with open("ci/targets.json", encoding="utf-8") as handle:
               targets = json.load(handle)
           keys = ("label", "url", "sha256", "timeout", "blocking")
-          include = [{"target": name, **{key: data[key] for key in keys}} for name, data in targets.items()]
+          # One job per target shard; the gate matrix has one `Native FreeCAD (<target>)` job per target.
+          include = [
+              {"target": name, "shard": shard, "shards": data["shards"], **{key: data[key] for key in keys}}
+              for name, data in targets.items()
+              for shard in range(1, data["shards"] + 1)
+          ]
+          gates = [{"target": name, "blocking": data["blocking"]} for name, data in targets.items()]
           print("matrix=" + json.dumps({"include": include}, separators=(",", ":")))
+          print("gates=" + json.dumps({"include": gates}, separators=(",", ":")))
           PY
 
   test:
-    name: Native FreeCAD (${{ matrix.target }})
+    name: Native FreeCAD (${{ matrix.target }}, shard ${{ matrix.shard }}/${{ matrix.shards }})
     needs: targets
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -172,12 +180,42 @@ jobs:
             --freecad-bin "${{ runner.temp }}/squashfs-root/AppRun" \
             --reports "${{ runner.temp }}/test-reports" \
             --timeout ${{ matrix.timeout }} \
-            --target "${{ matrix.target }}" "${diagnostic_args[@]}"
+            --target "${{ matrix.target }}" \
+            --shard "${{ matrix.shard }}/${{ matrix.shards }}" "${diagnostic_args[@]}"
 
       - name: Upload test failure reports
         if: failure() || (always() && github.event_name == 'workflow_dispatch' && inputs.native_diagnostics && matrix.target == 'stable')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: test-failure-reports-${{ matrix.target }}
+          name: test-failure-reports-${{ matrix.target }}-shard-${{ matrix.shard }}
           path: ${{ runner.temp }}/test-reports
           retention-days: 7
+
+  native:
+    name: Native FreeCAD (${{ matrix.target }})
+    needs: [targets, test]
+    # Branch protection requires these names. A skipped required check counts as passed,
+    # so the gate always runs and fails itself when a blocking target's shard failed.
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.targets.outputs.gates) }}
+
+    steps:
+      # Non-blocking shards run with continue-on-error, so only blocking shards can make needs.test.result fail.
+      - name: Check shard results
+        env:
+          TARGET: ${{ matrix.target }}
+          BLOCKING: ${{ matrix.blocking }}
+          SHARDS_RESULT: ${{ needs.test.result }}
+        run: |
+          if [[ "$BLOCKING" != "true" ]]; then
+            echo "::notice::Native FreeCAD ($TARGET) is informative: its shard jobs show its result and never fail the workflow (shard jobs result: '$SHARDS_RESULT')."
+          elif [[ "$SHARDS_RESULT" == "success" ]]; then
+            echo "Native FreeCAD ($TARGET): every blocking shard job passed (result '$SHARDS_RESULT')."
+          else
+            echo "::error::Native FreeCAD ($TARGET) is blocking and its shard jobs ended with '$SHARDS_RESULT'."
+            exit 1
+          fi

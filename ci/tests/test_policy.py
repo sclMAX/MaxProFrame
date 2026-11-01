@@ -927,7 +927,7 @@ class TestRunTestsPolicy(unittest.TestCase):
 class TestTargetsFilePolicy(unittest.TestCase):
     """ci/targets.json is the single source of truth for the pinned native targets (S1)."""
 
-    KEYS = {"label", "url", "sha256", "timeout", "blocking", "expected_freecad", "expected_python"}
+    KEYS = {"label", "url", "sha256", "timeout", "blocking", "shards", "expected_freecad", "expected_python"}
 
     def test_defines_exactly_stable_and_weekly_with_all_fields(self):
         targets = load_targets()
@@ -943,6 +943,8 @@ class TestTargetsFilePolicy(unittest.TestCase):
             self.assertTrue(all(isinstance(part, int) for part in entry["expected_python"]))
             self.assertIsInstance(entry["timeout"], int)
             self.assertIsInstance(entry["blocking"], bool)
+            self.assertIs(type(entry["shards"]), int)
+            self.assertGreaterEqual(entry["shards"], 1)
 
     def test_stable_pin_is_the_accepted_baseline(self):
         stable = load_targets()["stable"]
@@ -952,7 +954,7 @@ class TestTargetsFilePolicy(unittest.TestCase):
             "https://github.com/FreeCAD/FreeCAD/releases/download/1.1.4/FreeCAD_1.1.4-Linux-x86_64-py311.AppImage",
         )
         self.assertEqual(stable["sha256"], "f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434")
-        self.assertEqual((stable["timeout"], stable["blocking"]), (420, True))
+        self.assertEqual((stable["timeout"], stable["blocking"], stable["shards"]), (420, True, 2))
         self.assertEqual((stable["expected_freecad"], stable["expected_python"]), (["1", "1", "4"], [3, 11]))
 
     def test_weekly_is_pinned_to_one_tag_and_informative(self):
@@ -963,7 +965,7 @@ class TestTargetsFilePolicy(unittest.TestCase):
             weekly["url"],
             f"https://github.com/FreeCAD/FreeCAD/releases/download/{tag}/FreeCAD_{tag}-Linux-x86_64.AppImage",
         )
-        self.assertEqual((weekly["timeout"], weekly["blocking"]), (480, False))
+        self.assertEqual((weekly["timeout"], weekly["blocking"], weekly["shards"]), (480, False, 2))
 
     def test_run_tests_target_choices_come_from_targets_json(self):
         from ci import run_tests
@@ -1053,29 +1055,115 @@ class TestWorkflowStaticPolicy(unittest.TestCase):
         self.assertNotRegex(self.content, r"weekly-\d{4}\.\d{2}\.\d{2}")
         self.assertNotIn("releases/download", self.content)
 
-    def test_workflow_matrix_json_matches_targets_json(self):
-        """Running the targets job script yields one matrix entry per target with the fields the job uses."""
+    def _targets_outputs(self, targets_json=None, env=None):
+        """Run the targets job script against TARGETS_JSON and return its GITHUB_OUTPUT lines as a dict."""
         script = self.content.split("python3 - <<'PY' >> \"$GITHUB_OUTPUT\"\n", 1)[1].split("\n          PY\n", 1)[0]
         script = "\n".join(line[10:] for line in script.splitlines())
         with tempfile.TemporaryDirectory() as tmp:
             (pathlib.Path(tmp) / "ci").mkdir()
-            (pathlib.Path(tmp) / "ci" / "targets.json").write_text(TARGETS_PATH.read_text(encoding="utf-8"))
+            text = TARGETS_PATH.read_text(encoding="utf-8") if targets_json is None else json.dumps(targets_json)
+            (pathlib.Path(tmp) / "ci" / "targets.json").write_text(text)
             done = subprocess.run(
-                [sys.executable, "-I", "-c", script], cwd=tmp, capture_output=True, text=True, timeout=60
+                [sys.executable, "-I", "-c", script],
+                cwd=tmp,
+                env=dict(os.environ, **(env or {})),
+                capture_output=True,
+                text=True,
+                timeout=60,
             )
         self.assertEqual(done.returncode, 0, done.stderr)
-        line = done.stdout.strip()
-        self.assertTrue(line.startswith("matrix="))
-        include = json.loads(line[len("matrix=") :])["include"]
+        outputs = dict(line.split("=", 1) for line in done.stdout.splitlines())
+        self.assertEqual(sorted(outputs), ["gates", "matrix"])
+        return {name: json.loads(value)["include"] for name, value in outputs.items()}
+
+    def test_workflow_matrix_json_matches_targets_json(self):
+        """The targets job expands every target into its shards, in order, with the fields the job uses."""
+        include = self._targets_outputs()["matrix"]
         targets = load_targets()
-        self.assertEqual([entry["target"] for entry in include], list(targets))
-        for entry in include:
-            expected = {key: targets[entry["target"]][key] for key in ("label", "url", "sha256", "timeout", "blocking")}
-            self.assertEqual({k: v for k, v in entry.items() if k != "target"}, expected)
+        expected = [
+            {
+                "target": name,
+                "shard": shard,
+                "shards": data["shards"],
+                **{key: data[key] for key in ("label", "url", "sha256", "timeout", "blocking")},
+            }
+            for name, data in targets.items()
+            for shard in range(1, data["shards"] + 1)
+        ]
+        self.assertEqual(include, expected)
+        self.assertEqual(len(include), sum(data["shards"] for data in targets.values()))
+
+    def test_workflow_single_shard_target_keeps_one_job(self):
+        stable = dict(load_targets()["stable"], shards=1)
+        outputs = self._targets_outputs({"stable": stable})
+        self.assertEqual([(e["target"], e["shard"], e["shards"]) for e in outputs["matrix"]], [("stable", 1, 1)])
+        self.assertEqual(outputs["gates"], [{"target": "stable", "blocking": True}])
+
+    def test_workflow_gates_one_job_per_target(self):
+        gates = self._targets_outputs()["gates"]
+        self.assertEqual(
+            gates, [{"target": name, "blocking": data["blocking"]} for name, data in load_targets().items()]
+        )
+
+    def _job(self, job_id):
+        return re.split(r"\n\n  [\w-]+:\n", self.content.split(f"\n  {job_id}:\n", 1)[1], maxsplit=1)[0]
 
     def test_workflow_check_names_do_not_change(self):
-        self.assertIn("name: Native FreeCAD (${{ matrix.target }})", self.content)
+        """Branch protection requires `Native FreeCAD (stable)`: a per-target gate job keeps that exact name."""
         self.assertIn("name: Code Formatting (Black & isort)", self.content)
+        gate = self._job("native")
+        self.assertIn("    name: Native FreeCAD (${{ matrix.target }})\n", gate)
+        self.assertIn("stable", [entry["target"] for entry in self._targets_outputs()["gates"]])
+        self.assertEqual(self.content.count("name: Native FreeCAD (${{ matrix.target }})\n"), 1)
+        shard_job = self._job("test")
+        self.assertIn(
+            "    name: Native FreeCAD (${{ matrix.target }}, shard ${{ matrix.shard }}/${{ matrix.shards }})\n",
+            shard_job,
+        )
+
+    def test_workflow_gate_waits_for_every_shard_and_always_reports(self):
+        """A skipped required check counts as passed, so the gate must run even when shards fail."""
+        gate = self._job("native")
+        self.assertIn("    needs: [targets, test]\n", gate)
+        self.assertIn("    if: always()\n", gate)
+        self.assertIn("matrix: ${{ fromJSON(needs.targets.outputs.gates) }}", gate)
+        self.assertIn("fail-fast: false", gate)
+        self.assertIn("SHARDS_RESULT: ${{ needs.test.result }}", gate)
+        self.assertIn("BLOCKING: ${{ matrix.blocking }}", gate)
+        self.assertNotIn("continue-on-error:", gate)
+        self.assertNotIn("uses:", gate)
+
+    def _gate(self, blocking, result):
+        gate = self._job("native")
+        script = gate.split("        run: |\n", 1)[1]
+        script = "\n".join(line[10:] for line in script.splitlines())
+        env = dict(os.environ, TARGET="stable", BLOCKING=blocking, SHARDS_RESULT=result)
+        return subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, timeout=60)
+
+    def test_workflow_gate_fails_only_for_a_blocking_target(self):
+        for blocking, result, code in (
+            ("true", "success", 0),
+            ("true", "failure", 1),
+            ("true", "cancelled", 1),
+            ("true", "skipped", 1),
+            ("false", "success", 0),
+            ("false", "failure", 0),
+            ("false", "cancelled", 0),
+            ("false", "skipped", 0),
+        ):
+            with self.subTest(blocking=blocking, result=result):
+                done = self._gate(blocking, result)
+                self.assertEqual(done.returncode, code, done.stdout + done.stderr)
+                if code:
+                    self.assertIn("::error::Native FreeCAD (stable) is blocking", done.stdout)
+                if blocking == "false":
+                    self.assertIn("is informative", done.stdout)
+                self.assertIn(f"'{result}'", done.stdout)
+
+    def test_workflow_runs_and_reports_each_shard(self):
+        shard_job = self._job("test")
+        self.assertIn('--shard "${{ matrix.shard }}/${{ matrix.shards }}"', shard_job)
+        self.assertIn("name: test-failure-reports-${{ matrix.target }}-shard-${{ matrix.shard }}", shard_job)
 
     def test_workflow_weekly_is_informative_and_stable_is_blocking(self):
         """Only targets that are not `blocking` in ci/targets.json may continue on error."""
@@ -1160,6 +1248,17 @@ class TestDocumentationPolicy(unittest.TestCase):
         self.assertIn("never anything under `.github/`", content)
         self.assertIn("informative", content.lower())
         self.assertIn("--target", content)
+
+    def test_ci_docs_document_shards_and_gates(self):
+        content = (REPO_ROOT / "docs" / "ci.md").read_text(encoding="utf-8")
+        self.assertIn("## Parallel shards", content)
+        self.assertIn("--shard INDEX/COUNT", content)
+        self.assertIn("--shard 1/2", content)
+        self.assertIn("`shards`", content)
+        self.assertIn("`Native FreeCAD (stable)`", content)
+        self.assertIn("`Code Formatting (Black & isort)`", content)
+        self.assertIn("needs.test.result", content)
+        self.assertIn("test-failure-reports-<target>-shard-<n>", content)
 
     def test_ci_docs_document_node24_actions_infrastructure(self):
         """CI docs must document Node 24 as action infrastructure, runner requirements, and disclaim hosted execution."""

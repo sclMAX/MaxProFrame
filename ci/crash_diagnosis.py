@@ -90,8 +90,8 @@ def seeded_timeout(run_timeout):
 def rerun_under_gdb(command, environment, test_id, reports, scratch, timeout=RERUN_TIMEOUT, shuffle_seed=None):
     """Rerun under gdb and return a one-line note about what happened.
 
-    Without SHUFFLE_SEED only TEST_ID is rerun. With it the original selection and seed
-    (FF_TEST / FF_SHUFFLE_SEED already in ENVIRONMENT) are replayed, so order-dependent crashes reproduce.
+    Without SHUFFLE_SEED only TEST_ID is rerun, outside any shard. With it the original selection, shard and seed
+    (FF_TEST / FF_SHARD / FF_SHUFFLE_SEED already in ENVIRONMENT) are replayed, so order-dependent crashes reproduce.
     """
     if shutil.which("gdb") is None:
         return "gdb is not installed; crash rerun skipped."
@@ -100,6 +100,7 @@ def rerun_under_gdb(command, environment, test_id, reports, scratch, timeout=RER
     env = environment.copy()
     if shuffle_seed is None:
         env["FF_TEST"] = test_id
+        env.pop("FF_SHARD", None)
         mode = "single test"
         what = test_id
     else:
