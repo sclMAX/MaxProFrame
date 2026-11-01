@@ -13,8 +13,8 @@ Worktree `.git/gentle-worktrees/release-1.0`, branch `feat/release-1.0`. Native 
 
 ## Tasks
 
-- T1. [S1, S3] Remove FrameForge compatibility and fix install lists — route: worker — commit: this slice
-- T2. [S3] package.xml metadata (single repo URL on `release`, bugtracker) — route: inline — commit: this slice
+- T1. [S1, S3] Remove FrameForge compatibility and fix install lists — route: worker — commit: 20ebcd9
+- T2. [S3] package.xml metadata (single repo URL on `release`, bugtracker) — route: inline — commit: 20ebcd9
 - T3. [S4] README rewrite; dialog captures by worker script, 3D captures by the user — commit: pending
 - T4. [S2] Version 1.0.0, CHANGELOG 1.0.0 section, `release` branch, tag and GitHub Release — route: inline, needs user confirmation before push/tag — commit: pending
 
@@ -32,3 +32,4 @@ Worktree `.git/gentle-worktrees/release-1.0`, branch `feat/release-1.0`. Native 
 - L10. User: "A, pero tengo una duda en una intalacion limpia de MaxProFrame apareceran esas bibliotezas del sistema?" Answer: yes, system libraries ship in resources/profiles. Done: get_default_user_profiles_dir reads only MAXPROFRAME_USER_PROFILES_DIR and <UserAppData>/MaxProFrame/profiles; the CI isolation variable in ci/run_tests.py, ci/tests/test_policy.py and tests renamed to MAXPROFRAME_USER_PROFILES_DIR (Risk item 5: CI environment). RED `AssertionError: .../FrameForge/profiles != .../MaxProFrame/profiles`; GREEN test_compat_regression 9, test_catalog_family_profiles 11, test_task_panel_usability 12, ci/tests test_policy 57. Release notes must tell users to move <UserAppData>/FrameForge/profiles to MaxProFrame/profiles.
 - L11. Worker mvx2nm9t-3-ajfs finished the dialog captures: tools/capture_readme_dialogs.py (launches FreeCAD 1.1.4 offscreen with an isolated profile, FreeCAD Dark preference pack plus a matching dark QPalette, English locale) writes docs/images/readme/create-profiles-panel.png (378x947), library-manager-cards.png (1200x720), library-manager-help.png (720x720, topic Families), add-family.png (360x460); byte-identical across 4 runs; parent reviewed all four images.
 - L12. Full suite after the profiles-folder change: `Ran 771 tests in 256.728s / OK`.
+- L13. README rewritten for GitHub: badges, short feature list, screenshot tables with the four dialog captures, Addon Manager install via custom repository on `release`, manual install, updating, quick start without the removed Apply button, libraries, "Coming from FrameForge" (L7, L10), languages, compatibility, contributing. The detailed section alignment and circular correction text moved to docs/commands.md. 3D captures (hero-frame, end-miter, bom-cutlist, techdraw-balloons, workflow) are marked with HTML comments until the user provides them. All relative links checked.
