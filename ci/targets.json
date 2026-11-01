@@ -6,6 +6,8 @@
     "timeout": 420,
     "blocking": true,
     "shards": 2,
+    "platform": "linux",
+    "pull_request": true,
     "expected_freecad": ["1", "1", "4"],
     "expected_python": [3, 11]
   },
@@ -16,7 +18,21 @@
     "timeout": 480,
     "blocking": false,
     "shards": 2,
+    "platform": "linux",
+    "pull_request": true,
     "expected_freecad": ["27", "1", "0"],
     "expected_python": [3, 13]
+  },
+  "windows": {
+    "label": "FreeCAD 1.1.4 Windows",
+    "url": "https://github.com/FreeCAD/FreeCAD/releases/download/1.1.4/FreeCAD_1.1.4-Windows-x86_64-py311.7z",
+    "sha256": "4828741fc91ee37fafcdb97a1abacb18b04ba451ac4372d9ff7a7349b36f4d6d",
+    "timeout": 600,
+    "blocking": false,
+    "shards": 3,
+    "platform": "windows",
+    "pull_request": false,
+    "expected_freecad": ["1", "1", "4"],
+    "expected_python": [3, 11]
   }
 }

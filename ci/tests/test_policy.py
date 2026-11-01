@@ -866,6 +866,25 @@ class TestRunTestsPolicy(unittest.TestCase):
         self.assertEqual(summary.get("tests"), 1)
         self.assertIs(summary.get("successful"), True)
 
+    def test_macro_accepts_windows_target_with_1_1_4_and_py311(self):
+        """The Windows target validates the same pinned FreeCAD 1.1.4 / Python 3.11 runtime (S1)."""
+        fc_version, py_version = self._runtime("windows")
+        self.assertEqual((fc_version, py_version), (("1", "1", "4"), (3, 11, 0)))
+        proc, summary_file, summary, _ = self._run_macro_synthetic(
+            target="windows", fc_version=fc_version, py_version=py_version
+        )
+        self.assertEqual(proc.returncode, 0, f"Stderr: {proc.stderr}")
+        self.assertEqual((summary.get("tests"), summary.get("target")), (1, "windows"))
+
+    def test_macro_rejects_weekly_runtime_when_target_is_windows(self):
+        fc_version, py_version = self._runtime("weekly")
+        proc, summary_file, _, child_stderr = self._run_macro_synthetic(
+            target="windows", fc_version=fc_version, py_version=py_version
+        )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertFalse(summary_file.is_file())
+        self.assertIn("Pinned windows FreeCAD 1.1.4 Windows (Version 1.1.4, Python 3.11) is required.", child_stderr)
+
     def test_macro_rejects_weekly_runtime_when_target_is_stable(self):
         """Macro targeting stable must strictly reject the weekly runtime without writing summary."""
         fc_version, py_version = self._runtime("weekly")
@@ -927,11 +946,22 @@ class TestRunTestsPolicy(unittest.TestCase):
 class TestTargetsFilePolicy(unittest.TestCase):
     """ci/targets.json is the single source of truth for the pinned native targets (S1)."""
 
-    KEYS = {"label", "url", "sha256", "timeout", "blocking", "shards", "expected_freecad", "expected_python"}
+    KEYS = {
+        "label",
+        "url",
+        "sha256",
+        "timeout",
+        "blocking",
+        "shards",
+        "platform",
+        "pull_request",
+        "expected_freecad",
+        "expected_python",
+    }
 
-    def test_defines_exactly_stable_and_weekly_with_all_fields(self):
+    def test_defines_exactly_the_pinned_targets_with_all_fields(self):
         targets = load_targets()
-        self.assertEqual(list(targets), ["stable", "weekly"])
+        self.assertEqual(list(targets), ["stable", "weekly", "windows"])
         for name, entry in targets.items():
             self.assertEqual(set(entry), self.KEYS, name)
             self.assertRegex(entry["sha256"], r"^[0-9a-f]{64}$")
@@ -945,6 +975,8 @@ class TestTargetsFilePolicy(unittest.TestCase):
             self.assertIsInstance(entry["blocking"], bool)
             self.assertIs(type(entry["shards"]), int)
             self.assertGreaterEqual(entry["shards"], 1)
+            self.assertIn(entry["platform"], ("linux", "windows"))
+            self.assertIsInstance(entry["pull_request"], bool)
 
     def test_stable_pin_is_the_accepted_baseline(self):
         stable = load_targets()["stable"]
@@ -956,6 +988,7 @@ class TestTargetsFilePolicy(unittest.TestCase):
         self.assertEqual(stable["sha256"], "f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434")
         self.assertEqual((stable["timeout"], stable["blocking"], stable["shards"]), (420, True, 2))
         self.assertEqual((stable["expected_freecad"], stable["expected_python"]), (["1", "1", "4"], [3, 11]))
+        self.assertEqual((stable["platform"], stable["pull_request"]), ("linux", True))
 
     def test_weekly_is_pinned_to_one_tag_and_informative(self):
         weekly = load_targets()["weekly"]
@@ -966,6 +999,25 @@ class TestTargetsFilePolicy(unittest.TestCase):
             f"https://github.com/FreeCAD/FreeCAD/releases/download/{tag}/FreeCAD_{tag}-Linux-x86_64.AppImage",
         )
         self.assertEqual((weekly["timeout"], weekly["blocking"], weekly["shards"]), (480, False, 2))
+        self.assertEqual((weekly["platform"], weekly["pull_request"]), ("linux", True))
+
+    def test_windows_pin_is_the_portable_1_1_4_archive(self):
+        """S1/S2: official portable 7z, pinned by SHA-256, informative and kept off pull requests."""
+        self.assertEqual(
+            load_targets()["windows"],
+            {
+                "label": "FreeCAD 1.1.4 Windows",
+                "url": "https://github.com/FreeCAD/FreeCAD/releases/download/1.1.4/FreeCAD_1.1.4-Windows-x86_64-py311.7z",
+                "sha256": "4828741fc91ee37fafcdb97a1abacb18b04ba451ac4372d9ff7a7349b36f4d6d",
+                "timeout": 600,
+                "blocking": False,
+                "shards": 3,
+                "platform": "windows",
+                "pull_request": False,
+                "expected_freecad": ["1", "1", "4"],
+                "expected_python": [3, 11],
+            },
+        )
 
     def test_run_tests_target_choices_come_from_targets_json(self):
         from ci import run_tests
@@ -982,6 +1034,8 @@ class TestTargetsFilePolicy(unittest.TestCase):
         self.assertEqual(done.returncode, 0)
         self.assertIn("stable", done.stdout)
         self.assertIn("weekly", done.stdout)
+        self.assertIn("windows", done.stdout)
+        self.assertIn("bin/FreeCAD.exe", done.stdout)
         self.assertNotRegex(done.stdout, r"weekly-\d{4}")
 
 
@@ -1049,13 +1103,15 @@ class TestWorkflowStaticPolicy(unittest.TestCase):
 
     def test_workflow_keeps_pinned_values_out_of_the_yaml(self):
         """Nothing about the pinned runtimes is hard-coded in ci.yml any more."""
-        self.assertNotIn("latest", self.content)
+        # `windows-latest` is the runner image label, not a FreeCAD build.
+        self.assertNotIn("latest", self.content.replace("windows-latest", ""))
         self.assertNotIn(".AppImage\n", self.content.replace("FreeCAD.AppImage\n", ""))
+        self.assertNotIn(".7z", self.content.replace("FreeCAD.7z", ""))
         self.assertNotRegex(self.content, r"\b[0-9a-f]{64}\b")
         self.assertNotRegex(self.content, r"weekly-\d{4}\.\d{2}\.\d{2}")
         self.assertNotIn("releases/download", self.content)
 
-    def _targets_outputs(self, targets_json=None, env=None):
+    def _targets_outputs(self, targets_json=None, event="push"):
         """Run the targets job script against TARGETS_JSON and return its GITHUB_OUTPUT lines as a dict."""
         script = self.content.split("python3 - <<'PY' >> \"$GITHUB_OUTPUT\"\n", 1)[1].split("\n          PY\n", 1)[0]
         script = "\n".join(line[10:] for line in script.splitlines())
@@ -1066,7 +1122,7 @@ class TestWorkflowStaticPolicy(unittest.TestCase):
             done = subprocess.run(
                 [sys.executable, "-I", "-c", script],
                 cwd=tmp,
-                env=dict(os.environ, **(env or {})),
+                env=dict(os.environ, GITHUB_EVENT_NAME=event),
                 capture_output=True,
                 text=True,
                 timeout=60,
@@ -1076,31 +1132,53 @@ class TestWorkflowStaticPolicy(unittest.TestCase):
         self.assertEqual(sorted(outputs), ["gates", "matrix"])
         return {name: json.loads(value)["include"] for name, value in outputs.items()}
 
-    def test_workflow_matrix_json_matches_targets_json(self):
-        """The targets job expands every target into its shards, in order, with the fields the job uses."""
-        include = self._targets_outputs()["matrix"]
+    RUNNERS = {"linux": "ubuntu-24.04", "windows": "windows-latest"}
+
+    def _expected_matrix(self, names):
         targets = load_targets()
-        expected = [
+        return [
             {
                 "target": name,
                 "shard": shard,
-                "shards": data["shards"],
-                **{key: data[key] for key in ("label", "url", "sha256", "timeout", "blocking")},
+                "shards": targets[name]["shards"],
+                "runner": self.RUNNERS[targets[name]["platform"]],
+                **{key: targets[name][key] for key in ("label", "url", "sha256", "timeout", "blocking")},
             }
-            for name, data in targets.items()
-            for shard in range(1, data["shards"] + 1)
+            for name in names
+            for shard in range(1, targets[name]["shards"] + 1)
         ]
-        self.assertEqual(include, expected)
-        self.assertEqual(len(include), sum(data["shards"] for data in targets.values()))
+
+    def test_workflow_matrix_json_matches_targets_json(self):
+        """The targets job expands every target into its shards, in order, with the fields the job uses."""
+        targets = load_targets()
+        for event in ("push", "workflow_dispatch"):
+            with self.subTest(event=event):
+                include = self._targets_outputs(event=event)["matrix"]
+                self.assertEqual(include, self._expected_matrix(list(targets)))
+                self.assertEqual(len(include), sum(data["shards"] for data in targets.values()))
+
+    def test_workflow_pull_requests_skip_targets_marked_off_pull_requests(self):
+        """S2: Windows runs on push to main and workflow_dispatch, never on pull requests (shards nor gate)."""
+        outputs = self._targets_outputs(event="pull_request")
+        self.assertEqual(outputs["matrix"], self._expected_matrix(["stable", "weekly"]))
+        self.assertEqual([gate["target"] for gate in outputs["gates"]], ["stable", "weekly"])
+        self.assertNotIn("windows", json.dumps(outputs))
+        pushed = self._targets_outputs(event="push")
+        self.assertIn({"target": "windows", "blocking": False}, pushed["gates"])
+        self.assertEqual(
+            [(e["shard"], e["runner"]) for e in pushed["matrix"] if e["target"] == "windows"],
+            [(1, "windows-latest"), (2, "windows-latest"), (3, "windows-latest")],
+        )
 
     def test_workflow_single_shard_target_keeps_one_job(self):
         stable = dict(load_targets()["stable"], shards=1)
         outputs = self._targets_outputs({"stable": stable})
+        self.assertEqual(outputs["matrix"][0]["runner"], "ubuntu-24.04")
         self.assertEqual([(e["target"], e["shard"], e["shards"]) for e in outputs["matrix"]], [("stable", 1, 1)])
         self.assertEqual(outputs["gates"], [{"target": "stable", "blocking": True}])
 
     def test_workflow_gates_one_job_per_target(self):
-        gates = self._targets_outputs()["gates"]
+        gates = self._targets_outputs(event="push")["gates"]
         self.assertEqual(
             gates, [{"target": name, "blocking": data["blocking"]} for name, data in load_targets().items()]
         )
@@ -1160,6 +1238,75 @@ class TestWorkflowStaticPolicy(unittest.TestCase):
                     self.assertIn("is informative", done.stdout)
                 self.assertIn(f"'{result}'", done.stdout)
 
+    def _step(self, name):
+        return self.content.split(f"- name: {name}\n", 1)[1].split("- name:", 1)[0]
+
+    def test_workflow_shard_jobs_run_on_the_target_runner(self):
+        shard_job = self._job("test")
+        self.assertIn("    runs-on: ${{ matrix.runner }}\n", shard_job)
+        self.assertNotIn("runs-on: windows", self.content)
+
+    def test_workflow_linux_only_steps_are_conditional(self):
+        """apt, AppImage and gdb steps keep their commands and only run on Linux runners (S3)."""
+        for name in (
+            "Run host CI policy regression tests",
+            "Install minimal headless dependencies",
+            "Restore cached FreeCAD AppImage",
+            "Download and verify FreeCAD AppImage",
+            "Verify FreeCAD AppImage checksum",
+            "Extract AppImage",
+            "Run native FreeCAD tests",
+        ):
+            with self.subTest(step=name):
+                self.assertRegex(self._step(name), r"if: .*runner\.os == 'Linux'")
+        self.assertIn("libxcb-cursor0 gdb", self._step("Install minimal headless dependencies"))
+        self.assertIn('--freecad-bin "${{ runner.temp }}/squashfs-root/AppRun"', self._step("Run native FreeCAD tests"))
+
+    def test_workflow_caches_windows_archive_by_checksum_and_always_verifies(self):
+        """S1: the portable 7z is cached under its SHA-256, downloaded on a miss, verified on every run."""
+        windows_steps = (
+            "Restore cached FreeCAD portable archive",
+            "Download FreeCAD portable archive",
+            "Verify FreeCAD portable archive checksum",
+            "Extract FreeCAD portable archive",
+            "Run native FreeCAD tests on Windows",
+        )
+        for name in windows_steps:
+            with self.subTest(step=name):
+                self.assertRegex(self._step(name), r"if: .*runner\.os == 'Windows'")
+                if name != "Restore cached FreeCAD portable archive":
+                    self.assertIn("shell: pwsh", self._step(name))
+        restore = self._step("Restore cached FreeCAD portable archive")
+        self.assertIn("id: portable-cache", restore)
+        self.assertIn("actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0", restore)
+        self.assertIn("path: ${{ runner.temp }}/FreeCAD.7z", restore)
+        self.assertIn("key: freecad-portable-${{ matrix.sha256 }}", restore)
+        download = self._step("Download FreeCAD portable archive")
+        self.assertIn("steps.portable-cache.outputs.cache-hit != 'true'", download)
+        self.assertIn('curl.exe -fL -o "${{ runner.temp }}/FreeCAD.7z" "${{ matrix.url }}"', download)
+        verify = self._step("Verify FreeCAD portable archive checksum")
+        self.assertNotIn("cache-hit", verify)
+        self.assertIn("Get-FileHash -Algorithm SHA256", verify)
+        self.assertIn("'${{ matrix.sha256 }}'", verify)
+        self.assertIn("exit 1", verify)
+        self.assertIn("7z x", self._step("Extract FreeCAD portable archive"))
+
+    def test_workflow_runs_windows_shards_with_the_portable_executable(self):
+        run = self._step("Run native FreeCAD tests on Windows")
+        self.assertIn("-Filter FreeCAD.exe", run)
+        self.assertIn("$_.Directory.Name -eq 'bin'", run)
+        self.assertIn("--freecad-bin $freecad.FullName", run)
+        self.assertIn('--target "${{ matrix.target }}"', run)
+        self.assertIn('--shard "${{ matrix.shard }}/${{ matrix.shards }}"', run)
+        self.assertIn("--timeout ${{ matrix.timeout }}", run)
+        self.assertIn("exit $LASTEXITCODE", run)
+        self.assertNotIn("native-diagnostics", run)
+
+    def test_workflow_planner_runs_on_both_runners(self):
+        planner = self._step("Plan changed files")
+        self.assertNotIn("if:", planner)
+        self.assertEqual(self.content.count("python ci/changed_files.py"), 1, "setup-python provides `python` on both")
+
     def test_workflow_runs_and_reports_each_shard(self):
         shard_job = self._job("test")
         self.assertIn('--shard "${{ matrix.shard }}/${{ matrix.shards }}"', shard_job)
@@ -1208,7 +1355,7 @@ class TestWorkflowStaticPolicy(unittest.TestCase):
 
         # Verify all uses: references in workflow use a 40-character hex SHA
         uses_lines = [line.strip() for line in self.content.splitlines() if line.strip().startswith("uses:")]
-        self.assertEqual(len(uses_lines), 8, f"Expected exactly 8 uses steps, found {len(uses_lines)}")
+        self.assertEqual(len(uses_lines), 9, f"Expected exactly 9 uses steps, found {len(uses_lines)}")
         sha_pattern = re.compile(r"^uses:\s+actions/[a-zA-Z0-9_-]+@([0-9a-f]{40})\s+#\s+v[0-9.]+$")
         for line in uses_lines:
             self.assertRegex(
@@ -1259,6 +1406,25 @@ class TestDocumentationPolicy(unittest.TestCase):
         self.assertIn("`Code Formatting (Black & isort)`", content)
         self.assertIn("needs.test.result", content)
         self.assertIn("test-failure-reports-<target>-shard-<n>", content)
+
+    def test_ci_docs_document_the_windows_target(self):
+        """S6: the Windows target, its pin, its triggers and how to run one shard locally."""
+        content = (REPO_ROOT / "docs" / "ci.md").read_text(encoding="utf-8")
+        windows = load_targets()["windows"]
+        self.assertIn("## Windows target", content)
+        self.assertIn(windows["sha256"], content)
+        self.assertIn("FreeCAD_1.1.4-Windows-x86_64-py311.7z", content)
+        self.assertIn("windows-latest", content)
+        self.assertIn("freecad-portable-<sha256>", content)
+        self.assertIn("never on pull requests", content)
+        self.assertIn("`pull_request`", content)
+        self.assertIn("`platform`", content)
+        self.assertIn("--target windows", content)
+        self.assertIn("--shard 1/3", content)
+        self.assertIn("bin\\FreeCAD.exe", content)
+        self.assertIn("taskkill /T /F", content)
+        self.assertIn("APPDATA", content)
+        self.assertIn("gdb crash reruns are not available on Windows", content)
 
     def test_ci_docs_document_node24_actions_infrastructure(self):
         """CI docs must document Node 24 as action infrastructure, runner requirements, and disclaim hosted execution."""

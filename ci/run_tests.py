@@ -5,7 +5,8 @@ Launches the official FreeCAD 1.1.4 Linux GUI binary in an isolated headless
 environment, unsetting display variables and setting offscreen configuration.
 Extracted AppRun inputs resolve to the bundled binary with equivalent bootstrap
 variables, without vendor platform overrides or unsupported Qt CLI options.
-Enforces process-group timeouts (exit 124) and validates summary.json.
+On Windows the portable bin/FreeCAD.exe runs with an isolated user profile.
+Enforces process-group (Windows: process-tree) timeouts (exit 124) and validates summary.json.
 With --shard INDEX/COUNT only that shard of the discovered tests runs.
 """
 
@@ -20,6 +21,9 @@ import sys
 import tempfile
 
 MAX_LOG_BYTES = 1024 * 1024  # 1MB per log file
+WINDOWS = os.name == "nt"
+# subprocess.CREATE_NEW_PROCESS_GROUP, which only exists on Windows.
+CREATE_NEW_PROCESS_GROUP = 0x00000200
 
 
 TARGETS_PATH = pathlib.Path(__file__).resolve().parent / "targets.json"
@@ -29,6 +33,48 @@ def target_names():
     """Target names pinned in ci/targets.json (the single source of truth for the runtimes)."""
     with open(TARGETS_PATH, encoding="utf-8") as handle:
         return list(json.load(handle))
+
+
+def windows_profile_env(home, tmp):
+    """Windows profile variables inside the isolated HOME and TMP; FreeCAD reads its user dirs from them."""
+    home = pathlib.Path(home)
+    paths = {
+        "USERPROFILE": home,
+        "APPDATA": home / "AppData" / "Roaming",
+        "LOCALAPPDATA": home / "AppData" / "Local",
+        "TEMP": pathlib.Path(tmp),
+        "TMP": pathlib.Path(tmp),
+    }
+    for path in paths.values():
+        path.mkdir(parents=True, exist_ok=True)
+    return {name: str(path) for name, path in paths.items()}
+
+
+def launch_options(windows=WINDOWS):
+    """Popen options that let kill_process_tree reach everything the child starts."""
+    if windows:
+        return {"creationflags": CREATE_NEW_PROCESS_GROUP, "encoding": "utf-8", "errors": "replace"}
+    return {"start_new_session": True}
+
+
+def kill_process_tree(proc, windows=WINDOWS):
+    """Kill the child and its descendants: `taskkill /T /F` on Windows (no os.killpg), the process group elsewhere."""
+    if windows:
+        try:
+            subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        except OSError:
+            pass
+        proc.kill()
+        return
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except ProcessLookupError:
+        pass
 
 
 def write_bounded_file(dest: pathlib.Path, text: str) -> None:
@@ -132,7 +178,8 @@ def main() -> None:
     parser.add_argument(
         "--freecad-bin",
         required=True,
-        help="Path to FreeCAD executable or extracted AppRun",
+        help="Path to the FreeCAD executable, an extracted AppImage AppRun, or on Windows the portable "
+        "archive's bin/FreeCAD.exe",
     )
     parser.add_argument(
         "--reports",
@@ -285,6 +332,8 @@ def main() -> None:
         env["FF_ROOT"] = str(repo_root)
         env["FF_REPORTS"] = str(reports_dir)
         env["FF_TARGET"] = args.target
+        if WINDOWS:
+            env.update(windows_profile_env(isolated_home, isolated_tmp))
         env.pop("FF_TEST", None)
         if args.test is not None:
             env["FF_TEST"] = args.test
@@ -342,7 +391,7 @@ def main() -> None:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            start_new_session=True,
+            **launch_options(),
         )
 
         try:
@@ -351,11 +400,7 @@ def main() -> None:
             timed_out = True
             if native is not None:
                 native.kill_inferior(reports_dir, proc.pid)
-            try:
-                pgid = os.getpgid(proc.pid)
-                os.killpg(pgid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            kill_process_tree(proc)
             stdout_text, stderr_text = proc.communicate()
 
         if native is not None:
@@ -364,9 +409,8 @@ def main() -> None:
         write_bounded_file(reports_dir / "stderr.log", stderr_text)
 
         if timed_out:
-            sys.stderr.write(
-                f"run_tests error: FreeCAD process timed out after {args.timeout}s (killed process group).\n"
-            )
+            killed = "process tree" if WINDOWS else "process group"
+            sys.stderr.write(f"run_tests error: FreeCAD process timed out after {args.timeout}s (killed {killed}).\n")
             replay_hint()
             sys.exit(124)
 
