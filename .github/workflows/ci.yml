@@ -75,6 +75,7 @@ jobs:
       contents: read
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
+      gates: ${{ steps.matrix.outputs.gates }}
 
     steps:
       - name: Checkout code
@@ -88,20 +89,39 @@ jobs:
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
+          import os
 
           with open("ci/targets.json", encoding="utf-8") as handle:
               targets = json.load(handle)
+          # Targets with "pull_request": false (Windows) run only on push to main and workflow_dispatch.
+          if os.environ.get("GITHUB_EVENT_NAME") == "pull_request":
+              targets = {name: data for name, data in targets.items() if data["pull_request"]}
+          runners = {"linux": "ubuntu-24.04", "windows": "windows-latest"}
           keys = ("label", "url", "sha256", "timeout", "blocking")
-          include = [{"target": name, **{key: data[key] for key in keys}} for name, data in targets.items()]
+          # One job per target shard; the gate matrix has one `Native FreeCAD (<target>)` job per target.
+          include = [
+              {
+                  "target": name,
+                  "shard": shard,
+                  "shards": data["shards"],
+                  "runner": runners[data["platform"]],
+                  **{key: data[key] for key in keys},
+              }
+              for name, data in targets.items()
+              for shard in range(1, data["shards"] + 1)
+          ]
+          gates = [{"target": name, "blocking": data["blocking"]} for name, data in targets.items()]
           print("matrix=" + json.dumps({"include": include}, separators=(",", ":")))
+          print("gates=" + json.dumps({"include": gates}, separators=(",", ":")))
           PY
 
   test:
-    name: Native FreeCAD (${{ matrix.target }})
+    name: Native FreeCAD (${{ matrix.target }}, shard ${{ matrix.shard }}/${{ matrix.shards }})
     needs: targets
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    # Only targets marked `blocking` in ci/targets.json can fail the workflow; the weekly build is informative.
+    runs-on: ${{ matrix.runner }}
+    # Windows downloads a larger archive and runs slower; Linux keeps its 20 minutes.
+    timeout-minutes: ${{ matrix.runner == 'windows-latest' && 30 || 20 }}
+    # Only targets marked `blocking` in ci/targets.json can fail the workflow; weekly and Windows are informative.
     continue-on-error: ${{ !matrix.blocking }}
     strategy:
       fail-fast: false
@@ -119,50 +139,53 @@ jobs:
         with:
           python-version: '3.11'
 
+      # `python` (from setup-python) exists on Linux and Windows runners; `python3` does not on Windows.
       - name: Plan changed files
         id: planner
         env:
           INPUT_BASE_REF: ${{ github.event.inputs.base_ref }}
         run: |
-          python3 ci/changed_files.py > "${{ runner.temp }}/changes.json"
+          python ci/changed_files.py > "${{ runner.temp }}/changes.json"
 
+      # Linux-only steps: host policy tests, apt packages (with gdb), the AppImage and its runner.
       - name: Run host CI policy regression tests
+        if: runner.os == 'Linux'
         run: |
           python3 -m unittest discover -s ci/tests -p 'test_*.py' -v
 
       - name: Install minimal headless dependencies
-        if: steps.planner.outputs.run_tests == 'true'
+        if: steps.planner.outputs.run_tests == 'true' && runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libegl1 libopengl0 libxkbcommon-x11-0 libxcb-cursor0 gdb
 
       - name: Restore cached FreeCAD AppImage
         id: appimage-cache
-        if: steps.planner.outputs.run_tests == 'true'
+        if: steps.planner.outputs.run_tests == 'true' && runner.os == 'Linux'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/FreeCAD.AppImage
           key: freecad-appimage-${{ matrix.sha256 }}
 
       - name: Download and verify FreeCAD AppImage
-        if: steps.planner.outputs.run_tests == 'true' && steps.appimage-cache.outputs.cache-hit != 'true'
+        if: steps.planner.outputs.run_tests == 'true' && steps.appimage-cache.outputs.cache-hit != 'true' && runner.os == 'Linux'
         run: |
           curl -fL -o "${{ runner.temp }}/FreeCAD.AppImage" \
             "${{ matrix.url }}"
 
       - name: Verify FreeCAD AppImage checksum
-        if: steps.planner.outputs.run_tests == 'true'
+        if: steps.planner.outputs.run_tests == 'true' && runner.os == 'Linux'
         run: |
           echo "${{ matrix.sha256 }}  ${{ runner.temp }}/FreeCAD.AppImage" | sha256sum -c -
 
       - name: Extract AppImage
-        if: steps.planner.outputs.run_tests == 'true'
+        if: steps.planner.outputs.run_tests == 'true' && runner.os == 'Linux'
         run: |
           chmod +x "${{ runner.temp }}/FreeCAD.AppImage"
           cd "${{ runner.temp }}" && ./FreeCAD.AppImage --appimage-extract
 
       - name: Run native FreeCAD tests
-        if: steps.planner.outputs.run_tests == 'true'
+        if: steps.planner.outputs.run_tests == 'true' && runner.os == 'Linux'
         env:
           NATIVE_DIAGNOSTICS: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostics && matrix.target == 'stable' }}
         run: |
@@ -172,12 +195,90 @@ jobs:
             --freecad-bin "${{ runner.temp }}/squashfs-root/AppRun" \
             --reports "${{ runner.temp }}/test-reports" \
             --timeout ${{ matrix.timeout }} \
-            --target "${{ matrix.target }}" "${diagnostic_args[@]}"
+            --target "${{ matrix.target }}" \
+            --shard "${{ matrix.shard }}/${{ matrix.shards }}" "${diagnostic_args[@]}"
+
+      - name: Restore cached FreeCAD portable archive
+        id: portable-cache
+        if: steps.planner.outputs.run_tests == 'true' && runner.os == 'Windows'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/FreeCAD.7z
+          key: freecad-portable-${{ matrix.sha256 }}
+
+      - name: Download FreeCAD portable archive
+        if: steps.planner.outputs.run_tests == 'true' && runner.os == 'Windows' && steps.portable-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          curl.exe -fL -o "${{ runner.temp }}/FreeCAD.7z" "${{ matrix.url }}"
+
+      - name: Verify FreeCAD portable archive checksum
+        if: steps.planner.outputs.run_tests == 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath "${{ runner.temp }}/FreeCAD.7z").Hash.ToLowerInvariant()
+          if ($actual -ne '${{ matrix.sha256 }}') {
+            Write-Output "::error::FreeCAD portable archive SHA-256 is $actual, expected ${{ matrix.sha256 }}"
+            exit 1
+          }
+
+      - name: Extract FreeCAD portable archive
+        if: steps.planner.outputs.run_tests == 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          7z x "${{ runner.temp }}/FreeCAD.7z" "-o${{ runner.temp }}/freecad" -y -bso0 -bsp0
+
+      - name: Run native FreeCAD tests on Windows
+        if: steps.planner.outputs.run_tests == 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $freecad = Get-ChildItem -Path "${{ runner.temp }}/freecad" -Recurse -File -Filter FreeCAD.exe |
+            Where-Object { $_.Directory.Name -eq 'bin' } | Select-Object -First 1
+          if ($null -eq $freecad) {
+            Write-Output "::error::bin/FreeCAD.exe not found in the portable archive"
+            exit 1
+          }
+          python ci/run_tests.py `
+            --freecad-bin $freecad.FullName `
+            --reports "${{ runner.temp }}/test-reports" `
+            --timeout ${{ matrix.timeout }} `
+            --target "${{ matrix.target }}" `
+            --shard "${{ matrix.shard }}/${{ matrix.shards }}"
+          exit $LASTEXITCODE
 
       - name: Upload test failure reports
         if: failure() || (always() && github.event_name == 'workflow_dispatch' && inputs.native_diagnostics && matrix.target == 'stable')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: test-failure-reports-${{ matrix.target }}
+          name: test-failure-reports-${{ matrix.target }}-shard-${{ matrix.shard }}
           path: ${{ runner.temp }}/test-reports
           retention-days: 7
+
+  native:
+    name: Native FreeCAD (${{ matrix.target }})
+    needs: [targets, test]
+    # Branch protection requires these names. A skipped required check counts as passed,
+    # so the gate always runs and fails itself when a blocking target's shard failed.
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.targets.outputs.gates) }}
+
+    steps:
+      # Non-blocking shards run with continue-on-error, so only blocking shards can make needs.test.result fail.
+      - name: Check shard results
+        env:
+          TARGET: ${{ matrix.target }}
+          BLOCKING: ${{ matrix.blocking }}
+          SHARDS_RESULT: ${{ needs.test.result }}
+        run: |
+          if [[ "$BLOCKING" != "true" ]]; then
+            echo "::notice::Native FreeCAD ($TARGET) is informative: its shard jobs show its result and never fail the workflow (shard jobs result: '$SHARDS_RESULT')."
+          elif [[ "$SHARDS_RESULT" == "success" ]]; then
+            echo "Native FreeCAD ($TARGET): every blocking shard job passed (result '$SHARDS_RESULT')."
+          else
+            echo "::error::Native FreeCAD ($TARGET) is blocking and its shard jobs ended with '$SHARDS_RESULT'."
+            exit 1
+          fi

@@ -87,19 +87,30 @@ def seeded_timeout(run_timeout):
     return min(max(RERUN_TIMEOUT, run_timeout * 1.5), SEEDED_RERUN_CAP)
 
 
+def gdb_unavailable(windows=None):
+    """Why the gdb rerun cannot run on this host, or None when it can."""
+    if (os.name == "nt") if windows is None else windows:
+        return "gdb crash reruns are not available on Windows; crash rerun skipped."
+    if shutil.which("gdb") is None:
+        return "gdb is not installed; crash rerun skipped."
+    return None
+
+
 def rerun_under_gdb(command, environment, test_id, reports, scratch, timeout=RERUN_TIMEOUT, shuffle_seed=None):
     """Rerun under gdb and return a one-line note about what happened.
 
-    Without SHUFFLE_SEED only TEST_ID is rerun. With it the original selection and seed
-    (FF_TEST / FF_SHUFFLE_SEED already in ENVIRONMENT) are replayed, so order-dependent crashes reproduce.
+    Without SHUFFLE_SEED only TEST_ID is rerun, outside any shard. With it the original selection, shard and seed
+    (FF_TEST / FF_SHARD / FF_SHUFFLE_SEED already in ENVIRONMENT) are replayed, so order-dependent crashes reproduce.
     """
-    if shutil.which("gdb") is None:
-        return "gdb is not installed; crash rerun skipped."
+    unavailable = gdb_unavailable()
+    if unavailable is not None:
+        return unavailable
     rerun_reports = pathlib.Path(scratch) / "rerun-reports"
     rerun_reports.mkdir(exist_ok=True)
     env = environment.copy()
     if shuffle_seed is None:
         env["FF_TEST"] = test_id
+        env.pop("FF_SHARD", None)
         mode = "single test"
         what = test_id
     else:

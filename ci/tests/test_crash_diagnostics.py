@@ -36,7 +36,7 @@ FAKE_GDB = """#!{python}
 import json, os, sys
 with open(os.environ["FAKE_GDB_DUMP"], "w", encoding="utf-8") as f:
     json.dump({"argv": sys.argv[1:], "ff_test": os.environ.get("FF_TEST"), "ff_reports": os.environ.get("FF_REPORTS"),
-               "ff_seed": os.environ.get("FF_SHUFFLE_SEED")}, f)
+               "ff_seed": os.environ.get("FF_SHUFFLE_SEED"), "ff_shard": os.environ.get("FF_SHARD")}, f)
 if os.environ.get("FAKE_GDB_CRASH"):
     print("Program received signal SIGSEGV, Segmentation fault.")
 print("#0  fake_native_frame () at fake.c:1")
@@ -242,6 +242,20 @@ class TestCrashDiagnosisRunner(unittest.TestCase):
         self.assertIsNone(dump["ff_seed"])
         self.assertIn("single test", proc.stderr)
         self.assertNotIn("seeded suite replay", proc.stderr)
+
+    def test_sharded_crash_reruns_the_single_test_outside_the_shard(self):
+        env = self._crash_env(FAKE_GDB_CRASH="1", **self._install_gdb())
+        proc = self._run(env, "--shard", "2/3")
+        dump = json.loads(self.gdb_dump.read_text(encoding="utf-8"))
+        self.assertEqual(dump["ff_test"], TEST_ID)
+        self.assertIsNone(dump["ff_shard"], "A single-test rerun must not be filtered by the shard")
+        self.assertIn("single test", proc.stderr)
+
+    def test_sharded_seeded_crash_replays_the_same_shard(self):
+        env = self._crash_env(FAKE_GDB_CRASH="1", **self._install_gdb())
+        self._run(env, "--shard", "2/3", "--shuffle-seed", "7")
+        dump = json.loads(self.gdb_dump.read_text(encoding="utf-8"))
+        self.assertEqual((dump["ff_shard"], dump["ff_seed"], dump["ff_test"]), ("2/3", "7", None))
 
     def test_rerun_without_crash_says_did_not_reproduce(self):
         for extra in ((), ("--shuffle-seed", "5")):
