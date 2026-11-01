@@ -63,7 +63,7 @@ class TestProfileParentGuard(unittest.TestCase):
             profile = self.create(custom)
             if parent_type == "PartDesign::Body":
                 message.assert_called_once_with(
-                    "FrameForge: parent Parent (PartDesign::Body) does not accept Part::FeaturePython, "
+                    "MaxProFrame: parent Parent (PartDesign::Body) does not accept Part::FeaturePython, "
                     "keeping at document root\n"
                 )
                 self.assertEqual(tuple(parent.Group), before_group)

@@ -451,6 +451,8 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         )
         self.assertEqual(local_sketch.solve(), 0, "Imported sketch must solve cleanly.")
         self.assertEqual(len(local_sketch.ExternalGeometry), 0, "Imported sketch must have 0 external links.")
+        for name in ("FF_Provenance", "FF_AssetId", "FF_ObjectName", "FF_AssetPath"):
+            self.assertEqual(local_sketch.getGroupOfProperty(name), "MaxProFrame", name)
 
         # Assert exact object was captured (outer width 40 mm, not dummy sketch width 10 mm)
         self.assertAlmostEqual(local_sketch.Shape.BoundBox.XLength, 40.0, places=2)

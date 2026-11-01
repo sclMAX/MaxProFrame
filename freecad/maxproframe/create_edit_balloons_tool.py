@@ -72,7 +72,7 @@ def create_balloon(view, src_obj):
         raise RuntimeError("Impossible de trouver la page contenant la vue")
 
     balloon = doc.addObject("TechDraw::DrawViewBalloon", f"Balloon_{src_obj.Label}")
-    balloon.addProperty("App::PropertyString", "TargetName", "FrameForge", "Target Profile").TargetName = src_obj.Name
+    balloon.addProperty("App::PropertyString", "TargetName", "MaxProFrame", "Target Profile").TargetName = src_obj.Name
     balloon.SourceView = view
     page.addView(balloon)
 

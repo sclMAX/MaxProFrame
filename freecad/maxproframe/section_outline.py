@@ -18,7 +18,7 @@ def build_section_face(parameters, custom_face=None):
         return None
     values = dict(
         Family="",
-        FrameforgeVersion=__version__,
+        MaxProFrameVersion=__version__,
         ProfileWidth=0.0,
         ProfileHeight=0.0,
         Thickness=0.0,

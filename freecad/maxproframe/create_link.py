@@ -20,15 +20,15 @@ def makeLink(source):
 
     link.addProperty(
         "App::PropertyString",
-        "FrameforgeVersion",
-        "Frameforge",
-        "Frameforge Version used to create the profile",
-    ).FrameforgeVersion = ff_version
+        "MaxProFrameVersion",
+        "MaxProFrame",
+        "MaxProFrame version used to create the object",
+    ).MaxProFrameVersion = ff_version
 
     link.addProperty(
         "App::PropertyString",
         "PID",
-        "Frameforge",
+        "MaxProFrame",
         "Profile ID",
     ).PID = ""
 

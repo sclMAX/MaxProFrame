@@ -80,7 +80,7 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
         try:
             self.form_proxy.sb_unitprice.setValue(self.profile.UnitPrice)
         except:
-            App.Console.PrintMessage(f"Frameforge : can't find Unit Price for {self.profile.Label}\n")
+            App.Console.PrintMessage(f"MaxProFrame: can't find Unit Price for {self.profile.Label}\n")
         self.form_proxy.cb_make_fillet.setChecked(self.profile.MakeFillet)
         if hasattr(self.profile, "AnchorX"):
             ax = ANCHOR_X.index(self.profile.AnchorX) if self.profile.AnchorX in ANCHOR_X else 1

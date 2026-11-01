@@ -572,22 +572,22 @@ def get_or_import_section_sketch(library_root, asset_path, object_name, target_d
 
         # Tag captured sketch with composite provenance identity
         if not hasattr(captured_sketch, "FF_Provenance"):
-            captured_sketch.addProperty("App::PropertyString", "FF_Provenance", "FrameForge", "Source library root")
+            captured_sketch.addProperty("App::PropertyString", "FF_Provenance", "MaxProFrame", "Source library root")
         captured_sketch.FF_Provenance = canonical_root
 
         if not hasattr(captured_sketch, "FF_AssetId"):
-            captured_sketch.addProperty("App::PropertyString", "FF_AssetId", "FrameForge", "Source asset ID")
+            captured_sketch.addProperty("App::PropertyString", "FF_AssetId", "MaxProFrame", "Source asset ID")
         captured_sketch.FF_AssetId = target_aid
 
         if not hasattr(captured_sketch, "FF_ObjectName"):
             captured_sketch.addProperty(
-                "App::PropertyString", "FF_ObjectName", "FrameForge", "Source sketch object name"
+                "App::PropertyString", "FF_ObjectName", "MaxProFrame", "Source sketch object name"
             )
         captured_sketch.FF_ObjectName = str(object_name)
 
         if not hasattr(captured_sketch, "FF_AssetPath"):
             captured_sketch.addProperty(
-                "App::PropertyString", "FF_AssetPath", "FrameForge", "Source relative asset path"
+                "App::PropertyString", "FF_AssetPath", "MaxProFrame", "Source relative asset path"
             )
         captured_sketch.FF_AssetPath = norm_asset_path
 
