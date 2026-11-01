@@ -13,7 +13,7 @@ from test_extend_cut_geometry import FAR, NEAR, ExtendCutFixture
 
 from freecad.maxproframe import create_extend_cut_tool
 from freecad.maxproframe.create_extend_cut_tool import ExtendCutCommand, make_extend_cut_profile
-from freecad.maxproframe.create_trimmed_profiles_tool import TrimProfileCommand
+from freecad.maxproframe.create_notch_tool import make_notch_profile
 
 CTRL = QtCore.Qt.KeyboardModifier.ControlModifier
 
@@ -97,11 +97,11 @@ class TestExtendCutCommand(PanelFixture):
                 self.select(*selection)
                 self.assertTrue(ExtendCutCommand().IsActive())
 
-    def test_the_command_is_on_the_toolbar_next_to_trim_profile(self):
+    def test_the_command_is_on_the_toolbar_next_to_notch(self):
         from freecad.maxproframe.InitGui import MaxProFrame
 
         tools = MaxProFrame.toolbox_maxproframe
-        self.assertEqual(tools.index("MaxProFrame_ExtendCut"), tools.index("MaxProFrame_TrimProfiles") + 1)
+        self.assertEqual(tools.index("MaxProFrame_ExtendCut"), tools.index("MaxProFrame_Notch") + 1)
         resources = ExtendCutCommand().GetResources()
         self.assertEqual(resources["MenuText"], "Extend / Cut")
         self.assertTrue(resources["Pixmap"].endswith("trim_extend.svg"))
@@ -152,9 +152,7 @@ class TestExtendCutPanel(PanelFixture):
     def test_the_target_and_its_trim_chain_cannot_be_cut(self):
         target = self.target()
         far = self.profile(1000, 600)
-        trim = TrimProfileCommand().make_trimmed_profile(
-            trimmedBody=target, trimmingBoundary=[(far, (self.face_towards(far, App.Vector(-1, 0, 0)),))]
-        )
+        trim = make_notch_profile(target, far)
         self.doc.recompute()
         panel = self.run_command((trim, self.near_face(trim)))
         for obj in (trim, target):

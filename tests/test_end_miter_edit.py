@@ -10,7 +10,7 @@ from miter_helpers import use_language
 from PySide import QtWidgets
 from test_end_miter_geometry import CENTER, CHAINED, MiterFixture
 
-from freecad.maxproframe import create_end_miter_tool, create_trimmed_profiles_tool
+from freecad.maxproframe import create_end_miter_tool, create_notch_tool
 from freecad.maxproframe.extruded_cutout import ExtrudedCutout
 
 
@@ -163,13 +163,13 @@ class TestEditEndMiter(MiterFixture):
             self.assertFalse(obj.MiterExtend)
             self.assertEqual(obj.getStatusString(), "Valid")
 
-    def test_editing_an_end_trim_still_opens_the_trim_panel(self):
+    def test_editing_a_notch_opens_the_notch_panel(self):
         (p1, p2), _ = self.pair()
-        trim = create_trimmed_profiles_tool.TrimProfileCommand().make_trimmed_profile(p1, [(p2, ("Face1",))])
+        trim = create_notch_tool.make_notch_profile(p1, p2)
         self.doc.recompute()
-        panel = self.open_editor(trim, create_trimmed_profiles_tool, "CreateTrimmedProfileTaskPanel")
-        self.assertIsInstance(panel, create_trimmed_profiles_tool.CreateTrimmedProfileTaskPanel)
-        self.assertEqual(panel.mode, "edition")
+        panel = self.open_editor(trim, create_notch_tool, "NotchTaskPanel")
+        self.assertIsInstance(panel, create_notch_tool.NotchTaskPanel)
+        self.assertIs(panel.edited, trim)
         self.assertTrue(panel.reject())
 
 

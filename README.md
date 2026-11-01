@@ -131,7 +131,7 @@ the legacy zero-length Pipe face still represents its outer disk (not its bore).
   - **Extend** (on by default) lengthens a profile that stops short of the miter plane, so both cut faces meet. The extension is limited to ten times the section diagonal, so nearly parallel profiles do not grow without bound.
   - **Gap** leaves that distance between the two cut faces of a joint; each profile is cut back half of it.
   - Double-click an existing miter in the tree to change Extend and Gap: the new values apply to that miter and to the partner miters that cut against it, so the gap of the joint stays the value shown.
-- Use **Trim Profiles** to cut a profile flush against the face of another beam.
+- Use **Notch** to fit several profiles at once against a target profile, copying its shape (for example an I beam ending on another I beam): pick the target, then click the profiles. Each one keeps the piece that reaches its far end, in one Undo step.
 - Use **Extend / Cut** to bring several profiles at once to a target: pick a planar face or a whole profile, then click the profiles. Each one is extended or cut so its nearest end lies on the target plane, with an optional **Gap**, in one Undo step.
 - Use **Extruded Cutout** to cut notches, holes, or clearances from an attached sketch.
 

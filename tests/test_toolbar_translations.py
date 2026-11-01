@@ -13,8 +13,8 @@ from freecad.maxproframe import (  # noqa: F401  (importing registers the comman
     create_extend_cut_tool,
     create_extruded_cutout_tool,
     create_link,
+    create_notch_tool,
     create_profiles_tool,
-    create_trimmed_profiles_tool,
     library_manager_dialog,
     parametric_line,
     populate_ids_tool,
@@ -39,10 +39,10 @@ EXPECTED = {
         "Gestionar Bibliotecas de Perfiles",
         "Crear, editar y gestionar bibliotecas y dimensiones de perfiles personalizados",
     ),
-    "MaxProFrame_TrimProfiles": (
-        "Trim Profile",
-        "Recortar perfil",
-        "Seleccioná un perfil y luego caras de otro perfil.",
+    "MaxProFrame_Notch": (
+        "Notch",
+        "Encastrar",
+        "Seleccioná un perfil destino y luego los perfiles a encastrar en él.",
     ),
     "MaxProFrame_ExtendCut": (
         "Extend / Cut",

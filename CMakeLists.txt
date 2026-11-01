@@ -12,8 +12,6 @@ set(Namespace_SRCS
         freecad/maxproframe/resources/icons/box.svg
         freecad/maxproframe/resources/icons/bom.svg
         freecad/maxproframe/resources/icons/parts_list.svg
-        freecad/maxproframe/resources/icons/corner-coped-type.svg
-        freecad/maxproframe/resources/icons/corner-simple-type.svg
         freecad/maxproframe/resources/icons/corner-end-trim.svg
         freecad/maxproframe/resources/icons/list-remove.svg
         freecad/maxproframe/resources/icons/extendcurve.svg
@@ -60,7 +58,6 @@ set(Namespace_SRCS
         freecad/maxproframe/resources/help/library-manager.md
         freecad/maxproframe/resources/help/library-manager.es.md
 
-        freecad/maxproframe/resources/ui/create_trimmed_profiles.ui
         freecad/maxproframe/resources/ui/extend_cut.ui
         freecad/maxproframe/resources/ui/create_profiles.ui
 
@@ -68,13 +65,13 @@ set(Namespace_SRCS
 
         freecad/maxproframe/version.py
         freecad/maxproframe/ff_tools.py
-        freecad/maxproframe/create_trimmed_profiles_tool.py
         freecad/maxproframe/edit_profile_tool.py
         freecad/maxproframe/profile.py
         freecad/maxproframe/_utils.py
         freecad/maxproframe/parametric_line.py
         freecad/maxproframe/create_end_miter_tool.py
         freecad/maxproframe/create_extend_cut_tool.py
+        freecad/maxproframe/create_notch_tool.py
         freecad/maxproframe/trimmed_profile.py
         freecad/maxproframe/init_gui.py
         freecad/maxproframe/create_profiles_tool.py

@@ -6,7 +6,7 @@ import FreeCAD as App
 import Part
 from miter_helpers import use_language
 from test_end_miter_geometry import CENTER
-from test_end_trim_geometry import TrimFixture
+from test_notch_geometry import TrimFixture
 
 from freecad.maxproframe.create_extend_cut_tool import make_extend_cut_profile
 
