@@ -127,5 +127,40 @@ class TestNoFrameForgePreferenceFallback(unittest.TestCase):
         self.assertEqual(self.legacy.GetContents(), legacy_before)
 
 
+class TestNoFrameForgeProfilesFolder(unittest.TestCase):
+    """User libraries come only from MaxProFrame's own folder and variable."""
+
+    def setUp(self):
+        import os
+        import tempfile
+
+        self.os = os
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.legacy = os.path.join(self.temp.name, "FrameForge", "profiles")
+        os.makedirs(self.legacy)
+        env = {k: v for k, v in os.environ.items() if k not in ("MAXPROFRAME_USER_PROFILES_DIR",)}
+        env["FRAMEFORGE_USER_PROFILES_DIR"] = self.legacy
+        env["XDG_DATA_HOME"] = self.temp.name
+        env_patch = patch.dict(os.environ, env, clear=True)
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+
+    def test_frameforge_folder_and_variable_are_ignored(self):
+        from freecad.maxproframe.library_manager import get_default_user_profiles_dir
+
+        with patch.object(App, "getUserAppDataDir", return_value=self.temp.name):
+            self.assertEqual(
+                get_default_user_profiles_dir(), self.os.path.join(self.temp.name, "MaxProFrame", "profiles")
+            )
+
+    def test_maxproframe_variable_is_used(self):
+        from freecad.maxproframe.library_manager import get_default_user_profiles_dir
+
+        own = self.os.path.join(self.temp.name, "own")
+        with patch.dict(self.os.environ, {"MAXPROFRAME_USER_PROFILES_DIR": own}):
+            self.assertEqual(get_default_user_profiles_dir(), own)
+
+
 if __name__ == "__main__":
     unittest.main()

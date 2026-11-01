@@ -95,7 +95,7 @@ Portable folder libraries allow users to store FrameForge profile catalogs and s
 |-------|--------------------------|
 | **Catalog Root** | Self-contained user-selected directory containing `<root>/library.json`. Future section sketches live in relative paths under the root. |
 | **Manifest Format** | Standard FrameForge catalog JSON format with `_metadata` (`name`, `material`, `density`, `is_folder: true`). Never contains machine-specific workstation paths. |
-| **Local Registry** | Stored in dedicated subdirectory `.registry/folders.json` inside the user profile data directory (`FRAMEFORGE_USER_PROFILES_DIR`). Never scanned by legacy flat `*.json` search. |
+| **Local Registry** | Stored in dedicated subdirectory `.registry/folders.json` inside the user profile data directory (`MAXPROFRAME_USER_PROFILES_DIR`). Never scanned by legacy flat `*.json` search. |
 | **Registration Idempotence** | Canonical path normalization ensures registering the same directory multiple times or via relative aliases produces a single registry entry. |
 | **Missing / Unmounted Paths** | Missing or disconnected storage directories are omitted gracefully from `list_libraries()` without crashing or silently dropping from the disk registry. |
 | **Deletion Protection** | `delete_user_library()` rejects registered folder libraries with a diagnostic pointing to `unregister_folder_library()`, preventing accidental data destruction. |

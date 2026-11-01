@@ -7,27 +7,27 @@ from pathlib import Path
 
 import FreeCAD as App
 import Part
+from PySide import QtGui, QtWidgets
 
+from freecad.maxproframe.create_bom import group_profiles, traverse_assembly
+from freecad.maxproframe.edit_profile_tool import EditProfileTaskPanel
+from freecad.maxproframe.extruded_cutout import ExtrudedCutout
+from freecad.maxproframe.ff_tools import PROFILEIMAGES_PATH
 from freecad.maxproframe.library_manager import (
     FILLET_FAMILIES,
-    get_canonical_family,
-    calculate_linear_weight,
     LibraryManager,
+    calculate_linear_weight,
+    get_canonical_family,
 )
-from freecad.maxproframe.ff_tools import PROFILEIMAGES_PATH
-from PySide import QtGui, QtWidgets
 from freecad.maxproframe.profile import Profile
-from freecad.maxproframe.create_bom import traverse_assembly, group_profiles
 from freecad.maxproframe.trimmed_profile import TrimmedProfile
-from freecad.maxproframe.extruded_cutout import ExtrudedCutout
-from freecad.maxproframe.edit_profile_tool import EditProfileTaskPanel
 
 
 class TestCatalogFamilyProfiles(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp(prefix="ff_test_catalog_")
-        self.orig_user_dir = os.environ.get("FRAMEFORGE_USER_PROFILES_DIR")
-        os.environ["FRAMEFORGE_USER_PROFILES_DIR"] = self.temp_dir
+        self.orig_user_dir = os.environ.get("MAXPROFRAME_USER_PROFILES_DIR")
+        os.environ["MAXPROFRAME_USER_PROFILES_DIR"] = self.temp_dir
         self.doc_count = 0
         self.created_docs = []
 
@@ -77,9 +77,9 @@ class TestCatalogFamilyProfiles(unittest.TestCase):
             except Exception:
                 pass
         if self.orig_user_dir is not None:
-            os.environ["FRAMEFORGE_USER_PROFILES_DIR"] = self.orig_user_dir
+            os.environ["MAXPROFRAME_USER_PROFILES_DIR"] = self.orig_user_dir
         else:
-            os.environ.pop("FRAMEFORGE_USER_PROFILES_DIR", None)
+            os.environ.pop("MAXPROFRAME_USER_PROFILES_DIR", None)
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir, ignore_errors=True)
 

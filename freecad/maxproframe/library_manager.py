@@ -71,7 +71,6 @@ def get_canonical_family(family_key, family_data=None):
     return family_key
 
 
-
 def sanitize_library_name(name):
     """
     Sanitizes a user-provided library name into a safe identifier for filenames.
@@ -148,6 +147,7 @@ def calculate_linear_weight(
             area_mm2 = w * h
     elif family in ("C",):
         from freecad.maxproframe.c_profile import calculate_c_area
+
         area_mm2 = calculate_c_area(
             height=h,
             width=w,
@@ -174,41 +174,25 @@ def get_known_families():
 
 
 def get_default_stock_profiles_dir():
-    """Returns the bundled profiles directory inside FrameForge resources."""
+    """Returns the bundled profiles directory inside MaxProFrame resources."""
     base_dir = os.path.dirname(__file__)
     return os.path.join(base_dir, "resources", "profiles")
 
 
 def get_default_user_profiles_dir():
-    """
-    Returns the user application data directory for MaxProFrame custom profiles,
-    falling back to legacy FrameForge directories if they exist.
-    """
-    env_dir = os.environ.get("MAXPROFRAME_USER_PROFILES_DIR") or os.environ.get("FRAMEFORGE_USER_PROFILES_DIR")
+    """Returns the user application data directory for MaxProFrame custom profiles."""
+    env_dir = os.environ.get("MAXPROFRAME_USER_PROFILES_DIR")
     if env_dir:
         return env_dir
 
     try:
         import FreeCAD
 
-        app_data = FreeCAD.getUserAppDataDir()
-        max_path = os.path.join(app_data, "MaxProFrame", "profiles")
-        if os.path.isdir(max_path):
-            return max_path
-        legacy_path = os.path.join(app_data, "FrameForge", "profiles")
-        if os.path.isdir(legacy_path):
-            return legacy_path
-        return max_path
+        return os.path.join(FreeCAD.getUserAppDataDir(), "MaxProFrame", "profiles")
     except Exception:
         # Fallback for CLI or headless testing outside FreeCAD
         xdg_data = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
-        max_path = os.path.join(xdg_data, "FreeCAD", "MaxProFrame", "profiles")
-        if os.path.isdir(max_path):
-            return max_path
-        legacy_path = os.path.join(xdg_data, "FreeCAD", "FrameForge", "profiles")
-        if os.path.isdir(legacy_path):
-            return legacy_path
-        return max_path
+        return os.path.join(xdg_data, "FreeCAD", "MaxProFrame", "profiles")
 
 
 class LibraryManager:
@@ -236,9 +220,7 @@ class LibraryManager:
             except ValueError:
                 common = None
             if common != canonical_root:
-                raise ValueError(
-                    f"Manifest '{file_path}' is a symlink escaping folder root '{canonical_root}'."
-                )
+                raise ValueError(f"Manifest '{file_path}' is a symlink escaping folder root '{canonical_root}'.")
 
     @staticmethod
     def _validate_folder_catalog_data(data, material=None, density=None, require_name=True):
@@ -320,23 +302,17 @@ class LibraryManager:
         if isinstance(data, dict):
             raw_folders = data.get("folders")
             if not isinstance(raw_folders, list):
-                raise ValueError(
-                    f"Corrupt registry schema at '{self.registry_path}': 'folders' must be a list."
-                )
+                raise ValueError(f"Corrupt registry schema at '{self.registry_path}': 'folders' must be a list.")
         elif isinstance(data, list):
             raw_folders = data
         else:
-            raise ValueError(
-                f"Corrupt registry schema at '{self.registry_path}': root must be a dict or list."
-            )
+            raise ValueError(f"Corrupt registry schema at '{self.registry_path}': root must be a dict or list.")
 
         canonical_folders = []
         seen = set()
         for p in raw_folders:
             if not isinstance(p, str):
-                raise ValueError(
-                    f"Corrupt registry schema at '{self.registry_path}': folder entry must be a string."
-                )
+                raise ValueError(f"Corrupt registry schema at '{self.registry_path}': folder entry must be a string.")
             p_strip = p.strip()
             if p_strip:
                 canon = os.path.realpath(p_strip)
@@ -685,9 +661,7 @@ class LibraryManager:
 
         # Validate supplied data and arguments before any file operations
         catalog_input = data if data is not None else {}
-        self._validate_folder_catalog_data(
-            catalog_input, material=material, density=density, require_name=False
-        )
+        self._validate_folder_catalog_data(catalog_input, material=material, density=density, require_name=False)
 
         canonical_root = os.path.realpath(os.path.abspath(folder_path))
         manifest_path = os.path.join(canonical_root, "library.json")
@@ -856,9 +830,7 @@ class LibraryManager:
             raise FileExistsError(f"A library manifest already exists in '{folder_match}'.")
 
         # Validate input data, material, and density before any mutation or writes
-        self._validate_folder_catalog_data(
-            data, material=material, density=density, require_name=False
-        )
+        self._validate_folder_catalog_data(data, material=material, density=density, require_name=False)
 
         # Material immutability check
         existing_name = None
@@ -879,9 +851,7 @@ class LibraryManager:
                             existing_dens = inferred_dens
 
                     requested_mat = material or (
-                        data.get("_metadata", {}).get("material")
-                        if isinstance(data, dict)
-                        else None
+                        data.get("_metadata", {}).get("material") if isinstance(data, dict) else None
                     )
                     if existing_mat and requested_mat and requested_mat != existing_mat:
                         raise ValueError(
@@ -1013,9 +983,7 @@ class LibraryManager:
                             existing_dens = inferred_dens
 
                     requested_mat = material or (
-                        data.get("_metadata", {}).get("material")
-                        if isinstance(data, dict)
-                        else None
+                        data.get("_metadata", {}).get("material") if isinstance(data, dict) else None
                     )
                     if existing_mat and requested_mat and requested_mat != existing_mat:
                         raise ValueError(
@@ -1096,11 +1064,13 @@ class LibraryManager:
     def export_library_zip(self, name_or_path, archive_path):
         """Export a registered custom folder; return the absolute ZIP path, never overwrite."""
         from freecad.maxproframe.library_archive import export_library_zip
+
         return export_library_zip(self, name_or_path, archive_path)
 
     def import_library_zip(self, archive_path, target_folder_path=None):
         """Validate and import into a new owned folder; return registration metadata."""
         from freecad.maxproframe.library_archive import import_library_zip
+
         return import_library_zip(self, archive_path, target_folder_path)
 
     def get_default_library_folder(self, name):
@@ -1132,8 +1102,11 @@ class LibraryManager:
             )
             if source is None:
                 source = next(
-                    (lib for lib in libraries
-                     if os.path.splitext(lib["filename"])[0].lower() == source_name.strip().lower()),
+                    (
+                        lib
+                        for lib in libraries
+                        if os.path.splitext(lib["filename"])[0].lower() == source_name.strip().lower()
+                    ),
                     None,
                 )
             if source is None:
@@ -1168,9 +1141,7 @@ class LibraryManager:
             if self._get_registered_folder(canon_dest):
                 raise FileExistsError(f"Target folder path '{target_folder_path}' is already registered.")
 
-            src_manifest_path = (
-                os.path.join(canon_src, "library.json") if source_folder else source["path"]
-            )
+            src_manifest_path = os.path.join(canon_src, "library.json") if source_folder else source["path"]
             if not os.path.isfile(src_manifest_path):
                 raise FileNotFoundError(f"Source folder library manifest '{src_manifest_path}' not found.")
 
@@ -1335,11 +1306,7 @@ class LibraryManager:
                                             if "Lip Length" in size_props
                                             else None
                                         )
-                                        r1 = (
-                                            float(size_props.get("Radius1", 0))
-                                            if "Radius1" in size_props
-                                            else None
-                                        )
+                                        r1 = float(size_props.get("Radius1", 0)) if "Radius1" in size_props else None
                                         make_fillet = bool(fam_data.get("fillet", False))
                                         new_weight = calculate_linear_weight(
                                             family=canonical,
@@ -1368,8 +1335,8 @@ class LibraryManager:
                     if unrecalculated:
                         prefix = (
                             "Cannot recalculate weights for"
-                            if source_folder else
-                            "Cannot recalculate weights for unsupported complex families"
+                            if source_folder
+                            else "Cannot recalculate weights for unsupported complex families"
                         )
                         raise ValueError(
                             f"{prefix}: {', '.join(unrecalculated[:3])}. Duplicate without weight recalculation to preserve nominal weights."
@@ -1377,9 +1344,7 @@ class LibraryManager:
 
                 # Write manifest atomically in destination folder
                 manifest_path = os.path.join(canon_dest, "library.json")
-                temp_fd, temp_path = tempfile.mkstemp(
-                    prefix=".library_", suffix=".tmp", dir=canon_dest
-                )
+                temp_fd, temp_path = tempfile.mkstemp(prefix=".library_", suffix=".tmp", dir=canon_dest)
                 try:
                     with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
                         json.dump(cloned_data, f, indent=2)
