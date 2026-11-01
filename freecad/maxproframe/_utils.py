@@ -220,7 +220,7 @@ def get_trimmed_profile_all_cutting_angles(trimmed_profile):
     dir_vec = (edge.Vertexes[-1].Point.sub(edge.Vertexes[0].Point)).normalize()
 
     if trimmed_profile.TrimmedProfileType == "End Trim":
-        if trimmed_profile.CutType in ["Simple fit", "Simple cut"]:
+        if trimmed_profile.CutType == "Simple fit":
             for bound in trimmed_profile.TrimmingBoundary:
                 for sub in bound[1]:  # sous-objets (souvent "FaceX")
                     face = bound[0].getSubObject(sub)
@@ -232,7 +232,7 @@ def get_trimmed_profile_all_cutting_angles(trimmed_profile):
                             angle = 180 - angle
 
                         angles.append(angle)
-        elif trimmed_profile.CutType in ["Perfect fit", "Coped cut"]:
+        elif trimmed_profile.CutType == "Perfect fit":
             angles.append("P")
 
         else:

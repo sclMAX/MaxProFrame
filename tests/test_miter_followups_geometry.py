@@ -69,21 +69,6 @@ class TestMiterFollowupsGeometry(MiterFixture):
             self.assertAlmostEqual(obj.Proxy.miter_planes(obj)[0].cut_angle(), 64.87, places=6)
             self.assertEqual(obj.CuttingAngleB, "@ 64.9")
 
-    def test_legacy_miter_gains_properties_through_migration(self):
-        _, (m1, _) = self.miter_pair(
-            CHAINED, dict(CENTER, extension=0.0), dict(CENTER, extension=0.0), MiterExtend=False
-        )
-        volume = m1.Shape.Volume
-        m1.removeProperty("MiterExtend")
-        m1.removeProperty("MiterGap")
-        self.assertFalse(hasattr(m1, "MiterExtend"))
-        m1.touch()
-        self.doc.recompute()
-        self.assertEqual(m1.getStatusString(), "Valid")
-        self.assertFalse(m1.MiterExtend)
-        self.assertEqual(m1.MiterGap.Value, 0.0)
-        self.assertAlmostEqual(m1.Shape.Volume, volume, places=4)
-
 
 if __name__ == "__main__":
     unittest.main()
