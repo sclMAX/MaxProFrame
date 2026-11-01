@@ -1,10 +1,11 @@
 """Native read-only descriptions must never truncate the stored catalog value."""
+
 import copy
 import unittest
 
-from PySide import QtCore, QtWidgets
-
 import test_library_usability as fixtures
+from elision_helpers import font_ellipsis
+from PySide import QtCore, QtWidgets
 
 
 class TestCustomDescriptionDisplay(unittest.TestCase):
@@ -26,7 +27,8 @@ class TestCustomDescriptionDisplay(unittest.TestCase):
         lines = QtWidgets.QLabel.text(field).splitlines()
         displayed = " ".join(lines)
         self.assertTrue(lines[0].startswith("Perfil C"), displayed)
-        self.assertTrue(lines[-1].endswith("…"), displayed)
+        self.assertLess(len(displayed), len(text))
+        self.assertTrue(lines[-1].endswith(font_ellipsis(field.fontMetrics())), displayed)
         self.assertEqual(len(lines), 2)
         for line in lines:
             self.assertLessEqual(field.fontMetrics().horizontalAdvance(line), field.contentsRect().width())

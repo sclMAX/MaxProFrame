@@ -41,7 +41,7 @@ class TestDXFUnitsDialog(unittest.TestCase):
         root = Path(__file__).resolve().parents[1] / "freecad/maxproframe"
         sources = set()
         for filename in ("dxf_section_dialog.py", "sketch_section_dialog.py"):
-            for node in ast.walk(ast.parse((root / filename).read_text())):
+            for node in ast.walk(ast.parse((root / filename).read_text(encoding="utf-8"))):
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "translate":
                     if len(node.args) >= 2 and all(isinstance(arg, ast.Constant) for arg in node.args[:2]):
                         sources.add((node.args[0].value, node.args[1].value))

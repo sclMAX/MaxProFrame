@@ -9,10 +9,12 @@ from freecad.maxproframe.compile_translations import compile_all_translations, c
 
 try:
     from PySide import QtCore
+
     HAS_PYSIDE = True
 except ImportError:
     try:
         from PySide6 import QtCore
+
         HAS_PYSIDE = True
     except ImportError:
         HAS_PYSIDE = False
@@ -58,9 +60,20 @@ MINIMAL_CUSTOM_FR_TS = """<?xml version="1.0" encoding="utf-8"?>
 """
 
 
+def folds_case(directory):
+    """True when the file system of directory ignores case (NTFS and APFS by default)."""
+    probe = tempfile.mkdtemp(prefix="CaseProbe", dir=directory)
+    try:
+        return os.path.exists(os.path.join(directory, os.path.basename(probe).swapcase()))
+    finally:
+        os.rmdir(probe)
+
+
 class TestCompileTranslations(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.mkdtemp(prefix="ff_test_compile_")
+        # FrameForge_es.qm and frameforge_es.qm are one file where case is ignored.
+        self.file_name = str.casefold if folds_case(self.test_dir) else str
 
     def tearDown(self):
         if os.path.exists(self.test_dir):
@@ -81,7 +94,7 @@ class TestCompileTranslations(unittest.TestCase):
         }
 
         created_files = set(os.listdir(self.test_dir)) - {"frameforge_es.ts"}
-        self.assertEqual(created_files, expected_aliases)
+        self.assertEqual({self.file_name(name) for name in created_files}, set(map(self.file_name, expected_aliases)))
         self.assertEqual(set(os.path.basename(p) for p in compiled), expected_aliases)
 
         if HAS_PYSIDE:
@@ -120,7 +133,7 @@ class TestCompileTranslations(unittest.TestCase):
         all_expected = expected_project_aliases | {"unrelated_es.qm", "custom_fr.qm"}
 
         created_files = set(os.listdir(self.test_dir)) - {"frameforge_es.ts", "unrelated_es.ts", "custom_fr.ts"}
-        self.assertEqual(created_files, all_expected)
+        self.assertEqual({self.file_name(name) for name in created_files}, set(map(self.file_name, all_expected)))
         self.assertEqual(set(os.path.basename(p) for p in compiled), all_expected)
 
         # Ensure unrelated catalogs did NOT generate prefix aliases

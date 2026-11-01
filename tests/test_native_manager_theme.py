@@ -7,9 +7,9 @@ The two literal fixtures stand for already-resolved FreeCAD theme tokens.
 import copy
 import json
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 try:
@@ -24,7 +24,6 @@ from freecad.maxproframe.library_manager_dialog import (
     ProfileLibraryManagerDialog,
 )
 
-
 THEMES = (
     {"surface": "#24374b", "ink": "#f3dfac", "button": "#40566d", "disabled": "#8394a5"},
     {"surface": "#e9dfca", "ink": "#283c59", "button": "#c9d9e5", "disabled": "#68777e"},
@@ -32,7 +31,8 @@ THEMES = (
 
 
 def stylesheet(theme):
-    return """
+    return (
+        """
         QDialog { background-color: %(surface)s; color: %(ink)s; }
         QLabel {
             background-color: %(surface)s; color: %(ink)s;
@@ -43,7 +43,9 @@ def stylesheet(theme):
             border: 1px solid %(ink)s; padding: 6px 16px;
         }
         QPushButton:disabled { background-color: %(surface)s; color: %(disabled)s; }
-    """ % theme
+    """
+        % theme
+    )
 
 
 class TestNativeManagerTheme(unittest.TestCase):
@@ -127,8 +129,12 @@ class TestNativeManagerTheme(unittest.TestCase):
         ratio = image.devicePixelRatio()
         # Ignore borders: demand actual text-colored ink inside the content area.
         found = any(
-            max(abs(actual.red() - expected.red()), abs(actual.green() - expected.green()),
-                abs(actual.blue() - expected.blue())) <= 25
+            max(
+                abs(actual.red() - expected.red()),
+                abs(actual.green() - expected.green()),
+                abs(actual.blue() - expected.blue()),
+            )
+            <= 25
             for y in range(int(7 * ratio), int(image.height() - 7 * ratio))
             for x in range(int(10 * ratio), int(image.width() - 10 * ratio))
             for actual in (image.pixelColor(x, y),)
@@ -155,10 +161,12 @@ class TestNativeManagerTheme(unittest.TestCase):
                             self.assert_surface(badge, theme["surface"])
                             self.assert_ink(badge, theme["ink"])
                             self.assertGreaterEqual(badge.height() - 12, badge.fontMetrics().height())
-                            badge.setFixedWidth(45)
+                            # At most 27 px of text room, and always less than the text needs in this font.
+                            room = min(27, badge.fontMetrics().horizontalAdvance(full_text) - 1)
+                            badge.setFixedWidth(room + 2 * badge._TEXT_INSET_X)
                             self.settle(dialog)
                             self.assertEqual(badge.minimumSizeHint().width(), 0)
-                            elided = badge.fontMetrics().elidedText(full_text, QtCore.Qt.ElideRight, 27)
+                            elided = badge.fontMetrics().elidedText(full_text, QtCore.Qt.ElideRight, room)
                             self.assertNotEqual(elided, full_text)
                             self.assertEqual((badge.text(), badge.toolTip()), (full_text, tooltip))
                             self.assert_ink(badge, theme["ink"])

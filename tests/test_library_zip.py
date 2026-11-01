@@ -498,10 +498,10 @@ class TestLibraryZip(unittest.TestCase):
             "C:/drive",
             "sections\\..\\..\\outside.FCStd",
         ):
-            data = json.loads(manifest.read_text())
+            data = json.loads(manifest.read_text(encoding="utf-8"))
             for props in data["Custom Profile"]["sizes"].values():
                 props["asset_path"] = asset
-            manifest.write_text(json.dumps(data))
+            manifest.write_text(json.dumps(data), encoding="utf-8")
             before = self.snapshot()
             with self.assertRaises((ValueError, FileNotFoundError)):
                 self.manager.export_library_zip("Portable", str(self.root / "export.zip"))
