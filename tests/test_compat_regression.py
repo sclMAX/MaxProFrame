@@ -4,6 +4,7 @@ no module redirect, no command aliases and no legacy preference reads.
 """
 
 import importlib
+import pkgutil
 import sys
 import unittest
 import uuid
@@ -47,20 +48,11 @@ class TestNoFrameForgeModuleRedirect(unittest.TestCase):
 
 class TestNoFrameForgeCommandAliases(unittest.TestCase):
     def test_registered_commands_have_no_frameforge_alias(self):
-        from freecad.maxproframe import (  # noqa: F401 - imports register the commands
-            create_bom_tool,
-            create_edit_balloons_tool,
-            create_end_miter_tool,
-            create_extruded_cutout_tool,
-            create_link,
-            create_profiles_tool,
-            create_trimmed_profiles_tool,
-            edit_profile_tool,
-            library_manager_dialog,
-            parametric_line,
-            populate_ids_tool,
-            utilities,
-        )
+        # Importing a command module registers its commands; discover them so new or removed tools stay covered.
+        modules = ["create_link", "library_manager_dialog", "parametric_line", "utilities"]
+        modules += [info.name for info in pkgutil.iter_modules(maxproframe.__path__) if info.name.endswith("_tool")]
+        for name in modules:
+            importlib.import_module(f"freecad.maxproframe.{name}")
 
         commands = set(Gui.listCommands())
         canonical = sorted(name for name in commands if name.startswith("MaxProFrame_"))
