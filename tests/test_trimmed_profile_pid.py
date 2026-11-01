@@ -44,8 +44,7 @@ class TestTrimmedProfilePID(unittest.TestCase):
         TrimmedProfile(self.trimmed)
         self.trimmed.TrimmedBody = self.base
         self.trimmed.TrimmingBoundary = [(plane, ("Face1",))]
-        self.trimmed.TrimmedProfileType = "End Trim"
-        self.trimmed.CutType = "Simple fit"
+        self.trimmed.TrimmedProfileType = "Extend Cut"
         self.doc.recompute()
         self.assertEqual(self.trimmed.getStatusString(), "Valid")
         self.doc.clearUndos()

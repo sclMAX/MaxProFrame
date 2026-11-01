@@ -1,16 +1,16 @@
-"""End Trim objects are placed in the trimmed profile's own container."""
+"""Notch objects are placed in the trimmed profile's own container."""
 
 import unittest
 
 import FreeCAD as App
 from test_end_miter_geometry import CENTER, CHAINED, MiterFixture
 
-from freecad.maxproframe import create_profiles_tool, create_trimmed_profiles_tool
-from freecad.maxproframe.create_trimmed_profiles_tool import TrimProfileCommand
+from freecad.maxproframe import create_extend_cut_tool, create_profiles_tool
+from freecad.maxproframe.create_notch_tool import make_notch_profile
 
 
-class TestEndTrimContainer(MiterFixture):
-    def test_trim_stays_in_the_profile_container_inside_nested_parts(self):
+class TestNotchContainer(MiterFixture):
+    def test_notch_stays_in_the_profile_container_inside_nested_parts(self):
         App.setActiveDocument(self.doc.Name)
         outer = self.doc.addObject("App::Part", "Outer")
         inner = self.doc.addObject("App::Part", "Inner")
@@ -22,7 +22,7 @@ class TestEndTrimContainer(MiterFixture):
         inner.addObjects(sketches + [p1, p2])
         self.doc.recompute()
 
-        trim = TrimProfileCommand().make_trimmed_profile(trimmedBody=p1, trimmingBoundary=[(p2, ("Face1",))])
+        trim = make_notch_profile(p1, p2)
         self.doc.recompute()
 
         self.assertEqual(trim.getStatusString(), "Valid")
@@ -31,9 +31,9 @@ class TestEndTrimContainer(MiterFixture):
         expected = inner.getGlobalPlacement().multVec(p1.Shape.BoundBox.Center)
         self.assertLess((placed - expected).Length, 60.0)
 
-    def test_trim_tool_places_trims_with_the_create_profile_helper(self):
-        # The End Trim tool depends on Create Profile, not on the End Miter command module.
-        self.assertIs(create_trimmed_profiles_tool.place_in_container_of, create_profiles_tool.place_in_container_of)
+    def test_notch_tool_places_trims_with_the_create_profile_helper(self):
+        # Notch trims are made by the shared target joint factory, which places them with the Create Profile helper.
+        self.assertIs(create_extend_cut_tool.place_in_container_of, create_profiles_tool.place_in_container_of)
 
 
 if __name__ == "__main__":

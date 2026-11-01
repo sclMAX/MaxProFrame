@@ -1039,6 +1039,13 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Extend / Cut: the target face {} of {} is not planar.</source><translation>Extender / cortar: la cara destino {} de {} no es plana.</translation></message>
     <message><source>Extend / Cut: the target plane is parallel to the profile axis.</source><translation>Extender / cortar: el plano destino es paralelo al eje del perfil.</translation></message>
     <message><source>Extend / Cut: the profile axis crosses no face of {}.</source><translation>Extender / cortar: el eje del perfil no atraviesa ninguna cara de {}.</translation></message>
+    <message><source>Notch</source><translation>Encastrar</translation></message>
+    <message><source>Edit Notch</source><translation>Editar encastre</translation></message>
+    <message><source>Click the profiles to notch. Ctrl+click drops one.</source><translation>Hacé clic en los perfiles a encastrar. Ctrl+clic quita uno.</translation></message>
+    <message><source>Click a profile to change the target.</source><translation>Hacé clic en un perfil para cambiar el destino.</translation></message>
+    <message><source>Click the target profile, or select it in the tree.</source><translation>Hacé clic en el perfil destino o seleccionalo en el árbol.</translation></message>
+    <message><source>Select the target profile.</source><translation>Seleccioná el perfil destino.</translation></message>
+    <message><source>Select the profiles to notch.</source><translation>Seleccioná los perfiles a encastrar.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ParametricLine</name>
@@ -1056,9 +1063,9 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Create, edit and manage custom profile libraries and dimensions</source><translation>Crear, editar y gestionar bibliotecas y dimensiones de perfiles personalizados</translation></message>
 </context>
 <context>
-    <name>MaxProFrame_TrimProfiles</name>
-    <message><source>Trim Profile</source><translation>Recortar perfil</translation></message>
-    <message><source>&lt;b&gt;Trim a profile&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a profile, then faces of another profile.</source><translation>&lt;b&gt;Recortar un perfil&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná un perfil y luego caras de otro perfil.</translation></message>
+    <name>MaxProFrame_Notch</name>
+    <message><source>Notch</source><translation>Encastrar</translation></message>
+    <message><source>&lt;b&gt;Notch&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a target profile, then the profiles to notch into it.</source><translation>&lt;b&gt;Encastrar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná un perfil destino y luego los perfiles a encastrar en él.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ExtendCut</name>

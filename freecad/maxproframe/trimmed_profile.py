@@ -1,4 +1,3 @@
-import ArchCommands
 import BOPTools.SplitAPI
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -16,7 +15,7 @@ from freecad.maxproframe.miter_geometry import TOLERANCE, Member, MiterError, Mi
 from freecad.maxproframe.version import __version__ as ff_version
 
 # TrimmedProfileType -> TrimmedProfile method giving (body shape, cut shapes).
-JOINTS = {"End Trim": "_end_trim", "End Miter": "_end_miter", "Extend Cut": "_extend_cut"}
+JOINTS = {"Notch": "_notch", "End Miter": "_end_miter", "Extend Cut": "_extend_cut"}
 # Distance, in mm, within which the profile axis still counts as crossing a target face.
 CROSSING_TOLERANCE = 1e-4
 
@@ -53,13 +52,7 @@ class TrimmedProfile:
             "TrimmedProfileType",
             "TrimmedProfile",
             translate("App::Property", "TrimmedProfile Type"),
-        ).TrimmedProfileType = ["End Trim", "End Miter", "Extend Cut"]
-        obj.addProperty(
-            "App::PropertyEnumeration", "CutType", "TrimmedProfile", translate("App::Property", "Cut Type")
-        ).CutType = [
-            "Perfect fit",
-            "Simple fit",
-        ]
+        ).TrimmedProfileType = ["Notch", "End Miter", "Extend Cut"]
         obj.addProperty(
             "App::PropertyBool",
             "MiterExtend",
@@ -150,28 +143,15 @@ class TrimmedProfile:
         self.makeShape(fp, cut_shape, body_shape)
         self._update_structure_data(fp)
 
-    def _end_trim(self, fp, body_shape):
-        """(body, cut shapes) of an End Trim: Perfect fit copies the boundary, Simple fit cuts at its faces."""
-        cut_shapes = []
-        if fp.CutType == "Perfect fit":
-            shapes = [x[0].Shape for x in fp.TrimmingBoundary]
-            shps = BOPTools.SplitAPI.slice(body_shape, shapes, mode="Split")
-            for solid in shps.Solids:
-                x = body_shape.CenterOfGravity.x
-                y = body_shape.CenterOfGravity.y
-                z = body_shape.CenterOfGravity.z
-                if not solid.BoundBox.isInside(x, y, z):
-                    cut_shapes.append(Part.Shape(solid))
-
-        elif fp.CutType == "Simple fit":
-            for link in fp.TrimmingBoundary:
-                part = link[0]
-                for sub in link[1]:
-                    face = part.getSubObject(sub)
-                    if isinstance(face.Surface, Part.Plane):
-                        shp = self.getOutsideCV(face, body_shape)
-                        cut_shapes.append(shp)
-        return body_shape, cut_shapes
+    def _notch(self, fp, body_shape):
+        """(body, cut shapes) of a Notch: the target splits the body, the piece reaching the far end stays."""
+        target = fp.TrimmingBoundary[0][0]
+        member = self._miter_member(fp.TrimmedBody)
+        # The far end section may lie in a piece an earlier trim removed: the nearest piece stays.
+        far_section = member.section_at(self._far_end_is_start(member, target))
+        pieces = BOPTools.SplitAPI.slice(body_shape, [target.Shape], mode="Split").Solids
+        kept = min(range(len(pieces)), key=lambda index: pieces[index].distToShape(far_section)[0], default=None)
+        return body_shape, [Part.Shape(piece) for index, piece in enumerate(pieces) if index != kept]
 
     def _end_miter(self, fp, body_shape):
         """(body, cut shapes) of an End Miter: the body is extended up to each miter plane when asked."""
@@ -223,10 +203,15 @@ class TrimmedProfile:
         plane = MiterPlane(origin, normal, inward, member.section_at(at_start))
         return plane.shifted(fp.TrimGap.Value)
 
+    def _far_end_is_start(self, member, target):
+        """Whether the far end of ``member``, the axis end farthest from ``target``, is its start."""
+        start, end = (target.Shape.distToShape(Part.Vertex(member.end(at_start)[2]))[0] for at_start in (True, False))
+        return start >= end
+
     def _crossed_face(self, member, target):
         """(point, normal) of the planar face of ``target`` the axis crosses first, seen from the far end."""
         ends = [member.end(at_start)[2] for at_start in (True, False)]
-        far = max(ends, key=lambda point: target.Shape.distToShape(Part.Vertex(point))[0])
+        far = ends[0] if self._far_end_is_start(member, target) else ends[1]
         axis = ends[1] - ends[0]
         axis.normalize()
         crossed = []
@@ -289,14 +274,6 @@ class TrimmedProfile:
 
         obj.CuttingAngleA = cut_angles[0]
         obj.CuttingAngleB = cut_angles[1]
-
-    def getOutsideCV(self, cutplane, shape):
-        cv = ArchCommands.getCutVolume(cutplane, shape, clip=False, depth=0.0)
-        if cv[1].isInside(shape.CenterOfGravity, 0.001, False):
-            cv = cv[2]
-        else:
-            cv = cv[1]
-        return cv
 
     def makeShape(self, fp, cutshape, shape=None):
         if shape is None:
@@ -418,23 +395,23 @@ class ViewProviderTrimmedProfile:
         if mode != 0:
             return None
 
-        if self.Object.TrimmedProfileType == "Extend Cut":
-            from freecad.maxproframe import create_extend_cut_tool
-
-            # The panel listens to clicks: they change the target.
-            create_extend_cut_tool.show_panel(create_extend_cut_tool.ExtendCutTaskPanel(edited=self.Object))
-            return True
         if self.Object.TrimmedProfileType == "End Miter":
             import freecad.maxproframe.create_end_miter_tool
 
             taskd = freecad.maxproframe.create_end_miter_tool.EndMiterTaskPanel(edited=self.Object)
-        else:
-            import freecad.maxproframe.create_trimmed_profiles_tool
+            Gui.Control.showDialog(taskd)
+            return True
 
-            taskd = freecad.maxproframe.create_trimmed_profiles_tool.CreateTrimmedProfileTaskPanel(
-                self.Object, mode="edition"
-            )
-        Gui.Control.showDialog(taskd)
+        from freecad.maxproframe import create_extend_cut_tool
+
+        if self.Object.TrimmedProfileType == "Notch":
+            from freecad.maxproframe import create_notch_tool
+
+            panel = create_notch_tool.NotchTaskPanel(edited=self.Object)
+        else:
+            panel = create_extend_cut_tool.ExtendCutTaskPanel(edited=self.Object)
+        # The panel listens to clicks: they change the target.
+        create_extend_cut_tool.show_panel(panel)
         return True
 
     def unsetEdit(self, vobj, mode):
