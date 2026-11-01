@@ -15,7 +15,7 @@ Worktree `.git/gentle-worktrees/release-1.0`, branch `feat/release-1.0`. Native 
 
 - T1. [S1, S3] Remove FrameForge compatibility and fix install lists — route: worker — commit: 20ebcd9
 - T2. [S3] package.xml metadata (single repo URL on `release`, bugtracker) — route: inline — commit: 20ebcd9
-- T3. [S4] README rewrite; dialog captures by worker script, 3D captures by the user — commit: pending
+- T3. [S4] README rewrite; dialog captures by worker script, 3D captures by the user — commit: b1a753e, 4cb21d1
 - T4. [S2] Version 1.0.0, CHANGELOG 1.0.0 section, `release` branch, tag and GitHub Release — route: inline, needs user confirmation before push/tag — commit: pending
 
 ## Log
@@ -43,3 +43,4 @@ Worktree `.git/gentle-worktrees/release-1.0`, branch `feat/release-1.0`. Native 
 - L21. User provided the hero capture (portada.png, 1920x846, armchair M1). Cropped to 1120x886 without the navigation cube, bottom padded with the background color; saved as docs/images/readme/hero-frame.png and shown under the intro of the README. Still pending: end-miter.png (required), bom-cutlist.png, techdraw-balloons.png (recommended), workflow.gif (optional).
 - L22. User provided a Create Profiles capture with the live 3D placement preview (aluminium extrusion, 3 edges, X offset 50 mm). Navigation cube painted over with the background color; saved as docs/images/readme/placement-preview.png and shown first under Screenshots. It is not the End Miter capture, which stays pending.
 - L23. User provided three Miter Ends captures. Used the panel with three profiles and "2 joints will be created" as docs/images/readme/end-miter.png (navigation cube painted over, top 2 px viewer border cropped) and the finished corners as end-miter-result.png (cube painted over, cropped to 1220 px wide); both in a Screenshots table row. The two-profile capture was not used. Still pending: bom-cutlist.png, techdraw-balloons.png (recommended), workflow.gif (optional).
+- L24. User: "cerramos aca, continua con el resto y luego merge". Remaining captures dropped (bom-cutlist, techdraw-balloons, workflow.gif). Rebased on origin/main b712f52, where PR #36 (other session) already set version 1.0.0 in version.py, package.xml and pyproject.toml. T4 here: CHANGELOG "Unreleased" becomes "v1.0.0 (2026-11-01)" with FrameForge notes (L7, L10), package.xml date 2026-11-01, stale CHANGELOG link to the old README section fixed. Release branch, tag and GitHub Release wait for user confirmation after the merge.
