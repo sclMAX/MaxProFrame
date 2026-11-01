@@ -12,8 +12,13 @@ from freecad.maxproframe._utils import (
     length_along_normal,
 )
 from freecad.maxproframe.ff_tools import translate
-from freecad.maxproframe.miter_geometry import Member, miter_plane
+from freecad.maxproframe.miter_geometry import TOLERANCE, Member, MiterError, MiterPlane, miter_plane
 from freecad.maxproframe.version import __version__ as ff_version
+
+# TrimmedProfileType -> TrimmedProfile method giving (body shape, cut shapes).
+JOINTS = {"End Trim": "_end_trim", "End Miter": "_end_miter", "Extend Cut": "_extend_cut"}
+# Distance, in mm, within which the profile axis still counts as crossing a target face.
+CROSSING_TOLERANCE = 1e-4
 
 
 class TrimmedProfile:
@@ -48,7 +53,7 @@ class TrimmedProfile:
             "TrimmedProfileType",
             "TrimmedProfile",
             translate("App::Property", "TrimmedProfile Type"),
-        ).TrimmedProfileType = ["End Trim", "End Miter"]
+        ).TrimmedProfileType = ["End Trim", "End Miter", "Extend Cut"]
         obj.addProperty(
             "App::PropertyEnumeration", "CutType", "TrimmedProfile", translate("App::Property", "Cut Type")
         ).CutType = [
@@ -67,6 +72,12 @@ class TrimmedProfile:
             "TrimmedProfile",
             translate("App::Property", "Distance left between the two miter cut faces"),
         ).MiterGap = 0
+        obj.addProperty(
+            "App::PropertyLength",
+            "TrimGap",
+            "TrimmedProfile",
+            translate("App::Property", "Distance left between the profile end and the target plane"),
+        ).TrimGap = 0
 
         # related to Profile
         obj.addProperty("App::PropertyString", "Family", "Profile", "")
@@ -121,46 +132,14 @@ class TrimmedProfile:
         pass
 
     def execute(self, fp):
-        # TODO: Put these methods in proper functions
         if fp.TrimmedBody is None:
             return
         if len(fp.TrimmingBoundary) == 0:
             return
 
-        cut_shapes = []
-        body_shape = fp.TrimmedBody.Shape
-
-        if fp.TrimmedProfileType == "End Trim":
-            if fp.CutType == "Perfect fit":
-                shapes = [x[0].Shape for x in fp.TrimmingBoundary]
-                shps = BOPTools.SplitAPI.slice(fp.TrimmedBody.Shape, shapes, mode="Split")
-                for solid in shps.Solids:
-                    x = fp.TrimmedBody.Shape.CenterOfGravity.x
-                    y = fp.TrimmedBody.Shape.CenterOfGravity.y
-                    z = fp.TrimmedBody.Shape.CenterOfGravity.z
-                    if not solid.BoundBox.isInside(x, y, z):
-                        cut_shapes.append(Part.Shape(solid))
-
-            elif fp.CutType == "Simple fit":
-                cut_shape = Part.Shape()
-                for link in fp.TrimmingBoundary:
-                    part = link[0]
-                    for sub in link[1]:
-                        face = part.getSubObject(sub)
-                        if isinstance(face.Surface, Part.Plane):
-                            shp = self.getOutsideCV(face, fp.TrimmedBody.Shape)
-                            cut_shapes.append(shp)
-
-        elif fp.TrimmedProfileType == "End Miter":
-            planes = [plane.shifted(fp.MiterGap.Value / 2.0) for plane in self.miter_planes(fp)]
-            if fp.MiterExtend:
-                for plane in planes:
-                    extension = plane.extension()
-                    if extension is not None:
-                        body_shape = body_shape.fuse(extension)
-                body_shape = body_shape.removeSplitter()
-            for plane in planes:
-                cut_shapes.append(plane.removal_volume(body_shape))
+        # One method per joint type: a new joint adds a method instead of growing a chain of cases.
+        joint = getattr(self, JOINTS[fp.TrimmedProfileType])
+        body_shape, cut_shapes = joint(fp, fp.TrimmedBody.Shape)
 
         cut_shape = Part.Shape()
         if len(cut_shapes) > 0:
@@ -170,6 +149,104 @@ class TrimmedProfile:
 
         self.makeShape(fp, cut_shape, body_shape)
         self._update_structure_data(fp)
+
+    def _end_trim(self, fp, body_shape):
+        """(body, cut shapes) of an End Trim: Perfect fit copies the boundary, Simple fit cuts at its faces."""
+        cut_shapes = []
+        if fp.CutType == "Perfect fit":
+            shapes = [x[0].Shape for x in fp.TrimmingBoundary]
+            shps = BOPTools.SplitAPI.slice(body_shape, shapes, mode="Split")
+            for solid in shps.Solids:
+                x = body_shape.CenterOfGravity.x
+                y = body_shape.CenterOfGravity.y
+                z = body_shape.CenterOfGravity.z
+                if not solid.BoundBox.isInside(x, y, z):
+                    cut_shapes.append(Part.Shape(solid))
+
+        elif fp.CutType == "Simple fit":
+            for link in fp.TrimmingBoundary:
+                part = link[0]
+                for sub in link[1]:
+                    face = part.getSubObject(sub)
+                    if isinstance(face.Surface, Part.Plane):
+                        shp = self.getOutsideCV(face, body_shape)
+                        cut_shapes.append(shp)
+        return body_shape, cut_shapes
+
+    def _end_miter(self, fp, body_shape):
+        """(body, cut shapes) of an End Miter: the body is extended up to each miter plane when asked."""
+        planes = [plane.shifted(fp.MiterGap.Value / 2.0) for plane in self.miter_planes(fp)]
+        if fp.MiterExtend:
+            for plane in planes:
+                extension = plane.extension()
+                if extension is not None:
+                    body_shape = body_shape.fuse(extension)
+            body_shape = body_shape.removeSplitter()
+        return body_shape, [plane.removal_volume(body_shape) for plane in planes]
+
+    def _extend_cut(self, fp, body_shape):
+        """(body, cut shapes) of an Extend Cut: the body always ends on the target plane, gap included."""
+        plane = self.extend_cut_plane(fp)
+        extension = plane.extension(tool=translate("frameforge", "Extend / Cut"))
+        if extension is not None:
+            body_shape = body_shape.fuse(extension).removeSplitter()
+        return body_shape, [plane.removal_volume(body_shape)]
+
+    def extend_cut_plane(self, fp):
+        """Plane the moving end of an Extend Cut ends on, moved by the gap, its normal towards the kept end."""
+        member = self._miter_member(fp.TrimmedBody)
+        # A whole target is linked with an empty sub-element name.
+        target, subs = fp.TrimmingBoundary[0]
+        if subs and subs[0]:
+            face = target.getSubObject(subs[0])
+            if not isinstance(face, Part.Face) or not isinstance(face.Surface, Part.Plane):
+                raise MiterError(
+                    translate("frameforge", "Extend / Cut: the target face {} of {} is not planar.").format(
+                        subs[0], target.Label
+                    )
+                )
+            origin, normal = face.CenterOfMass, face.normalAt(0, 0)
+        else:
+            origin, normal = self._crossed_face(member, target)
+
+        ends = [member.end(at_start)[2] for at_start in (True, False)]
+        axis = ends[1] - ends[0]
+        axis.normalize()
+        if abs(normal.dot(axis)) < TOLERANCE:
+            raise MiterError(translate("frameforge", "Extend / Cut: the target plane is parallel to the profile axis."))
+        # The end nearest the plane moves; the other one, the far end, stays.
+        at_start = abs((ends[0] - origin).dot(normal)) <= abs((ends[1] - origin).dot(normal))
+        far = ends[1] if at_start else ends[0]
+        if normal.dot(far - origin) < 0:
+            normal = -normal
+        _, inward, _ = member.end(at_start)
+        plane = MiterPlane(origin, normal, inward, member.section_at(at_start))
+        return plane.shifted(fp.TrimGap.Value)
+
+    def _crossed_face(self, member, target):
+        """(point, normal) of the planar face of ``target`` the axis crosses first, seen from the far end."""
+        ends = [member.end(at_start)[2] for at_start in (True, False)]
+        far = max(ends, key=lambda point: target.Shape.distToShape(Part.Vertex(point))[0])
+        axis = ends[1] - ends[0]
+        axis.normalize()
+        crossed = []
+        for face in target.Shape.Faces:
+            if not isinstance(face.Surface, Part.Plane):
+                continue
+            point, normal = face.CenterOfMass, face.normalAt(0, 0)
+            along = normal.dot(axis)
+            # Only faces looking at the far end, crossed by the axis line, count.
+            if abs(along) < TOLERANCE or normal.dot(far - point) <= 0:
+                continue
+            crossing = far + axis * (normal.dot(point - far) / along)
+            if face.isInside(crossing, CROSSING_TOLERANCE, True):
+                crossed.append(((crossing - far).Length, point, normal))
+        if not crossed:
+            raise MiterError(
+                translate("frameforge", "Extend / Cut: the profile axis crosses no face of {}.").format(target.Label)
+            )
+        _, point, normal = min(crossed, key=lambda item: item[0])
+        return point, normal
 
     def miter_planes(self, fp):
         """One miter plane per trimming boundary, from the real profile positions."""
@@ -341,6 +418,12 @@ class ViewProviderTrimmedProfile:
         if mode != 0:
             return None
 
+        if self.Object.TrimmedProfileType == "Extend Cut":
+            from freecad.maxproframe import create_extend_cut_tool
+
+            # The panel listens to clicks: they change the target.
+            create_extend_cut_tool.show_panel(create_extend_cut_tool.ExtendCutTaskPanel(edited=self.Object))
+            return True
         if self.Object.TrimmedProfileType == "End Miter":
             import freecad.maxproframe.create_end_miter_tool
 

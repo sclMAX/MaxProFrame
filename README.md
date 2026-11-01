@@ -132,6 +132,7 @@ the legacy zero-length Pipe face still represents its outer disk (not its bore).
   - **Gap** leaves that distance between the two cut faces of a joint; each profile is cut back half of it.
   - Double-click an existing miter in the tree to change Extend and Gap: the new values apply to that miter and to the partner miters that cut against it, so the gap of the joint stays the value shown.
 - Use **Trim Profiles** to cut a profile flush against the face of another beam.
+- Use **Extend / Cut** to bring several profiles at once to a target: pick a planar face or a whole profile, then click the profiles. Each one is extended or cut so its nearest end lies on the target plane, with an optional **Gap**, in one Undo step.
 - Use **Extruded Cutout** to cut notches, holes, or clearances from an attached sketch.
 
 ### 4. Generate the BOM & Cut List

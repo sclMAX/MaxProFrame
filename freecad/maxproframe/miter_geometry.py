@@ -70,10 +70,13 @@ class MiterPlane:
     def shifted(self, distance):
         return MiterPlane(self.origin + self.normal * distance, self.normal, self.inward, self.section)
 
-    def extension(self):
-        """Prism that prolongs the member end past the plane, or None when the end already passes it."""
+    def extension(self, tool="End Miter"):
+        """Prism that prolongs the member end past the plane, or None when the end already passes it.
+
+        ``tool`` names the command in the error messages.
+        """
         if not self.section.Faces:
-            raise MiterError("End Miter: the profile section is not a closed face and cannot be extended.")
+            raise MiterError(f"{tool}: the profile section is not a closed face and cannot be extended.")
         along = self.normal.dot(self.inward)
         diagonal = self.section.BoundBox.DiagonalLength
         needed = (self.section.CenterOfMass - self.origin).dot(self.normal) / along
@@ -82,7 +85,7 @@ class MiterPlane:
         length = needed + diagonal / along
         if length > EXTENSION_LIMIT * diagonal:
             raise MiterError(
-                f"End Miter: the joint is too far to extend the profile ({length:.1f} mm, "
+                f"{tool}: the joint is too far to extend the profile ({length:.1f} mm, "
                 f"limit {EXTENSION_LIMIT * diagonal:.1f} mm)."
             )
         if length <= TOLERANCE:

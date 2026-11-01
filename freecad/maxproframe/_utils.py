@@ -242,6 +242,10 @@ def get_trimmed_profile_all_cutting_angles(trimmed_profile):
         # Geometry keeps the raw angle; the readable angles show one decimal.
         angles.extend(round(plane.cut_angle(), 1) for plane in trimmed_profile.Proxy.miter_planes(trimmed_profile))
 
+    elif trimmed_profile.TrimmedProfileType == "Extend Cut":
+        # As Simple fit, the angle between the profile axis and the target plane normal; one decimal as End Miter.
+        angles.append(round(trimmed_profile.Proxy.extend_cut_plane(trimmed_profile).cut_angle(), 1))
+
     else:
         raise ValueError("Unknown TrimmedProfileType")
 
