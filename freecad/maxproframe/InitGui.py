@@ -28,9 +28,9 @@ class MaxProFrame(Gui.Workbench):
     toolbox_maxproframe = [
         "MaxProFrame_CreateProfiles",
         "MaxProFrame_ManageProfileLibraries",
-        "MaxProFrame_Notch",
-        "MaxProFrame_ExtendCut",
         "MaxProFrame_EndMiter",
+        "MaxProFrame_ExtendCut",
+        "MaxProFrame_Notch",
         "MaxProFrame_AddExtrudeCutout",
     ]
 

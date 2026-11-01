@@ -2,7 +2,7 @@ set(Namespace_SRCS
         freecad/maxproframe/resources/icons/corner.svg
         freecad/maxproframe/resources/icons/splitcurve.svg
         freecad/maxproframe/resources/icons/warehouse_profiles.svg
-        freecad/maxproframe/resources/icons/trim_extend.svg
+        freecad/maxproframe/resources/icons/corner-notch.svg
         freecad/maxproframe/resources/icons/metalwb.svg
         freecad/maxproframe/resources/icons/line.svg
         freecad/maxproframe/resources/icons/corner-end-miter.svg

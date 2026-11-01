@@ -604,7 +604,7 @@ class ExtendCutTaskPanel:
 class ExtendCutCommand:
     def GetResources(self):
         return {
-            "Pixmap": os.path.join(ICONPATH, "trim_extend.svg"),
+            "Pixmap": os.path.join(ICONPATH, "corner-end-trim.svg"),
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_ExtendCut", "Extend / Cut"),
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_ExtendCut",
