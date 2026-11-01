@@ -31,9 +31,16 @@ def hard_exit(code: int) -> None:
     """
     if os.name == "nt":
         import ctypes
+        from ctypes import wintypes
 
-        kernel32 = ctypes.windll.kernel32
-        kernel32.TerminateProcess(kernel32.GetCurrentProcess(), code)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        # HANDLE is 64-bit: without these declarations ctypes passes the -1 pseudo-handle as a
+        # 32-bit int, TerminateProcess fails and os._exit aborts in the DLL teardown.
+        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+        kernel32.TerminateProcess.argtypes = (wintypes.HANDLE, wintypes.UINT)
+        kernel32.TerminateProcess.restype = wintypes.BOOL
+        if not kernel32.TerminateProcess(kernel32.GetCurrentProcess(), code):
+            log_startup(f"terminate-process-failed: winerror {ctypes.get_last_error()}")
     os._exit(code)
 
 
