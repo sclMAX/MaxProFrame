@@ -281,6 +281,10 @@ def main() -> None:
     # Prepare isolated environment
     with tempfile.TemporaryDirectory() as scratch_dir:
         scratch = pathlib.Path(scratch_dir)
+        if os.name == "nt":
+            # The runner TEMP is an 8.3 short path (C:\Users\RUNNER~1); FreeCAD and the tests resolve
+            # long names, so give the isolated profile its long form.
+            scratch = scratch.resolve()
         isolated_home = scratch / "home"
         isolated_config = scratch / "config"
         isolated_data = scratch / "data"

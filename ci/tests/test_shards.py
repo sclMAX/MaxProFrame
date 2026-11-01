@@ -67,7 +67,8 @@ class TestShardOption(unittest.TestCase):
         for value in ("0/2", "3/2", "a/b", "1/0", "0/0", "-1/2", "1/-2", "2", "1/2/3", "", " 1/2", "1/2 ", "01/2"):
             with self.subTest(shard=value):
                 sentinel.write_text("sentinel")
-                proc = self.run_host("--shard", value, env=dict(FAKE_ENV_DUMP=str(dump)))
+                # "--shard=VALUE": with "--shard VALUE", argparse before Python 3.12 reads "-1/2" as an option.
+                proc = self.run_host(f"--shard={value}", env=dict(FAKE_ENV_DUMP=str(dump)))
                 self.assertEqual(proc.returncode, 2)
                 self.assertEqual(proc.stdout, "")
                 self.assertIn(SHARD_ERROR, proc.stderr)
