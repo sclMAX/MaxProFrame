@@ -1,6 +1,7 @@
 # FreeCAD Macro: run-tests.FCMacro
 # Runs full test suite in official FreeCAD 1.1.4 Linux GUI offscreen runner.
 
+import gc
 import importlib.util
 import json
 import os
@@ -159,6 +160,9 @@ try:
         )
         runner = unittest.TextTestRunner(stream=stream, verbosity=2)
         result = runner.run(suite)
+        # Objects left by the tests (views without a GL context on Windows offscreen) must not be
+        # finalized after the verdict: no garbage collection until the process ends.
+        gc.disable()
         summary = {
             "tests": result.testsRun,
             "failures": len(result.failures),
@@ -176,6 +180,7 @@ try:
         sys.stdout.write(json.dumps(summary) + "\n")
         sys.stdout.flush()
 
+    log_startup("exit-flush")
     sys.stdout.flush()
     sys.stderr.flush()
     if diagnostic_session is not None:
@@ -183,6 +188,7 @@ try:
             diagnostic_session.stop()
         except Exception:
             pass
+    log_startup(f"exit-now: {exit_code}")
     hard_exit(exit_code)
 
 except BaseException as exc:
