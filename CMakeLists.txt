@@ -16,7 +16,6 @@ set(Namespace_SRCS
         freecad/maxproframe/resources/icons/list-remove.svg
         freecad/maxproframe/resources/icons/extendcurve.svg
         freecad/maxproframe/resources/icons/list-add.svg
-        freecad/maxproframe/resources/icons/extrude-cutout.svg
 
         freecad/maxproframe/resources/images/profiles/Metal/HEB_Fillet.png
         freecad/maxproframe/resources/images/profiles/Metal/Square_Hollow.png
@@ -59,7 +58,6 @@ set(Namespace_SRCS
         freecad/maxproframe/resources/help/library-manager.es.md
 
         freecad/maxproframe/resources/ui/extend_cut.ui
-        freecad/maxproframe/resources/ui/create_profiles.ui
 
         freecad/maxproframe/resources/profiles/metal.json
 
@@ -73,22 +71,21 @@ set(Namespace_SRCS
         freecad/maxproframe/create_extend_cut_tool.py
         freecad/maxproframe/create_notch_tool.py
         freecad/maxproframe/trimmed_profile.py
-        freecad/maxproframe/init_gui.py
         freecad/maxproframe/create_profiles_tool.py
         freecad/maxproframe/utilities.py
 )
 
 SOURCE_GROUP("" FILES ${Namespace_SRCS})
 
-ADD_CUSTOM_TARGET(SEARCHBAR ALL
+ADD_CUSTOM_TARGET(MAXPROFRAME ALL
         SOURCES ${Namespace_SRCS}
 )
 
-fc_copy_sources(SEARCHBAR "${CMAKE_BINARY_DIR}/Mod/FrameForge" ${Namespace_SRCS})
+fc_copy_sources(MAXPROFRAME "${CMAKE_BINARY_DIR}/Mod/MaxProFrame" ${Namespace_SRCS})
 
 INSTALL(
     FILES
         ${Namespace_SRCS}
     DESTINATION
-        Mod/SearchBar
+        Mod/MaxProFrame
 )

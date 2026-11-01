@@ -423,7 +423,7 @@ class TestRunTestsPolicy(unittest.TestCase):
                 "DISPLAY": ":99",
                 "WAYLAND_DISPLAY": "wayland-0",
                 "FREECAD_USER_HOME": "/inherited/fc_home",
-                "FRAMEFORGE_USER_PROFILES_DIR": "/inherited/profiles",
+                "MAXPROFRAME_USER_PROFILES_DIR": "/inherited/profiles",
             },
         )
 
@@ -437,8 +437,8 @@ class TestRunTestsPolicy(unittest.TestCase):
         self.assertNotEqual(dumped_env.get("HOME"), os.environ.get("HOME"))
         self.assertIn("FREECAD_USER_HOME", dumped_env)
         self.assertNotEqual(dumped_env.get("FREECAD_USER_HOME"), "/inherited/fc_home")
-        self.assertIn("FRAMEFORGE_USER_PROFILES_DIR", dumped_env)
-        self.assertNotEqual(dumped_env.get("FRAMEFORGE_USER_PROFILES_DIR"), "/inherited/profiles")
+        self.assertIn("MAXPROFRAME_USER_PROFILES_DIR", dumped_env)
+        self.assertNotEqual(dumped_env.get("MAXPROFRAME_USER_PROFILES_DIR"), "/inherited/profiles")
 
         self.assertTrue(argv_dump.is_file())
         dumped_argv = json.loads(argv_dump.read_text(encoding="utf-8"))
@@ -523,7 +523,7 @@ class TestRunTestsPolicy(unittest.TestCase):
         env["RECORD_ARGV"] = str(record_argv)
         env["RECORD_SUMMARY_PATH"] = str(summary_path)
         env["FREECAD_USER_HOME"] = "/inherited/home"
-        env["FRAMEFORGE_USER_PROFILES_DIR"] = "/inherited/profiles"
+        env["MAXPROFRAME_USER_PROFILES_DIR"] = "/inherited/profiles"
 
         proc = subprocess.run(
             [
@@ -560,7 +560,7 @@ class TestRunTestsPolicy(unittest.TestCase):
         self.assertEqual(dumped_env.get("QT_QPA_PLATFORM"), "offscreen")
         self.assertEqual(dumped_env.get("FREECAD_QT_QPA_PLATFORM"), "offscreen")
         self.assertNotEqual(dumped_env.get("FREECAD_USER_HOME"), "/inherited/home")
-        self.assertNotEqual(dumped_env.get("FRAMEFORGE_USER_PROFILES_DIR"), "/inherited/profiles")
+        self.assertNotEqual(dumped_env.get("MAXPROFRAME_USER_PROFILES_DIR"), "/inherited/profiles")
 
     def test_run_tests_apprun_missing_native_binary_fails_clearly(self):
         """When --freecad-bin points to AppRun without usr/bin/freecad, fail before child launch."""

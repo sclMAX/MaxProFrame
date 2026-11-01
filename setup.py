@@ -9,7 +9,7 @@ with open(version_path) as fp:
 setup(
     name="maxproframe",
     version=str(__version__),
-    packages=["freecad", "freecad.maxproframe", "freecad.frameforge"],
+    packages=["freecad", "freecad.maxproframe"],
     maintainer="sclMAX",
     maintainer_email="maxi.indumatics@gmail.com",
     url="https://github.com/sclMAX/MaxProFrame",

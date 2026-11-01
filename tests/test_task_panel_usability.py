@@ -38,7 +38,7 @@ class TestTaskPanelUsability(unittest.TestCase):
         Gui.addLanguagePath(TRANSLATIONSPATH)
         self._language("English", "en_US")
         self.temp_dir = tempfile.mkdtemp(prefix="mpf_task_panel_")
-        self.env = patch.dict(os.environ, {"FRAMEFORGE_USER_PROFILES_DIR": self.temp_dir})
+        self.env = patch.dict(os.environ, {"MAXPROFRAME_USER_PROFILES_DIR": self.temp_dir})
         self.env.start()
         self.addCleanup(self.env.stop)
         self.addCleanup(shutil.rmtree, self.temp_dir)

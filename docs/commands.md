@@ -17,6 +17,43 @@ Create Profiles separates catalog selection from placement. **Profile** and **Pl
 
 Edit Profile retains live updates, including when its catalog is unavailable. Its naming controls remain disabled. Task-panel controls inherit FreeCAD styling and palette; Spanish labels do not change Python commands or preference keys.
 
+## Visual section alignment
+
+The Placement group includes a 2D silhouette with nine clickable bounding-box
+anchors. Click a point to select the corresponding local anchor; the highlighted
+point and existing radio controls stay synchronized. The radio controls retain
+keyboard access. Rotation (including typed angles) rotates both the silhouette
+and points. Mirrors flip the section about its bounding-box center, without
+renaming the local anchors, matching profile placement.
+
+The silhouette uses the actual extrusion section, including custom-section holes;
+it is independent of the existing catalog thumbnail. Changing its anchor updates
+the 3D preview; **OK** confirms the current values and **Cancel** discards the
+session. Edit retains immediate updates
+and its existing OK/Cancel behavior. Invalid or unavailable section geometry shows
+**No Preview**; the existing controls remain usable. Existing unsupported filleted
+HEA/HEB/HEM geometry is not approximated or repaired by the widget.
+
+## Circular profile alignment correction
+
+Round Bar and Pipe now use **Height (diameter)** for both section extents, even
+when the catalog omits Width or an older object has a different Width. Horizontal
+alignment is independent of vertical alignment; mirrors retain the same bounding
+box. Recomputing existing circular profiles can therefore move their section.
+
+Precisely, let `D = ProfileHeight`, `W = stored ProfileWidth`, and `ax`, `ay` be
+anchor indices (0 = left/bottom, 1 = center, 2 = right/top). The new local section
+center is `(D*(1-ax)/2, D*(1-ay)/2)`. Relative to the old geometry, only X changes:
+
+- Without horizontal mirror: `deltaX = D*(ay-ax)/2`.
+- With horizontal mirror: `deltaX = D*(2-ax-ay)/2 - W*(1-ax)`.
+
+Zero deltas leave placement unchanged. Vertical mirror does not alter these
+formulas. Attachment rotation rotates this local displacement into world space.
+Diameter, pipe wall thickness, length, stored properties and other families are
+unchanged. Both extruded and zero-length sections use the corrected alignment;
+the legacy zero-length Pipe face still represents its outer disk (not its bore).
+
 # Code Snippets
 There is no way to add a button, menu entry from python to a workbench which is added with c++. So here is a comparison how to do that with python and with c++.
 

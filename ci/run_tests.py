@@ -244,7 +244,7 @@ def main() -> None:
         env["XDG_CACHE_HOME"] = str(isolated_cache)
         env["TMPDIR"] = str(isolated_tmp)
         env["FREECAD_USER_HOME"] = str(isolated_fc_home)
-        env["FRAMEFORGE_USER_PROFILES_DIR"] = str(isolated_profiles)
+        env["MAXPROFRAME_USER_PROFILES_DIR"] = str(isolated_profiles)
         env["QT_QPA_PLATFORM"] = "offscreen"
         env["FREECAD_QT_QPA_PLATFORM"] = "offscreen"
         env["FF_ROOT"] = str(repo_root)
