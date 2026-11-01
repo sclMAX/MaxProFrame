@@ -1,6 +1,7 @@
 ## Changelog
 
 * Unreleased
+  - Remove the FrameForge-era migrations of trims and miters: End Trim and End Miter objects no longer upgrade versionless objects, accept the old `Coped cut` / `Simple cut` cut types or add missing `MiterExtend` / `MiterGap` properties on recompute.
   - Translate the MaxProFrame toolbar and menu commands into Spanish: their names and tool tips now follow the FreeCAD language, including a language switch while FreeCAD is running. Fix the **Refresh Balloons** and **Recursively recompute** command names.
   - Add a built-in English and Spanish guide to the **Profile Library Manager**: **?** or **F1** opens it inside FreeCAD, offline and in FreeCAD's language, at the section for the focused area or current selection; **New Library**, **Duplicate Library** and **Add Family** have their own **Help** button. Controls without a tooltip now have one, and empty libraries and families say what to do next (see the [guide](freecad/maxproframe/resources/help/library-manager.md)).
   - Show thumbnails for the aluminium T-Slot and V-Slot families instead of the generic placeholder (#25).

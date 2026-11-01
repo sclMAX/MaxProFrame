@@ -18,7 +18,7 @@ from freecad.maxproframe.ff_tools import (
 from freecad.maxproframe.miter_geometry import Member
 from freecad.maxproframe.miter_joints import find_joints
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
-from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrimmedProfile, add_miter_properties
+from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrimmedProfile
 
 # Remembered state of the panel's "Update automatically" check box.
 AUTO_PREVIEW_PARAM = "Miter Auto Preview"
@@ -546,7 +546,6 @@ class EndMiterTaskPanel:
         try:
             # The joint gap is shared: each side of the joint cuts back half of it.
             for obj in miters:
-                add_miter_properties(obj, extend=False)
                 obj.MiterExtend = extend
                 obj.MiterGap = gap
             # A miter that fails to recompute does not raise: its status tells.

@@ -1,13 +1,8 @@
-import glob
-import math
-import os
-
 import ArchCommands
 import BOPTools.SplitAPI
 import FreeCAD as App
 import FreeCADGui as Gui
 import Part
-from PySide import QtCore, QtGui
 
 from freecad.maxproframe._utils import (
     get_childrens_from_trimmedbody,
@@ -16,27 +11,9 @@ from freecad.maxproframe._utils import (
     get_trimmed_profile_all_cutting_angles,
     length_along_normal,
 )
-from freecad.maxproframe.ff_tools import ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, translate
+from freecad.maxproframe.ff_tools import translate
 from freecad.maxproframe.miter_geometry import Member, miter_plane
 from freecad.maxproframe.version import __version__ as ff_version
-
-
-def add_miter_properties(obj, extend):
-    """Add MiterExtend and MiterGap when missing; miters made before them did not extend."""
-    if not hasattr(obj, "MiterExtend"):
-        obj.addProperty(
-            "App::PropertyBool",
-            "MiterExtend",
-            "TrimmedProfile",
-            translate("App::Property", "Extend the profile up to the miter plane"),
-        ).MiterExtend = extend
-    if not hasattr(obj, "MiterGap"):
-        obj.addProperty(
-            "App::PropertyLength",
-            "MiterGap",
-            "TrimmedProfile",
-            translate("App::Property", "Distance left between the two miter cut faces"),
-        ).MiterGap = 0
 
 
 class TrimmedProfile:
@@ -78,7 +55,18 @@ class TrimmedProfile:
             "Perfect fit",
             "Simple fit",
         ]
-        add_miter_properties(obj, extend=True)
+        obj.addProperty(
+            "App::PropertyBool",
+            "MiterExtend",
+            "TrimmedProfile",
+            translate("App::Property", "Extend the profile up to the miter plane"),
+        ).MiterExtend = True
+        obj.addProperty(
+            "App::PropertyLength",
+            "MiterGap",
+            "TrimmedProfile",
+            translate("App::Property", "Distance left between the two miter cut faces"),
+        ).MiterGap = 0
 
         # related to Profile
         obj.addProperty("App::PropertyString", "Family", "Profile", "")
@@ -133,9 +121,6 @@ class TrimmedProfile:
         pass
 
     def execute(self, fp):
-        """Print a short message when doing a recomputation, this method is mandatory"""
-        self.run_compatibility_migrations(fp)
-
         # TODO: Put these methods in proper functions
         if fp.TrimmedBody is None:
             return
@@ -150,7 +135,7 @@ class TrimmedProfile:
         body_shape = fp.TrimmedBody.Shape
 
         if fp.TrimmedProfileType == "End Trim":
-            if fp.CutType in ["Perfect fit", "Coped cut"]:  # Keeping Coped cut for retro-compatibility
+            if fp.CutType == "Perfect fit":
                 shapes = [x[0].Shape for x in fp.TrimmingBoundary]
                 shps = BOPTools.SplitAPI.slice(fp.TrimmedBody.Shape, shapes, mode="Split")
                 for solid in shps.Solids:
@@ -160,7 +145,7 @@ class TrimmedProfile:
                     if not solid.BoundBox.isInside(x, y, z):
                         cut_shapes.append(Part.Shape(solid))
 
-            elif fp.CutType in ["Simple fit", "Simple cut"]:  # Keeping Simple cut for retro-compatibility
+            elif fp.CutType == "Simple fit":
                 cut_shape = Part.Shape()
                 for link in fp.TrimmingBoundary:
                     part = link[0]
@@ -231,52 +216,6 @@ class TrimmedProfile:
 
         obj.CuttingAngleA = cut_angles[0]
         obj.CuttingAngleB = cut_angles[1]
-
-    def run_compatibility_migrations(self, obj):
-        if not hasattr(obj, "FrameforgeVersion"):
-            # migrate parents
-            for link in obj.TrimmingBoundary:
-                proxy = getattr(link[0], "Proxy", None)
-                execute = getattr(proxy, "execute", None)
-                if callable(execute):
-                    execute(link[0])
-            obj.TrimmedBody.Proxy.execute(obj.TrimmedBody)
-
-            App.Console.PrintMessage(f"Frameforge::object migration : Migrate {obj.Label} to 0.1.8\n")
-
-            def add_missing_property(prop_type, name, group, description=""):
-                # Partial migrations may already contain some or all fields.
-                # Keep their values; new properties use FreeCAD's type defaults.
-                if not hasattr(obj, name):
-                    obj.addProperty(prop_type, name, group, description)
-                obj.setEditorMode(name, 1)
-
-            # related to Profile
-            add_missing_property("App::PropertyString", "PID", "Profile", "Profile ID")
-            add_missing_property("App::PropertyString", "Family", "Profile")
-            add_missing_property("App::PropertyLink", "CustomProfile", "Profile", "Target profile")
-            add_missing_property("App::PropertyString", "SizeName", "Profile")
-            add_missing_property("App::PropertyString", "Material", "Profile")
-            add_missing_property("App::PropertyFloat", "ApproxWeight", "Base", "Approximate weight in Kilogram")
-            add_missing_property("App::PropertyFloat", "Price", "Base", "Profile Price")
-
-            # structure
-            add_missing_property("App::PropertyLength", "Width", "Structure", "Parameter for structure")
-            add_missing_property("App::PropertyLength", "Height", "Structure", "Parameter for structure")
-            add_missing_property("App::PropertyLength", "Length", "Structure", "Parameter for structure")
-            add_missing_property("App::PropertyBool", "Cutout", "Structure", "Has Cutout")
-            add_missing_property("App::PropertyString", "CuttingAngleA", "Structure", "Cutting Angle A")
-            add_missing_property("App::PropertyString", "CuttingAngleB", "Structure", "Cutting Angle B")
-
-            # add version
-            obj.addProperty(
-                "App::PropertyString",
-                "FrameforgeVersion",
-                "Profile",
-                "Frameforge Version used to create the profile",
-            ).FrameforgeVersion = ff_version
-
-        add_miter_properties(obj, extend=False)
 
     def getOutsideCV(self, cutplane, shape):
         cv = ArchCommands.getCutVolume(cutplane, shape, clip=False, depth=0.0)
