@@ -15,9 +15,9 @@
   <date>2026-03-02</date>
   <maintainer email="maxi.indumatics@gmail.com">sclMAX</maintainer>
   <license file="LICENSE">LGPL-3.0-only</license>
-  <url type="repository" branch="main">https://github.com/sclMAX/MaxProFrame</url> 
-  <url branch="main" type="repository">https://github.com/sclMAX/MaxProFrame.git</url>
-  <url type="readme">https://github.com/sclMAX/MaxProFrame/blob/main/README.md</url>
+  <url type="repository" branch="release">https://github.com/sclMAX/MaxProFrame</url>
+  <url type="bugtracker">https://github.com/sclMAX/MaxProFrame/issues</url>
+  <url type="readme">https://github.com/sclMAX/MaxProFrame/blob/release/README.md</url>
   <icon>freecad/maxproframe/resources/icons/metalwb.svg</icon>
 
   <freecadmin>1.1.4</freecadmin>

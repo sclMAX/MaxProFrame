@@ -110,12 +110,4 @@ class MaxProFrame(Gui.Workbench):
         App.Console.PrintMessage(translate("frameforge", "Workbench MaxProFrame de-activated.") + "\n")
 
 
-class FrameForge(MaxProFrame):
-    """
-    Backward compatibility alias for FrameForge workbench.
-    """
-
-    MenuText = "MaxProFrame (FrameForge)"
-
-
 Gui.addWorkbench(MaxProFrame())

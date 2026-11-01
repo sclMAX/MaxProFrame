@@ -62,7 +62,7 @@ Portable folder libraries allow users to store FrameForge profile catalogs and s
 
 1. **Create a new folder library**:
    ```python
-   from freecad.frameforge.library_manager import LibraryManager
+   from freecad.maxproframe.library_manager import LibraryManager
 
    manager = LibraryManager()
    manifest_path = manager.create_folder_library(

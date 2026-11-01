@@ -6,14 +6,14 @@ Autonomous section sketch capture converts valid FreeCAD sketch profiles—wheth
 
 1. **Capture an autonomous sketch copy in a target document**:
    ```python
-   from freecad.frameforge.section_capture import capture_section_sketch
+   from freecad.maxproframe.section_capture import capture_section_sketch
 
    target_sketch = capture_section_sketch(source_sketch, target_doc=doc, name="Section")
    ```
 
 2. **Save an autonomous section asset directly into a folder library**:
    ```python
-   from freecad.frameforge.section_capture import save_section_asset
+   from freecad.maxproframe.section_capture import save_section_asset
 
    metadata = save_section_asset(
        library_root="/path/to/my_library",
@@ -30,7 +30,7 @@ Autonomous section sketch capture converts valid FreeCAD sketch profiles—wheth
 
 3. **Validate custom section geometry independently**:
    ```python
-   from freecad.frameforge.custom_section_geometry import build_custom_section_face
+   from freecad.maxproframe.custom_section_geometry import build_custom_section_face
 
    # Validates one connected material region, closed contours, positive area
    face = build_custom_section_face(source_sketch)

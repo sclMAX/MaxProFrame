@@ -1,103 +1,130 @@
 """
-Regression tests for MaxProFrame backward-compatibility bridge and preferences proxy.
+Regression tests proving MaxProFrame does not claim any FrameForge names:
+no module redirect, no command aliases and no legacy preference reads.
 """
+
 import importlib
+import sys
 import unittest
-from unittest.mock import MagicMock, patch
+import uuid
+from unittest.mock import patch
+
+import FreeCAD as App
+import FreeCADGui as Gui
+
+import freecad.maxproframe as maxproframe
+
+LEGACY_GROUP = "User parameter:BaseApp/Preferences/Frameforge"
 
 
-class TestModuleIdentityCompatibility(unittest.TestCase):
-    def test_legacy_module_identity(self):
-        c = importlib.import_module("freecad.maxproframe.version")
-        l = importlib.import_module("freecad.frameforge.version")
-        c2 = importlib.import_module("freecad.maxproframe.version")
-        l2 = importlib.import_module("freecad.frameforge.version")
+class TestNoFrameForgeModuleRedirect(unittest.TestCase):
+    def test_import_does_not_alias_frameforge_module(self):
+        importlib.import_module("freecad.maxproframe")
 
-        self.assertIs(l, c, "Legacy import did not return canonical module instance")
-        self.assertIs(c2, c, "Subsequent canonical import did not return original instance")
-        self.assertIs(l2, c, "Subsequent legacy import did not return original instance")
+        for name, module in sys.modules.items():
+            if name == "freecad.frameforge" or name.startswith("freecad.frameforge."):
+                self.assertFalse(
+                    getattr(module, "__name__", "").startswith("freecad.maxproframe"),
+                    f"{name} is aliased to {module.__name__}",
+                )
+        self.assertIsNot(getattr(sys.modules.get("freecad"), "frameforge", None), maxproframe)
+
+    def test_no_maxproframe_finder_on_meta_path(self):
+        for finder in sys.meta_path:
+            owner = getattr(type(finder), "__module__", "") or ""
+            self.assertFalse(owner.startswith("freecad.maxproframe"), f"{finder!r} installed by {owner}")
+
+    def test_frameforge_import_does_not_resolve_to_maxproframe(self):
+        for name in ("freecad.frameforge", "freecad.frameforge.version"):
+            with self.subTest(name=name):
+                try:
+                    module = importlib.import_module(name)
+                except ImportError:
+                    continue
+                self.assertFalse(module.__name__.startswith("freecad.maxproframe"))
+                self.assertNotIn("maxproframe", getattr(module, "__file__", "") or "")
 
 
-class TestPreferencesProxyRegression(unittest.TestCase):
+class TestNoFrameForgeCommandAliases(unittest.TestCase):
+    def test_registered_commands_have_no_frameforge_alias(self):
+        from freecad.maxproframe import (  # noqa: F401 - imports register the commands
+            create_bom_tool,
+            create_edit_balloons_tool,
+            create_end_miter_tool,
+            create_extruded_cutout_tool,
+            create_link,
+            create_profiles_tool,
+            create_trimmed_profiles_tool,
+            edit_profile_tool,
+            library_manager_dialog,
+            parametric_line,
+            populate_ids_tool,
+            utilities,
+        )
+
+        commands = set(Gui.listCommands())
+        canonical = sorted(name for name in commands if name.startswith("MaxProFrame_"))
+        self.assertIn("MaxProFrame_RecomputeFrameForgeObjects", canonical)
+        self.assertIn("MaxProFrame_CreateProfiles", canonical)
+        for name in canonical:
+            legacy = "FrameForge_" + name[len("MaxProFrame_") :]
+            with self.subTest(command=name):
+                self.assertFalse(legacy in commands, f"{legacy} is registered as an alias of {name}")
+
+    def test_add_command_registers_only_the_given_name(self):
+        from freecad.maxproframe.ff_tools import add_command
+
+        command = object()
+        # FreeCADGui exposes no removeCommand, so record registrations instead of leaking probes.
+        with patch.object(Gui, "addCommand") as register:
+            add_command("MaxProFrame_CompatProbe", command)
+
+        self.assertEqual([call.args for call in register.call_args_list], [("MaxProFrame_CompatProbe", command)])
+
+
+class TestNoFrameForgePreferenceFallback(unittest.TestCase):
     def setUp(self):
-        self.pref_stores = {
-            "User parameter:BaseApp/Preferences/MaxProFrame": {},
-            "User parameter:BaseApp/Preferences/Frameforge": {
-                "Default Cut Type": "Perfect fit",
-                "Group IDs": True,
-                "IDs numbering type": 3,
-                "Kerf": 1.75,
-            },
-        }
+        self.key = "CompatProbe_" + uuid.uuid4().hex
+        self.legacy = App.ParamGet(LEGACY_GROUP)
+        self.addCleanup(self._remove_probe_keys)
 
-        class MockParamGroup:
-            def __init__(inner_self, key):
-                inner_self.key = key
+    def _remove_probe_keys(self):
+        for group in (self.legacy, App.ParamGet("User parameter:BaseApp/Preferences/MaxProFrame")):
+            group.RemString(self.key)
+            group.RemBool(self.key)
+            group.RemInt(self.key)
+            group.RemFloat(self.key)
 
-            def IsEmpty(inner_self):
-                return len(self.pref_stores[inner_self.key]) == 0
-
-            def GetString(inner_self, k, default=""):
-                return self.pref_stores[inner_self.key].get(k, default)
-
-            def SetString(inner_self, k, v):
-                self.pref_stores[inner_self.key][k] = v
-
-            def GetBool(inner_self, k, default=False):
-                return self.pref_stores[inner_self.key].get(k, default)
-
-            def SetBool(inner_self, k, v):
-                self.pref_stores[inner_self.key][k] = v
-
-            def GetInt(inner_self, k, default=0):
-                return self.pref_stores[inner_self.key].get(k, default)
-
-            def SetInt(inner_self, k, v):
-                self.pref_stores[inner_self.key][k] = v
-
-            def GetFloat(inner_self, k, default=0.0):
-                return self.pref_stores[inner_self.key].get(k, default)
-
-            def SetFloat(inner_self, k, v):
-                self.pref_stores[inner_self.key][k] = v
-
-        mock_freecad = MagicMock()
-        mock_freecad.ParamGet.side_effect = lambda path: MockParamGroup(path)
-        from freecad.maxproframe import ff_tools
-
-        # Patch the module's actual dependency even when native GUI tests imported it first.
-        self.freecad_patch = patch.object(ff_tools, "FreeCAD", mock_freecad)
-        self.freecad_patch.start()
-
-    def tearDown(self):
-        self.freecad_patch.stop()
-
-    def test_per_key_preference_fallback_and_isolation(self):
+    def test_legacy_only_values_are_not_read(self):
         from freecad.maxproframe.ff_tools import get_param_group
 
-        # 1. Partial write to MaxProFrame
-        writer = get_param_group(writable=True)
-        writer.SetString("Default Profile Material", "Titanium")
+        self.legacy.SetString(self.key, "Perfect fit")
+        self.legacy.SetBool(self.key, True)
+        self.legacy.SetInt(self.key, 3)
+        self.legacy.SetFloat(self.key, 1.75)
 
-        # 2. Reading via reader proxy
-        reader = get_param_group(writable=False)
+        reader = get_param_group()
 
-        # Canonical key returns new value
-        self.assertEqual(reader.GetString("Default Profile Material"), "Titanium")
+        self.assertEqual(reader.GetString(self.key, "default"), "default")
+        self.assertFalse(reader.GetBool(self.key, False))
+        self.assertEqual(reader.GetInt(self.key, 7), 7)
+        self.assertEqual(reader.GetFloat(self.key, 2.5), 2.5)
+        self.assertNotIn(self.key, [key for _type, key, _value in reader.GetContents() or ()])
 
-        # Legacy keys not yet written to MaxProFrame still resolve
-        self.assertEqual(reader.GetString("Default Cut Type"), "Perfect fit")
-        self.assertTrue(reader.GetBool("Group IDs"))
-        self.assertEqual(reader.GetInt("IDs numbering type"), 3)
-        self.assertEqual(reader.GetFloat("Kerf"), 1.75)
+    def test_writes_go_to_maxproframe_and_leave_legacy_untouched(self):
+        from freecad.maxproframe.ff_tools import get_param_group
 
-        # 3. Overriding a legacy key in MaxProFrame updates canonical without mutating legacy
-        writer.SetString("Default Cut Type", "Miter 45")
-        self.assertEqual(reader.GetString("Default Cut Type"), "Miter 45")
+        self.legacy.SetString(self.key, "legacy")
+        legacy_before = self.legacy.GetContents()
+
+        get_param_group(writable=True).SetString(self.key, "new")
+
+        self.assertEqual(get_param_group().GetString(self.key, ""), "new")
         self.assertEqual(
-            self.pref_stores["User parameter:BaseApp/Preferences/Frameforge"]["Default Cut Type"],
-            "Perfect fit",
+            App.ParamGet("User parameter:BaseApp/Preferences/MaxProFrame").GetString(self.key, ""),
+            "new",
         )
+        self.assertEqual(self.legacy.GetContents(), legacy_before)
 
 
 if __name__ == "__main__":
