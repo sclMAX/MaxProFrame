@@ -249,6 +249,8 @@ And you also can add faces related to the other side of the trimmed profile.
 
 You can speed up your development process by first selecting the TrimmedObject, THEN the Trimming Boundaries (faces of profiles to cut with), then click on Trim Profile command; it will fill the "Trim Primitives"
 
+The Trim Profile command is always available while a document is open. The profile to trim can be picked whole in the tree or by any of its faces or edges; the trimming boundaries must be faces. Anything the panel cannot use (an object that is not a profile, an edge or a whole object as a boundary, or a face of the trimmed profile itself) is left out and explained in the panel, and the valid items are kept. **OK** creates the trim in one Undo step, **Cancel** leaves the document unchanged, with no Undo step. If the trimming faces cut nothing, the profile is kept uncut and a warning is shown in the Report view.
+
 ## Organizing Objects
 
 Now, you should have something like this:
