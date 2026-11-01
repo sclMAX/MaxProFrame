@@ -51,7 +51,7 @@ class NotchTaskPanel(ExtendCutTaskPanel):
 class NotchCommand:
     def GetResources(self):
         return {
-            "Pixmap": os.path.join(ICONPATH, "corner-end-trim.svg"),
+            "Pixmap": os.path.join(ICONPATH, "corner-notch.svg"),
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_Notch", "Notch"),
             "Accel": "M, C",
             "ToolTip": QT_TRANSLATE_NOOP(

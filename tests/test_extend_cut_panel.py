@@ -97,14 +97,17 @@ class TestExtendCutCommand(PanelFixture):
                 self.select(*selection)
                 self.assertTrue(ExtendCutCommand().IsActive())
 
-    def test_the_command_is_on_the_toolbar_next_to_notch(self):
+    def test_the_joint_commands_read_miter_extend_cut_notch_on_the_toolbar(self):
         from freecad.maxproframe.InitGui import MaxProFrame
 
         tools = MaxProFrame.toolbox_maxproframe
-        self.assertEqual(tools.index("MaxProFrame_ExtendCut"), tools.index("MaxProFrame_Notch") + 1)
+        start = tools.index("MaxProFrame_EndMiter")
+        self.assertEqual(
+            tools[start : start + 3], ["MaxProFrame_EndMiter", "MaxProFrame_ExtendCut", "MaxProFrame_Notch"]
+        )
         resources = ExtendCutCommand().GetResources()
         self.assertEqual(resources["MenuText"], "Extend / Cut")
-        self.assertTrue(resources["Pixmap"].endswith("trim_extend.svg"))
+        self.assertTrue(resources["Pixmap"].endswith("corner-end-trim.svg"))
 
 
 class TestExtendCutPanel(PanelFixture):

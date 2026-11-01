@@ -1,5 +1,6 @@
 """Notch command and panel: availability, target then profiles, messages, Undo, edit and recompute without a GUI."""
 
+import os
 import unittest
 from unittest.mock import patch
 
@@ -122,12 +123,13 @@ class TestNotchCommand(NotchPanelFixture):
 
         tools = MaxProFrame.toolbox_maxproframe
         self.assertNotIn("MaxProFrame_TrimProfiles", tools)
-        self.assertEqual(tools.index("MaxProFrame_Notch"), tools.index("MaxProFrame_ExtendCut") - 1)
+        self.assertEqual(tools.index("MaxProFrame_Notch"), tools.index("MaxProFrame_ExtendCut") + 1)
         self.assertIn("MaxProFrame_Notch", Gui.listCommands())
         resources = NotchCommand().GetResources()
         self.assertEqual(resources["MenuText"], "Notch")
         self.assertEqual(resources["Accel"], "M, C")
-        self.assertTrue(resources["Pixmap"].endswith("corner-end-trim.svg"))
+        self.assertTrue(resources["Pixmap"].endswith("corner-notch.svg"))
+        self.assertTrue(os.path.isfile(resources["Pixmap"]))
 
 
 class TestNotchPanel(NotchPanelFixture):
