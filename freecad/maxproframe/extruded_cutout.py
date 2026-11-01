@@ -96,6 +96,20 @@ def one_wall_depth(shape, face, direction):
     return thickness + min(thickness, gap) / 2
 
 
+def _uncut_shape(shape):
+    """A copy of ``shape`` with its placement moved into its geometry.
+
+    During a recompute FreeCAD replaces the placement of an assigned shape by the cutout's own
+    (identity) Placement, as it does for the result of a cut.
+    """
+    uncut = shape.copy()
+    placement = uncut.Placement
+    uncut.Placement = App.Placement()
+    # Copied: without a copy a rigid transform only sets the location again.
+    uncut.transformShape(placement.toMatrix(), True)
+    return uncut
+
+
 class ExtrudedCutout:
     def __init__(self, obj, sketch, selected_face):
         """Initialize the parametric Sheet Metal Cut object and add
@@ -229,7 +243,7 @@ class ExtrudedCutout:
 
             if not myFacesList:
                 # An empty sketch, or one still being drawn, leaves the body uncut.
-                fp.Shape = selected_object.Shape.copy()
+                fp.Shape = _uncut_shape(selected_object.Shape)
                 self._update_structure_data(fp)
                 return
 
@@ -241,7 +255,7 @@ class ExtrudedCutout:
                     if depth is not None:
                         tools.append(face.extrude(-normal_vector * depth))
                 if not tools:
-                    fp.Shape = selected_object.Shape.copy()
+                    fp.Shape = _uncut_shape(selected_object.Shape)
                     self._update_structure_data(fp)
                     return
                 extruded_shape = Part.Compound(tools)

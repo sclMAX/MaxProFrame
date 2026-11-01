@@ -346,6 +346,25 @@ class TestEmptySketch(CutoutFixture):
         self.assertAlmostEqual(cutout.Shape.Volume, body.Shape.Volume, places=6)
         self.assertEqual(cutout.PID, body.PID)
 
+    def test_an_uncut_cutout_stays_where_its_base_is_after_a_recompute(self):
+        # Cancelling the sketch editor restores the sketch and recomputes the cutout.
+        body = self.tube()
+        top = self.face_towards(body, UP)
+        before = self.names()
+        panel = self.run_command((body, top))
+        self.assertTrue(panel.accept())
+        sketch, cutout = self.created(before)
+        for cut_type in ("One wall", "Through All"):
+            with self.subTest(cut_type=cut_type):
+                cutout.CutType = cut_type
+                sketch.touch()
+                self.doc.recompute()
+                self.assertEqual(cutout.getStatusString(), "Valid")
+                placed, base = cutout.Shape.BoundBox, body.Shape.BoundBox
+                for corner in ("XMin", "YMin", "ZMin", "XMax", "YMax", "ZMax"):
+                    self.assertAlmostEqual(getattr(placed, corner), getattr(base, corner), places=6, msg=corner)
+                self.assertAlmostEqual(cutout.Shape.Volume, body.Shape.Volume, places=6)
+
 
 class TestCutoutTranslations(CutoutFixture):
     def test_panel_text_and_messages_are_spanish(self):
