@@ -55,9 +55,9 @@ EXPECTED = {
         "Hacé clic en dos o más perfiles para unir en inglete las esquinas que forman.",
     ),
     "MaxProFrame_AddExtrudeCutout": (
-        "Extruded Cutout",
-        "Corte extruido",
-        "Seleccioná un croquis cerrado para el corte extruido.",
+        "Cutout / Hole",
+        "Calado",
+        "Dibujá el calado y cerrá el croquis para cortar.",
     ),
     "MaxProFrame_Link": (
         "Attached Link",

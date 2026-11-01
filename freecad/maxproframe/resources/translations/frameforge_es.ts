@@ -1089,8 +1089,8 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
 </context>
 <context>
     <name>MaxProFrame_AddExtrudeCutout</name>
-    <message><source>Extruded Cutout</source><translation>Corte extruido</translation></message>
-    <message><source>&lt;b&gt;Extruded cutout from a sketch extrusion&lt;/b&gt;&lt;br&gt;&lt;br&gt;1. Select a face of the part (not a thickness face).&lt;br&gt;2. Select a closed sketch for the extruded cut.&lt;br&gt;3. Use the Property editor to adjust the other parameters.</source><translation>&lt;b&gt;Corte extruido a partir de un croquis&lt;/b&gt;&lt;br&gt;&lt;br&gt;1. Seleccioná una cara de la pieza (que no sea la del espesor).&lt;br&gt;2. Seleccioná un croquis cerrado para el corte extruido.&lt;br&gt;3. Ajustá los demás parámetros en el editor de propiedades.</translation></message>
+    <message><source>Cutout / Hole</source><translation>Calado</translation></message>
+    <message><source>&lt;b&gt;Cutout / Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile or a cutout, then OK: a sketch holding the face outline is created on the face and opened. Draw the hole and close the sketch to cut it.&lt;br&gt;&lt;br&gt;Or preselect one face and one sketch to cut with that sketch directly.</source><translation>&lt;b&gt;Calado&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego en Aceptar: se crea en la cara un croquis con su contorno y se abre. Dibujá el calado y cerrá el croquis para cortar.&lt;br&gt;&lt;br&gt;O preseleccioná una cara y un croquis para cortar directamente con ese croquis.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_Link</name>

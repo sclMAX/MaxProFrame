@@ -1,5 +1,9 @@
 ## Changelog
 
+* Unreleased
+
+  - Rework **Extruded Cutout** into **Cutout / Hole** (Spanish *Calado*), with a new icon: a tube with a hole and a slot (see the [tutorial](docs/tutorial.md#cutout--hole)). The command is always active and opens a panel asking for one planar face of a profile, trim or cutout, explaining every selected item it cannot use. OK creates, in one Undo step, a sketch attached to the face in the profile's Part or folder, with the face outline as construction geometry to dimension against, plus the cutout, and opens the sketch; closing it cuts the profile. An empty or unfinished sketch leaves the profile uncut instead of failing. The new **One wall** cut type, the default of this flow, cuts only the wall under the face, as deep as that wall: a hole on the top of a rectangular tube no longer goes through the bottom wall. Selecting one face and one sketch still creates the cutout directly, with **Through All**.
+
 * v1.0.0 (2026-11-01)
 
   First release of MaxProFrame as an independent workbench. It can be installed side by side with FrameForge; neither replaces the other's modules, commands or settings.
