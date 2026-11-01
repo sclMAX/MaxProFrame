@@ -338,23 +338,34 @@ You can map a sketch to any face, and use Part design to do whatever you want !
 A group is just a folder. Simply add your objects into the Group. You are done. Can't be used in assembly for instance. 
 
 
-## Cutout / Drill
+## Cutout / Hole
 
-It is possible to map a sketch to a face of a profile, then cutout / make pocket.
+**Cutout / Hole** (shortcut `E, C`; Spanish *Calado*) cuts holes, slots and clearances in a profile from a sketch drawn on one of its faces.
 
-1. Select a face's profile and Click on the Sketch tool
-
-![alt text](images/90-create-sketch-on-face.png)
-
-A Dialog opens, keep it default (Attach to "Plane Face")
-
-2. Defines the sketch, all sketch tool features works (external geometry too!)
+1. Click on the **Cutout / Hole** command. The button is always active while a document is open.
+2. Click a planar face of a profile, a trimmed profile or an existing cutout, in the 3D view; a face selected before the command is used too. The end faces (the wall thickness at the profile ends), edges and curved faces cannot be cut: the panel says why.
+3. **OK** creates, in one Undo step, a sketch attached to that face and the cutout, both in the same Part or folder as the profile, and opens the sketch. The outline of the face is already in the sketch as construction geometry, so you can dimension the hole against the face edges right away. **Cancel** leaves the document unchanged.
+4. Draw closed shapes (circles, rectangles, slots); every sketch tool works, including External Geometry.
 
 ![alt text](images/90-draw-sketch.png)
 
-3. Select the face, then the skecth in the 3D view and click on the Extruded Cutout
+5. Close the sketch: the profile is cut. While the sketch is empty, or a shape is not closed yet, the profile is shown uncut.
 
-![alt text](images/91-extrudedcutout.png)
+The cutout has a **Cut type** property:
+
+- **One wall** (default of this flow): each closed shape cuts only the wall under the face, as deep as that wall. A hole on the top face of a rectangular tube goes through the top wall and leaves the bottom wall intact. The depth comes from the geometry, so it works on any hollow or open profile.
+- **Through All**: the shapes cut through the whole profile, every wall they cross.
+- **Distance**: the shapes cut as deep as **Extrusion Length**, shown only for this type.
+
+To change the holes later, edit the sketch; to change the cut type, use the Property editor or double-click the cutout.
+
+### With your own sketch
+
+You can still cut with a sketch you made yourself: attach a sketch to a face of the profile (Sketch tool, Attach to "Plane Face") and draw the shapes.
+
+![alt text](images/90-create-sketch-on-face.png)
+
+Select the face and the sketch (in either order) and click **Cutout / Hole**: the cutout is created directly, with **Through All**, the sketch is moved into the profile's Part, and a panel opens to choose the cut type.
 
 ![alt text](images/92-extrudedcutout-done.png)
 

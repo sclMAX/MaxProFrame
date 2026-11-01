@@ -13,6 +13,7 @@ set(Namespace_SRCS
         freecad/maxproframe/resources/icons/bom.svg
         freecad/maxproframe/resources/icons/parts_list.svg
         freecad/maxproframe/resources/icons/corner-end-trim.svg
+        freecad/maxproframe/resources/icons/cutout-hole.svg
         freecad/maxproframe/resources/icons/list-remove.svg
         freecad/maxproframe/resources/icons/extendcurve.svg
         freecad/maxproframe/resources/icons/list-add.svg
@@ -57,6 +58,7 @@ set(Namespace_SRCS
         freecad/maxproframe/resources/help/library-manager.md
         freecad/maxproframe/resources/help/library-manager.es.md
 
+        freecad/maxproframe/resources/ui/create_cutout.ui
         freecad/maxproframe/resources/ui/extend_cut.ui
 
         freecad/maxproframe/resources/profiles/metal.json

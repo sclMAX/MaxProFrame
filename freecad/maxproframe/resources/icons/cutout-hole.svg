@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Cutout / Hole: a rectangular tube (blue) with a round hole and a slot (red) cut through its top wall. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" version="1.1">
+  <g stroke="#302b00" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">
+    <polygon fill="#204a87" points="18.00,26.00 18.00,44.00 46.00,28.27 46.00,10.27"/>
+    <polygon fill="#729fcf" points="2.00,26.00 18.00,26.00 46.00,10.27 30.00,10.27"/>
+    <path fill="#3465a4" fill-rule="evenodd" d="M 2,26 H 18 V 44 H 2 Z M 4.5,28.5 V 41.5 H 15.5 V 28.5 Z"/>
+    <polygon fill="#0b1f3a" stroke="none" points="4.5,28.5 15.5,28.5 15.5,41.5 4.5,41.5"/>
+  </g>
+  <!-- Holes drawn in the top face plane: x across the 16 wide face, y along the tube (32.1 long). -->
+  <g transform="matrix(1,0,0.8717,-0.4897,2,26)" fill="#0b1f3a" stroke="#ed2b00" stroke-width="1.1">
+    <circle cx="8" cy="9" r="4.6"/>
+    <rect x="3" y="20" width="10" height="5" rx="2.5" ry="2.5"/>
+  </g>
+</svg>
