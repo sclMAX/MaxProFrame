@@ -101,7 +101,7 @@ The workbench is available in English and Spanish and follows the language selec
 
 ## Compatibility and testing
 
-Every change runs the full native test suite on the official FreeCAD 1.1.4 Linux AppImage and on a pinned FreeCAD weekly build. Windows and macOS are expected to work but are not tested automatically yet; please [report any problem](https://github.com/sclMAX/MaxProFrame/issues).
+Every change runs the full native test suite on the official FreeCAD 1.1.4 Linux AppImage and on a pinned FreeCAD weekly build. Every commit on `main` also runs it on the official FreeCAD 1.1.4 Windows build; that job is informative while the remaining Windows issues are fixed. macOS is expected to work but is not tested automatically yet. Please [report any problem](https://github.com/sclMAX/MaxProFrame/issues).
 
 ## Contributing
 
