@@ -10,7 +10,7 @@ from PySide import QtCore, QtGui
 from freecad.maxproframe.create_end_miter_tool import _alive, _base_profile, _failures
 from freecad.maxproframe.create_extend_cut_tool import _selected_items, show_panel, trimmed_body_problem
 from freecad.maxproframe.create_profiles_tool import place_in_container_of
-from freecad.maxproframe.extruded_cutout import ExtrudedCutout, ViewProviderExtrudedCutout
+from freecad.maxproframe.extruded_cutout import CUT_TYPES, ExtrudedCutout, ViewProviderExtrudedCutout
 from freecad.maxproframe.ff_tools import (
     ICONPATH,
     PROFILEIMAGES_PATH,
@@ -24,8 +24,8 @@ from freecad.maxproframe.ff_tools import (
 from freecad.maxproframe.frameforge_exceptions import FrameForgeException
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 
-# Cut type of the cutouts made from the face panel.
-GUIDED_CUT_TYPE = "Through All"
+# Cut type of the cutouts made from the face panel: the wall under the face only.
+GUIDED_CUT_TYPE = "One wall"
 # A face whose normal leans this much (cosine) along the profile axis is an end face, not a wall.
 END_FACE_TOLERANCE = 1e-6
 
@@ -234,10 +234,7 @@ class CreateExtrudedCutoutTaskPanel:
     def __init__(self, obj):
         self.obj = obj
 
-        self.cut_types = [
-            "Through All",
-            "Distance",
-        ]
+        self.cut_types = list(CUT_TYPES)
 
         self.form = QtGui.QWidget()
         layout = QtGui.QVBoxLayout(self.form)

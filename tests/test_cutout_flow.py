@@ -257,8 +257,8 @@ class TestCutoutCreation(CutoutFixture):
         self.assertLess(sketch.Placement.Rotation.multVec(UP).getAngle(face.normalAt(0, 0)), 1e-9)
         self.assertEqual(cutout.baseObject, (body, [top]))
         self.assertEqual(cutout.Sketch, sketch)
-        # S4 (One wall) is not in place yet: the guided flow keeps the Through All default.
-        self.assertEqual(cutout.CutType, "Through All")
+        # The guided flow cuts one wall by default (S4).
+        self.assertEqual(cutout.CutType, "One wall")
         self.assertEqual(cutout.getStatusString(), "Valid")
         self.assertEqual(sketch.getStatusString(), "Valid")
         self.assertEqual(self.doc.UndoCount, 1)
@@ -289,8 +289,8 @@ class TestCutoutCreation(CutoutFixture):
         sketch, cutout = self.created(before)
         self.add_hole(sketch, body, top)
         self.assertEqual(cutout.getStatusString(), "Valid")
-        # Through All: the hole goes through the top and the bottom walls.
-        removed = 2 * math.pi * HOLE_RADIUS**2 * WALL
+        # One wall: the hole goes through the top wall only.
+        removed = math.pi * HOLE_RADIUS**2 * WALL
         self.assertAlmostEqual(cutout.Shape.Volume, body.Shape.Volume - removed, places=3)
 
     def test_ok_opens_the_new_sketch_for_editing_once_the_panel_is_closed(self):
