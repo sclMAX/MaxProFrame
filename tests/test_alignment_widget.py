@@ -235,6 +235,28 @@ class TestAlignmentWidget(unittest.TestCase):
         self.assertEqual(themed("#ffffff", "#1a1a1a", "#1f5fbf"), QtGui.QColor("#1f5fbf"))
         self.assertEqual(self.widget.styleSheet(), "")
 
+    def test_section_and_anchors_stay_readable_when_text_matches_the_base(self):
+        def rendered(base, text):
+            palette = QtGui.QPalette(self.widget.palette())
+            palette.setColor(QtGui.QPalette.Base, QtGui.QColor(base))
+            palette.setColor(QtGui.QPalette.Text, QtGui.QColor(text))
+            palette.setColor(QtGui.QPalette.Highlight, QtGui.QColor("#1f5fbf"))
+            self.widget.setPalette(palette)
+            self.widget.set_offset((0, 0))
+            return self.widget.grab().toImage()
+
+        def pixels(image):
+            return [image.pixelColor(x, y) for x in range(image.width()) for y in range(image.height())]
+
+        # A stylesheet theme can leave a white base with light text: the section must not vanish.
+        image = rendered("#ffffff", "#f0f0f0")
+        ink = [color for color in pixels(image) if color.saturation() < 40 and color.lightness() < 100]
+        self.assertGreater(len(ink), 200)
+        # A readable theme keeps its own text color for the section.
+        image = rendered("#232323", "#e6e6e6")
+        self.assertIn(QtGui.QColor("#e6e6e6").rgb(), {color.rgb() for color in pixels(image)})
+        self.assertEqual(self.widget.styleSheet(), "")
+
     def test_anchor_clicks_still_select_nine_ids_with_an_offset(self):
         clicks = []
         self.widget.anchorClicked.connect(lambda x, y: clicks.append((x, y)))

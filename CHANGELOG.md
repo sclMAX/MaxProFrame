@@ -7,6 +7,7 @@
 
   **Fixes**
   - Show the stored depth in the cutout panel opened by double-click; it always showed 500.
+  - Draw the section and its placement points in the placement preview of **Create Profiles** and **Edit Profile** on themes whose text color is unreadable on the preview background: with a white background and light text only the selected point was visible. They now fall back to black or white.
 
 * v1.1.1 (2026-11-02)
 
