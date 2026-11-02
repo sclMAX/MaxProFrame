@@ -28,7 +28,12 @@ from freecad.maxproframe.ff_tools import (
 )
 from freecad.maxproframe.library_manager import LibraryManager, get_canonical_family
 from freecad.maxproframe.parametric_line import ParametricLine
-from freecad.maxproframe.profile import Profile, ViewProviderCustomProfile, ViewProviderProfile
+from freecad.maxproframe.profile import (
+    FIXED_SECTION_FAMILIES,
+    Profile,
+    ViewProviderCustomProfile,
+    ViewProviderProfile,
+)
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, release_layout_item_wrappers
 from freecad.maxproframe.section_library import find_existing_section_sketch, get_or_import_section_sketch
 from freecad.maxproframe.section_outline import build_section_face
@@ -1082,7 +1087,10 @@ class BaseProfileTaskPanel(ABC):
         self.form_proxy.combo_family.setToolTip(translate("frameforge", canonical))
 
         fillet_val = False if is_custom else bool(self.profiles.get(material, {}).get(family, {}).get("fillet", False))
+        # The sizes still belong to the previous family; on_size_changed rebuilds once they match.
+        was_blocked = self.form_proxy.cb_make_fillet.blockSignals(True)
         self.form_proxy.cb_make_fillet.setChecked(fillet_val)
+        self.form_proxy.cb_make_fillet.blockSignals(was_blocked)
         self.form_proxy.cb_make_fillet.setEnabled(False if is_custom else fillet_val)
 
         self.update_image()
@@ -1171,6 +1179,7 @@ class BaseProfileTaskPanel(ABC):
                     sb.setEnabled(True)
 
                     sb.setValue(float(profile[s]))
+                self._update_section_size_controls(canonical, profile)
 
             self.enable_signals(True)
             if hasattr(self, "label_profile_name") and self.label_profile_name is not None:
@@ -1179,6 +1188,12 @@ class BaseProfileTaskPanel(ABC):
                 )
             self.update_image()
             self.on_input_changed()
+
+    def _update_section_size_controls(self, canonical_family, size_data=None):
+        """Width and height follow the catalog size, except on fixed-section families."""
+        editable = canonical_family not in FIXED_SECTION_FAMILIES and canonical_family != "Custom Profile"
+        for key, sb in (("Width", self.form_proxy.sb_width), ("Height", self.form_proxy.sb_height)):
+            sb.setEnabled(editable and (size_data is None or key in size_data))
 
     def on_cb_make_fillet_changed(self, state):
         self.update_image()

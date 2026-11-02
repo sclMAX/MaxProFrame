@@ -109,6 +109,8 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
         else:
             canonical_family = getattr(self.profile, "Family", target_family)
         self._update_family_controls(canonical_family)
+        size_data = family_data.get("sizes", {}).get(target_size) if isinstance(family_data, dict) else None
+        self._update_section_size_controls(canonical_family, size_data)
 
         # self.form_proxy.cb_combined_bevel.setChecked()
 
@@ -167,21 +169,28 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
     def proceed(self):
         if getattr(self, "_initializing", False):
             return
+        old_family = self._family_label_part()
         old_size = getattr(self.profile, "SizeName", "")
         self.update_profile(self.profile)
-        self._replace_size_in_label(old_size, getattr(self.profile, "SizeName", ""))
+        self._replace_part_in_label(old_size, getattr(self.profile, "SizeName", ""))
+        self._replace_part_in_label(old_family, self._family_label_part())
 
         self.profile.recompute()
 
-    def _replace_size_in_label(self, old_size, new_size):
-        """Swap the old size for the new one when the label holds it as a whole "_"-separated part."""
-        if not old_size or not new_size or old_size == new_size:
+    def _family_label_part(self):
+        """The family as Create Profiles writes it in the label."""
+        family = getattr(self.profile, "CatalogFamily", None) or getattr(self.profile, "Family", "")
+        return family.replace(" ", "_")
+
+    def _replace_part_in_label(self, old, new):
+        """Swap old for new when the label holds it as a whole "_"-separated part."""
+        if not old or not new or old == new:
             return
-        pattern = rf"(?:^|(?<=_)){re.escape(old_size)}(?=_|$)"
+        pattern = rf"(?:^|(?<=_)){re.escape(old)}(?=_|$)"
         matches = list(re.finditer(pattern, self.profile.Label))
         if not matches:
             return
-        # The size follows the prefix, sketch and family parts, so replace the last occurrence.
+        # Family and size follow the prefix and sketch parts, so replace the last occurrence.
         last = matches[-1]
         label = self.profile.Label
-        self.profile.Label = label[: last.start()] + new_size + label[last.end() :]
+        self.profile.Label = label[: last.start()] + new + label[last.end() :]
