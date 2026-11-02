@@ -205,23 +205,37 @@ class AlignmentWidget(QtWidgets.QWidget):
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
         palette = self.palette()
         painter.fillRect(self.rect(), palette.brush(QtGui.QPalette.Base))
+        ink = self.ink_color()
         if self._bounds.isEmpty():
-            painter.setPen(palette.color(QtGui.QPalette.Text))
+            painter.setPen(ink)
             painter.drawText(self.rect(), QtCore.Qt.AlignCenter, translate("frameforge", "No Preview"))
         else:
             painter.setPen(QtCore.Qt.NoPen)
-            painter.setBrush(palette.brush(QtGui.QPalette.Text))
+            painter.setBrush(ink)
             painter.drawPath(self._section_transform().map(self._path))
             for ax in range(3):
                 for ay in range(3):
                     selected = self.selected_anchor == (ax, ay)
-                    painter.setPen(QtGui.QPen(palette.color(QtGui.QPalette.Text), 1.5))
+                    painter.setPen(QtGui.QPen(ink, 1.5))
                     painter.setBrush(palette.brush(QtGui.QPalette.Highlight if selected else QtGui.QPalette.Base))
                     painter.drawEllipse(self.anchor_position(ax, ay), 6 if selected else 4, 6 if selected else 4)
             marker = self._edge_marker()
             if marker is not None and self.offset != (0.0, 0.0):
                 self._paint_edge_marker(painter, palette, *marker)
         painter.end()
+
+    def ink_color(self):
+        """Theme text color for the section and anchors, or black/white when it is unreadable on the base.
+
+        A stylesheet theme can set a light text color while the base of this widget stays white.
+        """
+        palette = self.palette()
+        base = palette.color(QtGui.QPalette.Base)
+        text = palette.color(QtGui.QPalette.Text)
+        if _contrast_ratio(text, base) >= 3.0:
+            return text
+        black, white = QtGui.QColor(QtCore.Qt.black), QtGui.QColor(QtCore.Qt.white)
+        return black if _contrast_ratio(black, base) >= _contrast_ratio(white, base) else white
 
     def marker_color(self):
         """Theme accent for the edge marker, or the text color when the accent is unreadable on the base."""
@@ -231,7 +245,7 @@ class AlignmentWidget(QtWidgets.QWidget):
         # WCAG minimum contrast for graphical objects; Text on Base is the theme's own readable pair.
         if _contrast_ratio(highlight, base) >= 3.0:
             return highlight
-        return palette.color(QtGui.QPalette.Text)
+        return self.ink_color()
 
     def _paint_edge_marker(self, painter, palette, edge, clipped):
         highlight = self.marker_color()
