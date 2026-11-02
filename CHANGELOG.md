@@ -1,6 +1,6 @@
 ## Changelog
 
-* Unreleased
+* v1.1.1 (2026-11-02)
 
   **Fixes**
   - Keep the label in step with the family in **Edit Profile**: changing the family now also replaces the old family in the label, as Create Profiles writes it with spaces as `_` (for example `Profile_Square_Hollow_40x40x2_001` becomes `Profile_Rectangular_Hollow_30x10x1.5_001`), when the label holds it as a whole part; a label written by hand without it is left as it is. Cancelling the panel restores the previous label.
