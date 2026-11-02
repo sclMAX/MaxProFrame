@@ -28,6 +28,16 @@ from freecad.maxproframe.version import __version__ as ff_version
 ANCHOR_X = ("Left", "Center", "Right")
 ANCHOR_Y = ("Bottom", "Center", "Top")
 
+# Families whose section only exists in their catalog sizes, so width and height cannot be edited.
+FIXED_SECTION_FAMILIES = (
+    "V-Slot",
+    "T-Slot",
+    "T-Slot 3-Slots",
+    "T-Slot 2-Slots",
+    "T-Slot 2-Slots Opp",
+    "T-Slot 1-Slot",
+)
+
 FLANGE_ANGLES = {
     "UPE": 4.57,
     "UPN": 4.57,
@@ -1154,15 +1164,7 @@ class Profile:
             else:
                 raise ValueError("T-Slot 1-Slot H/W")
 
-        if obj.Family in (
-            "V-Slot",
-            "T-Slot",
-            "T-Slot 3-Slots",
-            "T-Slot 2-Slots",
-            "T-Slot 2-Slots Opp",
-            "T-Slot 1-Slot",
-            "Custom Profile",
-        ):
+        if obj.Family in FIXED_SECTION_FAMILIES or obj.Family == "Custom Profile":
             p = p.copy()
             p.translate(vec(w - p.BoundBox.XMin, h - p.BoundBox.YMin, 0))
 

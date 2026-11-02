@@ -102,6 +102,11 @@ class TestCreateProfileApply(unittest.TestCase):
         doc.recompute()
         return obj
 
+    def _select_square_hollow(self, panel):
+        """Use a family whose width and height are editable."""
+        panel.form_proxy.combo_material.setCurrentText("Metal")
+        panel.form_proxy.combo_family.setCurrentText("Square Hollow")
+
     def _get_profiles(self, doc):
         return [
             o
@@ -134,6 +139,7 @@ class TestCreateProfileApply(unittest.TestCase):
         panel = CreateProfileTaskPanel()
         self.panels.append(panel)
         panel.open()
+        self._select_square_hollow(panel)
 
         # Change length, material, family, size
         panel.form_proxy.sb_length.setValue(250.0)
@@ -202,6 +208,7 @@ class TestCreateProfileApply(unittest.TestCase):
         panel = CreateProfileTaskPanel()
         self.panels.append(panel)
         panel.open()
+        self._select_square_hollow(panel)
 
         for name in ("groupBox_apply", "btn_apply", "label_apply_status"):
             self.assertNotIn(name, panel.form_proxy.members)
@@ -251,6 +258,7 @@ class TestCreateProfileApply(unittest.TestCase):
         panel = CreateProfileTaskPanel()
         self.panels.append(panel)
         panel.open()
+        self._select_square_hollow(panel)
 
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(doc.Name, path.Name, "Edge1")

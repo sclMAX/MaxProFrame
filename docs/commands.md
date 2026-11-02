@@ -15,7 +15,7 @@ Create Profiles separates catalog selection from placement. **Profile** and **Pl
 - **Create a part** reuses one Part container for the session's attached paths and profiles, including previews created before selecting this option. Repeated preview updates and OK do not create additional Parts. Custom-section sketches remain shared library sources; their profile links can cross Part boundaries.
 - Previews update in the 3D view on every change: picking or removing a path, setting a manual length, or editing a value updates the affected previews immediately, without closing the panel. **OK** confirms the current values; **Cancel** discards the session preview and leaves the document as before.
 
-Edit Profile retains live updates, including when its catalog is unavailable. Its naming controls remain disabled; changing the size replaces the old size in the label when the label holds it as a whole `_`-separated part, and leaves any other label unchanged. Task-panel controls inherit FreeCAD styling and palette; Spanish labels do not change Python commands or preference keys.
+Edit Profile retains live updates, including when its catalog is unavailable. Its naming controls remain disabled; changing the family or size replaces the old family (spaces written as `_`) and the old size in the label when the label holds them as whole `_`-separated parts, and leaves any other label unchanged. Cancelling restores the previous label. Task-panel controls inherit FreeCAD styling and palette; Spanish labels do not change Python commands or preference keys.
 
 ## Visual section alignment
 

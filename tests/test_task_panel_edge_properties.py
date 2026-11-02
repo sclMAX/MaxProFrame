@@ -110,6 +110,11 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.created_docs.append(name)
         return doc
 
+    def _select_square_hollow(self, panel):
+        """Use a family whose width and height are editable."""
+        panel.form_proxy.combo_material.setCurrentText("Metal")
+        panel.form_proxy.combo_family.setCurrentText("Square Hollow")
+
     def _create_rectangle_sketch(self, doc, name="RectanglePath", width=100.0, height=80.0):
         sk = doc.addObject("Sketcher::SketchObject", name)
         p1 = App.Vector(0, 0, 0)
@@ -922,6 +927,7 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         panel = CreateProfileTaskPanel()
         self.panels.append(panel)
         panel.open()
+        self._select_square_hollow(panel)
         Gui.Selection.addObserver(panel)
         Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
         Gui.Selection.addSelection(doc.Name, sk.Name, "Edge2")
@@ -934,8 +940,8 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         has_alternative_size = size_combo.count() > 1
         if has_alternative_size:
             size_combo.setCurrentIndex((size_combo.currentIndex() + 1) % size_combo.count())
-        if panel.form_proxy.sb_width.isEnabled():
-            panel.form_proxy.sb_width.setValue(panel.form_proxy.sb_width.value() + 1)
+        self.assertTrue(panel.form_proxy.sb_width.isEnabled())
+        panel.form_proxy.sb_width.setValue(panel.form_proxy.sb_width.value() + 1)
         panel.edge_list_widget.select_edge(e2)
         panel.set_rotation(180)
         p1, p2 = panel._objects[e1], panel._objects[e2]
@@ -1013,6 +1019,7 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         panel = CreateProfileTaskPanel()
         self.panels.append(panel)
         panel.open()
+        self._select_square_hollow(panel)
         Gui.Selection.addObserver(panel)
         for edge in ("Edge1", "Edge2", "Edge3"):
             Gui.Selection.addSelection(doc.Name, sk.Name, edge)
@@ -1423,6 +1430,167 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
             size = self._edit_to_other_size(obj)
             self.assertEqual(obj.SizeName, size)
             self.assertEqual(obj.Label, label)
+
+    def test_edit_cancel_restores_label_and_size(self):
+        """Cancelling Edit Profile after a size change brings back the old label and size."""
+        doc = self._new_doc("DocEditCancelLabel")
+        obj = self._saved_profile(doc, "Profile_40x40x2_001")
+        panel = EditProfileTaskPanel(obj)
+        self.panels.append(panel)
+        panel.open()
+        combo = panel.form_proxy.combo_size
+        index = next(i for i in range(combo.count()) if combo.itemText(i) != "40x40x2")
+        combo.setCurrentIndex(index)
+        panel.proceed()
+        self.assertEqual(obj.Label, f"Profile_{combo.itemText(index)}_001")
+        panel.reject()
+        self.assertEqual(obj.Label, "Profile_40x40x2_001")
+        self.assertEqual(obj.SizeName, "40x40x2")
+
+    def _edit_to_other_family(self, obj):
+        panel = EditProfileTaskPanel(obj)
+        self.panels.append(panel)
+        panel.initialize_ui()
+        panel.form_proxy.combo_family.setCurrentText("Rectangular Hollow")
+        panel.proceed()
+        return panel.form_proxy.combo_family.currentText(), panel.form_proxy.combo_size.currentText()
+
+    def test_edit_family_change_replaces_family_and_size_in_label(self):
+        """Editing the family replaces the old family and size in the label and keeps the rest of it."""
+        doc = self._new_doc("DocEditFamilyLabel")
+        obj = self._saved_profile(doc, "Profile_Square_Hollow_40x40x2_001")
+        name = obj.Name
+        family, size = self._edit_to_other_family(obj)
+        self.assertEqual(family, "Rectangular Hollow")
+        self.assertEqual(obj.CatalogFamily, family)
+        self.assertEqual(obj.SizeName, size)
+        self.assertEqual(obj.Label, f"Profile_Rectangular_Hollow_{size}_001")
+        self.assertEqual(obj.Name, name)
+
+    def test_edit_family_change_keeps_label_without_old_family(self):
+        """A label the user wrote without the family or size stays as written after a family change."""
+        doc = self._new_doc("DocEditFamilyCustomLabel")
+        obj = self._saved_profile(doc, "Left rail")
+        family, size = self._edit_to_other_family(obj)
+        self.assertEqual(obj.CatalogFamily, family)
+        self.assertEqual(obj.SizeName, size)
+        self.assertEqual(obj.Label, "Left rail")
+
+    def test_edit_family_change_updates_profile_only_with_new_family_sizes(self):
+        """Switching family in Edit Profile never rebuilds the profile with the new family and the old size."""
+        doc = self._new_doc("DocEditFamilySizes")
+        obj = self._saved_profile(doc, "Left rail")
+        panel = EditProfileTaskPanel(obj)
+        self.panels.append(panel)
+        panel.initialize_ui()
+        sizes = panel.profiles["Metal"]["Rectangular Hollow"]["sizes"]
+        self.assertTrue(panel.profiles["Metal"]["Rectangular Hollow"]["fillet"])
+        self.assertFalse(panel.form_proxy.cb_make_fillet.isChecked())
+        proceed = panel.proceed
+        seen = []
+
+        def spy():
+            seen.append((panel.form_proxy.combo_family.currentText(), panel.form_proxy.combo_size.currentText()))
+            proceed()
+
+        with patch.object(panel, "proceed", side_effect=spy):
+            panel.form_proxy.combo_family.setCurrentText("Rectangular Hollow")
+        self.assertTrue(seen)
+        for family, size in seen:
+            self.assertEqual(family, "Rectangular Hollow")
+            self.assertTrue(size in sizes, f"proceed ran with size {size}")
+        self.assertTrue(panel.form_proxy.cb_make_fillet.isChecked())
+        self.assertEqual(obj.CatalogFamily, "Rectangular Hollow")
+        self.assertEqual(obj.SizeName, panel.form_proxy.combo_size.currentText())
+        self.assertTrue(obj.SizeName in sizes, obj.SizeName)
+        self.assertTrue(obj.MakeFillet)
+        self.assertTrue(obj.Shape.isValid())
+
+    def _fixed_section_material(self, profiles):
+        return next(material for material, families in profiles.items() if "V-Slot" in families)
+
+    def _use_default_catalog(self, material, family):
+        """Make the panels open on the given catalog family, restoring the previous defaults afterwards."""
+        param = get_param_group(writable=True)
+        keys = [k for _t, k, _v in param.GetContents() or []]
+        for key, value in (("Default Profile Material", material), ("Default Profile Family", family)):
+            if key in keys:
+                self.addCleanup(param.SetString, key, param.GetString(key))
+            else:
+                self.addCleanup(param.RemString, key)
+            param.SetString(key, value)
+
+    def test_fixed_section_families_keep_width_and_height_read_only(self):
+        """V-Slot and T-Slot sections exist only in their catalog sizes, so width and height are read-only."""
+        self._new_doc("DocFixedSection")
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+        proxy = panel.form_proxy
+        material = self._fixed_section_material(panel.profiles)
+        proxy.combo_material.setCurrentText(material)
+        for family, family_data in panel.profiles[material].items():
+            proxy.combo_family.setCurrentText(family)
+            for size, entry in family_data["sizes"].items():
+                proxy.combo_size.setCurrentText(size)
+                self.assertFalse(proxy.sb_width.isEnabled(), f"{family} {size}")
+                self.assertFalse(proxy.sb_height.isEnabled(), f"{family} {size}")
+                self.assertEqual(proxy.sb_width.value(), float(entry["Width"]))
+                self.assertEqual(proxy.sb_height.value(), float(entry["Height"]))
+        proxy.combo_material.setCurrentText("Metal")
+        proxy.combo_family.setCurrentText("Square Hollow")
+        self.assertTrue(proxy.sb_width.isEnabled())
+        self.assertTrue(proxy.sb_height.isEnabled())
+        self.assertTrue(proxy.sb_main_thickness.isEnabled())
+
+    def test_edit_fixed_section_profile_keeps_width_and_height_read_only(self):
+        """Edit Profile opens a saved V-Slot with read-only width and height, whatever family Create defaults to."""
+        doc = self._new_doc("DocEditFixedSection")
+        material = self._fixed_section_material(LibraryManager().get_all_profiles())
+        self._use_default_catalog("Metal", "Square Hollow")
+        obj = doc.addObject("Part::FeaturePython", "SavedVSlot")
+        obj.addExtension("Part::AttachExtensionPython")
+        Profile(
+            obj,
+            init_w=40.0,
+            init_h=20.0,
+            init_mt=0.0,
+            init_ft=0.0,
+            init_r1=0.0,
+            init_r2=0.0,
+            init_len=500.0,
+            init_wg=0.0,
+            init_unit_price=0.0,
+            init_mf=False,
+            init_anchor_x=1,
+            init_anchor_y=1,
+            material=material,
+            fam="V-Slot",
+            size_name="20x40",
+            bevels_combined=False,
+            catalog_family="V-Slot",
+        )
+        doc.recompute()
+        panel = EditProfileTaskPanel(obj)
+        self.panels.append(panel)
+        panel.initialize_ui()
+        self.assertFalse(panel.form_proxy.sb_width.isEnabled())
+        self.assertFalse(panel.form_proxy.sb_height.isEnabled())
+        self.assertEqual(panel.form_proxy.sb_width.value(), 40.0)
+        self.assertEqual(panel.form_proxy.sb_height.value(), 20.0)
+
+    def test_edit_parametric_profile_keeps_width_and_height_editable_after_fixed_default(self):
+        """A Square Hollow opened in Edit Profile keeps editable width and height when Create defaults to V-Slot."""
+        doc = self._new_doc("DocEditParametricAfterFixed")
+        self._use_default_catalog(self._fixed_section_material(LibraryManager().get_all_profiles()), "V-Slot")
+        obj = self._saved_profile(doc, "Left rail")
+        panel = EditProfileTaskPanel(obj)
+        self.panels.append(panel)
+        panel.initialize_ui()
+        self.assertTrue(panel.form_proxy.sb_width.isEnabled())
+        self.assertTrue(panel.form_proxy.sb_height.isEnabled())
+        self.assertEqual(panel.form_proxy.sb_width.value(), 40.0)
+        self.assertEqual(panel.form_proxy.sb_height.value(), 40.0)
 
 
 if __name__ == "__main__":
