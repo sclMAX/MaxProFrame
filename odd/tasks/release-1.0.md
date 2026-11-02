@@ -16,7 +16,7 @@ Worktree `.git/gentle-worktrees/release-1.0`, branch `feat/release-1.0`. Native 
 - T1. [S1, S3] Remove FrameForge compatibility and fix install lists — route: worker — commit: 20ebcd9
 - T2. [S3] package.xml metadata (single repo URL on `release`, bugtracker) — route: inline — commit: 20ebcd9
 - T3. [S4] README rewrite; dialog captures by worker script, 3D captures by the user — commit: b1a753e, 4cb21d1
-- T4. [S2] Version 1.0.0, CHANGELOG 1.0.0 section, `release` branch, tag and GitHub Release — route: inline, needs user confirmation before push/tag — commit: pending
+- T4. [S2] Version 1.0.0, CHANGELOG 1.0.0 section, `release` branch, tag and GitHub Release — route: inline, needs user confirmation before push/tag — commit: tag v1.0.0 (4f602ba), GitHub Release MaxProFrame 1.0.0
 
 ## Log
 
