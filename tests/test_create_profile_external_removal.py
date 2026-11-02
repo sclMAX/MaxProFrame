@@ -132,6 +132,8 @@ class TestCreateProfileExternalRemoval(unittest.TestCase):
         Gui.Selection.addSelection(doc.Name, sk.Name, "Edge1")
         self.assertTrue(panel._objects[(sk, "Edge1")].isAttachedToDocument())
         self.assertEqual(doc.UndoNames[:1], ["Add Profile"])
+        self.assertTrue(doc.HasPendingTransaction)
+        steps_before = doc.UndoNames.count("Add Profile")
 
         with patch.object(panel, "reject", wraps=panel.reject) as reject:
             Gui.Control.closeDialog()
@@ -140,7 +142,9 @@ class TestCreateProfileExternalRemoval(unittest.TestCase):
         self.assertFalse(Gui.Control.activeDialog())
         self.assertEqual([obj.Name for obj in doc.Objects], [sk.Name])
         self.assertEqual(panel._objects, {})
-        self.assertNotIn("Add Profile", doc.UndoNames)
+        # Only the panel's own pending transaction is dropped; earlier committed steps stay.
+        self.assertFalse(doc.HasPendingTransaction)
+        self.assertEqual(doc.UndoNames.count("Add Profile"), steps_before - 1)
 
         Gui.Selection.addSelection(doc.Name, sk.Name, "Edge2")
         panel.addSelection(doc.Name, sk.Name, "Edge2", None)
