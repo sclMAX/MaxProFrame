@@ -1,6 +1,7 @@
 import glob
 import json
 import os
+import re
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -166,6 +167,21 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
     def proceed(self):
         if getattr(self, "_initializing", False):
             return
+        old_size = getattr(self.profile, "SizeName", "")
         self.update_profile(self.profile)
+        self._replace_size_in_label(old_size, getattr(self.profile, "SizeName", ""))
 
         self.profile.recompute()
+
+    def _replace_size_in_label(self, old_size, new_size):
+        """Swap the old size for the new one when the label holds it as a whole "_"-separated part."""
+        if not old_size or not new_size or old_size == new_size:
+            return
+        pattern = rf"(?:^|(?<=_)){re.escape(old_size)}(?=_|$)"
+        matches = list(re.finditer(pattern, self.profile.Label))
+        if not matches:
+            return
+        # The size follows the prefix, sketch and family parts, so replace the last occurrence.
+        last = matches[-1]
+        label = self.profile.Label
+        self.profile.Label = label[: last.start()] + new_size + label[last.end() :]

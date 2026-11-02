@@ -1875,6 +1875,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 offset = max(self.form_proxy.sb_width.value(), self.form_proxy.sb_height.value())
                 profile.OffsetA = offset if props["pre_extend"] else 0.0
                 profile.OffsetB = offset if props["pre_extend"] else 0.0
+                self._sync_profile_label(profile, key[0])
             profile.Document.recompute()
 
     def _on_edge_selected(self, edge_key):
@@ -2355,20 +2356,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
         selection_list = self._path_selections()
 
-        p_name = "Profile_" if self.form_proxy.cb_prefix_profile_in_name.isChecked() else ""
-
-        if len(selection_list) == 1 and self.form_proxy.cb_sketch_in_name.isChecked():
-            sketch_sel = selection_list[0]
-
-            p_name += sketch_sel.Object.Name + "_"
-
-        if self.form_proxy.cb_family_in_name.isChecked():
-            p_name += self.form_proxy.combo_family.currentText().replace(" ", "_") + "_"
-
-        if self.form_proxy.cb_size_in_name.isChecked():
-            p_name += self.form_proxy.combo_size.currentText() + "_"
-
-        p_name += "000"
+        p_name, _ = self._profile_names(None)
 
         in_part = self.form_proxy.rb_profiles_in_part.isChecked()
         if not in_part and self._placed_in_part:
@@ -2401,14 +2389,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                         continue
                     seen_edges.add(key)
                     with self._section_for_edge(key):
-                        edge_name = "Profile_" if self.form_proxy.cb_prefix_profile_in_name.isChecked() else ""
-                        if len(selection_list) == 1 and self.form_proxy.cb_sketch_in_name.isChecked():
-                            edge_name += sketch_sel.Object.Name + "_"
-                        if self.form_proxy.cb_family_in_name.isChecked():
-                            edge_name += self.form_proxy.combo_family.currentText().replace(" ", "_") + "_"
-                        if self.form_proxy.cb_size_in_name.isChecked():
-                            edge_name += self.form_proxy.combo_size.currentText() + "_"
-                        k = self.create_or_update_profile(sketch_sel.Object, edge, edge_name + "000")
+                        edge_name, _ = self._profile_names(sketch_sel.Object)
+                        k = self.create_or_update_profile(sketch_sel.Object, edge, edge_name)
                     if container:
                         # Existing previews must follow paths moved into the session Part.
                         container.addObject(self._objects[k])
@@ -2446,6 +2428,28 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         if not self._preview_closed:
             self._refresh_edge_editor()
 
+    def _profile_names(self, sketch):
+        """Internal Name and Label for a profile on the sketch path, from the current section.
+
+        The Name is permanent in FreeCAD, so it never carries the size; the Label does and follows it.
+        """
+        proxy = self.form_proxy
+        name = "Profile_" if proxy.cb_prefix_profile_in_name.isChecked() else ""
+        if sketch is not None and proxy.cb_sketch_in_name.isChecked() and len(self._path_selections()) == 1:
+            name += sketch.Name + "_"
+        if proxy.cb_family_in_name.isChecked():
+            name += proxy.combo_family.currentText().replace(" ", "_") + "_"
+        label = name
+        if proxy.cb_size_in_name.isChecked():
+            label += proxy.combo_size.currentText() + "_"
+        return name + "000", label + "000"
+
+    def _sync_profile_label(self, profile, sketch):
+        _, label = self._profile_names(sketch)
+        # Keep the current number; FreeCAD renumbers a label that is already taken.
+        if not self.has_name_prefix(profile.Label, label):
+            profile.Label = label
+
     def has_name_prefix(self, internal_name, target_str):
         pattern = r"\d+$"
 
@@ -2479,6 +2483,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             o = self.make_profile(sketch, edge, name)
             self._objects[key] = o
 
+        self._sync_profile_label(self._objects[key], sketch)
         return key
 
     def _part_member(self, source):
