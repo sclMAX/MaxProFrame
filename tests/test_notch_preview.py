@@ -107,7 +107,7 @@ class TestNotchColors(NotchPreviewFixture):
         before = view_colors((trimmed, boundary))
         children = scene.getNumChildren()
         panel = self.run_command((boundary, ""), (trimmed, ""))
-        self.assertEqual(panel.form.colors_label.text(), "Target in orange, profiles in blue.")
+        self.assertEqual(panel.form.colors_label.text(), "Target in orange, profiles in blue, discarded pieces in red.")
         self.assertEqual(panel.highlights(), [(boundary, "", TARGET), (trimmed, "", PROFILE)])
         self.assertEqual(scene.getNumChildren(), children + 1)
         self.assertEqual(overlay_colors(scene.getChild(children)), [ORANGE, BLUE])
@@ -122,7 +122,9 @@ class TestNotchPreviewTranslations(NotchPreviewFixture):
         use_language(self, "Spanish", "es_ES")
         panel = self.run_command()
         self.assertEqual(panel.form.cb_auto_update.text(), "Actualizar automáticamente")
-        self.assertEqual(panel.form.colors_label.text(), "Destino en naranja, perfiles en azul.")
+        self.assertEqual(
+            panel.form.colors_label.text(), "Destino en naranja, perfiles en azul, piezas descartadas en rojo."
+        )
         self.assertEqual(panel.form.status_label.text(), "Sin previsualización")
 
 

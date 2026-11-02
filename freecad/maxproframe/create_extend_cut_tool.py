@@ -27,12 +27,16 @@ from freecad.maxproframe.ff_tools import (
     translate,
 )
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
-from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrimmedProfile
+from freecad.maxproframe.trimmed_profile import AUTO, END, START, TrimmedProfile, ViewProviderTrimmedProfile
 
-# Highlight kinds while the panel is open: the target, and the profiles to cut (or their previews).
+# Highlight kinds while the panel is open: the target, the profiles to cut (or their previews),
+# and the pieces the previews cut off.
 TARGET = "target"
 PROFILE = "profile"
-HIGHLIGHT_COLORS = {TARGET: (1.0, 0.5, 0.0), PROFILE: (0.0, 0.4, 1.0)}
+DISCARDED = "discarded"
+HIGHLIGHT_COLORS = {TARGET: (1.0, 0.5, 0.0), PROFILE: (0.0, 0.4, 1.0), DISCARDED: (1.0, 0.1, 0.1)}
+# Volume, in mm3, below which a cut-off piece is nothing to show.
+DISCARDED_MIN_VOLUME = 1e-6
 # Highlight lines: width in pixels, and how far, in mm, a curved edge may stray from its line.
 HIGHLIGHT_WIDTH = 3
 HIGHLIGHT_DEFLECTION = 0.5
@@ -104,9 +108,10 @@ def _related(a, b):
     return a in _trim_chain(b) or b in _trim_chain(a)
 
 
-def _edge_lines(obj, sub):
-    """Points along every edge of ``obj``, or of its face ``sub``, in document coordinates."""
-    shape = obj.Shape.getElement(sub) if sub else obj.Shape
+def _edge_lines(obj, sub, shape=None):
+    """Points along every edge of ``obj``, of its face ``sub`` or of ``shape`` (local to ``obj``), in document coordinates."""
+    if shape is None:
+        shape = obj.Shape.getElement(sub) if sub else obj.Shape
     # Shapes are local to their container.
     group = obj.getParentGeoFeatureGroup()
     if group is not None:
@@ -131,7 +136,11 @@ class ExtendCutTaskPanel:
 
     Without ``edited`` the trims are previewed live, like End Miter does: the preview objects are
     the trims OK keeps, all inside one transaction that Cancel aborts. While the panel is open the
-    target and the profiles are drawn over the 3D view in their HIGHLIGHT_COLORS.
+    target, the profiles and the pieces the previews cut off are drawn over the 3D view in their
+    HIGHLIGHT_COLORS.
+
+    Flip side keeps the other piece of the selected profiles when the target crosses them: their
+    KeepEnd becomes the other end, or Auto again when that is the piece Auto keeps.
     """
 
     joint = "Extend Cut"
@@ -160,6 +169,8 @@ class ExtendCutTaskPanel:
         self._translate_form()
         self.form.remove_button.setIcon(QtGui.QIcon(os.path.join(ICONPATH, "list-remove.svg")))
         self.form.remove_button.clicked.connect(self.remove_selected)
+        self.form.flip_button.clicked.connect(self.flip_selected)
+        self.form.profiles_list.itemDoubleClicked.connect(self._flip_item)
         if not self.has_gap:
             self.form.gap_label.hide()
             self.form.sb_gap.hide()
@@ -167,12 +178,16 @@ class ExtendCutTaskPanel:
         self.edited = edited
         self.target = None
         self.profiles = []
+        # Profile name -> START or END; a profile not in it keeps the Auto piece.
+        self.keep_ends = {}
         self._closed = False
         self._syncing = False
         self.doc = App.ActiveDocument
         # Live preview: profile name -> _Preview, and what it shows (see _wanted).
         self._previews = {}
         self._previewed = ()
+        # Preview trim name -> the piece it cuts off its body, in the body's coordinates.
+        self._discarded = {}
         self._transaction_open = False
         # Message area: what the last change explained, then the last preview or OK failure.
         self._messages = []
@@ -195,6 +210,9 @@ class ExtendCutTaskPanel:
             self.target = (obj, tuple(sub for sub in subs if sub))
             self.profiles = [edited.TrimmedBody]
             self.form.sb_gap.setValue(edited.TrimGap.Value)
+            keep_end = getattr(edited, "KeepEnd", AUTO)
+            if keep_end != AUTO:
+                self.keep_ends[edited.TrimmedBody.Name] = keep_end
         elif selection:
             messages += self._set_target(*selection[0])
             for obj, _ in selection[1:]:
@@ -217,8 +235,12 @@ class ExtendCutTaskPanel:
             (form.groupBox_profiles.setTitle, translate("frameforge", "Profiles")),
             (form.hint_label.setText, self.texts()["hint"]),
             (form.remove_button.setText, translate("frameforge", "Remove")),
+            (form.flip_button.setText, translate("frameforge", "Flip side")),
             (form.gap_label.setText, translate("frameforge", "Gap")),
-            (form.colors_label.setText, translate("frameforge", "Target in orange, profiles in blue.")),
+            (
+                form.colors_label.setText,
+                translate("frameforge", "Target in orange, profiles in blue, discarded pieces in red."),
+            ),
             (form.groupBox_preview.setTitle, translate("frameforge", "Preview")),
             (form.cb_auto_update.setText, translate("frameforge", "Update automatically")),
         ):
@@ -263,9 +285,65 @@ class ExtendCutTaskPanel:
         self._show([])
         self._changed()
 
+    def flip_selected(self):
+        """Keep the other piece of every selected profile."""
+        rows = sorted(self.form.profiles_list.row(item) for item in self.form.profiles_list.selectedItems())
+        self._flip([self.profiles[row] for row in rows if row < len(self.profiles)])
+
+    def _flip_item(self, item):
+        row = self.form.profiles_list.row(item)
+        if 0 <= row < len(self.profiles):
+            self._flip([self.profiles[row]])
+
+    def _flip(self, profiles):
+        if not profiles or not self._active():
+            return
+        if self.target is None:
+            self._show([self.texts()["missing_target"]])
+            return
+        if self.edited is None and not self._previews_cover(profiles):
+            # Which piece Auto keeps comes from the trims: build them even with Update automatically unchecked.
+            self._update_preview(force=True)
+        boundary = (self.target[0], self.target[1] or ("",))
+        messages = []
+        for profile in profiles:
+            trim = self.edited if self.edited is not None else self._shown(profile)
+            if not is_trimmedbody(trim):
+                messages.append(self._error or self.texts()["missing_target"])
+                continue
+            try:
+                kept_start, choosable = trim.Proxy.kept_end(trim, boundary, self.keep_ends.get(profile.Name, AUTO))
+                auto_start, _ = trim.Proxy.kept_end(trim, boundary, AUTO)
+            except Exception as error:
+                messages.append(f"{profile.Label}: {error}")
+                continue
+            if not choosable:
+                messages.append(
+                    translate(
+                        "frameforge", "{}: the target does not cross the profile, there is no side to choose."
+                    ).format(profile.Label)
+                )
+            elif (not kept_start) == auto_start:
+                self.keep_ends.pop(profile.Name, None)
+            else:
+                self.keep_ends[profile.Name] = START if not kept_start else END
+        self._show(messages)
+        for profile in profiles:
+            if profile in self.profiles:
+                self.form.profiles_list.item(self.profiles.index(profile)).setSelected(True)
+        self._changed()
+        # A button press is one deliberate change: the preview follows it at once.
+        self._preview_timer.stop()
+        self._update_preview()
+
+    def _previews_cover(self, profiles):
+        return all(name in self._previews and _alive(self._previews[name].obj) for name in (p.Name for p in profiles))
+
     def _show(self, messages):
         """Show the target, the profiles, ``messages`` and the preview state."""
         self.profiles = [obj for obj in self.profiles if _alive(obj)]
+        names = {obj.Name for obj in self.profiles}
+        self.keep_ends = {name: keep for name, keep in self.keep_ends.items() if name in names}
         if self.target is not None and not _alive(self.target[0]):
             self.target = None
         if self.target is None:
@@ -276,7 +354,10 @@ class ExtendCutTaskPanel:
         self.form.target_label.setText(text)
         self.form.profiles_list.clear()
         for obj in self.profiles:
-            self.form.profiles_list.addItem(f"{obj.Label} ({obj.Name})")
+            text = f"{obj.Label} ({obj.Name})"
+            if obj.Name in self.keep_ends:
+                text = translate("frameforge", "{}, side flipped").format(text)
+            self.form.profiles_list.addItem(text)
         self._messages = list(messages)
         self._error = ""
         self._show_messages()
@@ -300,7 +381,8 @@ class ExtendCutTaskPanel:
             return ()
         obj, faces = self.target
         gap = round(self.form.sb_gap.value(), 6) if self.has_gap else 0.0
-        return (obj.Name, faces), tuple(profile.Name for profile in self.profiles), gap
+        keep_ends = tuple(self.keep_ends.get(profile.Name, AUTO) for profile in self.profiles)
+        return (obj.Name, faces), tuple(profile.Name for profile in self.profiles), gap, keep_ends
 
     def _changed(self, *args):
         """The target, the profiles or the Gap changed: redraw, and preview once changes pause."""
@@ -342,14 +424,19 @@ class ExtendCutTaskPanel:
                 self._drop_preview(name)
             for name, profile in wanted.items():
                 preview = self._previews.get(name)
+                keep_end = self.keep_ends.get(name, AUTO)
                 if preview is None or not _alive(preview.obj):
                     visibility = [(body, body.ViewObject.Visibility) for body in _trim_chain(profile)]
-                    self._previews[name] = _Preview(self._make(profile, gap), profile, visibility)
+                    obj = self._make(profile, gap)
+                    obj.KeepEnd = keep_end
+                    self._previews[name] = _Preview(obj, profile, visibility)
                 else:
-                    self._retarget(preview.obj, gap)
+                    self._retarget(preview.obj, gap, keep_end)
             # A trim that fails to recompute does not raise: its status tells.
             self.doc.recompute()
             self._error = _failures(preview.obj for preview in self._previews.values())
+            if not self._error:
+                self._discarded = self._cut_off_pieces()
         except Exception as error:
             self._error = str(error)
         finally:
@@ -361,13 +448,39 @@ class ExtendCutTaskPanel:
         self._show_messages()
         self._draw_highlights()
 
-    def _retarget(self, obj, gap):
-        """Point the trim ``obj`` at the target and ``gap``; unchanged values are left alone, so not recomputed."""
+    def _retarget(self, obj, gap, keep_end):
+        """Point the trim ``obj`` at the target, ``gap`` and ``keep_end``; unchanged values are left alone, so not recomputed."""
         boundary = [(self.target[0], self.target[1] or ("",))]
         if obj.TrimmingBoundary != boundary:
             obj.TrimmingBoundary = boundary
         if self.has_gap and abs(obj.TrimGap.Value - gap) > 1e-9:
             obj.TrimGap = gap
+        # A trim saved before KeepEnd existed gains it only when a side is chosen.
+        if not hasattr(obj, "KeepEnd") and keep_end != AUTO:
+            TrimmedProfile.add_keep_end(obj)
+        if getattr(obj, "KeepEnd", AUTO) != keep_end:
+            obj.KeepEnd = keep_end
+
+    def _cut_off_pieces(self):
+        """Preview trim name -> the piece it cuts off its body, for the previews that cut something."""
+        pieces = {}
+        for preview in self._previews.values():
+            obj = preview.obj
+            piece = obj.TrimmedBody.Shape.cut(obj.Shape)
+            if not piece.isNull() and piece.Volume > DISCARDED_MIN_VOLUME:
+                pieces[obj.Name] = piece
+        return pieces
+
+    def discarded(self):
+        """(preview trim, piece it cuts off) of every preview that cuts something, while the panel is open."""
+        if self._closed:
+            return []
+        found = []
+        for preview in self._previews.values():
+            piece = self._discarded.get(preview.obj.Name) if _alive(preview.obj) else None
+            if piece is not None:
+                found.append((preview.obj, piece))
+        return found
 
     def _drop_preview(self, name):
         """Remove the preview of profile ``name`` and show the bodies it hid as they were before."""
@@ -396,6 +509,7 @@ class ExtendCutTaskPanel:
         finally:
             self._syncing = False
         self._previewed = ()
+        self._discarded = {}
 
     def _shown(self, profile):
         """What shows ``profile`` in the 3D view: the edited trim, its preview, or itself."""
@@ -431,10 +545,15 @@ class ExtendCutTaskPanel:
             return  # Nothing to show, or no 3D view (offscreen or another view type).
         from pivy import coin
 
+        lines_of = {kind: [] for kind in HIGHLIGHT_COLORS}
+        for obj, sub, kind in highlights:
+            lines_of[kind] += _edge_lines(obj, sub)
+        for obj, piece in self.discarded():
+            lines_of[DISCARDED] += _edge_lines(obj, "", piece)
         # An annotation is drawn over the shapes, so the highlights stay visible.
         node = coin.SoAnnotation()
         for kind, color in HIGHLIGHT_COLORS.items():
-            lines = [line for obj, sub, marker in highlights if marker == kind for line in _edge_lines(obj, sub)]
+            lines = lines_of[kind]
             if not lines:
                 continue
             points = [(point.x, point.y, point.z) for line in lines for point in line]
@@ -584,7 +703,7 @@ class ExtendCutTaskPanel:
         doc = self.edited.Document
         doc.openTransaction(f"Edit {self.joint}")
         try:
-            self._retarget(self.edited, gap)
+            self._retarget(self.edited, gap, self.keep_ends.get(self.edited.TrimmedBody.Name, AUTO))
             doc.recompute()
             error = _failures([self.edited])
         except Exception as exception:

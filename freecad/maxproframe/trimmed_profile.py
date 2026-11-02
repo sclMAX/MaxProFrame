@@ -80,14 +80,7 @@ class TrimmedProfile:
             "TrimmedProfile",
             translate("App::Property", "Distance left between the profile end and the target plane"),
         ).TrimGap = 0
-        obj.addProperty(
-            "App::PropertyEnumeration",
-            "KeepEnd",
-            "TrimmedProfile",
-            translate(
-                "App::Property", "Piece kept when the target crosses the profile: Auto, or the one reaching this end"
-            ),
-        ).KeepEnd = KEEP_ENDS
+        self.add_keep_end(obj)
 
         # related to Profile
         obj.addProperty("App::PropertyString", "Family", "Profile", "")
@@ -137,6 +130,18 @@ class TrimmedProfile:
         obj.setEditorMode("CuttingAngleB", 1)
 
         obj.Proxy = self
+
+    @staticmethod
+    def add_keep_end(obj):
+        """Add KeepEnd, set to Auto: trims saved before it existed lack it and behave as Auto."""
+        obj.addProperty(
+            "App::PropertyEnumeration",
+            "KeepEnd",
+            "TrimmedProfile",
+            translate(
+                "App::Property", "Piece kept when the target crosses the profile: Auto, or the one reaching this end"
+            ),
+        ).KeepEnd = KEEP_ENDS
 
     def onChanged(self, fp, prop):
         pass
