@@ -152,20 +152,21 @@ class TestCutTypes(OneWallFixture):
         self.doc.recompute()
         self.assertAlmostEqual(cutout.Shape.Volume, body.Shape.Volume - area * 1.0, places=3)
 
-    def test_the_cut_type_panel_offers_one_wall_and_hides_the_length(self):
+    def test_the_cut_type_panel_offers_one_wall_and_enables_the_depth_for_distance_only(self):
         body = self.tube()
         cutout = self.guided_cutout(body, self.face_towards(body, UP), radius=HOLE_RADIUS)
         panel = CreateExtrudedCutoutTaskPanel(cutout)
-        combo = panel.comboCutType
+        self.addCleanup(self.doc.abortTransaction)
+        combo, depth = panel.form.combo_cut_type, panel.form.spin_depth
         self.assertEqual([combo.itemText(i) for i in range(combo.count())], ["Through All", "Distance", "One wall"])
         self.assertEqual(combo.currentText(), "One wall")
-        self.assertTrue(panel.spinA.isHidden())
+        self.assertFalse(depth.isEnabled())
         combo.setCurrentIndex(1)
         self.assertEqual(cutout.CutType, "Distance")
-        self.assertFalse(panel.spinA.isHidden())
+        self.assertTrue(depth.isEnabled())
         combo.setCurrentIndex(2)
         self.assertEqual(cutout.CutType, "One wall")
-        self.assertTrue(panel.spinA.isHidden())
+        self.assertFalse(depth.isEnabled())
 
     def test_a_cutout_saved_before_one_wall_gains_it_on_restore(self):
         body = self.tube()

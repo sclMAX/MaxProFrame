@@ -1057,6 +1057,12 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Target in orange, profiles in blue.</source><translation>Destino en naranja, perfiles en azul.</translation></message>
     <message><source>Cutout / Hole</source><translation>Calado</translation></message>
     <message><source>Face</source><translation>Cara</translation></message>
+    <message><source>Cut type</source><translation>Tipo de corte</translation></message>
+    <message><source>Depth</source><translation>Profundidad</translation></message>
+    <message><source>Through All</source><translation>Pasante</translation></message>
+    <message><source>Distance</source><translation>Distancia</translation></message>
+    <message><source>One wall</source><translation>Una pared</translation></message>
+    <message><source>Delete the cutout and its sketch?</source><translation>¿Borrar el calado y su croquis?</translation></message>
     <message><source>OK creates a sketch on the face and opens it to draw the cutout.</source><translation>Aceptar crea un croquis en la cara y lo abre para dibujar el calado.</translation></message>
     <message><source>Click a planar face of a profile, a trimmed profile or a cutout.</source><translation>Hacé clic en una cara plana de un perfil, un perfil recortado o un calado.</translation></message>
     <message><source>Select a planar face of a profile, a trimmed profile or a cutout.</source><translation>Seleccioná una cara plana de un perfil, un perfil recortado o un calado.</translation></message>
