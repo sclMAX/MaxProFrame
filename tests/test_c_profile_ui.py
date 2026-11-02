@@ -259,7 +259,7 @@ class TestCProfileUI(unittest.TestCase):
         dialog.combo_family.setCurrentText("C (Fillet)")
         self.assertEqual(visible_keys(), expected[:-1] + ["Radius1", "Weight"])
         dialog.combo_family.setCurrentText("Square Hollow")
-        self.assertEqual(visible_keys(), ["Size", "Height", "Width", "Thickness", "Weight"])
+        self.assertEqual(visible_keys(), ["Size", "Height", "Thickness", "Weight"])
         self.assertEqual([header.logicalIndex(i) for i in range(header.count())], list(range(9)))
         dialog.combo_family.setCurrentText("C")
         self.assertEqual(visible_keys(), expected)
@@ -538,7 +538,8 @@ class TestCProfileUI(unittest.TestCase):
             dialog.table_sizes.item(0, 8).setText("-")
         dialog.table_sizes.item(0, 1).setText("60")
 
-        expected_mass = str(round(((50 * 60) - (46 * 56)) * 7.85 / 1000.0, 3))
+        # Square Hollow edits a single side, so the width follows the height.
+        expected_mass = str(round(((60 * 60) - (56 * 56)) * 7.85 / 1000.0, 3))
         self.assertEqual(dialog.table_sizes.item(0, 7).text(), expected_mass)
 
         # Save and reload public persisted weight; no C lip field injected

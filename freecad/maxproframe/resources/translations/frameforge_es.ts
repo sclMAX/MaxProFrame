@@ -386,6 +386,14 @@ Material: %s (%s g/cm³)</translation>
         <translation>Diámetro [mm]</translation>
     </message>
     <message>
+        <source>Side [mm]</source>
+        <translation>Lado [mm]</translation>
+    </message>
+    <message>
+        <source>Height and width differ in an equal-sided family.</source>
+        <translation>El alto y el ancho difieren en una familia de lados iguales.</translation>
+    </message>
+    <message>
         <source>Height [mm]</source>
         <translation>Alto [mm]</translation>
     </message>

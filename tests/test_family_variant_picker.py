@@ -540,9 +540,9 @@ class TestFamilyVariantPicker(unittest.TestCase):
         # Editing dimensions recalculates weight using canonical type "Square Hollow"
         dialog.table_sizes.item(0, 1).setText("100")
         weight_val = float(dialog.table_sizes.item(0, 7).text())
-        # Theoretical weight of 100x50x2 steel hollow = ~4.48 kg/m
-        self.assertGreater(weight_val, 4.0)
-        self.assertLess(weight_val, 5.0)
+        # Square Hollow keeps equal sides: 100x100x2 steel hollow = ~6.15 kg/m
+        self.assertGreater(weight_val, 6.0)
+        self.assertLess(weight_val, 6.3)
 
         # 2. Plain variant has Radius1 and Radius2 hidden
         dialog.combo_family.setCurrentText("Square Hollow (No Fillet)")

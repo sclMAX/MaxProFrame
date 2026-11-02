@@ -62,6 +62,7 @@ For standard shapes, each table row is one size:
 - **Add Size** (+) adds a row; type its code and dimensions in millimeters.
 - **Remove Size** (−) asks for confirmation and removes the selected row.
 - The weight in kg/m is calculated from the dimensions and the library density.
+- *Square*, *Square Hollow* and *Equal Leg Angles* have equal sides, so the table shows a single **Side** column. If an older row has a different height and width, both columns stay visible and the width cell explains the difference; nothing is corrected until you edit it.
 - **Search this family…** filters the rows by code or description, without caring about case or accents. Clear it to see every profile again; search never deletes anything.
 
 ## Custom profiles

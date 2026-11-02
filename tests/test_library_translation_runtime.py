@@ -1,4 +1,5 @@
 """Native translation ownership regressions; no translation-function substitutes."""
+
 import os
 import tempfile
 import unittest
@@ -8,12 +9,16 @@ try:
     import FreeCAD as App
     import FreeCADGui as Gui
     from PySide import QtCore, QtWidgets
-    from freecad.maxproframe.ff_tools import translate, TRANSLATIONSPATH
+
+    from freecad.maxproframe.ff_tools import TRANSLATIONSPATH, translate
     from freecad.maxproframe.library_manager import LibraryManager
     from freecad.maxproframe.library_manager_dialog import (
-        ProfileLibraryManagerDialog, AddFamilyDialog, NewLibraryDialog,
+        AddFamilyDialog,
         ManageProfileLibrariesCommand,
+        NewLibraryDialog,
+        ProfileLibraryManagerDialog,
     )
+
     NATIVE = True
 except ImportError:
     NATIVE = False
@@ -26,27 +31,39 @@ class TestLibraryTranslationRuntime(unittest.TestCase):
         language = self.prefs.GetString("Language", "")
         locale = Gui.getLocale()
         default = QtCore.QLocale()
+
         def restore():
             QtCore.QLocale.setDefault(default)
             Gui.setLocale(locale)
             self.prefs.SetString("Language", language)
             Gui.updateLocale()
+
         self.addCleanup(restore)
         self.temp = tempfile.TemporaryDirectory(prefix="library-language-")
         self.addCleanup(self.temp.cleanup)
         # Registered before dialogs: LIFO keeps Discard active during close.
-        discard = patch.object(QtWidgets.QMessageBox, "question",
-                               return_value=QtWidgets.QMessageBox.Discard)
+        discard = patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Discard)
         discard.start()
         self.addCleanup(discard.stop)
         self.manager = LibraryManager(user_dir=self.temp.name)
         self.name = "Mi catálogo English"
-        self.data = {"_metadata": {"name": self.name}, "Square Hollow": {
-            "norm": "English norma á", "sizes": {"Code English ñ": {
-                "Height": "50", "Width": "50", "Thickness": "2",
-                "Weight": "1", "Description": "English descripción"}}},
+        self.data = {
+            "_metadata": {"name": self.name},
+            "Square Hollow": {
+                "norm": "English norma á",
+                "sizes": {
+                    "Code English ñ": {
+                        "Height": "50",
+                        "Width": "50",
+                        "Thickness": "2",
+                        "Weight": "1",
+                        "Description": "English descripción",
+                    }
+                },
+            },
             "Pipe": {"norm": "Pipe standard", "sizes": {}},
-            "C": {"norm": "C standard", "fillet": True, "sizes": {}}}
+            "C": {"norm": "C standard", "fillet": True, "sizes": {}},
+        }
         self.manager.save_user_library(self.name, self.data)
         self.baseline = self.manager.get_library(self.name)
 
@@ -76,10 +93,20 @@ class TestLibraryTranslationRuntime(unittest.TestCase):
     def assert_spanish(self, dlg):
         self.assertEqual(dlg.list_families.currentItem().text(), "Tubo Cuadrado Hueco")
         self.assertEqual(dlg.lbl_family_name.text(), dlg.list_families.currentItem().text())
-        self.assertEqual([dlg.table_sizes.horizontalHeaderItem(i).text() for i in range(9)],
-                         ["Código", "Alto [mm]", "Ancho [mm]", "Espesor [mm]",
-                          "Espesor Ala [mm]", "Radio 1 [mm]", "Radio 2 [mm]",
-                          "Peso [kg/m]", "Labio [mm]"])
+        self.assertEqual(
+            [dlg.table_sizes.horizontalHeaderItem(i).text() for i in range(9)],
+            [
+                "Código",
+                "Lado [mm]",
+                "Ancho [mm]",
+                "Espesor [mm]",
+                "Espesor Ala [mm]",
+                "Radio 1 [mm]",
+                "Radio 2 [mm]",
+                "Peso [kg/m]",
+                "Labio [mm]",
+            ],
+        )
         self.assertEqual(dlg.lbl_profile_count.text(), "1 de 1 perfiles")
         self.assertEqual(dlg.table_sizes.item(0, 0).text(), "Code English ñ")
         self.assertEqual(dlg.le_norm.text(), "English norma á")
@@ -131,8 +158,7 @@ class TestLibraryTranslationRuntime(unittest.TestCase):
 
     def test_e_owned_dialogs_alternate_headers_and_shared_consumers(self):
         Gui.addLanguagePath(TRANSLATIONSPATH)
-        for selected, system, title in (("Spanish", "en_US", "Crear perfil"),
-                                        ("English", "es_ES", "Create Profile")):
+        for selected, system, title in (("Spanish", "en_US", "Crear perfil"), ("English", "es_ES", "Create Profile")):
             with self.subTest(language=selected):
                 self.language(selected, system)
                 dlg = self.dialog()
@@ -144,14 +170,19 @@ class TestLibraryTranslationRuntime(unittest.TestCase):
                 nested.close()
                 child.close()
                 self.family(dlg, "Pipe")
-                self.assertEqual(dlg.table_sizes.horizontalHeaderItem(1).text(),
-                                 "Diámetro [mm]" if selected == "Spanish" else "Diameter [mm]")
-                self.assertEqual(dlg.lbl_profiles_empty.text(),
-                                 "Esta familia no tiene perfiles." if selected == "Spanish"
-                                 else "This family has no profiles.")
+                self.assertEqual(
+                    dlg.table_sizes.horizontalHeaderItem(1).text(),
+                    "Diámetro [mm]" if selected == "Spanish" else "Diameter [mm]",
+                )
+                self.assertEqual(
+                    dlg.lbl_profiles_empty.text(),
+                    "Esta familia no tiene perfiles." if selected == "Spanish" else "This family has no profiles.",
+                )
                 self.family(dlg, "C")
-                self.assertEqual(dlg.table_sizes.horizontalHeaderItem(5).text(),
-                                 "Radio exterior [mm]" if selected == "Spanish" else "Exterior Radius [mm]")
+                self.assertEqual(
+                    dlg.table_sizes.horizontalHeaderItem(5).text(),
+                    "Radio exterior [mm]" if selected == "Spanish" else "Exterior Radius [mm]",
+                )
                 dlg.close()
                 self.assertEqual(translate("frameforge", "Create Profile"), title)
 
