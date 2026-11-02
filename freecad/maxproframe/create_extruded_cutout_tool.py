@@ -10,7 +10,7 @@ from PySide import QtCore, QtGui
 from freecad.maxproframe.create_end_miter_tool import _alive, _base_profile, _failures
 from freecad.maxproframe.create_extend_cut_tool import _selected_items, show_panel, trimmed_body_problem
 from freecad.maxproframe.create_profiles_tool import place_in_container_of
-from freecad.maxproframe.extruded_cutout import CUT_TYPES, ExtrudedCutout, ViewProviderExtrudedCutout
+from freecad.maxproframe.extruded_cutout import CUT_TYPES, ExtrudedCutout, ViewProviderExtrudedCutout, wall_thickness
 from freecad.maxproframe.ff_tools import (
     ICONPATH,
     PROFILEIMAGES_PATH,
@@ -28,6 +28,15 @@ from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 GUIDED_CUT_TYPE = "One wall"
 # A face whose normal leans this much (cosine) along the profile axis is an end face, not a wall.
 END_FACE_TOLERANCE = 1e-6
+# Shown names of the cut types, in CUT_TYPES order.
+CUT_TYPE_LABELS = {
+    "Through All": QT_TRANSLATE_NOOP("frameforge", "Through All"),
+    "Distance": QT_TRANSLATE_NOOP("frameforge", "Distance"),
+    "One wall": QT_TRANSLATE_NOOP("frameforge", "One wall"),
+}
+# Depth range of a Distance cut, in mm.
+MIN_DEPTH = 0.01
+MAX_DEPTH = 1e6
 
 
 def make_extruded_cutout(sketch, selected_face):
@@ -87,15 +96,57 @@ def face_problem(obj, sub):
     return None
 
 
-def _edit_sketch(doc_name, name):
+def _edit_sketch(doc_name, name, cutout_name=None):
     """Open the sketch ``name`` in the Sketcher, unless it is gone (undone, document closed).
 
     FreeCAD shows one task dialog at a time: another one open leaves the sketch closed.
+    With ``cutout_name``, closing the sketch opens the depth panel of that new cutout.
     """
     doc = App.listDocuments().get(doc_name)
     sketch = doc.getObject(name) if doc is not None else None
     if sketch is not None and not Gui.Control.activeDialog():
+        if cutout_name is not None:
+            _DepthAfterSketch(doc_name, name, cutout_name)
         Gui.getDocument(doc_name).setEdit(sketch)
+
+
+def _show_depth_panel(doc_name, cutout_name):
+    """Open the depth panel of the new cutout ``cutout_name``, unless it is gone or a dialog is open."""
+    doc = App.listDocuments().get(doc_name)
+    cutout = doc.getObject(cutout_name) if doc is not None else None
+    if cutout is not None and not Gui.Control.activeDialog():
+        Gui.Control.showDialog(CreateExtrudedCutoutTaskPanel(cutout, created=True))
+
+
+class _DepthAfterSketch:
+    """Opens the depth panel of a new cutout once its sketch leaves the Sketcher, then stops listening."""
+
+    # FreeCAD holds observers weakly enough to drop them: keep them alive while they listen.
+    _listening = set()
+
+    def __init__(self, doc_name, sketch_name, cutout_name):
+        self.doc_name, self.sketch_name, self.cutout_name = doc_name, sketch_name, cutout_name
+        self._listening.add(self)
+        Gui.addDocumentObserver(self)
+
+    def slotResetEdit(self, vobj):
+        obj = getattr(vobj, "Object", None)
+        if obj is None or obj.Document.Name != self.doc_name or obj.Name != self.sketch_name:
+            return
+        self.stop()
+        # The Sketcher closes its own task dialog after this signal.
+        QtCore.QTimer.singleShot(0, lambda: _show_depth_panel(self.doc_name, self.cutout_name))
+
+    def slotDeletedDocument(self, gui_doc):
+        if gui_doc.Document.Name == self.doc_name:
+            self.stop()
+
+    def stop(self):
+        self._listening.discard(self)
+        try:
+            Gui.removeDocumentObserver(self)
+        except Exception:
+            pass
 
 
 class CutoutTaskPanel:
@@ -222,97 +273,118 @@ class CutoutTaskPanel:
             return False
         doc.commitTransaction()
         self.clean()
-        # The sketch editor opens its own task dialog, once this one is closed.
-        doc_name, name = doc.Name, sketch.Name
-        QtCore.QTimer.singleShot(0, lambda: _edit_sketch(doc_name, name))
+        # The sketch editor opens its own task dialog, once this one is closed; closing it opens the depth panel.
+        doc_name, name, cutout_name = doc.Name, sketch.Name, cutout.Name
+        QtCore.QTimer.singleShot(0, lambda: _edit_sketch(doc_name, name, cutout_name))
         return True
 
 
 class CreateExtrudedCutoutTaskPanel:
-    """TaskPanel pour FrameForge ExtrudedCutout (corrigé pour CutType)."""
+    """Cut type and depth of a cutout, previewed live; OK keeps them in one Undo step.
 
-    def __init__(self, obj):
+    ``created``: the cutout was just made by the face panel and its sketch closed; Cancel then asks
+    to delete the cutout with its sketch. Otherwise Cancel restores the values the panel opened with.
+    """
+
+    def __init__(self, obj, created=False):
         self.obj = obj
+        self.created = created
+        self.doc = obj.Document
+        self._initial = (obj.CutType, obj.ExtrusionLength.Value)
+        self.form = self._build_form()
+        self.doc.openTransaction("Edit Cutout")
 
-        self.cut_types = list(CUT_TYPES)
+    def _build_form(self):
+        form = QtGui.QWidget()
+        form.setWindowTitle(translate("frameforge", "Cutout / Hole"))
+        layout = QtGui.QFormLayout(form)
+        form.label_cut_type = QtGui.QLabel(translate("frameforge", "Cut type"))
+        form.combo_cut_type = QtGui.QComboBox()
+        for cut_type in CUT_TYPES:
+            form.combo_cut_type.addItem(translate("frameforge", CUT_TYPE_LABELS[cut_type]), cut_type)
+        form.combo_cut_type.setCurrentIndex(max(form.combo_cut_type.findData(self.obj.CutType), 0))
+        form.label_depth = QtGui.QLabel(translate("frameforge", "Depth"))
+        form.spin_depth = QtGui.QDoubleSpinBox()
+        form.spin_depth.setRange(MIN_DEPTH, MAX_DEPTH)
+        form.spin_depth.setDecimals(2)
+        form.spin_depth.setSuffix(" mm")
+        form.spin_depth.setValue(self._initial_depth())
+        layout.addRow(form.label_cut_type, form.combo_cut_type)
+        layout.addRow(form.label_depth, form.spin_depth)
+        form.combo_cut_type.currentIndexChanged.connect(self._apply)
+        form.spin_depth.valueChanged.connect(self._apply)
+        form.spin_depth.setEnabled(self.obj.CutType == "Distance")
+        return form
 
-        self.form = QtGui.QWidget()
-        layout = QtGui.QVBoxLayout(self.form)
-
-        layout.addWidget(QtGui.QLabel("Cut type"))
-        self.comboCutType = QtGui.QComboBox()
-        self.comboCutType.addItems(self.cut_types)
+    def _initial_depth(self):
+        """The stored depth of a Distance cut, else the thickness of the wall under the face."""
+        if self.obj.CutType == "Distance":
+            return self.obj.ExtrusionLength.Value
         try:
-            current = str(self.obj.CutType)
-            idx = self.cut_types.index(current)
+            base, (face_name, *_) = self.obj.baseObject
+            thickness = wall_thickness(base.Shape, base.Shape.getElement(face_name))
         except Exception:
-            idx = 0
-        self.comboCutType.setCurrentIndex(idx)
-        layout.addWidget(self.comboCutType)
+            thickness = None
+        return thickness if thickness else self.obj.ExtrusionLength.Value
 
-        self.spinA = QtGui.QDoubleSpinBox()
-        self.spinA.setRange(-1e6, 1e6)
-        self.spinA.setDecimals(4)
-        try:
-            self.spinA.setValue(float(self.obj.ExtrusionLength1.Value))
-        except Exception:
-            try:
-                self.spinA.setValue(float(self.obj.ExtrusionLength1))
-            except Exception:
-                self.spinA.setValue(500.0)
+    def _apply(self, *args):
+        cut_type = self.form.combo_cut_type.currentData()
+        self.form.spin_depth.setEnabled(cut_type == "Distance")
+        self.obj.CutType = cut_type
+        if cut_type == "Distance":
+            self.obj.ExtrusionLength = self.form.spin_depth.value()
+        self.doc.recompute()
 
-        layout.addWidget(QtGui.QLabel("Extrusion Length"))
-        layout.addWidget(self.spinA)
-
-        self.comboCutType.currentIndexChanged.connect(self.onCutTypeChanged)
-        self.spinA.valueChanged.connect(self.onLengthAChanged)
-
-        self.updateWidgetsVisibility()
-
-    def onCutTypeChanged(self, idx):
-        if 0 <= idx < len(self.cut_types):
-            self.obj.CutType = self.cut_types[idx]
-        else:
-            self.obj.CutType = self.cut_types[0]
-        self.updateWidgetsVisibility()
-
-        self.obj.recompute()
-
-    def onLengthAChanged(self, val):
-        self.obj.ExtrusionLength = val
-        self.obj.recompute()
-
-    def updateWidgetsVisibility(self):
-        """Afficher/masquer les widgets de longueur selon CutType selectionné."""
-        ct = getattr(self.obj, "CutType", self.cut_types[0])
-        self.spinA.setVisible(ct in ["Distance"])
-
-    def open(self):
-        App.Console.PrintMessage(translate("frameforge", "Opening Create Extrude Cutout\n"))
-
-        App.ActiveDocument.openTransaction("Create Cutout")
+    def _leave_edit(self):
+        gui_doc = Gui.getDocument(self.doc.Name)
+        in_edit = gui_doc.getInEdit() if gui_doc is not None else None
+        if in_edit is not None and in_edit.Object == self.obj:
+            gui_doc.resetEdit()
 
     def accept(self):
-        App.Console.PrintMessage(translate("frameforge", "Accepting Create Extrude Cutout\n"))
-        try:
-            if hasattr(self.obj, "Sketch") and self.obj.Sketch:
-                try:
-                    self.obj.Sketch.ViewObject.hide()
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-        App.ActiveDocument.commitTransaction()
-        App.ActiveDocument.recompute()
-
+        self.doc.commitTransaction()
+        self.doc.recompute()
+        if self.obj.Sketch is not None and getattr(self.obj.Sketch, "ViewObject", None) is not None:
+            self.obj.Sketch.ViewObject.hide()
+        self._leave_edit()
         return True
 
     def reject(self):
-        App.Console.PrintMessage(translate("frameforge", "Rejecting Create Extrude Cutout\n"))
-        App.ActiveDocument.abortTransaction()
-
+        if self.created:
+            answer = QtGui.QMessageBox.question(
+                Gui.getMainWindow(),
+                translate("frameforge", "Cutout / Hole"),
+                translate("frameforge", "Delete the cutout and its sketch?"),
+                QtGui.QMessageBox.Yes | QtGui.QMessageBox.No,
+                QtGui.QMessageBox.No,
+            )
+            if answer != QtGui.QMessageBox.Yes:
+                return False
+        self.doc.abortTransaction()
+        if self.created:
+            self._delete_cutout()
+        else:
+            # Abort undoes the preview; set the values again in case the transaction held nothing.
+            cut_type, depth = self._initial
+            if self.obj.CutType != cut_type:
+                self.obj.CutType = cut_type
+            if abs(self.obj.ExtrusionLength.Value - depth) > 1e-9:
+                self.obj.ExtrusionLength = depth
+            self._leave_edit()
+        self.doc.recompute()
         return True
+
+    def _delete_cutout(self):
+        """Remove the new cutout and its sketch in one Undo step, showing the face's object again."""
+        base = self.obj.baseObject[0] if self.obj.baseObject else None
+        sketch = self.obj.Sketch
+        self.doc.openTransaction("Delete Cutout")
+        self.doc.removeObject(self.obj.Name)
+        if sketch is not None:
+            self.doc.removeObject(sketch.Name)
+        self.doc.commitTransaction()
+        if base is not None and getattr(base, "ViewObject", None) is not None:
+            base.ViewObject.Visibility = True
 
 
 def _is_face_and_sketch(selection):

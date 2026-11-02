@@ -78,10 +78,10 @@ class TestLibraryManagerDialog(unittest.TestCase):
             "Round Bar": {0, 1, 7},
             "Pipe": {0, 1, 3, 7},
             "Flat Sections": {0, 1, 2, 7},
-            "Square": {0, 1, 2, 7},
-            "Square Hollow": {0, 1, 2, 3, 5, 6, 7},
+            "Square": {0, 1, 7},
+            "Square Hollow": {0, 1, 3, 5, 6, 7},
             "Rectangular Hollow": {0, 1, 2, 3, 5, 6, 7},
-            "Equal Leg Angles": {0, 1, 2, 3, 5, 6, 7},
+            "Equal Leg Angles": {0, 1, 3, 5, 6, 7},
             "Unequal Leg Angles": {0, 1, 2, 3, 5, 6, 7},
             "IPE": {0, 1, 2, 3, 4, 5, 7},
             "UPE": set(range(8)),
@@ -130,7 +130,97 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
         self.assertEqual(dialog.table_sizes.horizontalHeaderItem(1).text(), translate("frameforge", "Diameter [mm]"))
         dialog.combo_family.setCurrentText("Square")
+        self.assertEqual(dialog.table_sizes.horizontalHeaderItem(1).text(), translate("frameforge", "Side [mm]"))
+        dialog.combo_family.setCurrentText("Rectangular Hollow")
         self.assertEqual(dialog.table_sizes.horizontalHeaderItem(1).text(), translate("frameforge", "Height [mm]"))
+
+    def _equal_side_dialog(self, families):
+        from freecad.maxproframe.library_manager_dialog import ProfileLibraryManagerDialog, QtWidgets
+
+        QtWidgets.QApplication.instance() or QtWidgets.QApplication(["test"])
+        self.manager.save_user_library(
+            "EqualSide",
+            {
+                "_metadata": {"name": "EqualSide", "material": "Steel", "density": 7.85},
+                **{
+                    name: {
+                        "norm": "Test",
+                        "fillet": False,
+                        "sizes": {code: dict(props) for code, props in sizes.items()},
+                    }
+                    for name, sizes in families.items()
+                },
+            },
+        )
+        dialog = self._own_manager(ProfileLibraryManagerDialog(library_manager=self.manager))
+        dialog.refresh_libraries(select_name="EqualSide")
+        return dialog
+
+    def test_equal_side_families_edit_one_side_and_keep_width_in_sync(self):
+        from freecad.maxproframe.ff_tools import translate
+        from freecad.maxproframe.library_manager import calculate_linear_weight
+
+        equal = ("Square", "Square Hollow", "Equal Leg Angles")
+        size = {"Height": "40", "Width": "40", "Thickness": "2", "Weight": "1"}
+        dialog = self._equal_side_dialog({**{name: {"S1": size} for name in equal}, "Rectangular Hollow": {"S1": size}})
+        for name in equal:
+            with self.subTest(family=name):
+                dialog.combo_family.setCurrentText(name)
+                self.assertTrue(dialog.table_sizes.isColumnHidden(2))
+                header = dialog.table_sizes.horizontalHeaderItem(1).text()
+                self.assertEqual(header, translate("frameforge", "Side [mm]"))
+                dialog.table_sizes.item(0, 1).setText("60")
+                self.assertEqual(dialog.table_sizes.item(0, 2).text(), "60")
+                expected = calculate_linear_weight(
+                    family=name, width=60.0, height=60.0, thickness=2.0, density_g_cm3=7.85, flange_thickness=0.0
+                )
+                self.assertEqual(dialog.table_sizes.item(0, 7).text(), str(expected))
+
+        # Rectangular tubes keep independent sides.
+        dialog.combo_family.setCurrentText("Rectangular Hollow")
+        self.assertFalse(dialog.table_sizes.isColumnHidden(2))
+        dialog.table_sizes.item(0, 1).setText("70")
+        self.assertEqual(dialog.table_sizes.item(0, 2).text(), "40")
+
+        dialog.btn_save.click()
+        saved = self.manager.get_library("EqualSide")
+        for name in equal:
+            self.assertEqual(saved[name]["sizes"]["S1"]["Height"], "60")
+            self.assertEqual(saved[name]["sizes"]["S1"]["Width"], "60")
+        self.assertEqual(saved["Rectangular Hollow"]["sizes"]["S1"]["Height"], "70")
+        self.assertEqual(saved["Rectangular Hollow"]["sizes"]["S1"]["Width"], "40")
+
+    def test_equal_side_family_with_mismatched_rows_warns_and_keeps_data(self):
+        from freecad.maxproframe.ff_tools import translate
+
+        dialog = self._equal_side_dialog(
+            {
+                "Square Hollow": {
+                    "OK": {"Height": "40", "Width": "40", "Thickness": "2", "Weight": "1"},
+                    "BAD": {"Height": "40", "Width": "50", "Thickness": "2", "Weight": "1"},
+                }
+            }
+        )
+        dialog.combo_family.setCurrentText("Square Hollow")
+        self.assertFalse(dialog.table_sizes.isColumnHidden(2))
+        self.assertEqual(dialog.table_sizes.horizontalHeaderItem(1).text(), translate("frameforge", "Height [mm]"))
+        rows = {dialog.table_sizes.item(r, 0).text(): r for r in range(dialog.table_sizes.rowCount())}
+        warning = translate("frameforge", "Height and width differ in an equal-sided family.")
+        self.assertEqual(dialog.table_sizes.item(rows["BAD"], 2).toolTip(), warning)
+        self.assertEqual(dialog.table_sizes.item(rows["OK"], 2).toolTip(), "")
+
+        # No silent correction: editing the height leaves the width alone.
+        dialog.table_sizes.item(rows["BAD"], 1).setText("45")
+        self.assertEqual(dialog.table_sizes.item(rows["BAD"], 2).text(), "50")
+        dialog.btn_save.click()
+        saved = self.manager.get_library("EqualSide")["Square Hollow"]["sizes"]
+        self.assertEqual((saved["BAD"]["Height"], saved["BAD"]["Width"]), ("45", "50"))
+        self.assertEqual((saved["OK"]["Height"], saved["OK"]["Width"]), ("40", "40"))
+
+        # Once the user aligns the sides, the family returns to the single-side view.
+        dialog.table_sizes.item(rows["BAD"], 2).setText("45")
+        self.assertTrue(dialog.table_sizes.isColumnHidden(2))
+        self.assertEqual(dialog.table_sizes.item(rows["BAD"], 2).toolTip(), "")
 
     def test_master_detail_families_list_and_icons(self):
         from freecad.maxproframe.ff_tools import PROFILEIMAGES_PATH, translate
@@ -512,10 +602,10 @@ class TestLibraryManagerDialog(unittest.TestCase):
         self.assertIn(translate("frameforge", "Aluminium"), dialog.lbl_lib_banner.text())
         self.assertIn("2.7", dialog.lbl_lib_banner.toolTip())
 
-        # Change Height (col 1) from 50 to 100
+        # Change the side (col 1) from 50 to 100; the width follows it
         dialog.table_sizes.item(0, 1).setText("100")
         new_w = float(dialog.table_sizes.item(0, 7).text())
-        self.assertAlmostEqual(new_w, 1.577, places=2)
+        self.assertAlmostEqual(new_w, 2.117, places=2)
 
         # Test manual override: user explicitly types a custom weight
         dialog.table_sizes.item(0, 7).setText("1.999")

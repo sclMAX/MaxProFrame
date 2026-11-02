@@ -405,6 +405,9 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         ("Lip Length", "Lip Length [mm]"),
     ]
 
+    # Families whose two sides are always equal: the table edits a single side.
+    EQUAL_SIDE_FAMILIES = frozenset(("Square", "Square Hollow", "Equal Leg Angles"))
+
     # Legacy inspection/cleanup attributes; native translators are never stored here.
     _translator = None
     _translator_installed = False
@@ -1181,9 +1184,12 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
 
         fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
         canonical = get_canonical_family(self.current_family, fam_data)
+        single_side = canonical in self.EQUAL_SIDE_FAMILIES and not self._mark_unequal_side_rows(canonical)
 
         # Unknown/custom geometries retain the full editor rather than lose access.
         visible = set(fields.get(canonical, {key for key, _ in self.TABLE_COLUMNS}))
+        if single_side:
+            visible.discard("Width")
         visible.update(("Size", "Weight"))
         if canonical != "C":
             visible.discard("Lip Length")
@@ -1194,6 +1200,8 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         for index, (key, label) in enumerate(self.TABLE_COLUMNS):
             if key == "Height" and canonical in ("Round Bar", "Pipe"):
                 label = "Diameter [mm]"
+            elif key == "Height" and single_side:
+                label = "Side [mm]"
             elif key == "Radius1" and canonical == "C":
                 label = "Exterior Radius [mm]"
             self.table_sizes.horizontalHeaderItem(index).setText(translate("frameforge", label))
@@ -1204,6 +1212,35 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         header = self.table_sizes.horizontalHeader()
         for visual_index, logical_index in enumerate(order):
             header.moveSection(header.visualIndex(logical_index), visual_index)
+
+    @staticmethod
+    def _sides_differ(height_text, width_text):
+        try:
+            return not math.isclose(float(height_text), float(width_text), abs_tol=1e-9)
+        except ValueError:
+            return height_text.strip() != width_text.strip()
+
+    def _mark_unequal_side_rows(self, canonical):
+        """Flags legacy rows whose sides differ in an equal-sided family; returns whether any exist."""
+        warning = translate("frameforge", "Height and width differ in an equal-sided family.")
+        found = False
+        was_blocked = self.table_sizes.blockSignals(True)
+        try:
+            for row in range(self.table_sizes.rowCount()):
+                h_item = self.table_sizes.item(row, 1)
+                w_item = self.table_sizes.item(row, 2)
+                if not w_item:
+                    continue
+                differ = (
+                    canonical in self.EQUAL_SIDE_FAMILIES
+                    and h_item is not None
+                    and self._sides_differ(h_item.text(), w_item.text())
+                )
+                found = found or differ
+                w_item.setToolTip(warning if differ else "")
+        finally:
+            self.table_sizes.blockSignals(was_blocked)
+        return found
 
     def _populate_sizes_table(self, sizes_dict):
         self.table_sizes.blockSignals(True)
@@ -1467,16 +1504,27 @@ class ProfileLibraryManagerDialog(QtWidgets.QDialog):
         if not item:
             return
         col = item.column()
-        if col in (1, 2, 3, 4):
-            self._recalculate_row_weight(item.row())
-        elif col in (5, 8):
-            fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
-            canonical = get_canonical_family(self.current_family, fam_data)
-            if canonical == "C":
-                self._recalculate_row_weight(item.row())
-
         fam_data = self.current_lib_data.get(self.current_family, {}) if self.current_family else {}
         canonical = get_canonical_family(self.current_family, fam_data) if self.current_family else ""
+        equal_side = canonical in self.EQUAL_SIDE_FAMILIES
+        if equal_side and col == 1 and self.table_sizes.isColumnHidden(2):
+            # Single-side families store the side in both Height and Width.
+            was_blocked = self.table_sizes.blockSignals(True)
+            try:
+                w_item = self.table_sizes.item(item.row(), 2)
+                if w_item:
+                    w_item.setText(item.text())
+                else:
+                    self.table_sizes.setItem(item.row(), 2, QtWidgets.QTableWidgetItem(item.text()))
+            finally:
+                self.table_sizes.blockSignals(was_blocked)
+        if equal_side and col in (1, 2):
+            self._update_size_columns()
+        if col in (1, 2, 3, 4):
+            self._recalculate_row_weight(item.row())
+        elif col in (5, 8) and canonical == "C":
+            self._recalculate_row_weight(item.row())
+
         if canonical == "Custom Profile" and hasattr(self, "cards_view") and self.cards_view is not None:
             self.cards_view.on_table_item_changed(item)
         self._filter_profiles()

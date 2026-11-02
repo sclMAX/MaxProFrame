@@ -62,6 +62,7 @@ En las formas estándar, cada fila de la tabla es una medida:
 - **Agregar Medida** (+) agrega una fila; escribí su código y sus dimensiones en milímetros.
 - **Quitar Medida** (−) pide confirmación y quita la fila seleccionada.
 - El peso en kg/m se calcula a partir de las dimensiones y la densidad de la biblioteca.
+- *Barra Cuadrada Maciza*, *Tubo Cuadrado Hueco* y *Ángulo de Alas Iguales* tienen lados iguales, así que la tabla muestra una sola columna **Lado**. Si una fila anterior tiene alto y ancho distintos, se ven las dos columnas y la celda del ancho explica la diferencia; no se corrige nada hasta que la edites.
 - **Buscar en esta familia…** filtra las filas por código o descripción, sin distinguir mayúsculas ni acentos. Borrá la búsqueda para ver de nuevo todos los perfiles; buscar nunca borra nada.
 
 ## Perfiles personalizados

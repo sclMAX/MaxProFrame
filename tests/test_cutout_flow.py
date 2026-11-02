@@ -50,6 +50,10 @@ class CutoutFixture(TrimFixture):
         for panel in self.panels:
             panel.clean()
         QtWidgets.QApplication.processEvents()
+        # Closing the sketch of a new cutout opens its depth panel: close it too.
+        if Gui.Control.activeDialog():
+            Gui.Control.closeDialog()
+            QtWidgets.QApplication.processEvents()
 
     def tube(self):
         return self.make_profile(self.make_sketch(PATH), "Edge1", **CENTER)

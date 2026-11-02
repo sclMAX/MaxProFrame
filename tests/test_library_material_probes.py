@@ -71,7 +71,7 @@ class MaterialProbes(unittest.TestCase):
             QtWidgets,
         )
 
-        self.create()
+        self.create(family="Rectangular Hollow")
         dialog = self.dialog()
         self.assertIn(translate("frameforge", "Aluminium"), dialog.lbl_lib_banner.text())
         self.assertIn("2.7 g/cm³", dialog.lbl_lib_banner.toolTip())
@@ -95,7 +95,7 @@ class MaterialProbes(unittest.TestCase):
         dialog.table_sizes.item(0, 0).setText("Renamed")
         dialog._on_save_library()
         saved = self.manager.get_library("Source")
-        self.assertEqual(saved["Square Hollow"]["sizes"]["Renamed"]["Weight"], "6.789")
+        self.assertEqual(saved["Rectangular Hollow"]["sizes"]["Renamed"]["Weight"], "6.789")
         dialog.refresh_libraries(select_name="Source")
         self.assertEqual(dialog.table_sizes.item(0, 7).text(), "6.789")
         self.assertTrue(dialog.table_sizes.item(0, 7).flags() & QtCore.Qt.ItemIsEditable)

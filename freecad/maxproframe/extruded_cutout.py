@@ -80,6 +80,21 @@ def one_wall_depth(shape, face, direction):
     or off the profile is not read. The cut runs past the inner face of the wall by half the
     wall, or half the gap to the next material when it is closer. None: no wall under ``face``.
     """
+    readings = _wall_readings(shape, face, direction)
+    if not readings:
+        return None
+    thickness, gap = min(readings)
+    return thickness + min(thickness, gap) / 2
+
+
+def wall_thickness(shape, face):
+    """Thickness of the wall of ``shape`` under its own planar ``face``, or None without a wall."""
+    readings = _wall_readings(shape, face, -face.normalAt(0, 0))
+    return min(readings)[0] if readings else None
+
+
+def _wall_readings(shape, face, direction):
+    """(thickness, gap to the next material) of the wall starting at ``face``, per point of ``face``."""
     readings = []
     for pieces in _material_along(shape, _wall_samples(face), direction):
         # The first piece that reaches past the plane, starting on it (not across a void).
@@ -90,10 +105,7 @@ def one_wall_depth(shape, face, direction):
         following = [start for start, _ in pieces if start > thickness + TOLERANCE]
         gap = following[0] - thickness if following else math.inf
         readings.append((thickness, gap))
-    if not readings:
-        return None
-    thickness, gap = min(readings)
-    return thickness + min(thickness, gap) / 2
+    return readings
 
 
 def _uncut_shape(shape):

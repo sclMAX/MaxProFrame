@@ -349,15 +349,15 @@ A group is just a folder. Simply add your objects into the Group. You are done. 
 
 ![alt text](images/90-draw-sketch.png)
 
-5. Close the sketch: the profile is cut. While the sketch is empty, or a shape is not closed yet, the profile is shown uncut.
+5. Close the sketch: the profile is cut and the **Cutout / Hole** panel opens to set the **Cut type** and the **Depth**. The depth starts at the thickness of the wall under the face and can be changed with **Distance**; every change is previewed. **OK** keeps them in one Undo step. **Cancel** asks whether to delete the new cutout together with its sketch. While the sketch is empty, or a shape is not closed yet, the profile is shown uncut.
 
-The cutout has a **Cut type** property:
+The cut types are:
 
 - **One wall** (default of this flow): each closed shape cuts only the wall under the face, as deep as that wall. A hole on the top face of a rectangular tube goes through the top wall and leaves the bottom wall intact. The depth comes from the geometry, so it works on any hollow or open profile.
 - **Through All**: the shapes cut through the whole profile, every wall they cross.
-- **Distance**: the shapes cut as deep as **Extrusion Length**, shown only for this type.
+- **Distance**: the shapes cut as deep as **Depth** (the **Extrusion Length** property).
 
-To change the holes later, edit the sketch; to change the cut type, use the Property editor or double-click the cutout.
+To change the holes later, edit the sketch. To change the cut type or the depth, double-click the cutout: the same panel opens with the stored values, and **Cancel** restores them.
 
 ### With your own sketch
 

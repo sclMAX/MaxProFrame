@@ -1,5 +1,13 @@
 ## Changelog
 
+* Unreleased
+
+  - Edit a single **Side** for *Square*, *Square Hollow* and *Equal Leg Angles* in the profile library manager: the width column is hidden and follows the side, so these families can no longer hold a size with different sides by mistake. The library format is unchanged. A size saved earlier with a different height and width keeps both columns visible, with a note on the width cell, and is never corrected without an edit.
+  - Set the depth of a new **Cutout / Hole** right after drawing it: closing the sketch opens the cutout panel with the **Cut type** and a **Depth** that starts at the thickness of the wall under the face, previewed live (see the [tutorial](docs/tutorial.md#cutout--hole)). **Cancel** asks whether to delete the new cutout with its sketch, in one Undo step. Double-clicking a cutout opens the same panel, translated, and **Cancel** there restores the stored values.
+
+  **Fixes**
+  - Show the stored depth in the cutout panel opened by double-click; it always showed 500.
+
 * v1.1.1 (2026-11-02)
 
   **Fixes**
