@@ -50,6 +50,14 @@ class TestExtendCutKeepEnd(ExtendCutFixture):
         obj = self.keep(self.valid_extend_cut(self.profile(0, 500), self.target()), "End")
         self.assert_runs(obj, FAR, 500.0)
 
+    def test_auto_with_a_whole_target_near_the_middle_moves_the_end_nearest_its_plane(self):
+        # Target faces at 210 and 260 on a 0-500 profile: the end is farther from the target (240 > 210),
+        # so the face seen from it is the one at 260, and the end is the one nearest that plane (240 < 260).
+        target = self.make_profile(self.make_sketch(((235, -200, 0), (235, 200, 0))), "Edge1", **CENTER)
+        obj = self.valid_extend_cut(self.profile(0, 500), target)
+        self.assert_runs(obj, 0.0, 260.0)
+        self.assert_runs(self.keep(obj, "End"), 260.0, 500.0)
+
     def test_a_target_that_does_not_cross_the_profile_ignores_the_choice(self):
         for keep_end in ("Start", "End"):
             with self.subTest(keep_end):

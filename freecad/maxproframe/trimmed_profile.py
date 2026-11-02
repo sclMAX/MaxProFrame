@@ -256,14 +256,12 @@ class TrimmedProfile:
         ends = [member.end(at_start)[2] for at_start in (True, False)]
         axis = ends[1] - ends[0]
         axis.normalize()
-        if subs and subs[0]:
-            # The end nearest the plane moves; the other one, the far end, stays.
-            far_start = abs((ends[0] - point).dot(face_normal)) > abs((ends[1] - point).dot(face_normal))
-        else:
-            far_start = self._far_end_is_start(member, target)
-        origin, normal = plane_seen_from(far_start)
+        # A whole target gives the face seen from the end farthest from it.
+        origin, normal = plane_seen_from(subs and subs[0] or self._far_end_is_start(member, target))
         if abs(normal.dot(axis)) < TOLERANCE:
             raise MiterError(translate("frameforge", "Extend / Cut: the target plane is parallel to the profile axis."))
+        # The end nearest the plane moves; the other one, the far end, stays.
+        far_start = abs((ends[0] - origin).dot(normal)) > abs((ends[1] - origin).dot(normal))
 
         # Only a plane between the two ends leaves two pieces to choose from.
         try:
