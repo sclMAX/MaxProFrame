@@ -1565,6 +1565,8 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         self._part_moves = {}
         self._placed_in_part = False
         super().__init__()
+        # FreeCAD may close the dialog without OK or Cancel: the form is then deleted.
+        self.form[0].destroyed.connect(self._form_gone)
 
     def initialize_ui(self):
         super().initialize_ui()
@@ -1845,7 +1847,26 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
                 # A removed preview no longer owns a live ViewObject.
                 continue
 
+    @staticmethod
+    def _attached(obj):
+        try:
+            attached = getattr(obj, "isAttachedToDocument", None)
+            return attached() if attached is not None else obj.Document is not None
+        except (RuntimeError, ReferenceError):
+            return False
+
+    def _prune_dead_previews(self):
+        """Forget previews and paths removed outside the panel (Delete, Undo); proceed() rebuilds the previews."""
+        for key, preview in list(self._objects.items()):
+            if not self._attached(preview):
+                del self._objects[key]
+        for key in list(self._edge_properties):
+            if key[0] is not None and not self._attached(key[0]):
+                del self._edge_properties[key]
+                self._edge_sections.pop(key, None)
+
     def _refresh_edge_editor(self):
+        self._prune_dead_previews()
         self._restore_preview_highlight()
         active = self._active_edge_key
         if hasattr(self, "edge_list_widget") and active not in self.edge_list_widget.get_selected_edges():
@@ -1861,7 +1882,11 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             preview = self._objects.get(key)
             if preview is None:
                 continue
-            view = getattr(preview, "ViewObject", None)
+            try:
+                view = getattr(preview, "ViewObject", None)
+            except (RuntimeError, ReferenceError):
+                # A removed preview no longer owns a live ViewObject.
+                continue
             if view is None:
                 continue
             appearance = {
@@ -1992,6 +2017,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             or getattr(self, "_preview_closed", False)
         ):
             return
+        self._prune_dead_previews()
         self._refresh_alignment()
         had_edge_properties = bool(self._edge_properties)
         keys = self.edge_list_widget.get_selected_edges() if hasattr(self, "edge_list_widget") else []
@@ -2148,6 +2174,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             return False
 
     def accept(self, defer=None):
+        self._prune_dead_previews()
         self._flush_pending_removals()
         has_sel = self._has_path_edges()
         if not (has_sel or self.form_proxy.sb_length.value() > 0):
@@ -2228,6 +2255,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             return False
 
         try:
+            self._prune_dead_previews()
             self.proceed()
 
             if hasattr(self, "_session_imported_sketches"):
@@ -2301,6 +2329,35 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
             except Exception:
                 pass
 
+    def _form_gone(self, *args):
+        # Closed without OK or Cancel (another dialog took the task view): stop listening and
+        # drop the previews, so they are not committed into the project. Widgets are gone here.
+        if self._preview_closed or self._reject_called:
+            return
+        self._preview_closed = True
+        self._pending_removals.clear()
+        self._preview_highlights = {}
+        if hasattr(Gui, "Selection"):
+            try:
+                Gui.Selection.removeObserver(self)
+            except Exception:
+                pass
+        target_doc = getattr(self, "_target_doc", None)
+        try:
+            # Only the panel's own transaction is rolled back.
+            if target_doc.HasPendingTransaction and target_doc.UndoNames[:1] == ["Add Profile"]:
+                target_doc.abortTransaction()
+        except Exception:
+            pass
+        self._prune_dead_previews()
+        for preview in self._objects.values():
+            try:
+                preview.Document.removeObject(preview.Name)
+            except Exception:
+                pass
+        self._objects.clear()
+        self._clean_unreferenced_session_sources()
+
     @staticmethod
     def _has_live_referrer(doc, target):
         # Referrers may live in other open documents (cross-document App::Link).
@@ -2366,6 +2423,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
         if getattr(self, "_initializing", False):
             return
 
+        self._prune_dead_previews()
         self._restore_preview_highlight()
         seen_profiles = []
 
@@ -2923,6 +2981,7 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
     def update_selection(self):
         if self._rendering_thumbnail:
             return
+        self._prune_dead_previews()
         selection_list = self._path_selections()
         self.form_proxy.sb_length.setEnabled(not selection_list)
         if selection_list:

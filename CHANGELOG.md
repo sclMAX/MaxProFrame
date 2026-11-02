@@ -8,6 +8,7 @@
   **Fixes**
   - Show the stored depth in the cutout panel opened by double-click; it always showed 500.
   - Draw the section and its placement points in the placement preview of **Create Profiles** and **Edit Profile** on themes whose text color is unreadable on the preview background: with a white background and light text only the selected point was visible. They now fall back to black or white.
+  - Keep **Create Profiles** working when its preview profiles are removed outside the panel, with **Undo** or **Delete**: every selection failed with `Object has been removed from document` and **OK** created nothing. The panel now rebuilds the previews of the edges still selected. When FreeCAD closes the panel without **OK** or **Cancel** (for example when the library manager opens a section in Sketcher), the panel stops listening to the selection and removes its previews instead of leaving them in the project.
 
 * v1.1.1 (2026-11-02)
 
