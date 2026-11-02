@@ -13,6 +13,8 @@ It is made for metal workshops, makers and engineers who build frames in steel, 
 
 <p align="center"><img src="docs/images/readme/hero-frame.png" alt="Armchair frame built from rectangular tubes with mitered corners" width="720"></p>
 
+<p align="center"><img src="docs/video/maxproframe-demo.gif" alt="Demo: a table frame from a sketch skeleton, square tube profiles, mitered corners, holes with Cutout / Hole and the cut list" width="720"><br><em>From skeleton to cut list in under a minute. <a href="docs/video/maxproframe-demo.mp4">Watch it in full HD (MP4)</a>.</em></p>
+
 ## Features
 
 - **Profile catalogs**: HEA, HEB, HEM, IPE, IPN, UPN, UPE, channels, lipped C, angles, square, rectangular and round tubes, bars and flats, T-Slot and V-Slot aluminium extrusions, and wood sections.
