@@ -27,7 +27,9 @@ class Member:
 
     def __init__(self, edge, profile_shape):
         self.edge = edge
-        self.section = _section(edge, profile_shape)
+        # The section is taken at a path point the profile body covers, then moved from there to each end.
+        self.param = _section_parameter(edge, profile_shape)
+        self.section = _section(edge, profile_shape, self.param)
 
     def end(self, at_start):
         """Point, inward direction (into the member) and section centroid at one end."""
@@ -37,19 +39,18 @@ class Member:
         return point, inward, centroid
 
     def section_at(self, at_start):
-        """The mid-edge section moved to one end of the path."""
+        """The section moved to one end of the path."""
         _, _, placement = self._end_frame(at_start)
         return self.section.transformed(placement.toMatrix())
 
     def _end_frame(self, at_start):
         point, inward = path_end(self.edge, at_start)
         tangent = inward if at_start else -inward
-        mid_param = _mid_parameter(self.edge)
-        mid_point = self.edge.valueAt(mid_param)
-        mid_tangent = self.edge.tangentAt(mid_param).normalize()
+        section_point = self.edge.valueAt(self.param)
+        section_tangent = self.edge.tangentAt(self.param).normalize()
         # A planar sweep keeps the section offset in the edge frame: turn it with the tangent.
-        rotation = App.Rotation(mid_tangent, tangent)
-        placement = App.Placement(point - rotation.multVec(mid_point), rotation)
+        rotation = App.Rotation(section_tangent, tangent)
+        placement = App.Placement(point - rotation.multVec(section_point), rotation)
         return point, inward, placement
 
 
@@ -160,12 +161,31 @@ def _mid_parameter(edge):
     return (edge.FirstParameter + edge.LastParameter) / 2.0
 
 
-def _section(edge, profile_shape):
-    """Profile section at mid-edge: a face, or its wires when they do not bound one."""
-    param = _mid_parameter(edge)
+def _slice(edge, profile_shape, param):
+    """Wires of the profile cut by the plane normal to the path at ``param``."""
     point = edge.valueAt(param)
     tangent = edge.tangentAt(param).normalize()
-    wires = profile_shape.slice(tangent, tangent.dot(point))
+    return profile_shape.slice(tangent, tangent.dot(point))
+
+
+def _section_parameter(edge, profile_shape):
+    """Path parameter where the profile body is cut: mid-edge, or the path point nearest the body bounding box centre.
+
+    End offsets can shorten the body past the path midpoint, which then lies outside the body.
+    """
+    param = _mid_parameter(edge)
+    if _slice(edge, profile_shape, param) or profile_shape.isNull():
+        return param
+    _, points, _ = edge.distToShape(Part.Vertex(profile_shape.BoundBox.Center))
+    nearest = edge.Curve.parameter(points[0][0])
+    return min(max(nearest, edge.FirstParameter), edge.LastParameter)
+
+
+def _section(edge, profile_shape, param=None):
+    """Profile section at ``param`` (mid-edge by default): a face, or its wires when they do not bound one."""
+    param = _mid_parameter(edge) if param is None else param
+    point = edge.valueAt(param)
+    wires = _slice(edge, profile_shape, param)
     if not wires:
         raise MiterError("End Miter: the profile does not cross its own path.")
     reach = profile_shape.BoundBox.DiagonalLength

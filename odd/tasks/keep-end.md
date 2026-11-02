@@ -1,0 +1,32 @@
+# Keep end: choose which side Extend / Cut and Notch keep
+
+When the target crosses a profile in the middle, Extend / Cut and Notch always keep the piece reaching the far end; the user needs to choose the other piece.
+Branch: `feat/keep-end` (from `main` d133a95). Native runner: `python3 ci/run_tests.py --freecad-bin .git/ci-policy-runtime/squashfs-root/AppRun --reports <dir> --timeout 180 [--test <module>]`.
+
+## Specs
+
+- S1. "deberiamos tener una forma de elejir que lado conservar" — when the target crosses the profile, the user can keep either piece, in Extend / Cut and in Notch.
+- S2. Agreed proposal: "Una propiedad nueva por recorte, `KeepEnd`, con tres valores: `Auto` es el comportamiento actual y queda como valor por defecto, así los archivos existentes no cambian. `Start` y `End` conservan explícitamente el pedazo que llega a ese extremo del eje." Existing documents without the property behave as `Auto`.
+- S3. Agreed proposal: "En el panel, un botón "Invertir lado" que actúa sobre los perfiles seleccionados en la lista (o doble clic en la fila). Como el comando trabaja con N perfiles, la elección tiene que ser por perfil, no global." Also when editing an existing trim.
+- S4. Agreed proposal: "se podría dibujar en otro color (gris o rojo) el pedazo que se descarta, así sabés qué va a desaparecer antes de dar OK."
+- S5. Agreed proposal: "Cuando el plano no cruza el perfil, el botón no aplica. Lo dejaría deshabilitado o con un aviso del tipo "el plano no cruza el perfil, no hay lado que elegir"." Geometry: an explicit `KeepEnd` only applies while the target crosses the profile between its ends; otherwise the `Auto` result is used.
+- S6. Agreed proposal: "Hacer clic en la vista 3D sobre el lado que querés conservar" and "Cambiar la regla automática" are out of scope.
+
+## Tasks
+
+- T1 (S1, S2, S5) `KeepEnd` property and geometry for Extend Cut and Notch, with native geometry tests. Route: inline. Commit: bd2e091. Done.
+- T2 (S3, S5) Panel: "Flip side" button and row double-click, per profile, in creation and edit; kept side shown in the list; message when the target does not cross. Route: inline. Commit: see L9.
+- T3 (S4) Preview: the discarded piece is drawn in its own color. Route: inline. Commit: see L9.
+- T4 (S1-S5) Spanish catalog, docs, CHANGELOG, full native suite. Route: gentle-ai-worker (context backstop) + parent doc fix. Commit: see L9.
+- T5 (L7) Fix: Extend / Cut and End Miter fail with "the profile does not cross its own path" when an end offset shortens the profile past its path midpoint. Route: inline. Commit: see L9.
+
+## Log
+
+- L1. User: "REvisemos el comando Extirar/Cortar, que pasa si [Image#1] quiero cortar el perfil vertical para que quede entre la pared y el techo, pero cuando uso el comando pasa esto [Image#2], deberiamos tener una forma de elejir que lado conservar, que opinas?"
+- L2. Cause: `trimmed_profile.py` Extend Cut moves "the end nearest the plane" and Notch keeps "the piece reaching the far end"; with the plane crossing mid-profile the long piece is always kept.
+- L3. User: "vamso con eso" (approves the KeepEnd + Flip side + discarded-piece preview proposal, for both commands).
+- L4. T1: RED `test_keep_end_geometry` 8 tests, all `AttributeError: ... no attribute 'KeepEnd'`. GREEN 8/8; neighbours test_extend_cut_geometry 10/10, test_notch_geometry 7/7, test_notch_container 2/2, test_trimmed_profile_pid 2/2. Notch crossing rule: the part of the target inside the profile's filled section prism lies strictly between the axis ends (an end in the hollow of a tube target counts as inside; first attempt with `isInside` kept the stub in the hollow). Commit bd2e091 (227 lines).
+- L5. T2/T3: RED `test_keep_end_panel` import error (no DISCARDED). GREEN 15/16, remaining failure is the Spanish catalog (T4). Flip updates the preview at once (not debounced); with Update automatically unchecked the flip builds the preview to learn the Auto side. Discarded piece = body.cut(preview), drawn red (1.0, 0.1, 0.1); `highlights()` unchanged, new `discarded()`. Colors label text changed to "Target in orange, profiles in blue, discarded pieces in red." (requested by S4; two existing preview tests pin the old text).
+- L6. T4 (worker mvzudww5-1-npgm): both Spanish catalogs, 16 .qm regenerated, preview label tests, tutorial/README/CHANGELOG. Modules: test_keep_end_panel 16/16, test_extend_cut_preview 22/22, test_extend_cut_panel 18/18, test_library_translations 3/3, test_compile_translations 2/2. Parent fixed a false tutorial claim (flip with Update automatically unchecked shows Pending changes) and updated the two label pins in test_notch_preview. Full suite with `--timeout 180` exited 124 after 525 tests (the timeout is for the whole process; suite needs longer); not retried automatically.
+- L7. User, manual test in FreeCAD: "pyException ... trimmed_profile.py, line 199, in extend_cut_plane ... miter_geometry.py, line 170, in _section ... End Miter: the profile does not cross its own path. ... Profile_006_Tr: End Miter: the profile does not cross its own path." File: /home/max/GoogleDrive/INDUMATICS/OBRAS/ObraTerrazaConParrilla/Maqueta.FCStd (copied to .git/keep-end/repro/, original untouched).
+- L8. Cause (pre-existing, same code on main): Profile_006 has OffsetB = -2000 on a 2530 mm path, body z 2000..2530; Member sliced the body at the path midpoint (z 1265), outside the body. Fix: Member takes the section at mid-edge or, when that slice is empty, at the path point nearest the body bounding box centre, and moves it to the ends from that same parameter. RED `test_a_profile_shortened_past_its_path_midpoint_is_still_cut` failed with "End Miter: the profile does not cross its own path." != 'Valid'; GREEN with test_extend_cut_geometry 11/11, test_end_miter_geometry 6/6, test_keep_end_geometry 8/8, test_notch_geometry 7/7. On the user's file copy (offscreen GUI): Profile_006_Tr Valid z 2000..2400 (Auto), KeepEnd=End z 2400..2530, Profile_004/005/007_Tr unchanged z 0..2400.

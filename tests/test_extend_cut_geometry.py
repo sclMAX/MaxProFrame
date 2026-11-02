@@ -122,6 +122,20 @@ class TestExtendCutGeometry(ExtendCutFixture):
         self.assertAlmostEqual(slanted.Shape.BoundBox.XMax, 400.0, places=5)
         self.assertAlmostEqual(slanted.Length.Value, 400.0, places=5)
 
+    def test_a_profile_shortened_past_its_path_midpoint_is_still_cut(self):
+        # An offset of more than half the path leaves the path midpoint outside the profile body.
+        target = self.target()
+        body = self.profile(0, 500)
+        body.OffsetB = -300.0
+        self.doc.recompute()
+        box = body.Shape.BoundBox
+        self.assertAlmostEqual(box.XLength, 200.0, places=5)
+        self.assertFalse(box.XMin <= 250.0 <= box.XMax)
+        obj = self.valid_extend_cut(body, target, (self.face_towards(target, App.Vector(-1, 0, 0)),))
+        self.assertAlmostEqual(
+            min(abs(obj.Shape.BoundBox.XMin - NEAR), abs(obj.Shape.BoundBox.XMax - NEAR)), 0.0, places=5
+        )
+
     def test_a_non_planar_face_target_is_an_error(self):
         tube = self.doc.addObject("Part::Feature", "Tube")
         tube.Shape = Part.makeCylinder(10, 100, App.Vector(400, 0, -50))
