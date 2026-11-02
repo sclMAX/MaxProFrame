@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import tempfile
 import unittest
@@ -383,6 +384,78 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.assertTrue(panel.btn_mirror_h.isChecked())
         panel.form_proxy.cb_mirror_h.setChecked(False)
         self.assertFalse(panel.btn_mirror_h.isChecked())
+
+    def _naming_panel(self, family=True):
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+        proxy = panel.form_proxy
+        proxy.cb_prefix_profile_in_name.setChecked(True)
+        proxy.cb_sketch_in_name.setChecked(False)
+        proxy.cb_family_in_name.setChecked(family)
+        proxy.cb_size_in_name.setChecked(True)
+        return panel
+
+    def _other_size(self, panel):
+        combo = panel.form_proxy.combo_size
+        current = combo.currentText()
+        index = next(i for i in range(combo.count()) if combo.itemText(i) != current)
+        return index, combo.itemText(index)
+
+    def test_size_change_relabels_only_the_edited_edge_profile(self):
+        """A size change relabels the edited edge preview; its internal Name never carries the size."""
+        doc = self._new_doc("DocSizeLabel")
+        sk = self._create_rectangle_sketch(doc)
+        panel = self._naming_panel()
+        family = re.escape(panel.form_proxy.combo_family.currentText().replace(" ", "_"))
+        name_family = re.sub(r"\W", "_", panel.form_proxy.combo_family.currentText())
+        first = panel.form_proxy.combo_size.currentText()
+        e1, e2 = (sk, "Edge1"), (sk, "Edge2")
+        panel._saved_selection = [
+            type("SelEx", (), {"Object": sk, "ObjectName": sk.Name, "SubElementNames": ["Edge1", "Edge2"]})()
+        ]
+        panel.update_selection()
+        panel.proceed()
+        p1, p2 = panel._objects[e1], panel._objects[e2]
+        names = (p1.Name, p2.Name)
+        for profile in (p1, p2):
+            self.assertRegex(profile.Name, rf"^Profile_{name_family}_\d+$")
+            self.assertRegex(profile.Label, rf"^Profile_{family}_{first}_\d+$")
+
+        panel.edge_list_widget.select_edge(e1)
+        index, second = self._other_size(panel)
+        panel.form_proxy.combo_size.setCurrentIndex(index)
+
+        self.assertIs(panel._objects[e1], p1)
+        self.assertEqual(p1.SizeName, second)
+        self.assertRegex(p1.Label, rf"^Profile_{family}_{second}_\d+$")
+        self.assertRegex(p2.Label, rf"^Profile_{family}_{first}_\d+$")
+        self.assertEqual((p1.Name, p2.Name), names)
+
+        # Unrelated edits keep the current label instead of renumbering it.
+        label = p1.Label
+        panel.set_rotation(90.0)
+        panel.on_input_changed()
+        self.assertEqual(p1.Label, label)
+
+    def test_size_change_relabels_length_profile_in_place(self):
+        """Without a path, a size change updates the same preview and its label."""
+        self._new_doc("DocLengthLabel")
+        panel = self._naming_panel(family=False)
+        panel.form_proxy.sb_length.setValue(250.0)
+        panel.proceed()
+        (key,) = panel._objects
+        profile = panel._objects[key]
+        self.assertRegex(profile.Name, r"^Profile_\d+$")
+
+        index, second = self._other_size(panel)
+        panel.form_proxy.combo_size.setCurrentIndex(index)
+        panel.proceed()
+
+        self.assertIs(panel._objects[key], profile)
+        self.assertEqual(profile.SizeName, second)
+        self.assertRegex(profile.Label, rf"^Profile_{second}_\d+$")
+        self.assertRegex(profile.Name, r"^Profile_\d+$")
 
     def test_s2_edge_list(self):
         """The edge list is always available without a mode selector."""
@@ -1294,6 +1367,62 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         edit_panel.form_proxy.sb_offset_y.setValue(0.0)
         self.assertEqual((obj.OffsetX.Value, obj.OffsetY.Value), (7.0, 0.0))
         self.assertEqual(obj.AttachmentOffset.Base, App.Vector(7.0, 0.0, 0.0))
+
+    def _saved_profile(self, doc, label):
+        obj = doc.addObject("Part::FeaturePython", "SavedProfile")
+        obj.addExtension("Part::AttachExtensionPython")
+        Profile(
+            obj,
+            init_w=40.0,
+            init_h=40.0,
+            init_mt=2.0,
+            init_ft=0.0,
+            init_r1=0.0,
+            init_r2=0.0,
+            init_len=500.0,
+            init_wg=2.0,
+            init_unit_price=10.0,
+            init_mf=False,
+            init_anchor_x=1,
+            init_anchor_y=1,
+            material="Metal",
+            fam="Square Hollow",
+            size_name="40x40x2",
+            bevels_combined=False,
+            catalog_family="Square Hollow",
+        )
+        obj.Label = label
+        doc.recompute()
+        return obj
+
+    def _edit_to_other_size(self, obj):
+        panel = EditProfileTaskPanel(obj)
+        self.panels.append(panel)
+        panel.initialize_ui()
+        combo = panel.form_proxy.combo_size
+        index = next(i for i in range(combo.count()) if combo.itemText(i) != "40x40x2")
+        combo.setCurrentIndex(index)
+        panel.proceed()
+        return combo.itemText(index)
+
+    def test_edit_size_change_replaces_size_in_label(self):
+        """Editing the size replaces the old size in the label and keeps the rest of it."""
+        doc = self._new_doc("DocEditLabel")
+        obj = self._saved_profile(doc, "Profile_40x40x2_001")
+        name = obj.Name
+        size = self._edit_to_other_size(obj)
+        self.assertEqual(obj.SizeName, size)
+        self.assertEqual(obj.Label, f"Profile_{size}_001")
+        self.assertEqual(obj.Name, name)
+
+    def test_edit_size_change_keeps_label_without_old_size(self):
+        """A label the user wrote without the size, or with it inside a word, stays as written."""
+        doc = self._new_doc("DocEditCustomLabel")
+        for label in ("Left rail", "Rail40x40x2b"):
+            obj = self._saved_profile(doc, label)
+            size = self._edit_to_other_size(obj)
+            self.assertEqual(obj.SizeName, size)
+            self.assertEqual(obj.Label, label)
 
 
 if __name__ == "__main__":
