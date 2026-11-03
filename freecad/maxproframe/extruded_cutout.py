@@ -108,6 +108,26 @@ def _wall_readings(shape, face, direction):
     return readings
 
 
+def cut_tools(shape, faces, direction, cut_type, distance, center):
+    """The solids that cut ``faces`` into ``shape`` along ``direction``, or None when none does.
+
+    ``distance`` is the depth of a Distance cut; ``center`` is where the faces are, for Through All.
+    """
+    if cut_type == "One wall":
+        # Each region goes through the wall under it, as deep as that wall.
+        tools = []
+        for face in faces:
+            depth = one_wall_depth(shape, face, direction)
+            if depth is not None:
+                tools.append(face.extrude(direction * depth))
+        return Part.Compound(tools) if tools else None
+    if cut_type == "Distance":
+        length = distance
+    else:
+        length = shape.BoundBox.DiagonalLength + (center - shape.BoundBox.Center).Length
+    return Part.Compound(faces).extrude(direction * length)
+
+
 def _uncut_shape(shape):
     """A copy of ``shape`` with its placement moved into its geometry.
 
@@ -259,33 +279,18 @@ class ExtrudedCutout:
                 self._update_structure_data(fp)
                 return
 
-            if fp.CutType == "One wall":
-                # Each region goes through the wall under it, as deep as that wall.
-                tools = []
-                for face in myFacesList:
-                    depth = one_wall_depth(selected_object.Shape, face, -normal_vector)
-                    if depth is not None:
-                        tools.append(face.extrude(-normal_vector * depth))
-                if not tools:
-                    fp.Shape = _uncut_shape(selected_object.Shape)
-                    self._update_structure_data(fp)
-                    return
-                extruded_shape = Part.Compound(tools)
-            else:
-                if fp.CutType == "Distance":
-                    ExtLength = fp.ExtrusionLength.Value
-                else:
-                    skCenter = cutSketch.Shape.BoundBox.Center
-                    objCenter = selected_object.Shape.BoundBox.Center
-                    distance = skCenter - objCenter
-                    TotalLength = selected_object.Shape.BoundBox.DiagonalLength + distance.Length
-
-                    ExtLength = TotalLength
-
-                compFaces = Part.Compound(myFacesList)
-
-                # Extrusion
-                extruded_shape = compFaces.extrude(-normal_vector * ExtLength)
+            extruded_shape = cut_tools(
+                selected_object.Shape,
+                myFacesList,
+                -normal_vector,
+                fp.CutType,
+                fp.ExtrusionLength.Value,
+                cutSketch.Shape.BoundBox.Center,
+            )
+            if extruded_shape is None:
+                fp.Shape = _uncut_shape(selected_object.Shape)
+                self._update_structure_data(fp)
+                return
 
             # Soustraction (Cut)
             cut_shape = selected_object.Shape.cut(extruded_shape)
