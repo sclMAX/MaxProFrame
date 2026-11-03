@@ -32,6 +32,7 @@ class MaxProFrame(Gui.Workbench):
         "MaxProFrame_ExtendCut",
         "MaxProFrame_Notch",
         "MaxProFrame_AddExtrudeCutout",
+        "MaxProFrame_DrillHole",
     ]
 
     toolbox_group = ["Std_Group", "Std_Part"]
@@ -58,6 +59,7 @@ class MaxProFrame(Gui.Workbench):
         """
         from freecad.maxproframe import (
             create_bom_tool,
+            create_drill_hole_tool,
             create_edit_balloons_tool,
             create_end_miter_tool,
             create_extend_cut_tool,

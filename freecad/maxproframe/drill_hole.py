@@ -5,11 +5,17 @@ so the cut list, the IDs and the trims treat it as one.
 """
 
 import os
+import re
 
 import FreeCAD as App
 import Part
 
-from freecad.maxproframe._utils import get_childrens_from_extrudedcutout, get_profile_from_extrudedcutout
+from freecad.maxproframe._utils import (
+    get_childrens_from_extrudedcutout,
+    get_profile_from_extrudedcutout,
+    is_extrudedcutout,
+    is_trimmedbody,
+)
 from freecad.maxproframe.extruded_cutout import (
     ExtrudedCutout,
     ViewProviderExtrudedCutout,
@@ -105,6 +111,29 @@ def _resolve_face(shape, name, normal, point):
     return min(faces, key=lambda face: face.distToShape(Part.Vertex(point))[0], default=None)
 
 
+def _builds_on(obj, base):
+    """Whether ``obj`` is a cutout or a trim made from ``base``."""
+    if is_extrudedcutout(obj):
+        return bool(obj.baseObject) and obj.baseObject[0] == base
+    return is_trimmedbody(obj) and obj.TrimmedBody == base
+
+
+def _show_unless_built_on(base, left_by):
+    """Show ``base`` again once ``left_by`` no longer cuts it, unless another cutout or trim builds on it."""
+    if getattr(base, "ViewObject", None) is None or base.Document is None:
+        return
+    if any(_builds_on(obj, base) for obj in base.InList if obj != left_by):
+        return
+    base.ViewObject.Visibility = True
+
+
+def _relabel(fp, left, base):
+    """Label ``fp`` after ``base`` when it still has the label it got from ``left``; a user label stays."""
+    # FreeCAD may number a duplicate label: Profile_Dh001.
+    if re.fullmatch(re.escape(f"{left.Label}_Dh") + r"\d*", fp.Label):
+        fp.Label = f"{base.Label}_Dh"
+
+
 class DrillHole(ExtrudedCutout):
     def __init__(self, obj, selected_face, vertex):
         super().__init__(obj, None, selected_face)
@@ -170,6 +199,22 @@ class DrillHole(ExtrudedCutout):
 
     def onDocumentRestored(self, obj):
         """Nothing to migrate yet: drill holes were created with every property."""
+
+    def onBeforeChange(self, fp, prop):
+        if prop == "baseObject" and fp.baseObject:
+            # A name, not the object: the proxy is saved with the document.
+            self._left_base = fp.baseObject[0].Name
+
+    def onChanged(self, fp, prop):
+        super().onChanged(fp, prop)
+        if prop == "baseObject":
+            name = getattr(self, "_left_base", None)
+            self._left_base = None
+            left = fp.Document.getObject(name) if name else None
+            if left is not None and (not fp.baseObject or fp.baseObject[0] != left):
+                _show_unless_built_on(left, fp)
+                if fp.baseObject:
+                    _relabel(fp, left, fp.baseObject[0])
 
     def reference(self, fp):
         """(vertex point, face normal, face center) the holes are placed from.
@@ -257,10 +302,17 @@ class ViewProviderDrillHole(ViewProviderExtrudedCutout):
         return True
 
     def setEdit(self, vobj, mode):
-        return None
+        """Double-click: the Drill Hole panel on this hole."""
+        if mode != 0:
+            return None
+        from freecad.maxproframe import create_drill_hole_tool
+
+        # The panel listens to clicks: they change the face and the vertex.
+        create_drill_hole_tool.show_panel(create_drill_hole_tool.DrillHoleTaskPanel(edited=self.Object))
+        return True
 
     def setupContextMenu(self, vobj, menu):
         """No sketch to edit."""
 
     def getIcon(self):
-        return os.path.join(ICONPATH, "cutout-hole.svg")
+        return os.path.join(ICONPATH, "drill-hole.svg")
