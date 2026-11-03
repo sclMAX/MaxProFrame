@@ -3,6 +3,10 @@
 * Unreleased
 
   - Choose which piece **Extend / Cut** and **Notch** keep when the target crosses a profile between its ends: select profiles in the list and press **Flip side**, or double-click a row, to keep the other piece of each one, also when editing an existing trim (see the [tutorial](docs/tutorial.md#via-extend--cut-command)). The choice is stored in the new **KeepEnd** property (**Auto**, **Start** or **End**); **Auto** keeps the current behavior and is the default, so existing documents are unchanged. Choosing another target puts every profile back to **Auto**. When the target does not cross the profile the panel says there is no side to choose. The live preview draws the pieces that will be discarded in red.
+  - Enable **Flip side** in the **Extend / Cut** and **Notch** panels only while a row of the profiles list is selected.
+  - Change the target of a new **Extend / Cut** or **Notch** without closing the panel: press **Change target** and the next click becomes the new target, then clicks add profiles again (see the [tutorial](docs/tutorial.md#via-extend--cut-command)). A click refused as target keeps it armed. While editing the button is hidden, since every click already changes the target.
+  - Show the icon of its command for each trim in the tree (**Extend / Cut**, **Notch** or **End Miter**) and label new trims after their profile, for example `Profile_TC40x40x1.5_001_Tr` (`_Mt` for End Miter); existing trims keep their label.
+  - Preview edits of an **Extend / Cut** or **Notch** live: the target, Gap and **Flip side** apply to the trim as you change them, with the discarded piece in red. **OK** keeps them in one Undo step; **Cancel**, or closing the panel without **OK**, puts the trim back unchanged, with no Undo step.
   - Fix **Extend / Cut** and **End Miter** failing with "the profile does not cross its own path" on a profile whose end offset shortens it past the middle of its path.
 
 * v1.2.0 (2026-11-02)

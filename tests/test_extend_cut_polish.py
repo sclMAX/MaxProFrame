@@ -3,6 +3,7 @@
 import unittest
 
 import FreeCAD as App
+from miter_helpers import use_language
 from PySide import QtWidgets
 from test_end_miter_geometry import CENTER
 from test_extend_cut_geometry import FAR, NEAR
@@ -148,6 +149,43 @@ class TestChangeTarget(KeepEndFixture):
         self.assertTrue(panel.accept())
         notch = [obj for obj in self.doc.Objects if getattr(obj, "TrimmedProfileType", None) == "Notch"]
         self.assertEqual([obj.TrimmingBoundary for obj in notch], [[(other, ("",))]])
+
+
+class TestChangeTargetTranslations(KeepEndFixture):
+    def settle(self, panel):
+        # The pending language switch resets the Designer texts on the first event loop pass; redraw after it.
+        QtWidgets.QApplication.processEvents()
+        panel._show([])
+
+    def test_change_target_texts_are_spanish(self):
+        target, face, body = self.crossing()
+        use_language(self, "Spanish", "es_ES")
+        panel = self.run_command((target, face), (body, ""))
+        button = panel.form.change_target_button
+        self.assertEqual(button.text(), "Cambiar destino")
+        self.settle(panel)
+        button.click()
+        self.assertEqual(
+            panel.form.target_label.text(), "Hacé clic en la nueva cara destino o seleccioná un perfil en el árbol."
+        )
+
+    def test_notch_change_target_text_is_spanish(self):
+        from test_keep_end_panel import TestFlipSide
+
+        from freecad.maxproframe.create_notch_tool import NotchCommand
+
+        body = self.make_profile(self.make_sketch(((-100, 0, 0), (300, 0, 0))), "Edge1", extension=0.0, **CENTER)
+        target = self.make_profile(self.make_sketch(((0, -200, 0), (0, 200, 0))), "Edge1", **CENTER)
+        self.doc.clearUndos()
+        use_language(self, "Spanish", "es_ES")
+        self.select((target, ""), (body, ""))
+        panel = TestFlipSide.capture_notch(self, NotchCommand().Activated)
+        self.assertEqual(panel.form.change_target_button.text(), "Cambiar destino")
+        self.settle(panel)
+        panel.form.change_target_button.click()
+        self.assertEqual(
+            panel.form.target_label.text(), "Hacé clic en el nuevo perfil destino o seleccionalo en el árbol."
+        )
 
 
 class TestTreeIconAndLabel(KeepEndFixture):

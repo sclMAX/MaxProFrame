@@ -16,7 +16,7 @@ Branch: `feat/extend-cut-panel-polish` (from `main` e183278). Native runner: `py
 - T2 (S2) "Change target" button arms the next click as target. Route: inline. Commit: see L5. Done.
 - T3 (S3) Tree icon per joint type; label new trims after the profile label. Route: inline. Commit: see L6. Done.
 - T4 (S4) Live preview while editing, discarded piece in red, Cancel restores. Route: inline. Commit: see L8. Done.
-- T5 (S1-S4) Spanish catalog, docs, CHANGELOG, full native suite. Route: inline. Commit: pending.
+- T5 (S1-S4) Spanish catalog, docs, CHANGELOG, full native suite. Route: gentle-ai-worker (context backstop). Commit: see L10. Done.
 
 ## Log
 
@@ -28,3 +28,5 @@ Branch: `feat/extend-cut-panel-polish` (from `main` e183278). Native runner: `py
 - L6. T3: RED 2 tests (XPM icon != command svg; 'Profile001_Tr' != 'Profile_TC40x40x1.5_001_Tr'). GREEN 10/10. getIcon returns the command svg by TrimmedProfileType (signalChangeIcon on type change); make_target_joint labels `<body label>_Tr`, make_end_miter_profile `<body label>_Mt`; object Names unchanged. The BOM shows trims by Label, so new trims show the profile label there too. Neighbours: custom_profile_grouping 7/7, portable_library_profile_instantiation 10/10, end_miter_panel 13/13, end_miter_edit 6/6, notch_panel 22/22, extend_cut_panel 18/18.
 - L7. T3 committed 84d8def.
 - L8. T4: RED 4 tests (KeepEnd 'Auto' != 'End', gap 1.0 != 4.0, boundary Face1 != Face4). GREEN 15/15. Edit mode applies target, gap and flip to the edited trim inside one "Edit <joint>" transaction (gap/click debounced, flip at once), draws its discarded piece; Cancel, closed() and a failed OK abort and put back the values from when the panel opened (also with undo disabled). Updated test_keep_end_panel.test_editing_flips_the_side_in_one_undo_step, which pinned "nothing changes before OK" (S4 changes it). Neighbours: keep_end_panel 22/22, extend_cut_panel 18/18, extend_cut_preview 22/22, notch_panel 22/22, notch_preview 7/7, end_miter_edit 6/6.
+- L9. T4 committed 4b3101f. Slice boundary: T1-T4 reached ~515 authored lines in 3 commits; the feature stays one PR (one panel, four small UI changes), T5 closes it.
+- L10. T5 (worker mw0l3yla-1-jo1h): 16 .qm rebuilt, TestChangeTargetTranslations (2 tests), tutorial and CHANGELOG; parent reworded "at once" (gap/clicks are debounced, Flip side immediate). test_extend_cut_polish 17/17, test_library_translations 3/3, test_compile_translations 2/2. Full native suite (`--timeout 1200`): "Ran 974 tests in 380.306s" OK, exit 0.
