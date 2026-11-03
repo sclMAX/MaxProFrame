@@ -118,6 +118,41 @@ class TestChangeTarget(KeepEndFixture):
         self.assertFalse(button.isChecked())
         self.assertEqual(panel.target, (target, (far,)))
 
+    def test_toggling_change_target_keeps_the_messages(self):
+        target, face, body = self.crossing()
+        sketch = body.AttachmentSupport[0][0]
+        panel = super().run_command((target, face), (body, ""), (sketch, ""))
+        # The pending language switch resets the Designer texts (see run_command): show the messages again.
+        QtWidgets.QApplication.processEvents()
+        panel._show_messages()
+        message = f"{sketch.Label} is not a profile"
+        self.assertEqual(self.message(panel), message)
+        panel.form.change_target_button.click()
+        self.assertEqual(self.message(panel), message)
+        panel.form.change_target_button.click()
+        self.assertEqual(self.message(panel), message)
+
+    def test_a_target_lost_while_armed_disarms_change_target(self):
+        target, face, body = self.crossing()
+        other = self.profile(0, 300)
+        panel = self.run_command((target, face), (body, ""))
+        button = panel.form.change_target_button
+        button.click()
+        for obj in [o for o in self.doc.Objects if getattr(o, "TrimmedBody", None) is not None]:
+            self.doc.removeObject(obj.Name)
+        self.doc.removeObject(target.Name)
+        panel._show([])
+        self.assertFalse(button.isChecked())
+        self.assertFalse(button.isEnabled())
+        new_target = self.target()
+        new_face = self.near_face(new_target)
+        self.click(new_target, new_face)
+        self.assertEqual(panel.target, (new_target, (new_face,)))
+        self.assertFalse(button.isChecked())
+        self.click(other, "Face1")
+        self.assertEqual(panel.profiles, [body, other])
+        self.assertEqual(panel.target, (new_target, (new_face,)))
+
     def test_change_target_is_disabled_without_a_target_and_hidden_while_editing(self):
         target, face, body = self.crossing()
         panel = self.run_command()

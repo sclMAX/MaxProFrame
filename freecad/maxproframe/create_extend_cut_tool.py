@@ -57,6 +57,16 @@ def _trim_chain(obj):
             obj = None
 
 
+def _in_document(obj):
+    """Whether ``obj`` is still in its document: a deleted object kept for Undo still has a Document."""
+    if not _alive(obj):
+        return False
+    try:
+        return obj.Document.getObject(obj.Name) == obj
+    except Exception:
+        return False
+
+
 def _cut_off_piece(trim):
     """The piece the trim ``trim`` cuts off its body."""
     return trim.TrimmedBody.Shape.cut(trim.Shape)
@@ -363,7 +373,8 @@ class ExtendCutTaskPanel:
     def _on_change_target_toggled(self, checked):
         """Change target armed: the next click picks the target instead of adding a profile."""
         if self._active():
-            self._show([])
+            # Only the target text changes: the messages and the preview error stay.
+            self._show_target()
 
     def _picking_target(self):
         return self.form.change_target_button.isChecked()
@@ -388,17 +399,7 @@ class ExtendCutTaskPanel:
         self.profiles = [obj for obj in self.profiles if _alive(obj)]
         names = {obj.Name for obj in self.profiles}
         self.keep_ends = {name: keep for name, keep in self.keep_ends.items() if name in names}
-        if self.target is not None and not _alive(self.target[0]):
-            self.target = None
-        if self.target is None:
-            text = self.texts()["no_target"]
-        elif self._picking_target():
-            text = self.texts()["pick_target"]
-        else:
-            obj, faces = self.target
-            text = " ".join([f"{obj.Label} ({obj.Name})", *faces])
-        self.form.target_label.setText(text)
-        self.form.change_target_button.setEnabled(self.target is not None)
+        self._show_target()
         self.form.profiles_list.clear()
         for obj in self.profiles:
             text = f"{obj.Label} ({obj.Name})"
@@ -410,6 +411,22 @@ class ExtendCutTaskPanel:
         self._error = ""
         self._show_messages()
         self._show_status()
+
+    def _show_target(self):
+        """Show the target, or what to click; a lost target also disarms Change target."""
+        if self.target is not None and not _in_document(self.target[0]):
+            self.target = None
+        if self.target is None:
+            # Any click picks the target now: nothing is left to change.
+            self._set_picking(False)
+            text = self.texts()["no_target"]
+        elif self._picking_target():
+            text = self.texts()["pick_target"]
+        else:
+            obj, faces = self.target
+            text = " ".join([f"{obj.Label} ({obj.Name})", *faces])
+        self.form.target_label.setText(text)
+        self.form.change_target_button.setEnabled(self.target is not None)
 
     def _show_messages(self):
         self.form.message_label.setText("\n".join(self._messages + ([self._error] if self._error else [])))
@@ -728,7 +745,7 @@ class ExtendCutTaskPanel:
             messages = self._set_target(source, (sub,))
         elif self._picking_target():
             messages = self._set_target(source, (sub,))
-            if not messages:
+            if self.target is not None and self.target[0] == source:
                 # The target is picked: clicks add profiles again.
                 self._set_picking(False)
         elif _ctrl_held() and source in self.profiles:
