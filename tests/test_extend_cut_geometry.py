@@ -132,9 +132,8 @@ class TestExtendCutGeometry(ExtendCutFixture):
         self.assertAlmostEqual(box.XLength, 200.0, places=5)
         self.assertFalse(box.XMin <= 250.0 <= box.XMax)
         obj = self.valid_extend_cut(body, target, (self.face_towards(target, App.Vector(-1, 0, 0)),))
-        self.assertAlmostEqual(
-            min(abs(obj.Shape.BoundBox.XMin - NEAR), abs(obj.Shape.BoundBox.XMax - NEAR)), 0.0, places=5
-        )
+        # OffsetB moves the path start: the body runs from x = 300 to 500, and the near face cuts it there.
+        self.assert_runs(obj, 300.0, NEAR)
 
     def test_a_non_planar_face_target_is_an_error(self):
         tube = self.doc.addObject("Part::Feature", "Tube")
