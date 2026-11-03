@@ -19,7 +19,7 @@ ROOT = os.path.join(os.path.dirname(__file__), os.pardir)
 
 class TestVersionProperty(TrimFixture):
     def assert_version(self, obj, group):
-        self.assertEqual(obj.MaxProFrameVersion, "1.4.0")
+        self.assertEqual(obj.MaxProFrameVersion, "1.4.1")
         self.assertEqual(obj.getGroupOfProperty("MaxProFrameVersion"), group)
         self.assertEqual(
             obj.getDocumentationOfProperty("MaxProFrameVersion"), "MaxProFrame version used to create the object"
@@ -29,13 +29,13 @@ class TestVersionProperty(TrimFixture):
             self.assertNotEqual(obj.getGroupOfProperty(name).lower(), "frameforge", name)
 
     def test_version_module_and_package_metadata_are_1_2_0(self):
-        self.assertEqual(__version__, "1.4.0")
+        self.assertEqual(__version__, "1.4.1")
         for name, pattern in (
             ("package.xml", r"<version>([^<]+)</version>"),
             ("pyproject.toml", r'^version = "([^"]+)"'),
         ):
             with open(os.path.join(ROOT, name), encoding="utf-8") as handle:
-                self.assertEqual(re.findall(pattern, handle.read(), re.MULTILINE), ["1.4.0"], name)
+                self.assertEqual(re.findall(pattern, handle.read(), re.MULTILINE), ["1.4.1"], name)
 
     def test_profiles_trims_links_and_cutouts_record_the_maxproframe_version(self):
         profile = self.make_profile(self.make_sketch(TRIMMED_EDGE), "Edge1", **CENTER)
