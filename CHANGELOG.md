@@ -5,6 +5,7 @@
   - Leave a **Gap** around the target of a **Notch**: the panel has the same **Gap** box as **Extend / Cut**, 0 mm by default, and the target shape is grown by the gap in every direction before cutting, so the mouth of the notch keeps the same clearance on flat faces, around the edges of a rotated tube and along a round pipe (see the [tutorial](docs/tutorial.md#via-notch-command)). Double-clicking a Notch shows its Gap; the preview, **OK** (one Undo step) and **Cancel** treat it like the other values. The value is stored in the existing **TrimGap** property, so notches saved before keep a gap of 0 and are unchanged. A target that cannot be grown by the gap (for example a single face) makes the Notch fail with the reason.
 
   **Fixes**
+  - Build **HEA**, **HEB** and **HEM** beams with their fillets: the catalog has fillets on for them, and creating one failed with `cannot access local variable 'wire1'`. They now get a root fillet at each web corner, like **IPE**. Beams created without fillets are unchanged.
   - Stop the **Create Profiles** and **Edit Profile** panels from printing `QAbstractItemView::commitData called with an editor that does not belong to this view` and `QAbstractItemView::closeEditor called with an editor that does not belong to this view` when the **Family** list loses focus or gets Tab, Enter or Escape. With the focus on that list, Tab moves to the next field again and Escape reaches the panel.
 
 * v1.3.0 (2026-11-03)
