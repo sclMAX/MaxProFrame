@@ -6,10 +6,10 @@ from unittest.mock import patch
 import FreeCAD as App
 import FreeCADGui as Gui
 import Part
+import test_end_miter_panel
 from miter_helpers import keep_auto_preview, use_language
 from PySide import QtCore, QtWidgets
 from test_end_miter_geometry import CENTER, SIZE, MiterFixture
-import test_end_miter_panel
 
 from freecad.maxproframe.create_extend_cut_tool import make_extend_cut_profile
 from freecad.maxproframe.miter_geometry import real_stretch

@@ -16,12 +16,11 @@ TOLERANCE = 1e-7
 PARALLEL_TOLERANCE = 1e-7
 # Longest extension, in section diagonals, before a joint is refused as too far.
 EXTENSION_LIMIT = 10.0
-
-
 # How far, in mm, the points measuring how far a body reaches may stray from its curved edges.
 REACH_DEFLECTION = 0.01
 # How far, in mm, a body end must be from the profile end to count as moved by a trim.
 MOVED_TOLERANCE = 1e-3
+
 
 class MiterError(RuntimeError):
     pass
