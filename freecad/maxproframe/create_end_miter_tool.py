@@ -15,7 +15,7 @@ from freecad.maxproframe.ff_tools import (
     get_param_group,
     translate,
 )
-from freecad.maxproframe.miter_geometry import Member
+from freecad.maxproframe.miter_geometry import Member, real_stretch
 from freecad.maxproframe.miter_joints import find_joints
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrimmedProfile
@@ -234,7 +234,8 @@ class EndMiterTaskPanel:
             try:
                 profile = _base_profile(obj)
                 sketch, subs = profile.Target
-                member = Member(sketch.getSubObject(subs[0]), profile.Shape)
+                # Joints are found where the shown bodies end: a trimmed profile may end away from its path ends.
+                member = Member(real_stretch(sketch.getSubObject(subs[0]), obj.Shape, profile.Shape), profile.Shape)
             except Exception as error:
                 errors.append(f"{obj.Label}: {error}")
                 continue
