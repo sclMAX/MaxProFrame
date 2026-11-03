@@ -12,19 +12,23 @@ from freecad.maxproframe.create_extend_cut_tool import (
 from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, translate
 
 
-def make_notch_profile(body, target):
-    """Notch of ``body`` into the whole ``target`` profile, placed in the body's own container."""
-    return make_target_joint(body, (target, ()), "Notch")
+def make_notch_profile(body, target, gap=0.0):
+    """Notch of ``body`` into the whole ``target`` profile, placed in the body's own container.
+
+    ``gap`` is the clearance left all around the target.
+    """
+    obj = make_target_joint(body, (target, ()), "Notch")
+    obj.TrimGap = gap
+    return obj
 
 
 class NotchTaskPanel(ExtendCutTaskPanel):
-    """The Extend / Cut panel for a Notch: the target is a whole profile and there is no gap.
+    """The Extend / Cut panel for a Notch: the target is a whole profile, the Gap a clearance all around it.
 
     A click on any face or edge of a profile picks the whole profile as the target.
     """
 
     joint = "Notch"
-    has_gap = False
     auto_preview_param = "Notch Auto Preview"
     # A notch is a heavy boolean: its preview waits until asked for.
     auto_preview_default = False
@@ -46,7 +50,7 @@ class NotchTaskPanel(ExtendCutTaskPanel):
         return (), trimmed_body_problem(None, obj)
 
     def _make(self, body, gap):
-        return make_notch_profile(body, self.target[0])
+        return make_notch_profile(body, self.target[0], gap)
 
 
 class NotchCommand:
@@ -57,7 +61,7 @@ class NotchCommand:
             "Accel": "M, C",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_Notch",
-                "<b>Notch</b><br><br>Select a target profile, then the profiles to notch into it.",
+                "<b>Notch</b><br><br>Select a target profile, then the profiles to notch into it. Gap leaves that clearance all around the target.",
             ),
         }
 
