@@ -119,6 +119,12 @@ class TestNotchKeepEnd(ExtendCutFixture):
                 self.assert_box(obj, x_min, x_max)
                 self.assertEqual(spy.call_count, calls)
 
+    def test_auto_stays_valid_when_the_crossing_test_fails(self):
+        # Auto keeps the far end without the crossing test, so a failing boolean there cannot break it.
+        with mock.patch.object(TrimmedProfile, "_target_crosses", side_effect=RuntimeError("boolean failed")):
+            obj = self.notch(-100, 300, "Auto")
+        self.assert_box(obj, HALF, 300.0)
+
     def test_a_target_holding_one_end_ignores_the_choice(self):
         # The start lies inside the target: there is only one piece to keep.
         for keep_end in ("Start", "End"):
