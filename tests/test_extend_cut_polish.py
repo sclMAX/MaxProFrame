@@ -174,11 +174,93 @@ class TestTreeIconAndLabel(KeepEndFixture):
 
         target, face, body = self.crossing()
         obj = make_extend_cut_profile(body, (target, (face,)))
-        for joint, command in (("Extend Cut", ExtendCutCommand), ("Notch", NotchCommand), ("End Miter", CreateEndMiterCommand)):
+        commands = (("Extend Cut", ExtendCutCommand), ("Notch", NotchCommand), ("End Miter", CreateEndMiterCommand))
+        for joint, command in commands:
             obj.TrimmedProfileType = joint
             icon = obj.ViewObject.Proxy.getIcon()
             self.assertEqual(icon, command().GetResources()["Pixmap"], joint)
             self.assertTrue(os.path.isfile(icon), icon)
+
+
+class TestLiveEditPreview(KeepEndFixture):
+    def existing(self, gap=0.0):
+        target, face, body = self.crossing()
+        obj = make_extend_cut_profile(body, (target, (face,)), gap)
+        obj.Label = "My trim"
+        self.doc.recompute()
+        self.doc.clearUndos()
+        return target, face, body, obj
+
+    def flip(self, panel):
+        self.flip_rows(panel, 0)
+
+    def test_flipping_while_editing_shows_the_other_piece_at_once_with_the_discarded_one(self):
+        target, face, body, obj = self.existing()
+        panel = self.capture_panel(obj.ViewObject.Proxy.edit)
+        self.assertEqual(self.box(obj.Shape), (0.0, NEAR))
+        self.flip(panel)
+        self.assertEqual(obj.KeepEnd, "End")
+        self.assertEqual(self.box(obj.Shape), (NEAR, 500.0))
+        [(trim, piece)] = panel.discarded()
+        self.assertIs(trim, obj)
+        self.assertEqual(self.box(piece), (0.0, NEAR))
+        self.assertTrue(panel.accept())
+        self.assertEqual(obj.KeepEnd, "End")
+        self.assertEqual(self.box(obj.Shape), (NEAR, 500.0))
+        self.assertEqual(obj.Label, "My trim")
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.assertEqual(panel.discarded(), [])
+        self.doc.undo()
+        self.doc.recompute()
+        self.assertEqual(obj.KeepEnd, "Auto")
+        self.assertEqual(self.box(obj.Shape), (0.0, NEAR))
+
+    def test_target_and_gap_changes_while_editing_are_previewed(self):
+        target, face, body, obj = self.existing()
+        panel = self.capture_panel(obj.ViewObject.Proxy.edit)
+        far = self.face_towards(target, App.Vector(1, 0, 0))
+        self.click(target, far)
+        panel.form.sb_gap.setValue(3.0)
+        wait()
+        self.assertEqual(obj.TrimmingBoundary, [(target, (far,))])
+        self.assertEqual(self.box(obj.Shape), (0.0, FAR - 3.0))
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.box(obj.Shape), (0.0, FAR - 3.0))
+        self.assertEqual(self.doc.UndoCount, 1)
+
+    def test_cancel_after_a_live_edit_restores_the_trim(self):
+        target, face, body, obj = self.existing(gap=1.0)
+        panel = self.capture_panel(obj.ViewObject.Proxy.edit)
+        self.flip(panel)
+        panel.form.sb_gap.setValue(4.0)
+        wait()
+        self.assertAlmostEqual(obj.TrimGap.Value, 4.0)
+        self.assertTrue(panel.reject())
+        self.assertEqual(obj.KeepEnd, "Auto")
+        self.assertAlmostEqual(obj.TrimGap.Value, 1.0)
+        self.assertEqual(obj.TrimmingBoundary, [(target, (face,))])
+        self.assertEqual(self.box(obj.Shape), (0.0, NEAR - 1.0))
+        self.assertEqual(self.doc.UndoCount, 0)
+        self.assertEqual(panel.discarded(), [])
+
+    def test_cancel_restores_the_trim_with_undo_disabled(self):
+        target, face, body, obj = self.existing()
+        self.doc.UndoMode = 0
+        panel = self.capture_panel(obj.ViewObject.Proxy.edit)
+        self.flip(panel)
+        self.assertEqual(obj.KeepEnd, "End")
+        self.assertTrue(panel.reject())
+        self.assertEqual(obj.KeepEnd, "Auto")
+        self.assertEqual(self.box(obj.Shape), (0.0, NEAR))
+
+    def test_closing_the_edit_without_ok_or_cancel_restores_the_trim(self):
+        target, face, body, obj = self.existing()
+        panel = self.capture_panel(obj.ViewObject.Proxy.edit)
+        self.flip(panel)
+        panel.closed()
+        self.assertEqual(obj.KeepEnd, "Auto")
+        self.assertEqual(self.box(obj.Shape), (0.0, NEAR))
+        self.assertEqual(self.doc.UndoCount, 0)
 
 
 if __name__ == "__main__":

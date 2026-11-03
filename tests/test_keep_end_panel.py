@@ -185,7 +185,8 @@ class TestEditFlipSide(KeepEndFixture):
         body, obj = self.existing()
         panel = self.capture_panel(obj.ViewObject.Proxy.edit)
         self.flip_rows(panel, 0)
-        self.assertEqual(obj.KeepEnd, "Auto")
+        # The edited trim previews the flip at once (Cancel puts it back).
+        self.assertEqual(obj.KeepEnd, "End")
         self.assertTrue(panel.accept())
         self.assertEqual(obj.KeepEnd, "End")
         self.assertEqual(self.box(obj.Shape), (NEAR, 500.0))

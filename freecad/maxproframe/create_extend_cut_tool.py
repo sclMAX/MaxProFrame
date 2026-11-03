@@ -142,7 +142,8 @@ class ExtendCutTaskPanel:
     texts, the target rule and ``_make``.
 
     Without ``edited`` the trims are previewed live, like End Miter does: the preview objects are
-    the trims OK keeps, all inside one transaction that Cancel aborts. While the panel is open the
+    the trims OK keeps, all inside one transaction that Cancel aborts. With ``edited`` the edited trim
+    itself follows the panel live, inside the edit transaction; Cancel puts it back as it was. While the panel is open the
     target, the profiles and the pieces the previews cut off are drawn over the 3D view in their
     HIGHLIGHT_COLORS.
 
@@ -227,16 +228,19 @@ class ExtendCutTaskPanel:
             keep_end = getattr(edited, "KeepEnd", AUTO)
             if keep_end != AUTO:
                 self.keep_ends[edited.TrimmedBody.Name] = keep_end
+            # The values Cancel puts back, also when undo is disabled.
+            self._edit_before = self._edit_values(edited)
+            self._previewed = self._wanted()
         elif selection:
             messages += self._set_target(*selection[0])
             for obj, _ in selection[1:]:
                 messages += self._add_profile(obj)
         self._show(messages)
+        self.form.sb_gap.valueChanged.connect(self._changed)
         if edited is None:
             auto_update = get_param_group().GetBool(self.auto_preview_param, self.auto_preview_default)
             self.form.cb_auto_update.setChecked(auto_update)
             self.form.cb_auto_update.toggled.connect(self._on_auto_update_toggled)
-            self.form.sb_gap.valueChanged.connect(self._changed)
             self._update_preview()
         self._draw_highlights()
 
@@ -431,8 +435,7 @@ class ExtendCutTaskPanel:
         if not self._active():
             return
         self._show_status()
-        if self.edited is None:
-            self._preview_timer.start()
+        self._preview_timer.start()
         # Never change the 3D view during FreeCAD's selection observer dispatch.
         QtCore.QTimer.singleShot(0, self._draw_highlights)
 
@@ -441,8 +444,15 @@ class ExtendCutTaskPanel:
         self._update_preview()
 
     def _update_preview(self, *args, force=False):
-        """Make the preview match the panel when Update automatically is checked (or ``force``)."""
-        if not self._active() or self.edited is not None:
+        """Make the preview match the panel when Update automatically is checked (or ``force``).
+
+        While editing, the edited trim itself is the preview: it always follows the panel.
+        """
+        if not self._active():
+            return
+        if self.edited is not None:
+            if self._previewed != self._wanted():
+                self._preview_edit()
             return
         if (force or self.form.cb_auto_update.isChecked()) and self._previewed != self._wanted():
             self._rebuild_preview()
@@ -490,6 +500,58 @@ class ExtendCutTaskPanel:
         self._show_messages()
         self._draw_highlights()
 
+    @staticmethod
+    def _edit_values(obj):
+        """(boundary, gap, KeepEnd or None when missing) of the trim ``obj``."""
+        gap = obj.TrimGap.Value if hasattr(obj, "TrimGap") else 0.0
+        return list(obj.TrimmingBoundary), gap, getattr(obj, "KeepEnd", None)
+
+    def _preview_edit(self):
+        """Apply the panel to the edited trim inside the edit transaction, and show what it cuts off."""
+        doc = self.edited.Document
+        if not self._transaction_open:
+            doc.openTransaction(f"Edit {self.joint}")
+            self._transaction_open = True
+        self._error = ""
+        self._discarded = {}
+        try:
+            keep_end = self.keep_ends.get(self.edited.TrimmedBody.Name, AUTO)
+            self._retarget(self.edited, self.form.sb_gap.value(), keep_end)
+            doc.recompute()
+            self._error = _failures([self.edited])
+            if not self._error:
+                self._discarded = self._cut_off_pieces()
+        except Exception as error:
+            self._error = str(error)
+        self._previewed = self._wanted()
+        self._show_messages()
+        self._draw_highlights()
+
+    def _restore_edit(self):
+        """Put the edited trim back as it was when the panel opened, even with undo disabled."""
+        doc = self.edited.Document
+        if self._transaction_open and _alive_document(doc):
+            try:
+                doc.abortTransaction()
+            except Exception:
+                pass
+        self._transaction_open = False
+        self._discarded = {}
+        obj = self.edited
+        if not _alive(obj):
+            return
+        if self._edit_values(obj) != self._edit_before:
+            boundary, gap, keep_end = self._edit_before
+            obj.TrimmingBoundary = boundary
+            if hasattr(obj, "TrimGap"):
+                obj.TrimGap = gap
+            if keep_end is not None:
+                obj.KeepEnd = keep_end
+            elif hasattr(obj, "KeepEnd"):
+                obj.KeepEnd = AUTO
+        doc.recompute()
+        self._previewed = self._wanted()
+
     def _retarget(self, obj, gap, keep_end):
         """Point the trim ``obj`` at the target, ``gap`` and ``keep_end``; unchanged values are left alone, so not recomputed."""
         boundary = [(self.target[0], self.target[1] or ("",))]
@@ -503,14 +565,19 @@ class ExtendCutTaskPanel:
         if getattr(obj, "KeepEnd", AUTO) != keep_end:
             obj.KeepEnd = keep_end
 
+    def _preview_trims(self):
+        """The trims showing the panel: the edited one, or the previews."""
+        if self.edited is not None:
+            return [self.edited]
+        return [preview.obj for preview in self._previews.values()]
+
     def _cut_off_pieces(self):
         """Preview trim name -> the piece it cuts off its body, for the previews that cut something.
 
         A piece that cannot be computed is only not drawn, with a warning: the trim itself is still valid.
         """
         pieces = {}
-        for preview in self._previews.values():
-            obj = preview.obj
+        for obj in self._preview_trims():
             try:
                 piece = _cut_off_piece(obj)
             except Exception as error:
@@ -527,10 +594,10 @@ class ExtendCutTaskPanel:
         if self._closed:
             return []
         found = []
-        for preview in self._previews.values():
-            piece = self._discarded.get(preview.obj.Name) if _alive(preview.obj) else None
+        for obj in self._preview_trims():
+            piece = self._discarded.get(obj.Name) if _alive(obj) else None
             if piece is not None:
-                found.append((preview.obj, piece))
+                found.append((obj, piece))
         return found
 
     def _drop_preview(self, name):
@@ -691,6 +758,8 @@ class ExtendCutTaskPanel:
         self.clean()
         if self.edited is None:
             self._discard_preview()
+        else:
+            self._restore_edit()
 
     def clean(self):
         self._closed = True
@@ -710,7 +779,7 @@ class ExtendCutTaskPanel:
     def reject(self):
         self.clean()
         if self.edited is not None:
-            # Nothing is changed before OK, so there is nothing to restore.
+            self._restore_edit()
             self._close_edit()
         else:
             self._discard_preview()
@@ -757,7 +826,11 @@ class ExtendCutTaskPanel:
 
     def _accept_edit(self, gap):
         doc = self.edited.Document
-        doc.openTransaction(f"Edit {self.joint}")
+        # OK keeps the current values even when a change is still pending.
+        self._preview_timer.stop()
+        if not self._transaction_open:
+            doc.openTransaction(f"Edit {self.joint}")
+            self._transaction_open = True
         try:
             self._retarget(self.edited, gap, self.keep_ends.get(self.edited.TrimmedBody.Name, AUTO))
             doc.recompute()
@@ -765,12 +838,14 @@ class ExtendCutTaskPanel:
         except Exception as exception:
             error = str(exception)
         if error:
-            # Keep the panel open with the trim as it was before OK.
-            doc.abortTransaction()
-            doc.recompute()
+            # Keep the panel open with the trim as it was before the panel opened.
+            self._restore_edit()
             self._show([error])
+            self._draw_highlights()
             return False
         doc.commitTransaction()
+        self._transaction_open = False
+        self._discarded = {}
         self.clean()
         self._close_edit()
         return True
