@@ -57,6 +57,11 @@ def _trim_chain(obj):
             obj = None
 
 
+def _cut_off_piece(trim):
+    """The piece the trim ``trim`` cuts off its body."""
+    return trim.TrimmedBody.Shape.cut(trim.Shape)
+
+
 def _selected_items():
     """The selection as (object, sub-element names) per object, in selection order; "" is the whole object."""
     # getSelectionEx drops a whole-object pick when a sub-element of the same object is picked too.
@@ -462,11 +467,17 @@ class ExtendCutTaskPanel:
             obj.KeepEnd = keep_end
 
     def _cut_off_pieces(self):
-        """Preview trim name -> the piece it cuts off its body, for the previews that cut something."""
+        """Preview trim name -> the piece it cuts off its body, for the previews that cut something.
+
+        A piece that cannot be computed is only not drawn: the trim itself is still valid.
+        """
         pieces = {}
         for preview in self._previews.values():
             obj = preview.obj
-            piece = obj.TrimmedBody.Shape.cut(obj.Shape)
+            try:
+                piece = _cut_off_piece(obj)
+            except Exception:
+                continue
             if not piece.isNull() and piece.Volume > DISCARDED_MIN_VOLUME:
                 pieces[obj.Name] = piece
         return pieces
