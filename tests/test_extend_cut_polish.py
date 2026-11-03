@@ -118,6 +118,16 @@ class TestChangeTarget(KeepEndFixture):
         self.assertFalse(button.isChecked())
         self.assertEqual(panel.target, (target, (far,)))
 
+    def test_a_refused_edge_of_the_current_target_keeps_change_target_armed(self):
+        target, face, body = self.crossing()
+        panel = self.run_command((target, face), (body, ""))
+        button = panel.form.change_target_button
+        button.click()
+        self.click(target, "Edge1")
+        self.assertEqual(self.message(panel), f"{target.Label}: Edge1 is not a face")
+        self.assertTrue(button.isChecked())
+        self.assertEqual(panel.target, (target, (face,)))
+
     def test_toggling_change_target_keeps_the_messages(self):
         target, face, body = self.crossing()
         sketch = body.AttachmentSupport[0][0]
@@ -379,6 +389,20 @@ class TestEditUpdateAutomatically(KeepEndFixture):
         self.assertTrue(panel.accept())
         self.assertEqual(self.doc.UndoCount, 1)
 
+    def test_ok_with_update_automatically_unchecked_applies_the_pending_change(self):
+        target, face, body = self.crossing()
+        obj = make_extend_cut_profile(body, (target, (face,)))
+        self.doc.recompute()
+        self.doc.clearUndos()
+        panel = self.capture_panel(obj.ViewObject.Proxy.edit)
+        panel.form.cb_auto_update.setChecked(False)
+        self.flip_rows(panel, 0)
+        self.assertEqual(obj.KeepEnd, "Auto")
+        self.assertTrue(panel.accept())
+        self.assertEqual(obj.KeepEnd, "End")
+        self.assertEqual(self.box(obj.Shape), (NEAR, 500.0))
+        self.assertEqual(self.doc.UndoCount, 1)
+
     def test_editing_a_notch_waits_like_creating_one_and_previews_once_checked(self):
         body, target, other, notch = self.notch_setup()
         volume = notch.Shape.Volume
@@ -484,7 +508,10 @@ class TestEditRobustness(KeepEndFixture):
         other = self.profile(0, 300)
         notch = make_notch_profile(other, target)
         self.doc.recompute()
-        path = os.path.join(tempfile.mkdtemp(), "icons.FCStd")
+        folder = tempfile.TemporaryDirectory()
+        # Cleanups run last first: the reopened document closes before its folder is removed.
+        self.addCleanup(folder.cleanup)
+        path = os.path.join(folder.name, "icons.FCStd")
         self.doc.saveCopy(path)
         reopened = App.openDocument(path)
         self.addCleanup(App.closeDocument, reopened.Name)

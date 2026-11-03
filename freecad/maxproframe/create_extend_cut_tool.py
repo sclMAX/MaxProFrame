@@ -750,8 +750,10 @@ class ExtendCutTaskPanel:
         if self.edited is not None or self.target is None:
             messages = self._set_target(source, (sub,))
         elif self._picking_target():
+            before = self.target
             messages = self._set_target(source, (sub,))
-            if self.target is not None and self.target[0] == source:
+            # Picked: accepted without a problem, or the target changed (whatever the messages say).
+            if not messages or self.target != before:
                 # The target is picked: clicks add profiles again.
                 self._set_picking(False)
         elif _ctrl_held() and source in self.profiles:
@@ -871,7 +873,10 @@ class ExtendCutTaskPanel:
             return False
         if self._edit_values(self.edited) == self._edit_before:
             # Nothing changed in the end: no Undo step.
-            doc.abortTransaction()
+            try:
+                doc.abortTransaction()
+            except Exception:
+                pass
             doc.recompute()
         else:
             doc.commitTransaction()
