@@ -1,12 +1,14 @@
 """Flip side in the Extend / Cut and Notch panels, and the discarded pieces drawn in their own color."""
 
 import unittest
+from unittest import mock
 
 import FreeCAD as App
 from miter_helpers import use_language
 from test_extend_cut_geometry import NEAR
 from test_extend_cut_preview import BLUE, ORANGE, PreviewFixture, keep_auto_preview, overlay_colors, scene_graph
 
+from freecad.maxproframe import create_extend_cut_tool as tool
 from freecad.maxproframe.create_extend_cut_tool import (
     DISCARDED,
     HIGHLIGHT_COLORS,
@@ -212,6 +214,45 @@ class TestDiscardedPieces(KeepEndFixture):
         panel = self.run_command((target, face), (body, ""))
         self.assertTrue(panel.reject())
         self.assertEqual(panel.discarded(), [])
+
+    def test_a_piece_that_cannot_be_computed_is_not_drawn_and_ok_still_creates_the_trim(self):
+        target, face, body = self.crossing()
+        with mock.patch.object(tool, "_cut_off_piece", side_effect=RuntimeError("boolean failed")):
+            panel = self.run_command((target, face), (body, ""))
+            self.assertEqual(panel.discarded(), [])
+            self.assertEqual(panel.form.message_label.text(), "")
+            self.assertEqual(panel.form.status_label.text(), "Preview updated")
+            self.assertTrue(panel.accept())
+        trim = self.trim_of(body)
+        self.assertEqual(self.box(trim.Shape), (0.0, NEAR))
+        self.assertEqual(self.doc.UndoCount, 1)
+
+    def test_only_the_piece_that_cannot_be_computed_is_skipped_with_a_warning(self):
+        target, face, first = self.crossing()
+        second = self.profile(0, 500)
+        real = tool._cut_off_piece
+
+        def cut(trim):
+            if trim.TrimmedBody == first:
+                raise RuntimeError("boolean failed")
+            return real(trim)
+
+        warnings = []
+        with (
+            mock.patch.object(tool, "_cut_off_piece", side_effect=cut),
+            mock.patch.object(App.Console, "PrintWarning", side_effect=warnings.append),
+        ):
+            panel = self.run_command((target, face), (first, ""), (second, ""))
+            self.assertEqual(
+                [(obj, self.box(shape)) for obj, shape in panel.discarded()], [(self.trim_of(second), (NEAR, 500.0))]
+            )
+            self.assertTrue(panel.accept())
+        self.assertEqual(
+            warnings, [f"{self.trim_of(first).Label}: the discarded piece cannot be shown: boolean failed\n"]
+        )
+        self.assertEqual(self.box(self.trim_of(first).Shape), (0.0, NEAR))
+        self.assertEqual(self.box(self.trim_of(second).Shape), (0.0, NEAR))
+        self.assertEqual(self.doc.UndoCount, 1)
 
     def test_discarded_pieces_are_drawn_in_red_and_the_panel_says_so(self):
         scene = scene_graph(self, self.doc)
