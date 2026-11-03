@@ -162,6 +162,7 @@ class ExtendCutTaskPanel:
             "hint": translate("frameforge", "Click the profiles to extend or cut. Ctrl+click drops one."),
             "edit_hint": translate("frameforge", "Click a face to change the target."),
             "no_target": translate("frameforge", "Click a face, or select a profile in the tree."),
+            "pick_target": translate("frameforge", "Click the new target face, or select a profile in the tree."),
             "missing_target": translate("frameforge", "Select the target face or profile."),
             "missing_profiles": translate("frameforge", "Select the profiles to extend or cut."),
         }
@@ -175,7 +176,11 @@ class ExtendCutTaskPanel:
         self.form.remove_button.setIcon(QtGui.QIcon(os.path.join(ICONPATH, "list-remove.svg")))
         self.form.remove_button.clicked.connect(self.remove_selected)
         self.form.flip_button.clicked.connect(self.flip_selected)
+        self.form.change_target_button.toggled.connect(self._on_change_target_toggled)
         self.form.profiles_list.itemDoubleClicked.connect(self._flip_item)
+        # Flip side acts on the selected rows: without one it has nothing to do.
+        self.form.profiles_list.itemSelectionChanged.connect(self._update_flip_button)
+        self._update_flip_button()
         if not self.has_gap:
             self.form.gap_label.hide()
             self.form.sb_gap.hide()
@@ -210,6 +215,8 @@ class ExtendCutTaskPanel:
             self.form.setWindowTitle(self.texts()["edit_title"])
             self.form.hint_label.setText(self.texts()["edit_hint"])
             self.form.remove_button.hide()
+            # While editing every click already changes the target.
+            self.form.change_target_button.hide()
             self.form.groupBox_preview.hide()
             obj, subs = edited.TrimmingBoundary[0]
             self.target = (obj, tuple(sub for sub in subs if sub))
@@ -239,6 +246,7 @@ class ExtendCutTaskPanel:
             (form.groupBox_target.setTitle, translate("frameforge", "Target")),
             (form.groupBox_profiles.setTitle, translate("frameforge", "Profiles")),
             (form.hint_label.setText, self.texts()["hint"]),
+            (form.change_target_button.setText, translate("frameforge", "Change target")),
             (form.remove_button.setText, translate("frameforge", "Remove")),
             (form.flip_button.setText, translate("frameforge", "Flip side")),
             (form.gap_label.setText, translate("frameforge", "Gap")),
@@ -344,6 +352,26 @@ class ExtendCutTaskPanel:
         self._preview_timer.stop()
         self._update_preview()
 
+    def _on_change_target_toggled(self, checked):
+        """Change target armed: the next click picks the target instead of adding a profile."""
+        if self._active():
+            self._show([])
+
+    def _picking_target(self):
+        return self.form.change_target_button.isChecked()
+
+    def _set_picking(self, picking):
+        """Arm or disarm Change target without its toggle redrawing the panel: the caller does."""
+        button = self.form.change_target_button
+        blocked = button.blockSignals(True)
+        try:
+            button.setChecked(picking)
+        finally:
+            button.blockSignals(blocked)
+
+    def _update_flip_button(self):
+        self.form.flip_button.setEnabled(bool(self.form.profiles_list.selectedItems()))
+
     def _previews_cover(self, profiles):
         return all(name in self._previews and _alive(self._previews[name].obj) for name in (p.Name for p in profiles))
 
@@ -356,16 +384,20 @@ class ExtendCutTaskPanel:
             self.target = None
         if self.target is None:
             text = self.texts()["no_target"]
+        elif self._picking_target():
+            text = self.texts()["pick_target"]
         else:
             obj, faces = self.target
             text = " ".join([f"{obj.Label} ({obj.Name})", *faces])
         self.form.target_label.setText(text)
+        self.form.change_target_button.setEnabled(self.target is not None)
         self.form.profiles_list.clear()
         for obj in self.profiles:
             text = f"{obj.Label} ({obj.Name})"
             if obj.Name in self.keep_ends:
                 text = translate("frameforge", "{}, side flipped").format(text)
             self.form.profiles_list.addItem(text)
+        self._update_flip_button()
         self._messages = list(messages)
         self._error = ""
         self._show_messages()
@@ -624,6 +656,11 @@ class ExtendCutTaskPanel:
         source = self._profile_of(source)
         if self.edited is not None or self.target is None:
             messages = self._set_target(source, (sub,))
+        elif self._picking_target():
+            messages = self._set_target(source, (sub,))
+            if not messages:
+                # The target is picked: clicks add profiles again.
+                self._set_picking(False)
         elif _ctrl_held() and source in self.profiles:
             # Ctrl+click toggles: a listed profile leaves the list.
             self.profiles.remove(source)
