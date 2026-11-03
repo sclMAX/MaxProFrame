@@ -36,6 +36,7 @@ class NotchTaskPanel(ExtendCutTaskPanel):
             "hint": translate("frameforge", "Click the profiles to notch. Ctrl+click drops one."),
             "edit_hint": translate("frameforge", "Click a profile to change the target."),
             "no_target": translate("frameforge", "Click the target profile, or select it in the tree."),
+            "pick_target": translate("frameforge", "Click the new target profile, or select it in the tree."),
             "missing_target": translate("frameforge", "Select the target profile."),
             "missing_profiles": translate("frameforge", "Select the profiles to notch."),
         }

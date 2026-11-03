@@ -57,6 +57,16 @@ def _trim_chain(obj):
             obj = None
 
 
+def _in_document(obj):
+    """Whether ``obj`` is still in its document: a deleted object kept for Undo still has a Document."""
+    if not _alive(obj):
+        return False
+    try:
+        return obj.Document.getObject(obj.Name) == obj
+    except Exception:
+        return False
+
+
 def _cut_off_piece(trim):
     """The piece the trim ``trim`` cuts off its body."""
     return trim.TrimmedBody.Shape.cut(trim.Shape)
@@ -90,6 +100,8 @@ def make_target_joint(body, target, joint):
     ``target`` is (object, face names): one face, or none for a whole profile.
     """
     obj = body.Document.addObject("Part::FeaturePython", f"{body.Name}_Tr")
+    # The tree shows the profile it trims, e.g. Profile_TC40x40x1.5_001_Tr.
+    obj.Label = f"{body.Label}_Tr"
     place_in_container_of(obj, body)
     TrimmedProfile(obj)
     if getattr(obj, "ViewObject", None) is not None:
@@ -140,9 +152,10 @@ class ExtendCutTaskPanel:
     texts, the target rule and ``_make``.
 
     Without ``edited`` the trims are previewed live, like End Miter does: the preview objects are
-    the trims OK keeps, all inside one transaction that Cancel aborts. While the panel is open the
-    target, the profiles and the pieces the previews cut off are drawn over the 3D view in their
-    HIGHLIGHT_COLORS.
+    the trims OK keeps, all inside one transaction that Cancel aborts. With ``edited`` the edited trim
+    itself is the preview, under the same Update automatically check box, inside the edit transaction;
+    Cancel puts it back as it was. While the panel is open the target, the profiles and the pieces the
+    previews cut off are drawn over the 3D view in their HIGHLIGHT_COLORS.
 
     Flip side keeps the other piece of the selected profiles when the target crosses them: their
     KeepEnd becomes the other end, or Auto again when that is the piece Auto keeps.
@@ -162,6 +175,7 @@ class ExtendCutTaskPanel:
             "hint": translate("frameforge", "Click the profiles to extend or cut. Ctrl+click drops one."),
             "edit_hint": translate("frameforge", "Click a face to change the target."),
             "no_target": translate("frameforge", "Click a face, or select a profile in the tree."),
+            "pick_target": translate("frameforge", "Click the new target face, or select a profile in the tree."),
             "missing_target": translate("frameforge", "Select the target face or profile."),
             "missing_profiles": translate("frameforge", "Select the profiles to extend or cut."),
         }
@@ -175,7 +189,11 @@ class ExtendCutTaskPanel:
         self.form.remove_button.setIcon(QtGui.QIcon(os.path.join(ICONPATH, "list-remove.svg")))
         self.form.remove_button.clicked.connect(self.remove_selected)
         self.form.flip_button.clicked.connect(self.flip_selected)
+        self.form.change_target_button.toggled.connect(self._on_change_target_toggled)
         self.form.profiles_list.itemDoubleClicked.connect(self._flip_item)
+        # Flip side acts on the selected rows: without one it has nothing to do.
+        self.form.profiles_list.itemSelectionChanged.connect(self._update_flip_button)
+        self._update_flip_button()
         if not self.has_gap:
             self.form.gap_label.hide()
             self.form.sb_gap.hide()
@@ -210,7 +228,8 @@ class ExtendCutTaskPanel:
             self.form.setWindowTitle(self.texts()["edit_title"])
             self.form.hint_label.setText(self.texts()["edit_hint"])
             self.form.remove_button.hide()
-            self.form.groupBox_preview.hide()
+            # While editing every click already changes the target.
+            self.form.change_target_button.hide()
             obj, subs = edited.TrimmingBoundary[0]
             self.target = (obj, tuple(sub for sub in subs if sub))
             self.profiles = [edited.TrimmedBody]
@@ -218,17 +237,23 @@ class ExtendCutTaskPanel:
             keep_end = getattr(edited, "KeepEnd", AUTO)
             if keep_end != AUTO:
                 self.keep_ends[edited.TrimmedBody.Name] = keep_end
+            # The values Cancel puts back, also when undo is disabled.
+            self._edit_before = self._edit_values(edited)
+            self._previewed = self._wanted()
         elif selection:
             messages += self._set_target(*selection[0])
             for obj, _ in selection[1:]:
                 messages += self._add_profile(obj)
         self._show(messages)
+        self.form.sb_gap.valueChanged.connect(self._changed)
+        # Editing previews like creating: the same remembered check box for this joint.
+        auto_update = get_param_group().GetBool(self.auto_preview_param, self.auto_preview_default)
+        self.form.cb_auto_update.setChecked(auto_update)
+        self.form.cb_auto_update.toggled.connect(self._on_auto_update_toggled)
         if edited is None:
-            auto_update = get_param_group().GetBool(self.auto_preview_param, self.auto_preview_default)
-            self.form.cb_auto_update.setChecked(auto_update)
-            self.form.cb_auto_update.toggled.connect(self._on_auto_update_toggled)
-            self.form.sb_gap.valueChanged.connect(self._changed)
             self._update_preview()
+        else:
+            self._show_status()
         self._draw_highlights()
 
     def _translate_form(self):
@@ -239,6 +264,7 @@ class ExtendCutTaskPanel:
             (form.groupBox_target.setTitle, translate("frameforge", "Target")),
             (form.groupBox_profiles.setTitle, translate("frameforge", "Profiles")),
             (form.hint_label.setText, self.texts()["hint"]),
+            (form.change_target_button.setText, translate("frameforge", "Change target")),
             (form.remove_button.setText, translate("frameforge", "Remove")),
             (form.flip_button.setText, translate("frameforge", "Flip side")),
             (form.gap_label.setText, translate("frameforge", "Gap")),
@@ -344,6 +370,27 @@ class ExtendCutTaskPanel:
         self._preview_timer.stop()
         self._update_preview()
 
+    def _on_change_target_toggled(self, checked):
+        """Change target armed: the next click picks the target instead of adding a profile."""
+        if self._active():
+            # Only the target text changes: the messages and the preview error stay.
+            self._show_target()
+
+    def _picking_target(self):
+        return self.form.change_target_button.isChecked()
+
+    def _set_picking(self, picking):
+        """Arm or disarm Change target without its toggle redrawing the panel: the caller does."""
+        button = self.form.change_target_button
+        blocked = button.blockSignals(True)
+        try:
+            button.setChecked(picking)
+        finally:
+            button.blockSignals(blocked)
+
+    def _update_flip_button(self):
+        self.form.flip_button.setEnabled(bool(self.form.profiles_list.selectedItems()))
+
     def _previews_cover(self, profiles):
         return all(name in self._previews and _alive(self._previews[name].obj) for name in (p.Name for p in profiles))
 
@@ -352,24 +399,34 @@ class ExtendCutTaskPanel:
         self.profiles = [obj for obj in self.profiles if _alive(obj)]
         names = {obj.Name for obj in self.profiles}
         self.keep_ends = {name: keep for name, keep in self.keep_ends.items() if name in names}
-        if self.target is not None and not _alive(self.target[0]):
-            self.target = None
-        if self.target is None:
-            text = self.texts()["no_target"]
-        else:
-            obj, faces = self.target
-            text = " ".join([f"{obj.Label} ({obj.Name})", *faces])
-        self.form.target_label.setText(text)
+        self._show_target()
         self.form.profiles_list.clear()
         for obj in self.profiles:
             text = f"{obj.Label} ({obj.Name})"
             if obj.Name in self.keep_ends:
                 text = translate("frameforge", "{}, side flipped").format(text)
             self.form.profiles_list.addItem(text)
+        self._update_flip_button()
         self._messages = list(messages)
         self._error = ""
         self._show_messages()
         self._show_status()
+
+    def _show_target(self):
+        """Show the target, or what to click; a lost target also disarms Change target."""
+        if self.target is not None and not _in_document(self.target[0]):
+            self.target = None
+        if self.target is None:
+            # Any click picks the target now: nothing is left to change.
+            self._set_picking(False)
+            text = self.texts()["no_target"]
+        elif self._picking_target():
+            text = self.texts()["pick_target"]
+        else:
+            obj, faces = self.target
+            text = " ".join([f"{obj.Label} ({obj.Name})", *faces])
+        self.form.target_label.setText(text)
+        self.form.change_target_button.setEnabled(self.target is not None)
 
     def _show_messages(self):
         self.form.message_label.setText("\n".join(self._messages + ([self._error] if self._error else [])))
@@ -377,7 +434,7 @@ class ExtendCutTaskPanel:
     def _show_status(self):
         if self._previewed != self._wanted():
             text = translate("frameforge", "Pending changes")
-        elif self._previews:
+        elif self._previews or self.edited is not None:
             text = translate("frameforge", "Preview updated")
         else:
             text = translate("frameforge", "No preview")
@@ -397,8 +454,7 @@ class ExtendCutTaskPanel:
         if not self._active():
             return
         self._show_status()
-        if self.edited is None:
-            self._preview_timer.start()
+        self._preview_timer.start()
         # Never change the 3D view during FreeCAD's selection observer dispatch.
         QtCore.QTimer.singleShot(0, self._draw_highlights)
 
@@ -407,11 +463,17 @@ class ExtendCutTaskPanel:
         self._update_preview()
 
     def _update_preview(self, *args, force=False):
-        """Make the preview match the panel when Update automatically is checked (or ``force``)."""
-        if not self._active() or self.edited is not None:
+        """Make the preview match the panel when Update automatically is checked (or ``force``).
+
+        While editing, the edited trim itself is the preview.
+        """
+        if not self._active():
             return
         if (force or self.form.cb_auto_update.isChecked()) and self._previewed != self._wanted():
-            self._rebuild_preview()
+            if self.edited is not None:
+                self._preview_edit()
+            else:
+                self._rebuild_preview()
         self._show_status()
 
     def _rebuild_preview(self):
@@ -456,6 +518,64 @@ class ExtendCutTaskPanel:
         self._show_messages()
         self._draw_highlights()
 
+    @staticmethod
+    def _edit_values(obj):
+        """(boundary, gap, KeepEnd or None when missing) of the trim ``obj``."""
+        gap = obj.TrimGap.Value if hasattr(obj, "TrimGap") else 0.0
+        return list(obj.TrimmingBoundary), gap, getattr(obj, "KeepEnd", None)
+
+    def _preview_edit(self):
+        """Apply the panel to the edited trim inside the edit transaction, and show what it cuts off."""
+        doc = self.edited.Document
+        if not self._transaction_open:
+            doc.openTransaction(f"Edit {self.joint}")
+            self._transaction_open = True
+        self._error = ""
+        self._discarded = {}
+        try:
+            keep_end = self.keep_ends.get(self.edited.TrimmedBody.Name, AUTO)
+            self._retarget(self.edited, self.form.sb_gap.value(), keep_end)
+            doc.recompute()
+            self._error = _failures([self.edited])
+            if not self._error:
+                self._discarded = self._cut_off_pieces()
+        except Exception as error:
+            self._error = str(error)
+        self._previewed = self._wanted()
+        self._show_messages()
+        self._draw_highlights()
+
+    def _restore_edit(self):
+        """Put the edited trim back as it was when the panel opened, even with undo disabled.
+
+        The panel values are then no longer shown by the trim: the preview applies them again on the next update.
+        """
+        doc = self.doc
+        aborted = self._transaction_open and _alive_document(doc)
+        if aborted:
+            try:
+                doc.abortTransaction()
+            except Exception:
+                pass
+        self._transaction_open = False
+        self._discarded = {}
+        self._previewed = ()
+        obj = self.edited
+        if not _in_document(obj):
+            return
+        restored = self._edit_values(obj) != self._edit_before
+        if restored:
+            boundary, gap, keep_end = self._edit_before
+            obj.TrimmingBoundary = boundary
+            if hasattr(obj, "TrimGap"):
+                obj.TrimGap = gap
+            if keep_end is not None:
+                obj.KeepEnd = keep_end
+            elif hasattr(obj, "KeepEnd"):
+                obj.KeepEnd = AUTO
+        if aborted or restored:
+            doc.recompute()
+
     def _retarget(self, obj, gap, keep_end):
         """Point the trim ``obj`` at the target, ``gap`` and ``keep_end``; unchanged values are left alone, so not recomputed."""
         boundary = [(self.target[0], self.target[1] or ("",))]
@@ -469,14 +589,19 @@ class ExtendCutTaskPanel:
         if getattr(obj, "KeepEnd", AUTO) != keep_end:
             obj.KeepEnd = keep_end
 
+    def _preview_trims(self):
+        """The trims showing the panel: the edited one, or the previews."""
+        if self.edited is not None:
+            return [self.edited]
+        return [preview.obj for preview in self._previews.values()]
+
     def _cut_off_pieces(self):
         """Preview trim name -> the piece it cuts off its body, for the previews that cut something.
 
         A piece that cannot be computed is only not drawn, with a warning: the trim itself is still valid.
         """
         pieces = {}
-        for preview in self._previews.values():
-            obj = preview.obj
+        for obj in self._preview_trims():
             try:
                 piece = _cut_off_piece(obj)
             except Exception as error:
@@ -493,10 +618,10 @@ class ExtendCutTaskPanel:
         if self._closed:
             return []
         found = []
-        for preview in self._previews.values():
-            piece = self._discarded.get(preview.obj.Name) if _alive(preview.obj) else None
+        for obj in self._preview_trims():
+            piece = self._discarded.get(obj.Name) if _alive(obj) else None
             if piece is not None:
-                found.append((preview.obj, piece))
+                found.append((obj, piece))
         return found
 
     def _drop_preview(self, name):
@@ -624,6 +749,13 @@ class ExtendCutTaskPanel:
         source = self._profile_of(source)
         if self.edited is not None or self.target is None:
             messages = self._set_target(source, (sub,))
+        elif self._picking_target():
+            before = self.target
+            messages = self._set_target(source, (sub,))
+            # Picked: accepted without a problem, or the target changed (whatever the messages say).
+            if not messages or self.target != before:
+                # The target is picked: clicks add profiles again.
+                self._set_picking(False)
         elif _ctrl_held() and source in self.profiles:
             # Ctrl+click toggles: a listed profile leaves the list.
             self.profiles.remove(source)
@@ -652,6 +784,8 @@ class ExtendCutTaskPanel:
         self.clean()
         if self.edited is None:
             self._discard_preview()
+        else:
+            self._restore_edit()
 
     def clean(self):
         self._closed = True
@@ -664,14 +798,16 @@ class ExtendCutTaskPanel:
             pass
 
     def _close_edit(self):
-        gui_doc = Gui.getDocument(self.edited.Document.Name)
+        if not _alive_document(self.doc):
+            return
+        gui_doc = Gui.getDocument(self.doc.Name)
         if gui_doc is not None and gui_doc.getInEdit() is not None:
             gui_doc.resetEdit()
 
     def reject(self):
         self.clean()
         if self.edited is not None:
-            # Nothing is changed before OK, so there is nothing to restore.
+            self._restore_edit()
             self._close_edit()
         else:
             self._discard_preview()
@@ -718,7 +854,11 @@ class ExtendCutTaskPanel:
 
     def _accept_edit(self, gap):
         doc = self.edited.Document
-        doc.openTransaction(f"Edit {self.joint}")
+        # OK keeps the current values even when a change is still pending.
+        self._preview_timer.stop()
+        if not self._transaction_open:
+            doc.openTransaction(f"Edit {self.joint}")
+            self._transaction_open = True
         try:
             self._retarget(self.edited, gap, self.keep_ends.get(self.edited.TrimmedBody.Name, AUTO))
             doc.recompute()
@@ -726,12 +866,22 @@ class ExtendCutTaskPanel:
         except Exception as exception:
             error = str(exception)
         if error:
-            # Keep the panel open with the trim as it was before OK.
-            doc.abortTransaction()
-            doc.recompute()
+            # Keep the panel open with the trim as it was before the panel opened.
+            self._restore_edit()
             self._show([error])
+            self._draw_highlights()
             return False
-        doc.commitTransaction()
+        if self._edit_values(self.edited) == self._edit_before:
+            # Nothing changed in the end: no Undo step.
+            try:
+                doc.abortTransaction()
+            except Exception:
+                pass
+            doc.recompute()
+        else:
+            doc.commitTransaction()
+        self._transaction_open = False
+        self._discarded = {}
         self.clean()
         self._close_edit()
         return True

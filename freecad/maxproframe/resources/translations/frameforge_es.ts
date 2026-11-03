@@ -1058,6 +1058,9 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Flip side</source><translation>Invertir lado</translation></message>
     <message><source>{}, side flipped</source><translation>{}, lado invertido</translation></message>
     <message><source>{}: the target does not cross the profile, there is no side to choose.</source><translation>{}: el destino no cruza el perfil, no hay lado que elegir.</translation></message>
+    <message><source>Change target</source><translation>Cambiar destino</translation></message>
+    <message><source>Click the new target face, or select a profile in the tree.</source><translation>Hacé clic en la nueva cara destino o seleccioná un perfil en el árbol.</translation></message>
+    <message><source>Click the new target profile, or select it in the tree.</source><translation>Hacé clic en el nuevo perfil destino o seleccionalo en el árbol.</translation></message>
     <message><source>Cutout / Hole</source><translation>Calado</translation></message>
     <message><source>Face</source><translation>Cara</translation></message>
     <message><source>Cut type</source><translation>Tipo de corte</translation></message>

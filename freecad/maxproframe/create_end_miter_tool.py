@@ -111,6 +111,8 @@ def make_end_miter_profile(trimmed_body=None, trimming_boundary=None, extend=Tru
     trimmed_profile = doc.addObject("Part::FeaturePython", name)
 
     if trimmed_body is not None:
+        # The tree shows the profile it trims, e.g. Profile_TC40x40x1.5_001_Mt.
+        trimmed_profile.Label = f"{trimmed_body.Label}_Mt"
         place_in_container_of(trimmed_profile, trimmed_body)
 
     TrimmedProfile(trimmed_profile)
