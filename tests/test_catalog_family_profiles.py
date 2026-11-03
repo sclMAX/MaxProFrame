@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import shutil
 import tempfile
@@ -12,7 +13,7 @@ from PySide import QtGui, QtWidgets
 from freecad.maxproframe.create_bom import group_profiles, traverse_assembly
 from freecad.maxproframe.edit_profile_tool import EditProfileTaskPanel
 from freecad.maxproframe.extruded_cutout import ExtrudedCutout
-from freecad.maxproframe.ff_tools import PROFILEIMAGES_PATH
+from freecad.maxproframe.ff_tools import PROFILEIMAGES_PATH, PROFILESPATH
 from freecad.maxproframe.library_manager import (
     FILLET_FAMILIES,
     LibraryManager,
@@ -254,6 +255,51 @@ class TestCatalogFamilyProfiles(unittest.TestCase):
         # Distinct variant identities coexist in the same document
         self.assertNotEqual(filleted.CatalogFamily, plain.CatalogFamily)
         self.assertEqual(filleted.Family, plain.Family)
+
+    def test_wide_flange_beams_build_with_their_catalog_fillets(self):
+        """HEA, HEB and HEM come with fillets in the catalog: they build like an IPE, a root fillet at each web corner."""
+        with open(os.path.join(PROFILESPATH, "metal.json"), encoding="utf-8") as f:
+            catalog = json.load(f)
+        doc = self._create_doc("TestWideFlangeFillets")
+        length = 500.0
+        for family in ("HEA", "HEB", "HEM", "IPE"):
+            with self.subTest(family=family):
+                self.assertTrue(catalog[family]["fillet"])
+                size, dims = next(iter(catalog[family]["sizes"].items()))
+                width, height = float(dims["Width"]), float(dims["Height"])
+                web, flange, radius = float(dims["Thickness"]), float(dims["Flange Thickness"]), float(dims["Radius1"])
+                obj = doc.addObject("Part::FeaturePython", f"{family}_{size}")
+                obj.addExtension("Part::AttachExtensionPython")
+                Profile(
+                    obj,
+                    init_w=width,
+                    init_h=height,
+                    init_mt=web,
+                    init_ft=flange,
+                    init_r1=radius,
+                    init_r2=0.0,
+                    init_len=length,
+                    init_wg=1.0,
+                    init_unit_price=1.0,
+                    init_mf=True,
+                    init_anchor_x=1,
+                    init_anchor_y=1,
+                    material="Metal",
+                    fam=family,
+                    size_name=size,
+                    bevels_combined=False,
+                    catalog_family=family,
+                )
+                doc.recompute()
+                self.assertEqual(obj.getStatusString(), "Valid")
+                self.assertTrue(obj.Shape.isValid())
+                fillets = [face for face in obj.Shape.Faces if isinstance(face.Surface, Part.Cylinder)]
+                self.assertEqual(len(fillets), 4)
+                for face in fillets:
+                    self.assertAlmostEqual(face.Surface.Radius, radius, places=6)
+                # Two flanges and the web, plus the four root fillets (a square minus a quarter circle each).
+                area = 2 * width * flange + (height - 2 * flange) * web + 4 * radius**2 * (1 - math.pi / 4)
+                self.assertAlmostEqual(obj.Shape.Volume / length, area, places=4)
 
     def test_profile_constructor_backward_compatibility(self):
         """S5: Existing Profile constructor without catalog_family keyword remains compatible."""

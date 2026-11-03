@@ -904,7 +904,8 @@ class Profile:
 
                 wire1 = Part.Wire([L1, L2, L3, L4, L5, L6, L7, L8, L9, L10, L11, L12])
 
-            if obj.MakeFillet == True and obj.Family == "IPE":  # IPE avec arrondis
+            # Parallel flanges with a root fillet at each web corner: IPE and the wide flange HEA, HEB, HEM.
+            if obj.MakeFillet == True and obj.Family in ("IPE", "HEA", "HEB", "HEM"):
                 p1 = vec(0 + w, 0 + h, 0)
                 p2 = vec(0 + w, TF + h, 0)
                 p3 = vec(XA1 - R + w, TF + h, 0)

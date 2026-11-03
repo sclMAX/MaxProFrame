@@ -1,3 +1,4 @@
+import math
 import unittest
 
 import FreeCAD as App
@@ -104,24 +105,29 @@ class TestSectionOutline(unittest.TestCase):
             self.assertAlmostEqual(section.common(cap).Area, section.Area, places=5)
             self.assertEqual(parameters["RadiusSmall"], 0)
 
-    def test_unsupported_filleted_h_families_retain_builder_failure(self):
-        # Existing extrusion builder has no filleted HEA/HEB/HEM branch. Do not
-        # invent preview geometry or fix unrelated modeling behavior in this task.
+    def test_filleted_h_families_build_a_section_with_root_fillets(self):
+        # HEA, HEB and HEM are built like IPE: parallel flanges and a root fillet at each web corner.
         for family in ("HEA", "HEB", "HEM"):
             with self.subTest(family=family):
-                with self.assertRaises(UnboundLocalError):
-                    build_section_face(
-                        dict(
-                            Family=family,
-                            ProfileWidth=100,
-                            ProfileHeight=100,
-                            Thickness=6,
-                            ThicknessFlange=8,
-                            RadiusLarge=12,
-                            RadiusSmall=6,
-                            MakeFillet=True,
-                        )
+                section = build_section_face(
+                    dict(
+                        Family=family,
+                        ProfileWidth=100,
+                        ProfileHeight=100,
+                        Thickness=6,
+                        ThicknessFlange=8,
+                        RadiusLarge=12,
+                        RadiusSmall=6,
+                        MakeFillet=True,
                     )
+                )
+                self.assertTrue(section.isValid())
+                arcs = [edge for edge in section.Edges if isinstance(edge.Curve, Part.Circle)]
+                self.assertEqual(len(arcs), 4)
+                self.assertTrue(all(abs(edge.Curve.Radius - 12) < 1e-9 for edge in arcs))
+                self.assertAlmostEqual(
+                    section.Area, 2 * 100 * 8 + (100 - 16) * 6 + 4 * 144 * (1 - math.pi / 4), places=6
+                )
 
     def test_custom_offset_holes_source_immutability(self):
         outer = Part.makePolygon(
