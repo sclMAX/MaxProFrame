@@ -1,6 +1,6 @@
 ## Changelog
 
-* Unreleased
+* v1.3.0 (2026-11-03)
 
   - Choose which piece **Extend / Cut** and **Notch** keep when the target crosses a profile between its ends: select profiles in the list and press **Flip side**, or double-click a row, to keep the other piece of each one, also when editing an existing trim (see the [tutorial](docs/tutorial.md#via-extend--cut-command)). The choice is stored in the new **KeepEnd** property (**Auto**, **Start** or **End**); **Auto** keeps the current behavior and is the default, so existing documents are unchanged. Choosing another target puts every profile back to **Auto**. When the target does not cross the profile the panel says there is no side to choose. The live preview draws the pieces that will be discarded in red.
   - Fix **Extend / Cut** and **End Miter** failing with "the profile does not cross its own path" on a profile whose end offset shortens it past the middle of its path.
