@@ -1,5 +1,10 @@
 ## Changelog
 
+* Unreleased
+
+  **Fixes**
+  - Fix FreeCAD crashing now and then when an **Extend / Cut** or **Notch** is deleted while its edit panel is open. The deletion closes the panel, and the panel no longer puts the trim back or recomputes the document while FreeCAD is still removing the trim. The trim stays deleted.
+
 * v1.4.0 (2026-11-03)
 
   - Leave a **Gap** around the target of a **Notch**: the panel has the same **Gap** box as **Extend / Cut**, 0 mm by default, and the target shape is grown by the gap in every direction before cutting, so the mouth of the notch keeps the same clearance on flat faces, around the edges of a rotated tube and along a round pipe (see the [tutorial](docs/tutorial.md#via-notch-command)). Double-clicking a Notch shows its Gap; the preview, **OK** (one Undo step) and **Cancel** treat it like the other values. The value is stored in the existing **TrimGap** property, so notches saved before keep a gap of 0 and are unchanged. A target that cannot be grown by the gap (for example a single face) makes the Notch fail with the reason.

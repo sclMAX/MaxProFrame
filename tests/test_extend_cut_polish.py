@@ -3,6 +3,7 @@
 import unittest
 
 import FreeCAD as App
+import FreeCADGui as Gui
 from miter_helpers import use_language
 from PySide import QtWidgets
 from test_end_miter_geometry import CENTER
@@ -499,6 +500,34 @@ class TestEditRobustness(KeepEndFixture):
         self.doc.removeObject(name)
         self.assertTrue(panel.reject())
         self.assertIsNone(self.doc.getObject(name))
+
+    def test_deleting_the_edited_trim_leaves_it_and_the_document_alone_while_it_is_removed(self):
+        # The deletion closes the panel from inside removeObject: restoring or recomputing then can crash FreeCAD.
+        target, face, body, obj = self.existing()
+        panel = self.capture_panel(obj.ViewObject.Proxy.edit)
+        self.flip_rows(panel, 0)
+        name = obj.Name
+        events = []
+
+        class Observer:
+            # FreeCAD itself clears the links of a removed object: only what the panel would put back counts.
+            def slotChangedObject(self, changed, prop):
+                if getattr(obj, "Removing", False) and prop in ("KeepEnd", "TrimGap"):
+                    events.append((changed.Name, prop))
+
+            def slotRecomputedDocument(self, doc):
+                if getattr(obj, "Removing", False):
+                    events.append((doc.Name, "recompute"))
+
+        observer = Observer()
+        App.addDocumentObserver(observer)
+        self.addCleanup(App.removeDocumentObserver, observer)
+        self.doc.removeObject(name)
+        self.assertEqual(events, [])
+        self.assertFalse(Gui.Control.activeDialog())
+        self.assertTrue(panel.reject())
+        self.assertIsNone(self.doc.getObject(name))
+        self.assertEqual(events, [])
 
     def test_a_reopened_document_shows_the_command_icon_of_each_trim(self):
         import os
