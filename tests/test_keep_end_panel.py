@@ -133,6 +133,25 @@ class TestFlipSide(KeepEndFixture):
         self.assertEqual(self.box(notch[0].Shape), (-100.0, -25.0))
         self.assertEqual(self.doc.UndoCount, 1)
 
+    def test_notch_with_a_new_target_puts_the_flip_back_to_auto(self):
+        from test_end_miter_geometry import CENTER
+
+        from freecad.maxproframe.create_notch_tool import NotchCommand
+
+        body = self.make_profile(self.make_sketch(((-100, 0, 0), (300, 0, 0))), "Edge1", extension=0.0, **CENTER)
+        target = self.make_profile(self.make_sketch(((0, -200, 0), (0, 200, 0))), "Edge1", **CENTER)
+        other = self.make_profile(self.make_sketch(((200, -200, 0), (200, 200, 0))), "Edge1", **CENTER)
+        self.doc.clearUndos()
+        self.select((target, ""), (body, ""))
+        panel = self.capture_notch(NotchCommand().Activated)
+        self.flip_rows(panel, 0)
+        panel.set_target(other, ())
+        self.assertEqual(self.rows(panel), [f"{body.Label} ({body.Name})"])
+        self.assertTrue(panel.accept())
+        notch = [obj for obj in self.doc.Objects if getattr(obj, "TrimmedProfileType", None) == "Notch"]
+        self.assertEqual([obj.KeepEnd for obj in notch], ["Auto"])
+        self.assertEqual(self.doc.UndoCount, 1)
+
     def capture_notch(self, action):
         from unittest.mock import patch
 
@@ -189,6 +208,45 @@ class TestEditFlipSide(KeepEndFixture):
         self.assertTrue(panel.accept())
         self.assertEqual(obj.KeepEnd, "Auto")
         self.assertEqual(self.box(obj.Shape), (0.0, NEAR))
+
+
+class TestRetargetResetsSide(KeepEndFixture):
+    def far_face(self, target):
+        return self.face_towards(target, App.Vector(1, 0, 0))
+
+    def test_a_new_target_puts_flipped_profiles_back_to_auto(self):
+        target, face, body = self.crossing()
+        panel = self.run_command((target, face), (body, ""))
+        self.flip_rows(panel, 0)
+        panel.set_target(target, (self.far_face(target),))
+        self.assertEqual(self.rows(panel), [f"{body.Label} ({body.Name})"])
+        self.assertEqual(self.status(panel), "Pending changes")
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.trim_of(body).KeepEnd, "Auto")
+
+    def test_the_same_target_again_keeps_the_flip(self):
+        target, face, body = self.crossing()
+        panel = self.run_command((target, face), (body, ""))
+        self.flip_rows(panel, 0)
+        panel.set_target(target, (face,))
+        self.assertEqual(self.rows(panel), [f"{body.Label} ({body.Name}), side flipped"])
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.trim_of(body).KeepEnd, "End")
+
+    def test_editing_a_flipped_trim_with_a_new_target_stores_auto(self):
+        target, face, body = self.crossing()
+        obj = make_extend_cut_profile(body, (target, (face,)))
+        obj.KeepEnd = "End"
+        self.doc.recompute()
+        self.doc.clearUndos()
+        panel = self.capture_panel(obj.ViewObject.Proxy.edit)
+        far_face = self.far_face(target)
+        self.click(target, far_face)
+        self.assertEqual(self.rows(panel), [f"{body.Label} ({body.Name})"])
+        self.assertTrue(panel.accept())
+        self.assertEqual(obj.TrimmingBoundary, [(target, (far_face,))])
+        self.assertEqual(obj.KeepEnd, "Auto")
+        self.assertEqual(self.doc.UndoCount, 1)
 
 
 class TestDiscardedPieces(KeepEndFixture):
