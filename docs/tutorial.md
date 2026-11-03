@@ -198,6 +198,8 @@ Offsets are optional: with **Extend** (on by default) a profile that stops short
 
 3. The panel tells how many joints will be created. Every corner formed by the selected profiles is mitered: two profiles meeting at both ends get both corners, and a whole frame can be selected at once. A point where three or more selected profiles meet is skipped and listed in the panel; it is not mitered. The 3D view marks each joint with a small dot and each skipped point with a red dot.
 
+   Profiles are met where their bodies really end: a profile shortened by [Extend / Cut](#via-extend--cut-command) (or another trim) is mitered at its new end, for example a side cut back to a crossbar and the crossbar form a corner. Selecting a profile together with a trim built on it lists it once, as the trim.
+
 4. The miters are previewed live in the 3D view, like Create Profile does: the preview replaces the mitered profiles. Clicking a previewed miter stands for its profile, so Ctrl+click on it drops that profile. With **Update automatically** (on by default, remembered between sessions) the preview follows every change: adding or dropping a profile, Extend and Gap. Uncheck it to keep the preview as it is while you change things on a heavy frame; the panel then shows **Pending changes**, and checking it again updates the preview.
 
 5. Set the options and press **OK**:
