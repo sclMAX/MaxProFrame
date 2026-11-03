@@ -2,6 +2,7 @@
 
 * Unreleased
 
+  - Label the sketch of a new **Cutout / Hole** after its profile too, for example `Profile_TC40x40x1.5_000_Sketch` (it showed the internal name, `Profile_000_Sketch`). Existing sketches keep their label.
   - Edit the sketch of a **Cutout / Hole** from its panel: **Edit sketch** keeps the cut type and depth shown, opens the sketch, and closing it brings the panel back. The cutout's right-click menu in the tree also has **Edit sketch**.
   - New **Cutout / Hole** icon, a standing tube with a cutout in its wall, also shown for each cutout in the tree, and new cutouts are labelled after their profile, for example `Profile_TC40x40x1.5_000_Ex` (they showed the internal name, `Profile_000_Ex`). Existing cutouts keep their label.
   - The **Cutout / Hole** panel says that a click on another face changes it, and when Ctrl+Click selects several faces it says that only the last one clicked is used (see the [tutorial](docs/tutorial.md#cutout--hole)).

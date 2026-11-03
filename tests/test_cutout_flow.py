@@ -290,7 +290,7 @@ class TestCutoutCreation(CutoutFixture):
         self.doc.undo()
         self.assertEqual(self.names(), before)
 
-    def test_the_cutout_is_labelled_after_the_label_of_its_profile(self):
+    def test_the_cutout_and_its_sketch_are_labelled_after_the_label_of_their_profile(self):
         body = self.tube()
         body.Label = "Profile_TC40x40x1.5_000"
         top = self.face_towards(body, UP)
@@ -300,6 +300,8 @@ class TestCutoutCreation(CutoutFixture):
         sketch, cutout = self.created(before)
         self.assertEqual(cutout.Label, "Profile_TC40x40x1.5_000_Ex")
         self.assertEqual(cutout.Name, f"{body.Name}_Ex")
+        self.assertEqual(sketch.Label, "Profile_TC40x40x1.5_000_Sketch")
+        self.assertEqual(sketch.Name, f"{body.Name}_Sketch")
 
     def test_the_sketch_holds_the_face_outline_as_construction_geometry(self):
         body = self.tube()
