@@ -1,6 +1,6 @@
 ## Changelog
 
-* Unreleased
+* v1.4.1 (2026-11-03)
 
   **Fixes**
   - Fix FreeCAD crashing now and then when an **Extend / Cut** or **Notch** is deleted while its edit panel is open. The deletion closes the panel, and the panel no longer puts the trim back or recomputes the document while FreeCAD is still removing the trim. The trim stays deleted.
