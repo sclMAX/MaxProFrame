@@ -68,6 +68,7 @@ def make_cutout_sketch(obj, face):
     The outline is external geometry, so construction: it builds no wire of the cut.
     """
     sketch = obj.Document.addObject("Sketcher::SketchObject", f"{obj.Name}_Sketch")
+    sketch.Label = f"{obj.Label}_Sketch"
     # Sketcher rejects external geometry from outside the sketch's own container.
     place_in_container_of(sketch, obj)
     sketch.AttachmentSupport = [(obj, face)]

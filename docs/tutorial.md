@@ -352,7 +352,7 @@ A group is just a folder. Simply add your objects into the Group. You are done. 
 
 1. Click on the **Cutout / Hole** command. The button is always active while a document is open.
 2. Click a planar face of a profile, a trimmed profile or an existing cutout, in the 3D view; a face selected before the command is used too. The end faces (the wall thickness at the profile ends), edges and curved faces cannot be cut: the panel says why. Click another face to change it; with Ctrl+Click on several faces the last one clicked is used, since a cutout takes one face.
-3. **OK** creates, in one Undo step, a sketch attached to that face and the cutout, both in the same Part or folder as the profile, and opens the sketch. The cutout is labelled after the profile, for example `Profile_TC40x40x1.5_000_Ex`. The outline of the face is already in the sketch as construction geometry, so you can dimension the hole against the face edges right away. **Cancel** leaves the document unchanged.
+3. **OK** creates, in one Undo step, a sketch attached to that face and the cutout, both in the same Part or folder as the profile, and opens the sketch. The cutout and its sketch are labelled after the profile, for example `Profile_TC40x40x1.5_000_Ex` and `Profile_TC40x40x1.5_000_Sketch`. The outline of the face is already in the sketch as construction geometry, so you can dimension the hole against the face edges right away. **Cancel** leaves the document unchanged.
 4. Draw closed shapes (circles, rectangles, slots); every sketch tool works, including External Geometry.
 
 ![alt text](images/90-draw-sketch.png)
