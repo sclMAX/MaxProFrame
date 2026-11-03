@@ -352,7 +352,7 @@ class TestExtendCutPreview(PreviewFixture):
 class TestExtendCutColors(PreviewFixture):
     def test_the_panel_says_which_color_is_which(self):
         panel = self.run_command()
-        self.assertEqual(panel.form.colors_label.text(), "Target in orange, profiles in blue.")
+        self.assertEqual(panel.form.colors_label.text(), "Target in orange, profiles in blue, discarded pieces in red.")
         self.assertEqual(HIGHLIGHT_COLORS[TARGET], ORANGE)
         self.assertEqual(HIGHLIGHT_COLORS[PROFILE], BLUE)
 
@@ -435,7 +435,7 @@ class TestExtendCutPreviewTranslations(PreviewFixture):
         form = panel.form
         self.assertEqual(form.groupBox_preview.title(), "Previsualización")
         self.assertEqual(form.cb_auto_update.text(), "Actualizar automáticamente")
-        self.assertEqual(form.colors_label.text(), "Destino en naranja, perfiles en azul.")
+        self.assertEqual(form.colors_label.text(), "Destino en naranja, perfiles en azul, piezas descartadas en rojo.")
         self.assertEqual(form.status_label.text(), "Sin previsualización")
 
 

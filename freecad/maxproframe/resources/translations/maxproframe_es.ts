@@ -1054,7 +1054,10 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Click the target profile, or select it in the tree.</source><translation>Hacé clic en el perfil destino o seleccionalo en el árbol.</translation></message>
     <message><source>Select the target profile.</source><translation>Seleccioná el perfil destino.</translation></message>
     <message><source>Select the profiles to notch.</source><translation>Seleccioná los perfiles a encastrar.</translation></message>
-    <message><source>Target in orange, profiles in blue.</source><translation>Destino en naranja, perfiles en azul.</translation></message>
+    <message><source>Target in orange, profiles in blue, discarded pieces in red.</source><translation>Destino en naranja, perfiles en azul, piezas descartadas en rojo.</translation></message>
+    <message><source>Flip side</source><translation>Invertir lado</translation></message>
+    <message><source>{}, side flipped</source><translation>{}, lado invertido</translation></message>
+    <message><source>{}: the target does not cross the profile, there is no side to choose.</source><translation>{}: el destino no cruza el perfil, no hay lado que elegir.</translation></message>
     <message><source>Cutout / Hole</source><translation>Calado</translation></message>
     <message><source>Face</source><translation>Cara</translation></message>
     <message><source>Cut type</source><translation>Tipo de corte</translation></message>

@@ -18,6 +18,15 @@ from freecad.maxproframe.version import __version__ as ff_version
 JOINTS = {"Notch": "_notch", "End Miter": "_end_miter", "Extend Cut": "_extend_cut"}
 # Distance, in mm, within which the profile axis still counts as crossing a target face.
 CROSSING_TOLERANCE = 1e-4
+# KeepEnd values: the automatic rule, or the axis end whose piece stays when the target crosses the profile.
+AUTO, START, END = "Auto", "Start", "End"
+KEEP_ENDS = [AUTO, START, END]
+
+
+def _between(ends, origin, normal):
+    """Whether the plane through ``origin`` with ``normal`` lies strictly between the two ``ends``."""
+    start, end = ((point - origin).dot(normal) for point in ends)
+    return start * end < 0 and min(abs(start), abs(end)) > TOLERANCE
 
 
 class TrimmedProfile:
@@ -71,6 +80,7 @@ class TrimmedProfile:
             "TrimmedProfile",
             translate("App::Property", "Distance left between the profile end and the target plane"),
         ).TrimGap = 0
+        self.add_keep_end(obj)
 
         # related to Profile
         obj.addProperty("App::PropertyString", "Family", "Profile", "")
@@ -121,6 +131,18 @@ class TrimmedProfile:
 
         obj.Proxy = self
 
+    @staticmethod
+    def add_keep_end(obj):
+        """Add KeepEnd, set to Auto: trims saved before it existed lack it and behave as Auto."""
+        obj.addProperty(
+            "App::PropertyEnumeration",
+            "KeepEnd",
+            "TrimmedProfile",
+            translate(
+                "App::Property", "Piece kept when the target crosses the profile: Auto, or the one reaching this end"
+            ),
+        ).KeepEnd = KEEP_ENDS
+
     def onChanged(self, fp, prop):
         pass
 
@@ -148,7 +170,7 @@ class TrimmedProfile:
         target = fp.TrimmingBoundary[0][0]
         member = self._miter_member(fp.TrimmedBody)
         # The far end section may lie in a piece an earlier trim removed: the nearest piece stays.
-        far_section = member.section_at(self._far_end_is_start(member, target))
+        far_section = member.section_at(self.kept_end(fp)[0])
         pieces = BOPTools.SplitAPI.slice(body_shape, [target.Shape], mode="Split").Solids
         kept = min(range(len(pieces)), key=lambda index: pieces[index].distToShape(far_section)[0], default=None)
         return body_shape, [Part.Shape(piece) for index, piece in enumerate(pieces) if index != kept]
@@ -175,8 +197,44 @@ class TrimmedProfile:
     def extend_cut_plane(self, fp):
         """Plane the moving end of an Extend Cut ends on, moved by the gap, its normal towards the kept end."""
         member = self._miter_member(fp.TrimmedBody)
+        far_start, origin, normal, _ = self._extend_cut_side(member, fp.TrimmingBoundary[0], self._chosen_far_start(fp))
+        far = member.end(far_start)[2]
+        if normal.dot(far - origin) < 0:
+            normal = -normal
+        at_start = not far_start
+        _, inward, _ = member.end(at_start)
+        plane = MiterPlane(origin, normal, inward, member.section_at(at_start))
+        return plane.shifted(fp.TrimGap.Value)
+
+    def kept_end(self, fp, boundary=None, keep_end=None):
+        """(whether the piece kept by ``fp`` reaches the axis start, whether the target lets KeepEnd choose).
+
+        ``boundary`` (a TrimmingBoundary item) and ``keep_end`` stand for the values of ``fp`` when given.
+        The target lets KeepEnd choose only while it crosses the profile between its ends: otherwise
+        one piece makes sense and the Auto rule keeps it.
+        """
+        member = self._miter_member(fp.TrimmedBody)
+        boundary = fp.TrimmingBoundary[0] if boundary is None else boundary
+        chosen = self._chosen_far_start(fp) if keep_end is None else {START: True, END: False}.get(keep_end)
+        if fp.TrimmedProfileType == "Extend Cut":
+            far_start, _, _, choosable = self._extend_cut_side(member, boundary, chosen)
+            return far_start, choosable
+        target = boundary[0]
+        far_start = self._far_end_is_start(member, target)
+        choosable = self._target_crosses(member, target)
+        return (chosen if choosable and chosen is not None else far_start), choosable
+
+    def _chosen_far_start(self, fp):
+        """Whether KeepEnd keeps the start (True) or the end (False); None for Auto or a trim saved without it."""
+        return {START: True, END: False}.get(getattr(fp, "KeepEnd", AUTO))
+
+    def _extend_cut_side(self, member, boundary, chosen):
+        """(far end is start, plane point, plane normal, whether KeepEnd can choose) of an Extend Cut.
+
+        ``chosen`` is the end KeepEnd keeps (True for the start), or None for Auto.
+        """
         # A whole target is linked with an empty sub-element name.
-        target, subs = fp.TrimmingBoundary[0]
+        target, subs = boundary
         if subs and subs[0]:
             face = target.getSubObject(subs[0])
             if not isinstance(face, Part.Face) or not isinstance(face.Surface, Part.Plane):
@@ -185,33 +243,68 @@ class TrimmedProfile:
                         subs[0], target.Label
                     )
                 )
-            origin, normal = face.CenterOfMass, face.normalAt(0, 0)
+            point, face_normal = face.CenterOfMass, face.normalAt(0, 0)
+
+            def plane_seen_from(far_start):
+                return point, face_normal
+
         else:
-            origin, normal = self._crossed_face(member, target)
+
+            def plane_seen_from(far_start):
+                return self._crossed_face(member, target, far_start)
 
         ends = [member.end(at_start)[2] for at_start in (True, False)]
         axis = ends[1] - ends[0]
         axis.normalize()
+        # A whole target gives the face seen from the end farthest from it.
+        origin, normal = plane_seen_from(subs and subs[0] or self._far_end_is_start(member, target))
         if abs(normal.dot(axis)) < TOLERANCE:
             raise MiterError(translate("frameforge", "Extend / Cut: the target plane is parallel to the profile axis."))
         # The end nearest the plane moves; the other one, the far end, stays.
-        at_start = abs((ends[0] - origin).dot(normal)) <= abs((ends[1] - origin).dot(normal))
-        far = ends[1] if at_start else ends[0]
-        if normal.dot(far - origin) < 0:
-            normal = -normal
-        _, inward, _ = member.end(at_start)
-        plane = MiterPlane(origin, normal, inward, member.section_at(at_start))
-        return plane.shifted(fp.TrimGap.Value)
+        far_start = abs((ends[0] - origin).dot(normal)) > abs((ends[1] - origin).dot(normal))
+
+        # Only a plane between the two ends leaves two pieces to choose from.
+        try:
+            other_origin, other_normal = plane_seen_from(not far_start)
+        except MiterError:
+            other_origin = None
+        choosable = other_origin is not None and _between(ends, other_origin, other_normal)
+        if choosable and chosen == (not far_start):
+            far_start, origin, normal = not far_start, other_origin, other_normal
+        return far_start, origin, normal, choosable
+
+    def _target_crosses(self, member, target):
+        """Whether the part of ``target`` in the path of the profile section lies strictly between its ends.
+
+        The section is filled: an end in the hollow of a tube target is inside the target.
+        """
+        ends = [member.end(at_start)[2] for at_start in (True, False)]
+        axis = ends[1] - ends[0]
+        length = axis.Length
+        axis.normalize()
+        section = member.section_at(True)
+        if not section.Faces:
+            return False
+        # A prism one millimetre past each end tells a target reaching past an end.
+        outline = Part.Face(section.Faces[0].OuterWire).translated(axis * -1.0)
+        inside = target.Shape.common(outline.extrude(axis * (length + 2.0)))
+        if inside.isNull() or inside.Volume < CROSSING_TOLERANCE:
+            return False
+        # Along the axis: the start at Z = 0, the end at Z = length.
+        to_axis = App.Placement(App.Vector(), App.Rotation(axis, App.Vector(0, 0, 1)))
+        to_axis = to_axis.multiply(App.Placement(-ends[0], App.Rotation()))
+        box = inside.transformed(to_axis.toMatrix()).optimalBoundingBox()
+        return box.ZMin > CROSSING_TOLERANCE and box.ZMax < length - CROSSING_TOLERANCE
 
     def _far_end_is_start(self, member, target):
         """Whether the far end of ``member``, the axis end farthest from ``target``, is its start."""
         start, end = (target.Shape.distToShape(Part.Vertex(member.end(at_start)[2]))[0] for at_start in (True, False))
         return start >= end
 
-    def _crossed_face(self, member, target):
+    def _crossed_face(self, member, target, far_start):
         """(point, normal) of the planar face of ``target`` the axis crosses first, seen from the far end."""
         ends = [member.end(at_start)[2] for at_start in (True, False)]
-        far = ends[0] if self._far_end_is_start(member, target) else ends[1]
+        far = ends[0] if far_start else ends[1]
         axis = ends[1] - ends[0]
         axis.normalize()
         crossed = []
