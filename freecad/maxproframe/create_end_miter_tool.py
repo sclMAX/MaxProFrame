@@ -47,6 +47,21 @@ def _base_profile(obj):
     return None
 
 
+def _built_on(obj):
+    """The bodies ``obj`` is built on, through trims and cutouts (``obj`` excluded)."""
+    found = []
+    while obj is not None:
+        if is_trimmedbody(obj):
+            obj = obj.TrimmedBody
+        elif is_extrudedcutout(obj):
+            obj = obj.baseObject[0] if obj.baseObject else None
+        else:
+            break
+        if obj is not None:
+            found.append(obj)
+    return found
+
+
 def _alive(obj):
     try:
         return obj.Document is not None
@@ -208,8 +223,12 @@ class EndMiterTaskPanel:
             setter(text)
 
     def add_member(self, obj):
+        """List ``obj``; one entry per profile: a trim replaces the profile it is built on, and not the reverse."""
         if obj is None or _base_profile(obj) is None or obj in self.members:
             return False
+        if any(obj in _built_on(member) for member in self.members):
+            return False
+        self.members = [member for member in self.members if member not in _built_on(obj)]
         self.members.append(obj)
         return True
 

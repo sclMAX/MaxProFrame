@@ -105,5 +105,21 @@ class TestMiterAfterExtendCut(MiterAfterExtendCutFixture):
         self.assertAlmostEqual(box.XMax, 500.0, places=4)
 
 
+class TestOneEntryPerProfile(MiterAfterExtendCutFixture):
+    def test_a_profile_and_its_trim_are_listed_once_as_the_trim(self):
+        side, crossbar, trim = self.shortened_corner()
+        for members in ([side, trim, crossbar], [trim, side, crossbar]):
+            with self.subTest(order=[obj.Name for obj in members]):
+                panel = self.open_panel(members)
+                self.assertEqual(panel.members, [trim, crossbar])
+                widget = panel.form.members_list
+                self.assertEqual(
+                    [widget.item(row).text() for row in range(widget.count())],
+                    [f"{trim.Label} ({trim.Name})", f"{crossbar.Label} ({crossbar.Name})"],
+                )
+                self.assertEqual(panel.form.message_label.text(), "1 joint will be created.")
+                self.close_panels()
+
+
 if __name__ == "__main__":
     unittest.main()

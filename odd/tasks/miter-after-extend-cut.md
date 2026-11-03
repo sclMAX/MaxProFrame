@@ -12,7 +12,7 @@ Branch: `fix/miter-after-extend-cut` (from `main` 795189e). Native runner: `pyth
 ## Tasks
 
 - T1 (S1, S2) Real stretch for End Miter joints and planes, with native geometry and panel tests. Route: inline. Commit: see L5. Done.
-- T2 (S3) Miter panel keeps one entry per profile chain. Route: inline. Commit: pending.
+- T2 (S3) Miter panel keeps one entry per profile chain. Route: inline. Commit: see L6. Done.
 - T3 (S1-S3) Tutorial, CHANGELOG, full native suite. Route: inline. Commit: pending.
 
 ## Log
@@ -22,3 +22,4 @@ Branch: `fix/miter-after-extend-cut` (from `main` 795189e). Native runner: `pyth
 - L3. User choice: "Solo en Inglete (Recomendado)".
 - L4. Reproduced (RED): test_miter_after_extend_cut, side A 0..500 cut on the far face of crossbar C (x = 300) keeping End: '0 joints will be created.' != '1 joint will be created.'.
 - L5. T1: `miter_geometry.real_stretch(edge, shape, base_shape)` moves a straight path end to where the shown body ends only when the trim moved it relative to the base profile (untouched ends keep the path end, so untrimmed profiles are unchanged); used by `EndMiterTaskPanel.analysis` and `TrimmedProfile.miter_planes` (`_stretch_member`); `_miter_member` (Extend / Cut, Notch) unchanged. Fixing only detection fails OK with "Profile_Tr_Mt: max() arg is an empty sequence" (wrong end), so both are needed. A first version stretched every body to its full reach and moved the skipped point of test_end_miter_panel / test_end_miter_preview from (0, 0, 0) to (0, -16.7, 0) (end offsets); the per-end rule fixed it. GREEN test_miter_after_extend_cut 3/3; end_miter_panel 13/13, end_miter_preview 26/26, anchors 2/2, edit 6/6, extend_gap 6/6, geometry 6/6, translations 4/4, miter_followups_geometry 8/8, extend_cut_geometry 11/11, keep_end_geometry 11/11, notch_geometry 7/7.
+- L6. T1 committed 276d076. T2: RED TestOneEntryPerProfile (3 members listed instead of 2, both orders). `add_member` refuses a body another member is built on and replaces the members the new one is built on. GREEN test_miter_after_extend_cut 4/4, end_miter_panel 13/13, end_miter_edit 6/6, end_miter_preview 26/26.
