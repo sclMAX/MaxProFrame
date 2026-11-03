@@ -1047,6 +1047,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Extend / Cut: the target face {} of {} is not planar.</source><translation>Extender / cortar: la cara destino {} de {} no es plana.</translation></message>
     <message><source>Extend / Cut: the target plane is parallel to the profile axis.</source><translation>Extender / cortar: el plano destino es paralelo al eje del perfil.</translation></message>
     <message><source>Extend / Cut: the profile axis crosses no face of {}.</source><translation>Extender / cortar: el eje del perfil no atraviesa ninguna cara de {}.</translation></message>
+    <message><source>Notch: the gap of {} mm cannot be applied to {}. {}</source><translation>Encastrar: la separación de {} mm no se puede aplicar a {}. {}</translation></message>
     <message><source>Notch</source><translation>Encastrar</translation></message>
     <message><source>Edit Notch</source><translation>Editar encastre</translation></message>
     <message><source>Click the profiles to notch. Ctrl+click drops one.</source><translation>Hacé clic en los perfiles a encastrar. Ctrl+clic quita uno.</translation></message>
@@ -1097,7 +1098,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
 <context>
     <name>MaxProFrame_Notch</name>
     <message><source>Notch</source><translation>Encastrar</translation></message>
-    <message><source>&lt;b&gt;Notch&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a target profile, then the profiles to notch into it.</source><translation>&lt;b&gt;Encastrar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná un perfil destino y luego los perfiles a encastrar en él.</translation></message>
+    <message><source>&lt;b&gt;Notch&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a target profile, then the profiles to notch into it. Gap leaves that clearance all around the target.</source><translation>&lt;b&gt;Encastrar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná un perfil destino y luego los perfiles a encastrar en él. La separación deja esa luz alrededor del destino.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ExtendCut</name>

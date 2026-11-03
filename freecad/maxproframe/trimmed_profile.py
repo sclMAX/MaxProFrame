@@ -10,10 +10,19 @@ from freecad.maxproframe._utils import (
     get_profile_from_trimmedbody,
     get_readable_cutting_angles,
     get_trimmed_profile_all_cutting_angles,
+    is_profile,
     length_along_normal,
 )
 from freecad.maxproframe.ff_tools import ICONPATH, translate
-from freecad.maxproframe.miter_geometry import TOLERANCE, Member, MiterError, MiterPlane, miter_plane, real_stretch
+from freecad.maxproframe.miter_geometry import (
+    TOLERANCE,
+    Member,
+    MiterError,
+    MiterPlane,
+    _reach,
+    miter_plane,
+    real_stretch,
+)
 from freecad.maxproframe.version import __version__ as ff_version
 
 # TrimmedProfileType -> TrimmedProfile method giving (body shape, cut shapes).
@@ -25,6 +34,11 @@ CROSSING_TOLERANCE = 1e-4
 # KeepEnd values: the automatic rule, or the axis end whose piece stays when the target crosses the profile.
 AUTO, START, END = "Auto", "Start", "End"
 KEEP_ENDS = [AUTO, START, END]
+# Tolerances, in mm, tried in turn to grow a target that is no straight profile by the gap of a Notch:
+# nearly tangent faces (a fillet meeting a tapered flange) make the finest one fail.
+NOTCH_OFFSET_TOLERANCES = (1e-6, 1e-3)
+# Share of the section area a grown section may miss and still count as holding it.
+NOTCH_SECTION_TOLERANCE = 1e-6
 
 
 def _between(ends, origin, normal):
@@ -82,7 +96,11 @@ class TrimmedProfile:
             "App::PropertyLength",
             "TrimGap",
             "TrimmedProfile",
-            translate("App::Property", "Distance left between the profile end and the target plane"),
+            translate(
+                "App::Property",
+                "Extend / Cut: distance left between the profile end and the target plane."
+                " Notch: clearance left all around the target profile.",
+            ),
         ).TrimGap = 0
         self.add_keep_end(obj)
 
@@ -170,14 +188,80 @@ class TrimmedProfile:
         self._update_structure_data(fp)
 
     def _notch(self, fp, body_shape):
-        """(body, cut shapes) of a Notch: the target splits the body, the piece reaching the far end stays."""
+        """(body, cut shapes) of a Notch: the target splits the body, the piece reaching the far end stays.
+
+        With a gap the target is grown by it in every direction first, so the kept piece stays that far from it.
+        """
         target = fp.TrimmingBoundary[0][0]
         member = self._miter_member(fp.TrimmedBody)
         # The far end section may lie in a piece an earlier trim removed: the nearest piece stays.
+        # Which end is far, and whether the target crosses, come from the real target: the gap only moves the cut.
         far_section = member.section_at(self._notch_kept_start(fp, member, target))
-        pieces = BOPTools.SplitAPI.slice(body_shape, [target.Shape], mode="Split").Solids
+        pieces = BOPTools.SplitAPI.slice(body_shape, [self._notch_cutter(fp, target)], mode="Split").Solids
         kept = min(range(len(pieces)), key=lambda index: pieces[index].distToShape(far_section)[0], default=None)
         return body_shape, [Part.Shape(piece) for index, piece in enumerate(pieces) if index != kept]
+
+    def _notch_cutter(self, fp, target):
+        """The shape a Notch cuts with: ``target`` itself, or grown by the gap all around it."""
+        gap = fp.TrimGap.Value if hasattr(fp, "TrimGap") else 0.0
+        if gap <= 0:
+            return target.Shape
+        grown = self._grown_profile(target, gap)
+        if grown is not None:
+            return grown
+        reason = ""
+        for tolerance in NOTCH_OFFSET_TOLERANCES:
+            # Arc joins round the grown edges and corners: the clearance is the gap everywhere, at edges too.
+            try:
+                grown = target.Shape.makeOffsetShape(gap, tolerance, join=0)
+            except Exception as error:
+                reason = str(error)
+                continue
+            if not grown.isNull() and grown.Solids:
+                return grown
+        raise MiterError(
+            translate("frameforge", "Notch: the gap of {} mm cannot be applied to {}. {}")
+            .format(f"{gap:g}", target.Label, reason)
+            .strip()
+        )
+
+    def _grown_profile(self, target, gap):
+        """``target`` grown by ``gap``, or None when it is not built on a straight profile.
+
+        The section of its profile is grown by the gap all around in its plane, round at the corners
+        (holes shrink), and swept along the profile axis over the length ``target`` reaches, plus the gap
+        at each end. Growing the section is exact on every face along the axis, fillets and tapers included,
+        where growing the whole solid fails on faces that meet nearly tangent.
+        """
+        profile = get_profile_from_trimmedbody(target)
+        if not is_profile(profile) or profile.Shape.isNull() or target.Shape.isNull():
+            return None
+        # A profile is its section swept along the Z axis of its placement.
+        origin = profile.Placement.Base
+        axis = profile.Placement.Rotation.multVec(App.Vector(0, 0, 1))
+        base_reach, reach = _reach(profile.Shape, origin, axis), _reach(target.Shape, origin, axis)
+        if base_reach is None or reach is None or base_reach[1] - base_reach[0] < TOLERANCE:
+            return None
+        try:
+            member = Member(
+                Part.LineSegment(origin + axis * base_reach[0], origin + axis * base_reach[1]).toShape(), profile.Shape
+            )
+            if not member.section.Faces:
+                return None
+            # A slice may orient its wires against the face (a round tube): fixed, the offset grows the face.
+            section = member.section.copy()
+            section.fix(TOLERANCE, TOLERANCE, TOLERANCE)
+            grown = section.makeOffset2D(gap, join=0)
+            # Only a face holding the whole section grows it: anything else is left to the 3D offset.
+            if grown.isNull() or not grown.Faces or grown.Area <= section.Area:
+                return None
+            if abs(grown.common(section).Area - section.Area) > NOTCH_SECTION_TOLERANCE * section.Area:
+                return None
+        except Exception:
+            return None
+        at = (member.edge.valueAt(member.param) - origin).dot(axis)
+        grown.translate(axis * (reach[0] - gap - at))
+        return grown.extrude(axis * (reach[1] - reach[0] + 2 * gap))
 
     def _end_miter(self, fp, body_shape):
         """(body, cut shapes) of an End Miter: the body is extended up to each miter plane when asked."""

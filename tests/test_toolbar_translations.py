@@ -42,7 +42,7 @@ EXPECTED = {
     "MaxProFrame_Notch": (
         "Notch",
         "Encastrar",
-        "Seleccioná un perfil destino y luego los perfiles a encastrar en él.",
+        "Seleccioná un perfil destino y luego los perfiles a encastrar en él. La separación deja esa luz alrededor del destino.",
     ),
     "MaxProFrame_ExtendCut": (
         "Extend / Cut",

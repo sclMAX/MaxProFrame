@@ -8,7 +8,7 @@ from test_notch_geometry import HALF
 from test_notch_panel import NotchPanelFixture
 
 from freecad.maxproframe.create_extend_cut_tool import PROFILE, TARGET, ExtendCutTaskPanel
-from freecad.maxproframe.create_notch_tool import NotchTaskPanel
+from freecad.maxproframe.create_notch_tool import NotchTaskPanel, make_notch_profile
 from freecad.maxproframe.ff_tools import get_param_group
 
 
@@ -71,6 +71,40 @@ class TestNotchPreview(NotchPreviewFixture):
         self.assertEqual([obj.Name for obj in self.trims()], [preview.Name])
         self.assertAlmostEqual(preview.Shape.Volume, volume, places=5)
         self.assertEqual(self.doc.UndoCount, 1)
+
+    def test_checked_preview_follows_the_gap(self):
+        trimmed, boundary = self.setup_joint()
+        keep_auto_preview(self, NotchTaskPanel, True)
+        panel = self.run_command((boundary, ""), (trimmed, ""))
+        (preview,) = self.trims()
+        self.assertAlmostEqual(preview.Shape.BoundBox.XMin, HALF, places=5)
+        panel.form.sb_gap.setValue(1.5)
+        self.assertEqual(self.status(panel), "Pending changes")
+        wait()
+        self.assertEqual(self.status(panel), "Preview updated")
+        self.assertEqual([obj.Name for obj in self.trims()], [preview.Name])
+        self.assertAlmostEqual(preview.TrimGap.Value, 1.5)
+        self.assertAlmostEqual(preview.Shape.BoundBox.XMin, HALF + 1.5, places=5)
+        self.assertTrue(panel.accept())
+        self.assertAlmostEqual(preview.TrimGap.Value, 1.5)
+        self.assertEqual(self.doc.UndoCount, 1)
+
+    def test_editing_with_update_automatically_previews_the_gap(self):
+        trimmed, boundary = self.setup_joint()
+        keep_auto_preview(self, NotchTaskPanel, True)
+        trim = make_notch_profile(trimmed, boundary)
+        self.doc.recompute()
+        self.doc.clearUndos()
+        panel = self.capture_panel(trim.ViewObject.Proxy.edit)
+        panel.form.sb_gap.setValue(2.0)
+        wait()
+        self.assertEqual(self.status(panel), "Preview updated")
+        self.assertAlmostEqual(trim.TrimGap.Value, 2.0)
+        self.assertAlmostEqual(trim.Shape.BoundBox.XMin, HALF + 2.0, places=5)
+        self.assertTrue(panel.reject())
+        self.assertAlmostEqual(trim.TrimGap.Value, 0.0)
+        self.assertAlmostEqual(trim.Shape.BoundBox.XMin, HALF, places=5)
+        self.assertEqual(self.doc.UndoCount, 0)
 
     def test_cancel_removes_the_preview_and_leaves_the_document_unchanged(self):
         trimmed, boundary = self.setup_joint()

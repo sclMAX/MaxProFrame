@@ -133,10 +133,31 @@ class TestNotchCommand(NotchPanelFixture):
 
 
 class TestNotchPanel(NotchPanelFixture):
-    def test_the_gap_row_is_hidden(self):
+    def test_the_gap_row_is_shown_from_zero(self):
         panel = self.run_command()
-        self.assertFalse(panel.form.sb_gap.isVisibleTo(panel.form))
-        self.assertFalse(panel.form.gap_label.isVisibleTo(panel.form))
+        self.assertTrue(panel.form.sb_gap.isVisibleTo(panel.form))
+        self.assertTrue(panel.form.gap_label.isVisibleTo(panel.form))
+        self.assertEqual(panel.form.gap_label.text(), "Gap")
+        self.assertEqual(panel.form.sb_gap.minimum(), 0.0)
+        self.assertEqual(panel.form.sb_gap.value(), 0.0)
+
+    def test_ok_stores_the_gap_in_each_notch(self):
+        trimmed, boundary = self.t_joint()
+        other = self.make_profile(self.make_sketch(((0, 100, 0), (300, 100, 0))), "Edge1", **CENTER)
+        self.doc.clearUndos()
+        panel = self.run_command((boundary, ""), (trimmed, ""), (other, ""))
+        panel.form.sb_gap.setValue(1.5)
+        self.assertTrue(panel.accept())
+        trims = self.trims()
+        self.assertEqual(len(trims), 2)
+        for obj in trims:
+            self.assertEqual(obj.getStatusString(), "Valid")
+            self.assertAlmostEqual(obj.TrimGap.Value, 1.5)
+            self.assertAlmostEqual(obj.Shape.BoundBox.XMin, HALF + 1.5, places=5)
+            self.assertAlmostEqual(obj.Shape.distToShape(boundary.Shape)[0], 1.5, places=4)
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.doc.undo()
+        self.assertEqual(self.trims(), [])
 
     def test_a_target_face_picks_the_whole_target_profile_and_the_rest_are_profiles(self):
         trimmed, boundary = self.t_joint()
@@ -258,10 +279,11 @@ class TestNotchPanel(NotchPanelFixture):
 
 
 class TestEditNotch(NotchPanelFixture):
-    def existing(self):
+    def existing(self, gap=0.0):
         trimmed, boundary = self.t_joint()
         far = self.far()
         trim = make_notch_profile(trimmed, boundary)
+        trim.TrimGap = gap
         self.doc.recompute()
         self.assertEqual(trim.getStatusString(), "Valid")
         self.doc.clearUndos()
@@ -274,7 +296,8 @@ class TestEditNotch(NotchPanelFixture):
         self.assertEqual(panel.profiles, [trimmed])
         self.assertEqual(panel.target, (boundary, ()))
         self.assertEqual(panel.form.windowTitle(), "Edit Notch")
-        self.assertFalse(panel.form.sb_gap.isVisibleTo(panel.form))
+        self.assertTrue(panel.form.sb_gap.isVisibleTo(panel.form))
+        self.assertEqual(panel.form.sb_gap.value(), 0.0)
         self.click(far, self.face_towards(far, App.Vector(-1, 0, 0)))
         self.assertEqual(panel.target, (far, ()))
         self.assertTrue(panel.accept())
@@ -295,6 +318,36 @@ class TestEditNotch(NotchPanelFixture):
         self.assertAlmostEqual(trim.Shape.Volume, volume, places=5)
         self.assertEqual(self.doc.UndoCount, 0)
 
+    def test_editing_shows_and_changes_the_gap_in_one_undo_step(self):
+        trimmed, boundary, far, trim = self.existing(gap=1.0)
+        self.assertAlmostEqual(trim.Shape.BoundBox.XMin, HALF + 1.0, places=5)
+        panel = self.capture_panel(trim.ViewObject.Proxy.edit)
+        self.assertEqual(panel.form.sb_gap.value(), 1.0)
+        panel.form.sb_gap.setValue(2.0)
+        self.assertTrue(panel.accept())
+        self.assertAlmostEqual(trim.TrimGap.Value, 2.0)
+        self.assertAlmostEqual(trim.Shape.BoundBox.XMin, HALF + 2.0, places=5)
+        self.assertAlmostEqual(trim.Shape.distToShape(boundary.Shape)[0], 2.0, places=4)
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.doc.undo()
+        self.doc.recompute()
+        self.assertAlmostEqual(trim.TrimGap.Value, 1.0)
+        self.assertAlmostEqual(trim.Shape.BoundBox.XMin, HALF + 1.0, places=5)
+
+    def test_cancel_after_changing_the_gap_restores_it_without_an_undo_step(self):
+        trimmed, boundary, far, trim = self.existing(gap=1.0)
+        volume = trim.Shape.Volume
+        panel = self.capture_panel(trim.ViewObject.Proxy.edit)
+        panel.form.sb_gap.setValue(4.0)
+        panel._update_preview(force=True)
+        self.assertAlmostEqual(trim.TrimGap.Value, 4.0)
+        self.assertAlmostEqual(trim.Shape.BoundBox.XMin, HALF + 4.0, places=5)
+        self.assertTrue(panel.reject())
+        self.assertAlmostEqual(trim.TrimGap.Value, 1.0)
+        self.assertAlmostEqual(trim.Shape.Volume, volume, places=5)
+        self.assertAlmostEqual(trim.Shape.BoundBox.XMin, HALF + 1.0, places=5)
+        self.assertEqual(self.doc.UndoCount, 0)
+
 
 class TestNotchTranslations(NotchPanelFixture):
     def test_panel_text_is_spanish(self):
@@ -305,6 +358,7 @@ class TestNotchTranslations(NotchPanelFixture):
         self.assertEqual(form.groupBox_target.title(), "Destino")
         self.assertEqual(form.target_label.text(), "Hacé clic en el perfil destino o seleccionalo en el árbol.")
         self.assertEqual(form.hint_label.text(), "Hacé clic en los perfiles a encastrar. Ctrl+clic quita uno.")
+        self.assertEqual(form.gap_label.text(), "Separación")
         self.assertFalse(panel.accept())
         self.assertEqual(form.message_label.text(), "Seleccioná el perfil destino.")
         _, boundary = self.t_joint()
@@ -320,6 +374,17 @@ class TestNotchTranslations(NotchPanelFixture):
         panel = self.capture_panel(trim.ViewObject.Proxy.edit)
         self.assertEqual(panel.form.windowTitle(), "Editar encastre")
         self.assertEqual(panel.form.hint_label.text(), "Hacé clic en un perfil para cambiar el destino.")
+
+    def test_the_gap_failure_is_spanish(self):
+        trimmed, _ = self.t_joint()
+        sheet = self.doc.addObject("Part::Feature", "Sheet")
+        sheet.Shape = Part.makePlane(400, 400, App.Vector(100, -200, -200), App.Vector(1, 0, 0))
+        use_language(self, "Spanish", "es_ES")
+        trim = make_notch_profile(trimmed, sheet, 1.5)
+        self.doc.recompute()
+        self.assertIn(
+            f"Encastrar: la separación de 1.5 mm no se puede aplicar a {sheet.Label}.", trim.getStatusString()
+        )
 
     def test_panel_text_stays_english_in_english(self):
         panel = self.run_command()
@@ -347,6 +412,17 @@ class TestNotchRecompute(TrimFixture):
             trim = self.notch(trimmed, tube)
         self.assertAlmostEqual(trim.Shape.Volume, trimmed.Shape.Volume, places=5)
         self.assertTrue(any(trim.Label in text and "left uncut" in text for text in warnings), warnings)
+
+    def test_a_gap_that_cannot_grow_the_target_fails_with_the_reason(self):
+        use_language(self, "English", "en_US")
+        trimmed, _ = self.t_joint()
+        sheet = self.doc.addObject("Part::Feature", "Sheet")
+        # A face has no inside to grow: the gap cannot be applied.
+        sheet.Shape = Part.makePlane(400, 400, App.Vector(100, -200, -200), App.Vector(1, 0, 0))
+        trim = make_notch_profile(trimmed, sheet, 1.0)
+        self.doc.recompute()
+        self.assertFalse(trim.isValid())
+        self.assertIn(f"Notch: the gap of 1 mm cannot be applied to {sheet.Label}.", trim.getStatusString())
 
 
 if __name__ == "__main__":
