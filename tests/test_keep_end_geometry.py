@@ -1,12 +1,14 @@
 """KeepEnd: which piece Extend Cut and Notch keep when the target crosses the profile between its ends."""
 
 import unittest
+from unittest import mock
 
 import FreeCAD as App
 from test_end_miter_geometry import CENTER
 from test_extend_cut_geometry import FAR, NEAR, ExtendCutFixture
 
 from freecad.maxproframe.create_notch_tool import make_notch_profile
+from freecad.maxproframe.trimmed_profile import TrimmedProfile
 
 HALF = 25.0
 
@@ -105,6 +107,17 @@ class TestNotchKeepEnd(ExtendCutFixture):
         for name, ((a, b), keep_end, (x_min, x_max)) in cases.items():
             with self.subTest(name):
                 self.assert_box(self.notch(a, b, keep_end), x_min, x_max)
+
+    def test_auto_does_not_test_whether_the_target_crosses(self):
+        # The crossing test is a boolean on the target: only a chosen end needs it.
+        crosses = TrimmedProfile._target_crosses
+        cases = {"Auto": ((HALF, 300.0), 0), "Start": ((-100.0, -HALF), 1)}
+        for keep_end, ((x_min, x_max), calls) in cases.items():
+            with self.subTest(keep_end):
+                with mock.patch.object(TrimmedProfile, "_target_crosses", autospec=True, side_effect=crosses) as spy:
+                    obj = self.notch(-100, 300, keep_end)
+                self.assert_box(obj, x_min, x_max)
+                self.assertEqual(spy.call_count, calls)
 
     def test_a_target_holding_one_end_ignores_the_choice(self):
         # The start lies inside the target: there is only one piece to keep.
