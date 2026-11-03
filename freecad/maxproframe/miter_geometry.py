@@ -16,6 +16,10 @@ TOLERANCE = 1e-7
 PARALLEL_TOLERANCE = 1e-7
 # Longest extension, in section diagonals, before a joint is refused as too far.
 EXTENSION_LIMIT = 10.0
+# How far, in mm, the points measuring how far a body reaches may stray from its curved edges.
+REACH_DEFLECTION = 0.01
+# How far, in mm, a body end must be from the profile end to count as moved by a trim.
+MOVED_TOLERANCE = 1e-3
 
 
 class MiterError(RuntimeError):
@@ -116,6 +120,42 @@ def miter_plane(member, other):
     normal.normalize()
     origin = axes_crossing(centroid, inward, other_centroid, other_inward)
     return MiterPlane(origin, normal, inward, member.section_at(at_start))
+
+
+def real_stretch(edge, shape, base_shape):
+    """The straight path ``edge`` with each end moved to where ``shape`` really ends, when a trim moved it.
+
+    A trim or cutout (``shape``) may end its profile (``base_shape``) away from the path ends; End Miter meets
+    members where their bodies end. An end ``shape`` reaches as far as the profile keeps the path end, so a
+    profile without trims keeps its path. A curved path, or a shape with nothing along it, keeps ``edge``.
+    """
+    if not isinstance(edge.Curve, Part.Line):
+        return edge
+    start = edge.valueAt(edge.FirstParameter)
+    direction = edge.valueAt(edge.LastParameter) - start
+    length = direction.Length
+    reach, base_reach = _reach(shape, start, direction), _reach(base_shape, start, direction)
+    if length < TOLERANCE or reach is None or base_reach is None:
+        return edge
+    low, high = (
+        moved if abs(moved - kept) > MOVED_TOLERANCE else path
+        for moved, kept, path in zip(reach, base_reach, (0.0, length))
+    )
+    if high - low < TOLERANCE:
+        return edge
+    direction.normalize()
+    return Part.LineSegment(start + direction * low, start + direction * high).toShape()
+
+
+def _reach(shape, start, direction):
+    """(lowest, highest) distance ``shape`` reaches along ``direction`` from ``start``, or None for no shape."""
+    if shape is None or shape.isNull() or not shape.Edges:
+        return None
+    unit = App.Vector(direction).normalize()
+    # Points along every edge: a curved edge (an oblique cut of a round tube) reaches past its vertices.
+    points = [point for edge in shape.Edges for point in edge.discretize(Deflection=REACH_DEFLECTION)]
+    distances = [(point - start).dot(unit) for point in points]
+    return min(distances), max(distances)
 
 
 def path_end(edge, at_start):

@@ -15,7 +15,7 @@ from freecad.maxproframe.ff_tools import (
     get_param_group,
     translate,
 )
-from freecad.maxproframe.miter_geometry import Member
+from freecad.maxproframe.miter_geometry import Member, real_stretch
 from freecad.maxproframe.miter_joints import find_joints
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrimmedProfile
@@ -45,6 +45,21 @@ def _base_profile(obj):
         else:
             return None
     return None
+
+
+def _built_on(obj):
+    """The bodies ``obj`` is built on, through trims and cutouts (``obj`` excluded)."""
+    found = []
+    while obj is not None:
+        if is_trimmedbody(obj):
+            obj = obj.TrimmedBody
+        elif is_extrudedcutout(obj):
+            obj = obj.baseObject[0] if obj.baseObject else None
+        else:
+            break
+        if obj is not None:
+            found.append(obj)
+    return found
 
 
 def _alive(obj):
@@ -208,8 +223,12 @@ class EndMiterTaskPanel:
             setter(text)
 
     def add_member(self, obj):
+        """List ``obj``; one entry per profile: a trim replaces the profile it is built on, and not the reverse."""
         if obj is None or _base_profile(obj) is None or obj in self.members:
             return False
+        if any(obj in _built_on(member) for member in self.members):
+            return False
+        self.members = [member for member in self.members if member not in _built_on(obj)]
         self.members.append(obj)
         return True
 
@@ -234,7 +253,8 @@ class EndMiterTaskPanel:
             try:
                 profile = _base_profile(obj)
                 sketch, subs = profile.Target
-                member = Member(sketch.getSubObject(subs[0]), profile.Shape)
+                # Joints are found where the shown bodies end: a trimmed profile may end away from its path ends.
+                member = Member(real_stretch(sketch.getSubObject(subs[0]), obj.Shape, profile.Shape), profile.Shape)
             except Exception as error:
                 errors.append(f"{obj.Label}: {error}")
                 continue

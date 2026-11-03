@@ -13,7 +13,7 @@ from freecad.maxproframe._utils import (
     length_along_normal,
 )
 from freecad.maxproframe.ff_tools import ICONPATH, translate
-from freecad.maxproframe.miter_geometry import TOLERANCE, Member, MiterError, MiterPlane, miter_plane
+from freecad.maxproframe.miter_geometry import TOLERANCE, Member, MiterError, MiterPlane, miter_plane, real_stretch
 from freecad.maxproframe.version import __version__ as ff_version
 
 # TrimmedProfileType -> TrimmedProfile method giving (body shape, cut shapes).
@@ -339,13 +339,20 @@ class TrimmedProfile:
 
     def miter_planes(self, fp):
         """One miter plane per trimming boundary, from the real profile positions."""
-        member = self._miter_member(fp.TrimmedBody)
-        return [miter_plane(member, self._miter_member(bound[0])) for bound in fp.TrimmingBoundary]
+        member = self._stretch_member(fp.TrimmedBody)
+        return [miter_plane(member, self._stretch_member(bound[0])) for bound in fp.TrimmingBoundary]
 
     def _miter_member(self, body):
         target = self.getTarget(body)
         edge = target[0].getSubObject(target[1][0])
         return Member(edge, get_profile_from_trimmedbody(body).Shape)
+
+    def _stretch_member(self, body):
+        """The member of ``body`` along its real stretch: End Miter meets bodies where they end, trims included."""
+        target = self.getTarget(body)
+        edge = target[0].getSubObject(target[1][0])
+        profile_shape = get_profile_from_trimmedbody(body).Shape
+        return Member(real_stretch(edge, body.Shape, profile_shape), profile_shape)
 
     def _update_structure_data(self, obj):
         prof = get_profile_from_trimmedbody(obj)
