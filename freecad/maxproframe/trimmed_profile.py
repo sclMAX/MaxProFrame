@@ -170,7 +170,7 @@ class TrimmedProfile:
         target = fp.TrimmingBoundary[0][0]
         member = self._miter_member(fp.TrimmedBody)
         # The far end section may lie in a piece an earlier trim removed: the nearest piece stays.
-        far_section = member.section_at(self.kept_end(fp)[0])
+        far_section = member.section_at(self._notch_kept_start(fp, member, target))
         pieces = BOPTools.SplitAPI.slice(body_shape, [target.Shape], mode="Split").Solids
         kept = min(range(len(pieces)), key=lambda index: pieces[index].distToShape(far_section)[0], default=None)
         return body_shape, [Part.Shape(piece) for index, piece in enumerate(pieces) if index != kept]
@@ -223,6 +223,13 @@ class TrimmedProfile:
         far_start = self._far_end_is_start(member, target)
         choosable = self._target_crosses(member, target)
         return (chosen if choosable and chosen is not None else far_start), choosable
+
+    def _notch_kept_start(self, fp, member, target):
+        """Whether the piece a Notch keeps reaches the axis start; only a chosen end needs the crossing test."""
+        chosen = self._chosen_far_start(fp)
+        if chosen is not None and self._target_crosses(member, target):
+            return chosen
+        return self._far_end_is_start(member, target)
 
     def _chosen_far_start(self, fp):
         """Whether KeepEnd keeps the start (True) or the end (False); None for Auto or a trim saved without it."""
