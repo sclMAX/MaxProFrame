@@ -2,6 +2,9 @@
 
 * Unreleased
 
+  - Edit the sketch of a **Cutout / Hole** from its panel: **Edit sketch** keeps the cut type and depth shown, opens the sketch, and closing it brings the panel back. The cutout's right-click menu in the tree also has **Edit sketch**.
+  - New **Cutout / Hole** icon, a standing tube with a cutout in its wall, also shown for each cutout in the tree, and new cutouts are labelled after their profile, for example `Profile_TC40x40x1.5_000_Ex` (they showed the internal name, `Profile_000_Ex`). Existing cutouts keep their label.
+  - The **Cutout / Hole** panel says that a click on another face changes it, and when Ctrl+Click selects several faces it says that only the last one clicked is used (see the [tutorial](docs/tutorial.md#cutout--hole)).
   - Choose which piece **Extend / Cut** and **Notch** keep when the target crosses a profile between its ends: select profiles in the list and press **Flip side**, or double-click a row, to keep the other piece of each one, also when editing an existing trim (see the [tutorial](docs/tutorial.md#via-extend--cut-command)). The choice is stored in the new **KeepEnd** property (**Auto**, **Start** or **End**); **Auto** keeps the current behavior and is the default, so existing documents are unchanged. Choosing another target puts every profile back to **Auto**. When the target does not cross the profile the panel says there is no side to choose. The live preview draws the pieces that will be discarded in red.
   - Fix **End Miter** finding no joint (0 joints) for a profile shortened by **Extend / Cut**: joints and miter planes now use where the trimmed body really ends, so the shortened profile and the profile it now ends on are mitered. Profiles without trims are mitered as before.
   - List a profile and a trim built on it only once in the **End Miter** panel, as the trim.

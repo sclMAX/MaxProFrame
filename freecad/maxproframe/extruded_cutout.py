@@ -419,44 +419,25 @@ class ViewProviderExtrudedCutout:
     def edit(self):
         FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
 
-    def getIcon(self):
-        return """
-        /* XPM */
-            static char *profile[] = {
-            /* columns rows colors chars-per-pixel */
-            "15 16 15 1 ",
-            "  c None",
-            ". c #343636",
-            "X c #53595F",
-            "o c #303A4E",
-            "O c #2A4A73",
-            "+ c #31465A",
-            "@ c #615954",
-            "# c #AC6F35",
-            "$ c #FFC400",
-            "% c None",
-            "& c #315F9B",
-            "* c #5E6D84",
-            "= c #E2A19F",
-            "- c #E5D8D6",
-            "; c #B8ADAC",
-            /* pixels */
-            "               ",
-            "      Xo.      ",
-            "    .o&&&o.    ",
-            "    oOO&&&OX   ",
-            " .o.o&&OO&&Oo  ",
-            " X-;+O+OOO+##. ",
-            " X---;#oOO#$#  ",
-            " X--==-ooO%$#  ",
-            " X===--#o+%$#  ",
-            " X=-=-=#+O%$#  ",
-            " X=-===*&O%$@  ",
-            " X====-@o+#o.  ",
-            " .;-==-o XX    ",
-            "  .@--;o       ",
-            "    X*@X       ",
-            "     ..        "
-            };
+    def setupContextMenu(self, vobj, menu):
+        """Edit sketch: open the sketch of the cutout in the Sketcher."""
+        sketch = vobj.Object.Sketch
+        action = menu.addAction(translate("frameforge", "Edit sketch"))
+        action.setObjectName("edit_cutout_sketch")
+        action.setEnabled(sketch is not None)
+        if sketch is None:
+            return
+        if getattr(sketch, "ViewObject", None) is not None:
+            action.setIcon(sketch.ViewObject.Icon)
+        doc_name, name = sketch.Document.Name, sketch.Name
 
-        """
+        def edit_sketch():
+            from freecad.maxproframe.create_extruded_cutout_tool import _edit_sketch
+
+            _edit_sketch(doc_name, name)
+
+        action.triggered.connect(edit_sketch)
+
+    def getIcon(self):
+        """The icon of the Cutout / Hole command, so the tree tells cutouts apart from profiles and trims."""
+        return os.path.join(ICONPATH, "cutout-hole.svg")

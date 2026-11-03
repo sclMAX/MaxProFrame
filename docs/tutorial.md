@@ -351,8 +351,8 @@ A group is just a folder. Simply add your objects into the Group. You are done. 
 **Cutout / Hole** (shortcut `E, C`; Spanish *Calado*) cuts holes, slots and clearances in a profile from a sketch drawn on one of its faces.
 
 1. Click on the **Cutout / Hole** command. The button is always active while a document is open.
-2. Click a planar face of a profile, a trimmed profile or an existing cutout, in the 3D view; a face selected before the command is used too. The end faces (the wall thickness at the profile ends), edges and curved faces cannot be cut: the panel says why.
-3. **OK** creates, in one Undo step, a sketch attached to that face and the cutout, both in the same Part or folder as the profile, and opens the sketch. The outline of the face is already in the sketch as construction geometry, so you can dimension the hole against the face edges right away. **Cancel** leaves the document unchanged.
+2. Click a planar face of a profile, a trimmed profile or an existing cutout, in the 3D view; a face selected before the command is used too. The end faces (the wall thickness at the profile ends), edges and curved faces cannot be cut: the panel says why. Click another face to change it; with Ctrl+Click on several faces the last one clicked is used, since a cutout takes one face.
+3. **OK** creates, in one Undo step, a sketch attached to that face and the cutout, both in the same Part or folder as the profile, and opens the sketch. The cutout is labelled after the profile, for example `Profile_TC40x40x1.5_000_Ex`. The outline of the face is already in the sketch as construction geometry, so you can dimension the hole against the face edges right away. **Cancel** leaves the document unchanged.
 4. Draw closed shapes (circles, rectangles, slots); every sketch tool works, including External Geometry.
 
 ![alt text](images/90-draw-sketch.png)
@@ -365,7 +365,7 @@ The cut types are:
 - **Through All**: the shapes cut through the whole profile, every wall they cross.
 - **Distance**: the shapes cut as deep as **Depth** (the **Extrusion Length** property).
 
-To change the holes later, edit the sketch. To change the cut type or the depth, double-click the cutout: the same panel opens with the stored values, and **Cancel** restores them.
+To change the cut type or the depth, double-click the cutout: the same panel opens with the stored values, and **Cancel** restores them. To change the holes, press **Edit sketch** in that panel: the cut type and depth shown are kept (one Undo step), the sketch opens, and closing it opens the panel again. **Cancel** there restores the cut type and depth only; the drawing stays as you left it, and **Undo** takes it back. Right-click the cutout in the tree and choose **Edit sketch** to open the sketch alone.
 
 ### With your own sketch
 
