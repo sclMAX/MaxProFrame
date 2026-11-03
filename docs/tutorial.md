@@ -237,7 +237,7 @@ When the target crosses a profile between its ends, select the profile in the li
 
 You can also select the target and then the profiles before clicking the command: the panel starts with them. To pick another target, press **Change target**: the next click becomes the new target, as in [Extend / Cut](#via-extend--cut-command) below.
 
-To change a Notch later, double-click it in the tree: click another profile to change the target, or use **Flip side** to keep the other piece. Each change is applied to the Notch once you pause (**Flip side** at once), with the removed piece in red. **OK** keeps the changes in one Undo step; **Cancel**, or closing the panel without **OK**, puts the Notch back unchanged, with no Undo step.
+To change a Notch later, double-click it in the tree: click another profile to change the target, or use **Flip side** to keep the other piece. The panel has the same **Update automatically** check box as when creating a Notch, off by default and remembered: checked, each change is applied to the Notch once you pause (**Flip side** at once), with the removed piece in red; unchecked, the panel shows **Pending changes** and **OK** applies them. **OK** keeps the changes in one Undo step, or none when nothing changed in the end; if the result is invalid the Notch is put back and the panel stays open with the reason and the changes pending. **Cancel**, or closing the panel without **OK**, puts the Notch back unchanged, with no Undo step.
 
 In the BOM, a notched end shows the cutting angle `P`: it follows the target shape instead of a single angle.
 
@@ -259,7 +259,7 @@ You can also select the target and then the profiles before clicking the command
 
 To pick another target while creating, press **Change target** next to the target: the next click becomes the new target, then clicks add profiles again. A click the panel refuses as target (for example a listed profile) keeps it armed, and pressing the button again cancels it. The button is hidden while editing, where every click already changes the target.
 
-To change an Extend / Cut later, double-click it in the tree: click another face to change the target, change the Gap, or use **Flip side** to keep the other piece. Each change is applied to the trim once you pause (**Flip side** at once), with the discarded piece in red; the target and the edited trim are outlined in orange and blue. **OK** keeps the changes in one Undo step; **Cancel**, or closing the panel without **OK**, puts the trim back unchanged, with no Undo step.
+To change an Extend / Cut later, double-click it in the tree: click another face to change the target, change the Gap, or use **Flip side** to keep the other piece. The panel has the same **Update automatically** check box as when creating, on by default for Extend / Cut and remembered: checked, each change is applied to the trim once you pause (**Flip side** at once), with the discarded piece in red; unchecked, the panel shows **Pending changes** and **OK** applies them. The target and the edited trim are outlined in orange and blue. **OK** keeps the changes in one Undo step, or none when nothing changed in the end; if the result is invalid the trim is put back and the panel stays open with the reason and the changes pending. **Cancel**, or closing the panel without **OK**, puts the trim back unchanged, with no Undo step.
 
 In the BOM, the cutting angle of the moved end is the angle between the target plane and a square cut.
 
