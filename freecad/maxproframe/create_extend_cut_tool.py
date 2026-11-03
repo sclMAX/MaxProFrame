@@ -220,7 +220,6 @@ class ExtendCutTaskPanel:
             self.form.remove_button.hide()
             # While editing every click already changes the target.
             self.form.change_target_button.hide()
-            self.form.groupBox_preview.hide()
             obj, subs = edited.TrimmingBoundary[0]
             self.target = (obj, tuple(sub for sub in subs if sub))
             self.profiles = [edited.TrimmedBody]
@@ -237,11 +236,14 @@ class ExtendCutTaskPanel:
                 messages += self._add_profile(obj)
         self._show(messages)
         self.form.sb_gap.valueChanged.connect(self._changed)
+        # Editing previews like creating: the same remembered check box for this joint.
+        auto_update = get_param_group().GetBool(self.auto_preview_param, self.auto_preview_default)
+        self.form.cb_auto_update.setChecked(auto_update)
+        self.form.cb_auto_update.toggled.connect(self._on_auto_update_toggled)
         if edited is None:
-            auto_update = get_param_group().GetBool(self.auto_preview_param, self.auto_preview_default)
-            self.form.cb_auto_update.setChecked(auto_update)
-            self.form.cb_auto_update.toggled.connect(self._on_auto_update_toggled)
             self._update_preview()
+        else:
+            self._show_status()
         self._draw_highlights()
 
     def _translate_form(self):
@@ -415,7 +417,7 @@ class ExtendCutTaskPanel:
     def _show_status(self):
         if self._previewed != self._wanted():
             text = translate("frameforge", "Pending changes")
-        elif self._previews:
+        elif self._previews or self.edited is not None:
             text = translate("frameforge", "Preview updated")
         else:
             text = translate("frameforge", "No preview")
@@ -446,16 +448,15 @@ class ExtendCutTaskPanel:
     def _update_preview(self, *args, force=False):
         """Make the preview match the panel when Update automatically is checked (or ``force``).
 
-        While editing, the edited trim itself is the preview: it always follows the panel.
+        While editing, the edited trim itself is the preview.
         """
         if not self._active():
             return
-        if self.edited is not None:
-            if self._previewed != self._wanted():
-                self._preview_edit()
-            return
         if (force or self.form.cb_auto_update.isChecked()) and self._previewed != self._wanted():
-            self._rebuild_preview()
+            if self.edited is not None:
+                self._preview_edit()
+            else:
+                self._rebuild_preview()
         self._show_status()
 
     def _rebuild_preview(self):

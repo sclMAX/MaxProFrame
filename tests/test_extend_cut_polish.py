@@ -11,6 +11,7 @@ from test_extend_cut_preview import wait
 from test_keep_end_panel import KeepEndFixture
 
 from freecad.maxproframe.create_extend_cut_tool import make_extend_cut_profile
+from freecad.maxproframe.create_notch_tool import make_notch_profile
 
 
 class TestFlipButtonState(KeepEndFixture):
@@ -299,6 +300,80 @@ class TestLiveEditPreview(KeepEndFixture):
         self.assertEqual(obj.KeepEnd, "Auto")
         self.assertEqual(self.box(obj.Shape), (0.0, NEAR))
         self.assertEqual(self.doc.UndoCount, 0)
+
+
+class TestEditUpdateAutomatically(KeepEndFixture):
+    def notch_setup(self):
+        body = self.make_profile(self.make_sketch(((-100, 0, 0), (300, 0, 0))), "Edge1", extension=0.0, **CENTER)
+        target = self.make_profile(self.make_sketch(((0, -200, 0), (0, 200, 0))), "Edge1", **CENTER)
+        other = self.make_profile(self.make_sketch(((200, -200, 0), (200, 200, 0))), "Edge1", **CENTER)
+        notch = make_notch_profile(body, target)
+        self.doc.recompute()
+        self.doc.clearUndos()
+        return body, target, other, notch
+
+    def edit_notch(self, notch):
+        from test_keep_end_panel import TestFlipSide
+
+        return TestFlipSide.capture_notch(self, notch.ViewObject.Proxy.edit)
+
+    def test_editing_an_extend_cut_shows_update_automatically_checked_by_default(self):
+        target, face, body = self.crossing()
+        obj = make_extend_cut_profile(body, (target, (face,)))
+        self.doc.recompute()
+        panel = self.capture_panel(obj.ViewObject.Proxy.edit)
+        self.assertTrue(panel.form.groupBox_preview.isVisibleTo(panel.form))
+        self.assertTrue(panel.form.cb_auto_update.isChecked())
+        self.assertEqual(self.status(panel), "Preview updated")
+
+    def test_editing_with_update_automatically_unchecked_waits_for_ok(self):
+        target, face, body = self.crossing()
+        obj = make_extend_cut_profile(body, (target, (face,)))
+        self.doc.recompute()
+        self.doc.clearUndos()
+        panel = self.capture_panel(obj.ViewObject.Proxy.edit)
+        panel.form.cb_auto_update.setChecked(False)
+        self.flip_rows(panel, 0)
+        self.assertEqual(obj.KeepEnd, "Auto")
+        self.assertEqual(self.box(obj.Shape), (0.0, NEAR))
+        self.assertEqual(self.status(panel), "Pending changes")
+        panel.form.cb_auto_update.setChecked(True)
+        self.assertEqual(obj.KeepEnd, "End")
+        self.assertEqual(self.box(obj.Shape), (NEAR, 500.0))
+        self.assertEqual(self.status(panel), "Preview updated")
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.doc.UndoCount, 1)
+
+    def test_editing_a_notch_waits_like_creating_one_and_previews_once_checked(self):
+        body, target, other, notch = self.notch_setup()
+        volume = notch.Shape.Volume
+        panel = self.edit_notch(notch)
+        self.assertTrue(panel.form.groupBox_preview.isVisibleTo(panel.form))
+        self.assertFalse(panel.form.cb_auto_update.isChecked())
+        self.click(other, "Face1")
+        wait()
+        self.assertEqual(panel.target, (other, ()))
+        self.assertEqual(notch.TrimmingBoundary, [(target, ("",))])
+        self.assertEqual(self.status(panel), "Pending changes")
+        panel.form.cb_auto_update.setChecked(True)
+        self.assertEqual(notch.TrimmingBoundary, [(other, ("",))])
+        self.assertEqual(self.status(panel), "Preview updated")
+        self.assertEqual(len(panel.discarded()), 1)
+        self.assertTrue(panel.reject())
+        self.assertEqual(notch.TrimmingBoundary, [(target, ("",))])
+        self.assertAlmostEqual(notch.Shape.Volume, volume, places=5)
+        self.assertEqual(self.doc.UndoCount, 0)
+
+    def test_a_notch_edit_previewed_live_is_kept_by_ok_in_one_undo_step(self):
+        body, target, other, notch = self.notch_setup()
+        panel = self.edit_notch(notch)
+        panel.form.cb_auto_update.setChecked(True)
+        self.flip_rows(panel, 0)
+        self.assertEqual(notch.KeepEnd, "Start")
+        self.assertEqual(self.box(notch.Shape), (-100.0, -25.0))
+        self.assertTrue(panel.accept())
+        self.assertEqual(notch.KeepEnd, "Start")
+        self.assertEqual(self.doc.UndoCount, 1)
 
 
 if __name__ == "__main__":

@@ -413,14 +413,15 @@ class TestExtendCutColors(PreviewFixture):
         self.assertEqual(overlay_colors(scene.getChild(children)), [ORANGE, BLUE])
         self.assertEqual(panel.highlights(), [(target, face, TARGET), (short, "", PROFILE)])
 
-    def test_editing_highlights_the_target_and_the_edited_trim_without_a_preview(self):
+    def test_editing_highlights_the_target_and_the_edited_trim(self):
         target, face, short, _ = self.setup_two()
         obj = create_extend_cut_tool.make_extend_cut_profile(short, (target, (face,)))
         self.doc.recompute()
         self.doc.clearUndos()
         before = view_colors((target, short, obj))
         panel = self.capture_panel(obj.ViewObject.Proxy.edit)
-        self.assertFalse(panel.form.groupBox_preview.isVisibleTo(panel.form))
+        # Editing previews the trim itself, with the same Update automatically check box as creating.
+        self.assertTrue(panel.form.groupBox_preview.isVisibleTo(panel.form))
         self.assertEqual(panel.highlights(), [(target, face, TARGET), (obj, "", PROFILE)])
         self.assertTrue(panel.reject())
         self.assertEqual(panel.highlights(), [])
