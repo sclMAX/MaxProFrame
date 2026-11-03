@@ -469,14 +469,17 @@ class ExtendCutTaskPanel:
     def _cut_off_pieces(self):
         """Preview trim name -> the piece it cuts off its body, for the previews that cut something.
 
-        A piece that cannot be computed is only not drawn: the trim itself is still valid.
+        A piece that cannot be computed is only not drawn, with a warning: the trim itself is still valid.
         """
         pieces = {}
         for preview in self._previews.values():
             obj = preview.obj
             try:
                 piece = _cut_off_piece(obj)
-            except Exception:
+            except Exception as error:
+                App.Console.PrintWarning(
+                    translate("frameforge", "{}: the discarded piece cannot be shown: {}\n").format(obj.Label, error)
+                )
                 continue
             if not piece.isNull() and piece.Volume > DISCARDED_MIN_VOLUME:
                 pieces[obj.Name] = piece

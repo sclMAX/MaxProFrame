@@ -227,6 +227,33 @@ class TestDiscardedPieces(KeepEndFixture):
         self.assertEqual(self.box(trim.Shape), (0.0, NEAR))
         self.assertEqual(self.doc.UndoCount, 1)
 
+    def test_only_the_piece_that_cannot_be_computed_is_skipped_with_a_warning(self):
+        target, face, first = self.crossing()
+        second = self.profile(0, 500)
+        real = tool._cut_off_piece
+
+        def cut(trim):
+            if trim.TrimmedBody == first:
+                raise RuntimeError("boolean failed")
+            return real(trim)
+
+        warnings = []
+        with (
+            mock.patch.object(tool, "_cut_off_piece", side_effect=cut),
+            mock.patch.object(App.Console, "PrintWarning", side_effect=warnings.append),
+        ):
+            panel = self.run_command((target, face), (first, ""), (second, ""))
+            self.assertEqual(
+                [(obj, self.box(shape)) for obj, shape in panel.discarded()], [(self.trim_of(second), (NEAR, 500.0))]
+            )
+            self.assertTrue(panel.accept())
+        self.assertEqual(
+            warnings, [f"{self.trim_of(first).Label}: the discarded piece cannot be shown: boolean failed\n"]
+        )
+        self.assertEqual(self.box(self.trim_of(first).Shape), (0.0, NEAR))
+        self.assertEqual(self.box(self.trim_of(second).Shape), (0.0, NEAR))
+        self.assertEqual(self.doc.UndoCount, 1)
+
     def test_discarded_pieces_are_drawn_in_red_and_the_panel_says_so(self):
         scene = scene_graph(self, self.doc)
         target, face, body = self.crossing()
