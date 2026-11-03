@@ -411,5 +411,89 @@ class TestEditUpdateAutomatically(KeepEndFixture):
         self.assertEqual(self.doc.UndoCount, 1)
 
 
+class TestEditRobustness(KeepEndFixture):
+    def existing(self):
+        target, face, body = self.crossing()
+        obj = make_extend_cut_profile(body, (target, (face,)))
+        self.doc.recompute()
+        self.doc.clearUndos()
+        return target, face, body, obj
+
+    def parallel_face(self, target):
+        # Parallel to the profile axis: an Extend / Cut cannot end on it.
+        return self.face_towards(target, App.Vector(0, 0, 1))
+
+    def test_a_failed_ok_keeps_the_trim_and_shows_the_change_as_pending(self):
+        target, face, body, obj = self.existing()
+        panel = self.capture_panel(obj.ViewObject.Proxy.edit)
+        panel.form.cb_auto_update.setChecked(False)
+        parallel = self.parallel_face(target)
+        self.click(target, parallel)
+        self.assertFalse(panel.accept())
+        self.assertNotEqual(self.message(panel), "")
+        self.assertEqual(obj.TrimmingBoundary, [(target, (face,))])
+        self.assertEqual(obj.getStatusString(), "Valid")
+        self.assertEqual(self.box(obj.Shape), (0.0, NEAR))
+        self.assertEqual(self.doc.UndoCount, 0)
+        self.assertEqual(panel.target, (target, (parallel,)))
+        self.assertEqual(self.status(panel), "Pending changes")
+        self.click(target, face)
+        self.assertTrue(panel.accept())
+        self.assertEqual(obj.TrimmingBoundary, [(target, (face,))])
+
+    def test_after_a_failed_live_ok_the_preview_applies_the_panel_again(self):
+        target, face, body, obj = self.existing()
+        panel = self.capture_panel(obj.ViewObject.Proxy.edit)
+        self.click(target, self.parallel_face(target))
+        wait()
+        self.assertFalse(panel.accept())
+        self.assertEqual(obj.TrimmingBoundary, [(target, (face,))])
+        self.assertEqual(self.status(panel), "Pending changes")
+        far = self.face_towards(target, App.Vector(1, 0, 0))
+        self.click(target, far)
+        wait()
+        self.assertEqual(obj.TrimmingBoundary, [(target, (far,))])
+        self.assertEqual(self.status(panel), "Preview updated")
+
+    def test_ok_without_a_net_change_leaves_no_undo_step(self):
+        target, face, body, obj = self.existing()
+        panel = self.capture_panel(obj.ViewObject.Proxy.edit)
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.doc.UndoCount, 0)
+        panel = self.capture_panel(obj.ViewObject.Proxy.edit)
+        self.flip_rows(panel, 0)
+        self.flip_rows(panel, 0)
+        self.assertTrue(panel.accept())
+        self.assertEqual(obj.KeepEnd, "Auto")
+        self.assertEqual(self.doc.UndoCount, 0)
+
+    def test_cancel_after_the_edited_trim_was_deleted_does_not_fail(self):
+        target, face, body, obj = self.existing()
+        panel = self.capture_panel(obj.ViewObject.Proxy.edit)
+        self.flip_rows(panel, 0)
+        name = obj.Name
+        self.doc.removeObject(name)
+        self.assertTrue(panel.reject())
+        self.assertIsNone(self.doc.getObject(name))
+
+    def test_a_reopened_document_shows_the_command_icon_of_each_trim(self):
+        import os
+        import tempfile
+
+        target, face, body, obj = self.existing()
+        other = self.profile(0, 300)
+        notch = make_notch_profile(other, target)
+        self.doc.recompute()
+        path = os.path.join(tempfile.mkdtemp(), "icons.FCStd")
+        self.doc.saveCopy(path)
+        reopened = App.openDocument(path)
+        self.addCleanup(App.closeDocument, reopened.Name)
+        icons = {
+            name: os.path.basename(reopened.getObject(name).ViewObject.Proxy.getIcon())
+            for name in (obj.Name, notch.Name)
+        }
+        self.assertEqual(icons, {obj.Name: "corner-end-trim.svg", notch.Name: "corner-notch.svg"})
+
+
 if __name__ == "__main__":
     unittest.main()

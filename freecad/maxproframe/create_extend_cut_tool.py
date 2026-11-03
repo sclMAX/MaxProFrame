@@ -153,9 +153,9 @@ class ExtendCutTaskPanel:
 
     Without ``edited`` the trims are previewed live, like End Miter does: the preview objects are
     the trims OK keeps, all inside one transaction that Cancel aborts. With ``edited`` the edited trim
-    itself follows the panel live, inside the edit transaction; Cancel puts it back as it was. While the panel is open the
-    target, the profiles and the pieces the previews cut off are drawn over the 3D view in their
-    HIGHLIGHT_COLORS.
+    itself is the preview, under the same Update automatically check box, inside the edit transaction;
+    Cancel puts it back as it was. While the panel is open the target, the profiles and the pieces the
+    previews cut off are drawn over the 3D view in their HIGHLIGHT_COLORS.
 
     Flip side keeps the other piece of the selected profiles when the target crosses them: their
     KeepEnd becomes the other end, or Auto again when that is the piece Auto keeps.
@@ -546,19 +546,25 @@ class ExtendCutTaskPanel:
         self._draw_highlights()
 
     def _restore_edit(self):
-        """Put the edited trim back as it was when the panel opened, even with undo disabled."""
-        doc = self.edited.Document
-        if self._transaction_open and _alive_document(doc):
+        """Put the edited trim back as it was when the panel opened, even with undo disabled.
+
+        The panel values are then no longer shown by the trim: the preview applies them again on the next update.
+        """
+        doc = self.doc
+        aborted = self._transaction_open and _alive_document(doc)
+        if aborted:
             try:
                 doc.abortTransaction()
             except Exception:
                 pass
         self._transaction_open = False
         self._discarded = {}
+        self._previewed = ()
         obj = self.edited
-        if not _alive(obj):
+        if not _in_document(obj):
             return
-        if self._edit_values(obj) != self._edit_before:
+        restored = self._edit_values(obj) != self._edit_before
+        if restored:
             boundary, gap, keep_end = self._edit_before
             obj.TrimmingBoundary = boundary
             if hasattr(obj, "TrimGap"):
@@ -567,8 +573,8 @@ class ExtendCutTaskPanel:
                 obj.KeepEnd = keep_end
             elif hasattr(obj, "KeepEnd"):
                 obj.KeepEnd = AUTO
-        doc.recompute()
-        self._previewed = self._wanted()
+        if aborted or restored:
+            doc.recompute()
 
     def _retarget(self, obj, gap, keep_end):
         """Point the trim ``obj`` at the target, ``gap`` and ``keep_end``; unchanged values are left alone, so not recomputed."""
@@ -790,7 +796,9 @@ class ExtendCutTaskPanel:
             pass
 
     def _close_edit(self):
-        gui_doc = Gui.getDocument(self.edited.Document.Name)
+        if not _alive_document(self.doc):
+            return
+        gui_doc = Gui.getDocument(self.doc.Name)
         if gui_doc is not None and gui_doc.getInEdit() is not None:
             gui_doc.resetEdit()
 
@@ -861,7 +869,12 @@ class ExtendCutTaskPanel:
             self._show([error])
             self._draw_highlights()
             return False
-        doc.commitTransaction()
+        if self._edit_values(self.edited) == self._edit_before:
+            # Nothing changed in the end: no Undo step.
+            doc.abortTransaction()
+            doc.recompute()
+        else:
+            doc.commitTransaction()
         self._transaction_open = False
         self._discarded = {}
         self.clean()
