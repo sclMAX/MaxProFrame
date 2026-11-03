@@ -1,3 +1,5 @@
+import os
+
 import BOPTools.SplitAPI
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -10,12 +12,14 @@ from freecad.maxproframe._utils import (
     get_trimmed_profile_all_cutting_angles,
     length_along_normal,
 )
-from freecad.maxproframe.ff_tools import translate
+from freecad.maxproframe.ff_tools import ICONPATH, translate
 from freecad.maxproframe.miter_geometry import TOLERANCE, Member, MiterError, MiterPlane, miter_plane
 from freecad.maxproframe.version import __version__ as ff_version
 
 # TrimmedProfileType -> TrimmedProfile method giving (body shape, cut shapes).
 JOINTS = {"Notch": "_notch", "End Miter": "_end_miter", "Extend Cut": "_extend_cut"}
+# TrimmedProfileType -> tree icon: the icon of the command making that joint.
+JOINT_ICONS = {"Notch": "corner-notch.svg", "End Miter": "corner-end-miter.svg", "Extend Cut": "corner-end-trim.svg"}
 # Distance, in mm, within which the profile axis still counts as crossing a target face.
 CROSSING_TOLERANCE = 1e-4
 # KeepEnd values: the automatic rule, or the axis end whose piece stays when the target crosses the profile.
@@ -418,6 +422,8 @@ class ViewProviderTrimmedProfile:
                 # The trim replaces its body in the 3D view.
                 for body in get_childrens_from_trimmedbody(fp.TrimmedBody):
                     body.ViewObject.Visibility = False
+        elif prop == "TrimmedProfileType" and hasattr(self.ViewObject, "signalChangeIcon"):
+            self.ViewObject.signalChangeIcon()
         return
 
     def getDisplayModes(self, obj):
@@ -449,34 +455,9 @@ class ViewProviderTrimmedProfile:
         return True
 
     def getIcon(self):
-        """Return the icon in XMP format which will appear in the tree view. This method is optional
-        and if not defined a default icon is shown.
-        """
-        return """
-        	/* XPM */
-                static char * corner_xpm[] = {
-                "16 16 4 1",
-                " 	c None",
-                ".	c #000000",
-                "+	c #3465A4",
-                "@	c #ED2B00",
-                "         ..     ",
-                "       ..++..   ",
-                "   .....+++++.  ",
-                " ..@@@@@.+++... ",
-                " .@.@@@@@.+.++. ",
-                " .@@.@...@.+++. ",
-                " .@@@.@@@@.+++. ",
-                " .@@@.@@@@.+++. ",
-                " ..@@.@@@@....  ",
-                " .+.@.@@...     ",
-                " .++....++.     ",
-                " .+++.++++.     ",
-                " .+++.++++.     ",
-                "  .++.++++.     ",
-                "   .+.+...      ",
-                "    ...         "};
-        	"""
+        """The icon of the command making this joint, so the tree tells Extend / Cut, Notch and End Miter apart."""
+        joint = getattr(getattr(self, "Object", None), "TrimmedProfileType", None)
+        return os.path.join(ICONPATH, JOINT_ICONS.get(joint, JOINT_ICONS["Extend Cut"]))
 
     def __getstate__(self):
         """When saving the document this object gets stored using Python's cPickle module.

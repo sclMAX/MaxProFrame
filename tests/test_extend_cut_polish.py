@@ -150,5 +150,36 @@ class TestChangeTarget(KeepEndFixture):
         self.assertEqual([obj.TrimmingBoundary for obj in notch], [[(other, ("",))]])
 
 
+class TestTreeIconAndLabel(KeepEndFixture):
+    def test_new_trims_are_labelled_after_their_profile(self):
+        from freecad.maxproframe.create_end_miter_tool import make_end_miter_profile
+        from freecad.maxproframe.create_notch_tool import make_notch_profile
+
+        target, face, body = self.crossing()
+        body.Label = "Profile_TC40x40x1.5_001"
+        panel = self.run_command((target, face), (body, ""))
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.trim_of(body).Label, "Profile_TC40x40x1.5_001_Tr")
+        other = self.profile(0, 300)
+        other.Label = "Profile_RT20x40_002"
+        self.assertEqual(make_notch_profile(other, target).Label, "Profile_RT20x40_002_Tr")
+        self.assertEqual(make_end_miter_profile(other, []).Label, "Profile_RT20x40_002_Mt")
+
+    def test_each_joint_shows_the_icon_of_its_command(self):
+        import os
+
+        from freecad.maxproframe.create_end_miter_tool import CreateEndMiterCommand
+        from freecad.maxproframe.create_extend_cut_tool import ExtendCutCommand
+        from freecad.maxproframe.create_notch_tool import NotchCommand
+
+        target, face, body = self.crossing()
+        obj = make_extend_cut_profile(body, (target, (face,)))
+        for joint, command in (("Extend Cut", ExtendCutCommand), ("Notch", NotchCommand), ("End Miter", CreateEndMiterCommand)):
+            obj.TrimmedProfileType = joint
+            icon = obj.ViewObject.Proxy.getIcon()
+            self.assertEqual(icon, command().GetResources()["Pixmap"], joint)
+            self.assertTrue(os.path.isfile(icon), icon)
+
+
 if __name__ == "__main__":
     unittest.main()

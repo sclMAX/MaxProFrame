@@ -14,7 +14,7 @@ Branch: `feat/extend-cut-panel-polish` (from `main` e183278). Native runner: `py
 
 - T1 (S1) Flip side enabled only with a selected row. Route: inline. Commit: see L5. Done.
 - T2 (S2) "Change target" button arms the next click as target. Route: inline. Commit: see L5. Done.
-- T3 (S3) Tree icon per joint type; label new trims after the profile label. Route: inline. Commit: pending.
+- T3 (S3) Tree icon per joint type; label new trims after the profile label. Route: inline. Commit: see L6. Done.
 - T4 (S4) Live preview while editing, discarded piece in red, Cancel restores. Route: inline. Commit: pending.
 - T5 (S1-S4) Spanish catalog, docs, CHANGELOG, full native suite. Route: inline. Commit: pending.
 
@@ -24,3 +24,5 @@ Branch: `feat/extend-cut-panel-polish` (from `main` e183278). Native runner: `py
 - L2. User choices: change target with a "Cambiar destino" button (recommended); tree shows the command icon and the profile label, existing trims keep their label (recommended); live preview while editing (recommended).
 - L3. T1: RED test_extend_cut_polish 3 tests `True is not false` (button always enabled). GREEN 3/3: enabled from the list selection, refreshed after every list rebuild.
 - L4. T2: RED 5 tests `no attribute 'change_target_button'`. GREEN 8/8. Checkable "Change target" button (hidden while editing, disabled without a target); armed, the target label says "Click the new target face, or select a profile in the tree." (Notch: "Click the new target profile, or select it in the tree."); a refused click keeps it armed. Test note: use_language leaves a LanguageChange pending that resets Designer texts on the first event loop pass (test artifact, Spanish texts stay in real FreeCAD). Neighbours: keep_end_panel 22/22, extend_cut_panel 18/18, extend_cut_preview 22/22, notch_panel 22/22, notch_preview 7/7. black/isort unavailable locally (no pip/venv); lines checked by hand, CI checks format.
+- L5. T1+T2 committed bc56bf2.
+- L6. T3: RED 2 tests (XPM icon != command svg; 'Profile001_Tr' != 'Profile_TC40x40x1.5_001_Tr'). GREEN 10/10. getIcon returns the command svg by TrimmedProfileType (signalChangeIcon on type change); make_target_joint labels `<body label>_Tr`, make_end_miter_profile `<body label>_Mt`; object Names unchanged. The BOM shows trims by Label, so new trims show the profile label there too. Neighbours: custom_profile_grouping 7/7, portable_library_profile_instantiation 10/10, end_miter_panel 13/13, end_miter_edit 6/6, notch_panel 22/22, extend_cut_panel 18/18.

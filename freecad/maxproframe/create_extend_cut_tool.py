@@ -90,6 +90,8 @@ def make_target_joint(body, target, joint):
     ``target`` is (object, face names): one face, or none for a whole profile.
     """
     obj = body.Document.addObject("Part::FeaturePython", f"{body.Name}_Tr")
+    # The tree shows the profile it trims, e.g. Profile_TC40x40x1.5_001_Tr.
+    obj.Label = f"{body.Label}_Tr"
     place_in_container_of(obj, body)
     TrimmedProfile(obj)
     if getattr(obj, "ViewObject", None) is not None:
