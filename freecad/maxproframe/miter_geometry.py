@@ -18,6 +18,11 @@ PARALLEL_TOLERANCE = 1e-7
 EXTENSION_LIMIT = 10.0
 
 
+# How far, in mm, the points measuring how far a body reaches may stray from its curved edges.
+REACH_DEFLECTION = 0.01
+# How far, in mm, a body end must be from the profile end to count as moved by a trim.
+MOVED_TOLERANCE = 1e-3
+
 class MiterError(RuntimeError):
     pass
 
@@ -134,7 +139,7 @@ def real_stretch(edge, shape, base_shape):
     if length < TOLERANCE or reach is None or base_reach is None:
         return edge
     low, high = (
-        moved if abs(moved - kept) > TOLERANCE else path
+        moved if abs(moved - kept) > MOVED_TOLERANCE else path
         for moved, kept, path in zip(reach, base_reach, (0.0, length))
     )
     if high - low < TOLERANCE:
@@ -145,10 +150,12 @@ def real_stretch(edge, shape, base_shape):
 
 def _reach(shape, start, direction):
     """(lowest, highest) distance ``shape`` reaches along ``direction`` from ``start``, or None for no shape."""
-    if shape is None or shape.isNull() or not shape.Vertexes:
+    if shape is None or shape.isNull() or not shape.Edges:
         return None
     unit = App.Vector(direction).normalize()
-    distances = [(vertex.Point - start).dot(unit) for vertex in shape.Vertexes]
+    # Points along every edge: a curved edge (an oblique cut of a round tube) reaches past its vertices.
+    points = [point for edge in shape.Edges for point in edge.discretize(Deflection=REACH_DEFLECTION)]
+    distances = [(point - start).dot(unit) for point in points]
     return min(distances), max(distances)
 
 
