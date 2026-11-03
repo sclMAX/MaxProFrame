@@ -1,5 +1,10 @@
 ## Changelog
 
+* Unreleased
+
+  **Fixes**
+  - Stop the **Create Profiles** and **Edit Profile** panels from printing `QAbstractItemView::commitData called with an editor that does not belong to this view` and `QAbstractItemView::closeEditor called with an editor that does not belong to this view` when the **Family** list loses focus or gets Tab, Enter or Escape. With the focus on that list, Tab moves to the next field again and Escape reaches the panel.
+
 * v1.3.0 (2026-11-03)
 
   - Choose which piece **Extend / Cut** and **Notch** keep when the target crosses a profile between its ends: select profiles in the list and press **Flip side**, or double-click a row, to keep the other piece of each one, also when editing an existing trim (see the [tutorial](docs/tutorial.md#via-extend--cut-command)). The choice is stored in the new **KeepEnd** property (**Auto**, **Start** or **End**); **Auto** keeps the current behavior and is the default, so existing documents are unchanged. Choosing another target puts every profile back to **Auto**. When the target does not cross the profile the panel says there is no side to choose. The live preview draws the pieces that will be discarded in red.

@@ -116,11 +116,21 @@ def _safe_remove_layout_widget(layout, widget_or_item):
 
 
 class _TranslatedFamilyPresentation(QtWidgets.QStyledItemDelegate):
-    """Translate only native painting; combo text and catalog keys stay canonical."""
+    """Translate only the native popup items; combo text and catalog keys stay canonical."""
 
     def initStyleOption(self, option, index):
         super().initStyleOption(option, index)
         option.text = translate("frameforge", option.text)
+
+
+class _TranslatedFamilyLabel(QtCore.QObject):
+    """Paint the translated current family on the closed combo.
+
+    Kept apart from the item delegate: a delegate's own event filter treats
+    every watched widget as an item editor, so filtering the combo with it made
+    focus changes and Tab/Enter/Escape commit and close the combo as an editor
+    of the popup view ("editor that does not belong to this view").
+    """
 
     def eventFilter(self, watched, event):
         if event.type() == QtCore.QEvent.Paint:
@@ -136,7 +146,7 @@ class _TranslatedFamilyPresentation(QtWidgets.QStyledItemDelegate):
             painter.drawControl(QtWidgets.QStyle.CE_ComboBoxLabel, option)
             painter.end()
             return True
-        return super().eventFilter(watched, event)
+        return False
 
 
 class _MixedPresentation(QtCore.QObject):
@@ -298,7 +308,8 @@ class BaseProfileTaskPanel(ABC):
         self.family_presentation = _TranslatedFamilyPresentation(first_combo_fam)
         if first_combo_fam is not None:
             first_combo_fam.setItemDelegate(self.family_presentation)
-            first_combo_fam.installEventFilter(self.family_presentation)
+            self.family_label = _TranslatedFamilyLabel(first_combo_fam)
+            first_combo_fam.installEventFilter(self.family_label)
         # Keep the designer widgets (and FormProxy membership) when moving rows.
         first_gb = _safe_unwrap_widget(getattr(first, "groupBox", None))
         catalog = first_gb.layout() if first_gb is not None and hasattr(first_gb, "layout") else None
