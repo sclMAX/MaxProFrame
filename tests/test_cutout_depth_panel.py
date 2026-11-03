@@ -143,6 +143,103 @@ class TestCutoutDepthPanel(CutoutFixture):
         self.assertAlmostEqual(cutout.Shape.Volume, body.Shape.Volume - self.hole(1.5), places=3)
         self.assertEqual(self.doc.UndoCount, 0)
 
+    def edit_cutout(self, cutout):
+        """Double-click ``cutout``: its depth panel, with no Undo step yet."""
+        Gui.Control.closeDialog()
+        self.events()
+        self.doc.clearUndos()
+        Gui.getDocument(self.doc.Name).setEdit(cutout, 0)
+        self.events()
+        return self.depth_panels[-1]
+
+    def test_edit_sketch_applies_the_panel_opens_the_sketch_and_comes_back(self):
+        body, sketch, cutout, _ = self.new_cutout()
+        self.assertTrue(self.depth_panels[0].accept())
+        panel = self.edit_cutout(cutout)
+        form = panel.form
+        self.assertEqual(form.button_edit_sketch.text(), "Edit sketch")
+        self.assertTrue(form.button_edit_sketch.isEnabled())
+        form.combo_cut_type.setCurrentIndex(form.combo_cut_type.findData("Distance"))
+        form.spin_depth.setValue(1.0)
+        form.button_edit_sketch.click()
+        self.events()
+        gui_doc = Gui.getDocument(self.doc.Name)
+        self.assertEqual(gui_doc.getInEdit().Object, sketch)
+        # The panel changes are kept, in one Undo step, before the sketch opens.
+        self.assertEqual(cutout.CutType, "Distance")
+        self.assertAlmostEqual(cutout.ExtrusionLength.Value, 1.0, places=6)
+        self.assertEqual(self.doc.UndoCount, 1)
+        count = len(self.depth_panels)
+        gui_doc.resetEdit()
+        self.events()
+        # Closing the sketch opens the panel of the edited cutout again, with the kept values.
+        self.assertEqual(len(self.depth_panels), count + 1)
+        again = self.depth_panels[-1]
+        self.assertIs(again.obj, cutout)
+        self.assertFalse(again.created)
+        self.assertTrue(Gui.Control.activeDialog())
+        self.assertEqual(again.form.combo_cut_type.currentData(), "Distance")
+        self.assertAlmostEqual(again.form.spin_depth.value(), 1.0, places=6)
+        self.assertTrue(again.reject())
+        self.assertEqual(cutout.CutType, "Distance")
+        self.assertAlmostEqual(cutout.Shape.Volume, body.Shape.Volume - self.hole(1.0), places=3)
+
+    def test_edit_sketch_of_a_new_cutout_comes_back_to_a_new_cutout(self):
+        _, sketch, cutout, before = self.new_cutout()
+        panel = self.depth_panels[0]
+        panel.form.button_edit_sketch.click()
+        self.events()
+        gui_doc = Gui.getDocument(self.doc.Name)
+        self.assertEqual(gui_doc.getInEdit().Object, sketch)
+        gui_doc.resetEdit()
+        self.events()
+        again = self.depth_panels[-1]
+        self.assertIsNot(again, panel)
+        self.assertIs(again.obj, cutout)
+        # Cancel still offers to delete the new cutout with its sketch.
+        self.assertTrue(again.created)
+        with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Yes):
+            self.assertTrue(again.reject())
+        self.assertEqual(self.names(), before)
+
+    def test_edit_sketch_is_disabled_without_a_sketch(self):
+        _, _, cutout, _ = self.new_cutout()
+        self.assertTrue(self.depth_panels[0].accept())
+        Gui.Control.closeDialog()
+        self.events()
+        cutout.Sketch = None
+        panel = create_extruded_cutout_tool.CreateExtrudedCutoutTaskPanel(cutout)
+        self.addCleanup(panel.reject)
+        self.assertFalse(panel.form.button_edit_sketch.isEnabled())
+
+    def context_action(self, cutout):
+        menu = QtWidgets.QMenu()
+        self.addCleanup(menu.deleteLater)
+        cutout.ViewObject.Proxy.setupContextMenu(cutout.ViewObject, menu)
+        actions = [action for action in menu.actions() if action.objectName() == "edit_cutout_sketch"]
+        self.assertEqual(len(actions), 1)
+        return actions[0]
+
+    def test_the_context_menu_opens_the_sketch(self):
+        _, sketch, cutout, _ = self.new_cutout()
+        self.assertTrue(self.depth_panels[0].accept())
+        Gui.Control.closeDialog()
+        self.events()
+        action = self.context_action(cutout)
+        self.assertEqual(action.text(), "Edit sketch")
+        self.assertTrue(action.isEnabled())
+        count = len(self.depth_panels)
+        action.trigger()
+        self.events()
+        gui_doc = Gui.getDocument(self.doc.Name)
+        self.assertEqual(gui_doc.getInEdit().Object, sketch)
+        gui_doc.resetEdit()
+        self.events()
+        # From the tree only the sketch is edited: no cutout panel follows.
+        self.assertEqual(len(self.depth_panels), count)
+        cutout.Sketch = None
+        self.assertFalse(self.context_action(cutout).isEnabled())
+
     def test_the_depth_panel_is_spanish(self):
         use_language(self, "Spanish", "es_ES")
         self.settle()
@@ -155,6 +252,8 @@ class TestCutoutDepthPanel(CutoutFixture):
         )
         self.assertEqual(form.label_cut_type.text(), "Tipo de corte")
         self.assertEqual(form.label_depth.text(), "Profundidad")
+        self.assertEqual(form.button_edit_sketch.text(), "Editar croquis")
+        self.assertEqual(self.context_action(self.depth_panels[0].obj).text(), "Editar croquis")
 
 
 if __name__ == "__main__":

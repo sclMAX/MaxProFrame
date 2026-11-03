@@ -1069,7 +1069,9 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Distance</source><translation>Distancia</translation></message>
     <message><source>One wall</source><translation>Una pared</translation></message>
     <message><source>Delete the cutout and its sketch?</source><translation>¿Borrar el calado y su croquis?</translation></message>
-    <message><source>OK creates a sketch on the face and opens it to draw the cutout.</source><translation>Aceptar crea un croquis en la cara y lo abre para dibujar el calado.</translation></message>
+    <message><source>Click another face to change it. OK creates a sketch on the face and opens it to draw the cutout.</source><translation>Hacé clic en otra cara para cambiarla. Aceptar crea un croquis en la cara y lo abre para dibujar el calado.</translation></message>
+    <message><source>Edit sketch</source><translation>Editar croquis</translation></message>
+    <message><source>Only the last face clicked is used: a cutout takes one face.</source><translation>Solo se usa la última cara en la que hiciste clic: un calado lleva una sola cara.</translation></message>
     <message><source>Click a planar face of a profile, a trimmed profile or a cutout.</source><translation>Hacé clic en una cara plana de un perfil, un perfil recortado o un calado.</translation></message>
     <message><source>Select a planar face of a profile, a trimmed profile or a cutout.</source><translation>Seleccioná una cara plana de un perfil, un perfil recortado o un calado.</translation></message>
     <message><source>{}: pick one of its faces</source><translation>{}: elegí una de sus caras</translation></message>

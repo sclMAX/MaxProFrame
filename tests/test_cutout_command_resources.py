@@ -4,6 +4,7 @@ import os
 import unittest
 
 from freecad.maxproframe.create_extruded_cutout_tool import AddExtrudedCutoutCommandClass
+from freecad.maxproframe.extruded_cutout import ViewProviderExtrudedCutout
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ICON = "freecad/maxproframe/resources/icons/cutout-hole.svg"
@@ -26,6 +27,10 @@ class TestCutoutCommandResources(unittest.TestCase):
         self.assertTrue(os.path.isfile(pixmap))
         with open(os.path.join(ROOT, "CMakeLists.txt"), encoding="utf-8") as handle:
             self.assertIn(ICON, handle.read().split())
+
+    def test_the_tree_shows_cutouts_with_the_command_icon(self):
+        icon = ViewProviderExtrudedCutout.__new__(ViewProviderExtrudedCutout).getIcon()
+        self.assertEqual(icon, self.resources["Pixmap"])
 
 
 if __name__ == "__main__":

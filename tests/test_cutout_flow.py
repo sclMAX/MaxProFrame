@@ -150,7 +150,8 @@ class TestCutoutPanel(CutoutFixture):
         self.assertEqual(panel.form.windowTitle(), "Cutout / Hole")
         self.assertEqual(panel.form.groupBox_face.title(), "Face")
         self.assertEqual(
-            panel.form.hint_label.text(), "OK creates a sketch on the face and opens it to draw the cutout."
+            panel.form.hint_label.text(),
+            "Click another face to change it. OK creates a sketch on the face and opens it to draw the cutout.",
         )
 
     def test_every_unusable_item_is_explained(self):
@@ -201,6 +202,26 @@ class TestCutoutPanel(CutoutFixture):
         self.assertEqual(self.message(panel), f"{body.Label}: {end} is an end face (wall thickness)")
         self.click(body, side)
         self.assertEqual(panel.face, (body, side))
+        self.assertEqual(self.message(panel), "")
+
+    def test_ctrl_clicking_several_faces_uses_the_last_one_and_says_so(self):
+        body = self.tube()
+        top, side, end = (self.face_towards(body, direction) for direction in (UP, SIDE, END))
+        panel = self.run_command()
+        self.click(body, top)
+        # Ctrl+Click adds to the selection instead of replacing it.
+        Gui.Selection.addSelection(self.doc.Name, body.Name, side)
+        QtWidgets.QApplication.processEvents()
+        self.assertEqual(panel.face, (body, side))
+        self.assertEqual(self.message(panel), "Only the last face clicked is used: a cutout takes one face.")
+        # A refused Ctrl+Click keeps the face and explains the pick.
+        Gui.Selection.addSelection(self.doc.Name, body.Name, end)
+        QtWidgets.QApplication.processEvents()
+        self.assertEqual(panel.face, (body, side))
+        self.assertEqual(self.message(panel), f"{body.Label}: {end} is an end face (wall thickness)")
+        # A plain click on one face clears the note.
+        self.click(body, top)
+        self.assertEqual(panel.face, (body, top))
         self.assertEqual(self.message(panel), "")
 
     def test_a_pick_inside_a_part_names_the_face_of_the_profile(self):
@@ -268,6 +289,17 @@ class TestCutoutCreation(CutoutFixture):
         self.assertEqual(self.doc.UndoCount, 1)
         self.doc.undo()
         self.assertEqual(self.names(), before)
+
+    def test_the_cutout_is_labelled_after_the_label_of_its_profile(self):
+        body = self.tube()
+        body.Label = "Profile_TC40x40x1.5_000"
+        top = self.face_towards(body, UP)
+        before = self.names()
+        panel = self.run_command((body, top))
+        self.assertTrue(panel.accept())
+        sketch, cutout = self.created(before)
+        self.assertEqual(cutout.Label, "Profile_TC40x40x1.5_000_Ex")
+        self.assertEqual(cutout.Name, f"{body.Name}_Ex")
 
     def test_the_sketch_holds_the_face_outline_as_construction_geometry(self):
         body = self.tube()
@@ -384,10 +416,19 @@ class TestCutoutTranslations(CutoutFixture):
         self.assertEqual(
             form.face_label.text(), "Hacé clic en una cara plana de un perfil, un perfil recortado o un calado."
         )
-        self.assertEqual(form.hint_label.text(), "Aceptar crea un croquis en la cara y lo abre para dibujar el calado.")
+        self.assertEqual(
+            form.hint_label.text(),
+            "Hacé clic en otra cara para cambiarla. Aceptar crea un croquis en la cara y lo abre para dibujar el calado.",
+        )
         self.assertFalse(panel.accept())
         self.assertEqual(
             self.message(panel), "Seleccioná una cara plana de un perfil, un perfil recortado o un calado."
+        )
+        self.click(body, top)
+        Gui.Selection.addSelection(self.doc.Name, body.Name, side)
+        QtWidgets.QApplication.processEvents()
+        self.assertEqual(
+            self.message(panel), "Solo se usa la última cara en la que hiciste clic: un calado lleva una sola cara."
         )
         self.close_dialog()
         panel = self.run_command((body, top), (body, side), (body, end), (path, ""), (whole, ""))

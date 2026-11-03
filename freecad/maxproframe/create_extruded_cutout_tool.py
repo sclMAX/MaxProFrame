@@ -43,6 +43,8 @@ def make_extruded_cutout(sketch, selected_face):
     """A cutout of the face ``selected_face`` (object, face name) by ``sketch``; the caller places it."""
     selected_object = selected_face[0]
     obj = selected_object.Document.addObject("Part::FeaturePython", f"{selected_object.Name}_Ex")
+    # Named after the object, labelled after its label, as trims are (_Tr, _Mt).
+    obj.Label = f"{selected_object.Label}_Ex"
     obj.addExtension("Part::AttachExtensionPython")
     ExtrudedCutout(obj, sketch, selected_face)
     if getattr(obj, "ViewObject", None) is not None:
@@ -96,36 +98,38 @@ def face_problem(obj, sub):
     return None
 
 
-def _edit_sketch(doc_name, name, cutout_name=None):
+def _edit_sketch(doc_name, name, cutout_name=None, created=True):
     """Open the sketch ``name`` in the Sketcher, unless it is gone (undone, document closed).
 
     FreeCAD shows one task dialog at a time: another one open leaves the sketch closed.
-    With ``cutout_name``, closing the sketch opens the depth panel of that new cutout.
+    With ``cutout_name``, closing the sketch opens the depth panel of that cutout, a new one
+    when ``created``.
     """
     doc = App.listDocuments().get(doc_name)
     sketch = doc.getObject(name) if doc is not None else None
     if sketch is not None and not Gui.Control.activeDialog():
         if cutout_name is not None:
-            _DepthAfterSketch(doc_name, name, cutout_name)
+            _DepthAfterSketch(doc_name, name, cutout_name, created)
         Gui.getDocument(doc_name).setEdit(sketch)
 
 
-def _show_depth_panel(doc_name, cutout_name):
-    """Open the depth panel of the new cutout ``cutout_name``, unless it is gone or a dialog is open."""
+def _show_depth_panel(doc_name, cutout_name, created=True):
+    """Open the depth panel of the cutout ``cutout_name``, unless it is gone or a dialog is open."""
     doc = App.listDocuments().get(doc_name)
     cutout = doc.getObject(cutout_name) if doc is not None else None
     if cutout is not None and not Gui.Control.activeDialog():
-        Gui.Control.showDialog(CreateExtrudedCutoutTaskPanel(cutout, created=True))
+        Gui.Control.showDialog(CreateExtrudedCutoutTaskPanel(cutout, created=created))
 
 
 class _DepthAfterSketch:
-    """Opens the depth panel of a new cutout once its sketch leaves the Sketcher, then stops listening."""
+    """Opens the depth panel of a cutout once its sketch leaves the Sketcher, then stops listening."""
 
     # FreeCAD holds observers weakly enough to drop them: keep them alive while they listen.
     _listening = set()
 
-    def __init__(self, doc_name, sketch_name, cutout_name):
+    def __init__(self, doc_name, sketch_name, cutout_name, created=True):
         self.doc_name, self.sketch_name, self.cutout_name = doc_name, sketch_name, cutout_name
+        self.created = created
         self._listening.add(self)
         Gui.addDocumentObserver(self)
 
@@ -135,7 +139,7 @@ class _DepthAfterSketch:
             return
         self.stop()
         # The Sketcher closes its own task dialog after this signal.
-        QtCore.QTimer.singleShot(0, lambda: _show_depth_panel(self.doc_name, self.cutout_name))
+        QtCore.QTimer.singleShot(0, lambda: _show_depth_panel(self.doc_name, self.cutout_name, self.created))
 
     def slotDeletedDocument(self, gui_doc):
         if gui_doc.Document.Name == self.doc_name:
@@ -178,7 +182,10 @@ class CutoutTaskPanel:
             (form.groupBox_face.setTitle, translate("frameforge", "Face")),
             (
                 form.hint_label.setText,
-                translate("frameforge", "OK creates a sketch on the face and opens it to draw the cutout."),
+                translate(
+                    "frameforge",
+                    "Click another face to change it. OK creates a sketch on the face and opens it to draw the cutout.",
+                ),
             ),
         ):
             setter(text)
@@ -220,9 +227,21 @@ class CutoutTaskPanel:
         if source is None:
             return
         problem = face_problem(source, sub)
-        if problem is None:
-            self.face = (source, sub)
-        self._show([] if problem is None else [problem])
+        if problem is not None:
+            self._show([problem])
+            return
+        self.face = (source, sub)
+        # Ctrl+Click keeps the faces clicked before selected: only this last one is used.
+        faces = sum(
+            isinstance(element, Part.Face)
+            for item in Gui.Selection.getSelectionEx("", 0)
+            for element in item.SubObjects
+        )
+        self._show(
+            [translate("frameforge", "Only the last face clicked is used: a cutout takes one face.")]
+            if faces > 1
+            else []
+        )
 
     def removeSelection(self, doc, obj, sub):
         pass
@@ -284,6 +303,8 @@ class CreateExtrudedCutoutTaskPanel:
 
     ``created``: the cutout was just made by the face panel and its sketch closed; Cancel then asks
     to delete the cutout with its sketch. Otherwise Cancel restores the values the panel opened with.
+    Edit sketch keeps the values like OK, opens the sketch and opens this panel again once the
+    sketch is closed, still ``created`` for a new cutout.
     """
 
     def __init__(self, obj, created=False):
@@ -309,8 +330,14 @@ class CreateExtrudedCutoutTaskPanel:
         form.spin_depth.setDecimals(2)
         form.spin_depth.setSuffix(" mm")
         form.spin_depth.setValue(self._initial_depth())
+        form.button_edit_sketch = QtGui.QPushButton(translate("frameforge", "Edit sketch"))
+        form.button_edit_sketch.setEnabled(self.obj.Sketch is not None)
+        if self.obj.Sketch is not None and getattr(self.obj.Sketch, "ViewObject", None) is not None:
+            form.button_edit_sketch.setIcon(self.obj.Sketch.ViewObject.Icon)
         layout.addRow(form.label_cut_type, form.combo_cut_type)
         layout.addRow(form.label_depth, form.spin_depth)
+        layout.addRow(form.button_edit_sketch)
+        form.button_edit_sketch.clicked.connect(self._edit_sketch)
         form.combo_cut_type.currentIndexChanged.connect(self._apply)
         form.spin_depth.valueChanged.connect(self._apply)
         form.spin_depth.setEnabled(self.obj.CutType == "Distance")
@@ -334,6 +361,21 @@ class CreateExtrudedCutoutTaskPanel:
         if cut_type == "Distance":
             self.obj.ExtrusionLength = self.form.spin_depth.value()
         self.doc.recompute()
+
+    def _edit_sketch(self, *args):
+        """Keep the values in one Undo step, close the panel and open the sketch; closing it comes back here."""
+        if self.obj.Sketch is None:
+            return
+        self.doc.commitTransaction()
+        doc_name, sketch_name, cutout_name, created = self.doc.Name, self.obj.Sketch.Name, self.obj.Name, self.created
+        # The button belongs to the dialog being closed: close it once its click is handled.
+        QtCore.QTimer.singleShot(0, lambda: self._close_for_sketch(doc_name, sketch_name, cutout_name, created))
+
+    def _close_for_sketch(self, doc_name, sketch_name, cutout_name, created):
+        self._leave_edit()
+        if Gui.Control.activeDialog():
+            Gui.Control.closeDialog()
+        QtCore.QTimer.singleShot(0, lambda: _edit_sketch(doc_name, sketch_name, cutout_name, created))
 
     def _leave_edit(self):
         gui_doc = Gui.getDocument(self.doc.Name)

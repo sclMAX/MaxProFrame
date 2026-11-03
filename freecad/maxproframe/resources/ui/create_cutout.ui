@@ -33,7 +33,7 @@
       <item>
        <widget class="QLabel" name="hint_label">
         <property name="text">
-         <string>OK creates a sketch on the face and opens it to draw the cutout.</string>
+         <string>Click another face to change it. OK creates a sketch on the face and opens it to draw the cutout.</string>
         </property>
         <property name="wordWrap">
          <bool>true</bool>
