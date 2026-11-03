@@ -267,6 +267,9 @@ class ExtendCutTaskPanel:
             return [problem]
         if any(_related(obj, profile) for profile in self.profiles):
             return [translate("frameforge", "{} cannot trim itself").format(obj.Label)]
+        if self.target is not None and self.target != (obj, faces):
+            # A side flipped for the old target means nothing for the new one: the profiles go back to Auto.
+            self.keep_ends = {}
         self.target = (obj, faces)
         return []
 
