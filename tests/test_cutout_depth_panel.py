@@ -14,7 +14,9 @@ from test_cutout_flow import HOLE_RADIUS, UP, WALL, CutoutFixture
 from freecad.maxproframe import create_extruded_cutout_tool
 
 
-class TestCutoutDepthPanel(CutoutFixture):
+class DepthPanelFixture(CutoutFixture):
+    """Records every depth panel opened."""
+
     def setUp(self):
         super().setUp()
         self.depth_panels = []
@@ -64,6 +66,17 @@ class TestCutoutDepthPanel(CutoutFixture):
     def hole(self, depth):
         return math.pi * HOLE_RADIUS**2 * depth
 
+    def edit_cutout(self, cutout):
+        """Double-click ``cutout``: its depth panel, with no Undo step yet."""
+        Gui.Control.closeDialog()
+        self.events()
+        self.doc.clearUndos()
+        Gui.getDocument(self.doc.Name).setEdit(cutout, 0)
+        self.events()
+        return self.depth_panels[-1]
+
+
+class TestCutoutDepthPanel(DepthPanelFixture):
     def test_closing_the_new_sketch_opens_the_depth_panel_on_the_cutout(self):
         body, _, cutout, _ = self.new_cutout()
         self.assertEqual(len(self.depth_panels), 1)
@@ -142,15 +155,6 @@ class TestCutoutDepthPanel(CutoutFixture):
         self.assertAlmostEqual(cutout.ExtrusionLength.Value, 1.5, places=6)
         self.assertAlmostEqual(cutout.Shape.Volume, body.Shape.Volume - self.hole(1.5), places=3)
         self.assertEqual(self.doc.UndoCount, 0)
-
-    def edit_cutout(self, cutout):
-        """Double-click ``cutout``: its depth panel, with no Undo step yet."""
-        Gui.Control.closeDialog()
-        self.events()
-        self.doc.clearUndos()
-        Gui.getDocument(self.doc.Name).setEdit(cutout, 0)
-        self.events()
-        return self.depth_panels[-1]
 
     def test_edit_sketch_applies_the_panel_opens_the_sketch_and_comes_back(self):
         body, sketch, cutout, _ = self.new_cutout()
@@ -254,6 +258,108 @@ class TestCutoutDepthPanel(CutoutFixture):
         self.assertEqual(form.label_depth.text(), "Profundidad")
         self.assertEqual(form.button_edit_sketch.text(), "Editar croquis")
         self.assertEqual(self.context_action(self.depth_panels[0].obj).text(), "Editar croquis")
+
+
+class TestCutoutDepthExpressions(DepthPanelFixture):
+    """The depth field takes a FreeCAD expression (Fx), bound to the cutout's ExtrusionLength."""
+
+    def varset(self, depth):
+        varset = self.doc.addObject("App::VarSet", "VarSet")
+        varset.addProperty("App::PropertyLength", "Depth")
+        varset.Depth = depth
+        self.doc.recompute()
+        return varset
+
+    def distance_cutout(self, depth):
+        """A new cutout kept as a Distance cut of ``depth``, then opened for editing."""
+        body, sketch, cutout, _ = self.new_cutout()
+        panel = self.depth_panels[0]
+        panel.form.combo_cut_type.setCurrentIndex(panel.form.combo_cut_type.findData("Distance"))
+        panel.form.spin_depth.setValue(depth)
+        self.assertTrue(panel.accept())
+        return body, cutout
+
+    def expressions(self, obj):
+        return dict(obj.ExpressionEngine)
+
+    def test_the_depth_field_is_bound_to_the_cutout_depth(self):
+        _, cutout = self.distance_cutout(1.0)
+        varset = self.varset(1.25)
+        panel = self.edit_cutout(cutout)
+        binding = Gui.ExpressionBinding(panel.form.spin_depth)
+        self.assertTrue(binding.isBound())
+        self.assertFalse(binding.hasExpression())
+        # What the Fx editor does: the expression goes on the bound property and the field shows its value.
+        cutout.setExpression("ExtrusionLength", f"{varset.Name}.Depth")
+        self.doc.recompute()
+        self.assertTrue(binding.hasExpression())
+        self.assertAlmostEqual(panel.form.spin_depth.value(), 1.25, places=6)
+        self.assertTrue(panel.reject())
+
+    def test_ok_keeps_an_expression_set_in_the_panel_in_one_undo_step(self):
+        body, cutout = self.distance_cutout(1.0)
+        varset = self.varset(1.25)
+        panel = self.edit_cutout(cutout)
+        cutout.setExpression("ExtrusionLength", f"{varset.Name}.Depth")
+        self.doc.recompute()
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.expressions(cutout), {"ExtrusionLength": f"{varset.Name}.Depth"})
+        self.assertAlmostEqual(cutout.Shape.Volume, body.Shape.Volume - self.hole(1.25), places=3)
+        # The VarSet drives the depth from now on.
+        varset.Depth = 0.5
+        self.doc.recompute()
+        self.assertAlmostEqual(cutout.ExtrusionLength.Value, 0.5, places=6)
+        self.assertAlmostEqual(cutout.Shape.Volume, body.Shape.Volume - self.hole(0.5), places=3)
+        varset.Depth = 1.25
+        self.doc.recompute()
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.doc.undo()
+        self.doc.recompute()
+        self.assertEqual(self.expressions(cutout), {})
+        self.assertAlmostEqual(cutout.ExtrusionLength.Value, 1.0, places=6)
+
+    def test_cancel_removes_an_expression_set_in_the_panel(self):
+        body, cutout = self.distance_cutout(1.0)
+        varset = self.varset(1.25)
+        panel = self.edit_cutout(cutout)
+        cutout.setExpression("ExtrusionLength", f"{varset.Name}.Depth")
+        self.doc.recompute()
+        self.assertTrue(panel.reject())
+        self.assertEqual(self.expressions(cutout), {})
+        self.assertAlmostEqual(cutout.ExtrusionLength.Value, 1.0, places=6)
+        self.assertAlmostEqual(cutout.Shape.Volume, body.Shape.Volume - self.hole(1.0), places=3)
+        self.assertEqual(self.doc.UndoCount, 0)
+
+    def test_cancel_with_undo_off_removes_an_expression_set_in_the_panel(self):
+        body, cutout = self.distance_cutout(1.0)
+        varset = self.varset(1.25)
+        panel = self.edit_cutout(cutout)
+        self.doc.UndoMode = 0
+        self.addCleanup(setattr, self.doc, "UndoMode", 1)
+        cutout.setExpression("ExtrusionLength", f"{varset.Name}.Depth")
+        self.doc.recompute()
+        self.assertTrue(panel.reject())
+        self.assertEqual(self.expressions(cutout), {})
+        self.assertAlmostEqual(cutout.ExtrusionLength.Value, 1.0, places=6)
+        self.assertAlmostEqual(cutout.Shape.Volume, body.Shape.Volume - self.hole(1.0), places=3)
+
+    def test_an_existing_expression_is_shown_and_kept(self):
+        body, cutout = self.distance_cutout(1.0)
+        varset = self.varset(1.25)
+        cutout.setExpression("ExtrusionLength", f"{varset.Name}.Depth")
+        self.doc.recompute()
+        panel = self.edit_cutout(cutout)
+        form = panel.form
+        self.assertTrue(Gui.ExpressionBinding(form.spin_depth).hasExpression())
+        self.assertAlmostEqual(form.spin_depth.value(), 1.25, places=6)
+        # Changing the cut type back and forth leaves the expression in place.
+        form.combo_cut_type.setCurrentIndex(form.combo_cut_type.findData("Through All"))
+        form.combo_cut_type.setCurrentIndex(form.combo_cut_type.findData("Distance"))
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.expressions(cutout), {"ExtrusionLength": f"{varset.Name}.Depth"})
+        varset.Depth = 0.5
+        self.doc.recompute()
+        self.assertAlmostEqual(cutout.Shape.Volume, body.Shape.Volume - self.hole(0.5), places=3)
 
 
 if __name__ == "__main__":
