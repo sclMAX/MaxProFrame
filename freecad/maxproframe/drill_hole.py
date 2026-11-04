@@ -29,6 +29,11 @@ from freecad.maxproframe.frameforge_exceptions import FrameForgeException
 DEFAULT_CUT_TYPE = "One wall"
 DEFAULT_DIAMETER = 10.0
 DEFAULT_PITCH = 50.0
+# Holes a pattern side adds, and holes a drill hole makes at most.
+MAX_COUNT = 1000
+MAX_HOLES = 1000
+# Prefixes of the pattern properties: a count and a pitch on each side of the point, along and across.
+PATTERN_SIDES = ("AlongBackward", "AlongForward", "AcrossBackward", "AcrossForward")
 # Below this a component of a direction is zero.
 TOLERANCE = 1e-9
 # Distance (mm) within which a vertex or a face plane is where the reference snapshot was taken.
@@ -111,6 +116,139 @@ def _add_center_properties(obj):
             setattr(obj, name, False)
 
 
+def _pattern_tips():
+    """{property: tooltip} of the pattern properties, in the order they are added."""
+    return {
+        "AlongBackwardCount": translate("frameforge", "Number of holes backward of the point, along the profile"),
+        "AlongBackwardPitch": translate(
+            "frameforge", "Distance between the holes backward of the point, along the profile"
+        ),
+        "AlongForwardCount": translate("frameforge", "Number of holes forward of the point, along the profile"),
+        "AlongForwardPitch": translate(
+            "frameforge", "Distance between the holes forward of the point, along the profile"
+        ),
+        "AcrossBackwardCount": translate("frameforge", "Number of holes backward of the point, across the profile"),
+        "AcrossBackwardPitch": translate(
+            "frameforge", "Distance between the holes backward of the point, across the profile"
+        ),
+        "AcrossForwardCount": translate("frameforge", "Number of holes forward of the point, across the profile"),
+        "AcrossForwardPitch": translate(
+            "frameforge", "Distance between the holes forward of the point, across the profile"
+        ),
+        "HoleAtPoint": translate("frameforge", "Drill a hole at the point the offsets give"),
+    }
+
+
+def _add_pattern_properties(obj):
+    """Add the pattern properties ``obj`` has not got: no count on any side, a hole at the point."""
+    for name, tip in _pattern_tips().items():
+        if hasattr(obj, name):
+            continue
+        if name.endswith("Count"):
+            obj.addProperty("App::PropertyIntegerConstraint", name, "DrillHole", tip)
+            setattr(obj, name, (0, 0, MAX_COUNT, 1))
+        elif name.endswith("Pitch"):
+            obj.addProperty("App::PropertyLength", name, "DrillHole", tip)
+            setattr(obj, name, DEFAULT_PITCH)
+        else:
+            obj.addProperty("App::PropertyBool", name, "DrillHole", tip)
+            setattr(obj, name, True)
+
+
+def _migrate_count_pitch(obj):
+    """Turn the Count and Pitch of a drill hole saved by 1.5.0 into holes forward along (S4).
+
+    Count holes from the point, Pitch apart, are the hole at the point and Count - 1 forward. An
+    expression on Pitch moves to AlongForwardPitch, one on Count becomes ``(expression) - 1`` on
+    AlongForwardCount. Count and Pitch are then removed.
+    """
+    if not (hasattr(obj, "Count") and hasattr(obj, "Pitch")) or hasattr(obj, "AlongForwardCount"):
+        return
+    count, pitch = obj.Count, obj.Pitch.Value
+    expressions = {path.lstrip("."): expression for path, expression in obj.ExpressionEngine}
+    _add_pattern_properties(obj)
+    obj.AlongForwardCount = max(count - 1, 0)
+    obj.AlongForwardPitch = pitch
+    for old, new, expression in (
+        ("Pitch", "AlongForwardPitch", expressions.get("Pitch")),
+        ("Count", "AlongForwardCount", f"({expressions['Count']}) - 1" if expressions.get("Count") else None),
+    ):
+        if expressions.get(old):
+            obj.setExpression(old, None)
+        if expression:
+            obj.setExpression(new, expression)
+        obj.removeProperty(old)
+
+
+def _pattern(fp):
+    """(hole at the point, {side: (count, pitch)}) of the drill hole ``fp``.
+
+    A drill hole saved with Count and Pitch has not got the pattern until it is restored: the same holes.
+    """
+    if not hasattr(fp, "AlongForwardCount") and hasattr(fp, "Count"):
+        sides = {side: (0, 0.0) for side in PATTERN_SIDES}
+        sides["AlongForward"] = (max(fp.Count - 1, 0), fp.Pitch.Value)
+        return True, sides
+    return fp.HoleAtPoint, {
+        side: (getattr(fp, f"{side}Count"), getattr(fp, f"{side}Pitch").Value) for side in PATTERN_SIDES
+    }
+
+
+def axis_positions(backward, forward, at_point):
+    """Positions of the holes on one axis from the point: ``backward`` and ``forward`` are (count, pitch).
+
+    Backward first, from the farthest; then 0 when ``at_point``; then forward, from the nearest.
+    """
+    (backward_count, backward_pitch), (forward_count, forward_pitch) = backward, forward
+    return (
+        [-index * backward_pitch for index in range(backward_count, 0, -1)]
+        + ([0.0] if at_point else [])
+        + [index * forward_pitch for index in range(1, forward_count + 1)]
+    )
+
+
+def _pattern_axes(at_point, sides):
+    """(along, across) positions of the pattern ``sides``, ([], []) when it has no hole at all.
+
+    An axis without holes still holds the point's line (position 0) for the holes of the other axis.
+    """
+    along = axis_positions(sides["AlongBackward"], sides["AlongForward"], at_point)
+    across = axis_positions(sides["AcrossBackward"], sides["AcrossForward"], at_point)
+    if not along and not across:
+        return [], []
+    return along or [0.0], across or [0.0]
+
+
+def pattern_count(at_point, sides):
+    """Number of holes of the pattern, as pattern_positions makes them: 0 when it has none.
+
+    Not limited to MAX_HOLES, which pattern_positions refuses.
+    """
+    along, across = _pattern_axes(at_point, sides)
+    return len(along) * len(across)
+
+
+def pattern_positions(at_point, sides):
+    """(along, across) positions of the holes from the point: every combination of one along and one across.
+
+    An axis without holes still holds the point's line (position 0) for the holes of the other axis.
+    Raise when there is no hole at all or more than MAX_HOLES.
+    """
+    along, across = _pattern_axes(at_point, sides)
+    if not along:
+        raise FrameForgeException(
+            translate(
+                "frameforge", "Drill Hole: no hole to drill. Check Hole at the point or set a count in the pattern."
+            )
+        )
+    total = len(along) * len(across)
+    if total > MAX_HOLES:
+        raise FrameForgeException(
+            translate("frameforge", "Drill Hole: the pattern makes {} holes, at most {}.").format(total, MAX_HOLES)
+        )
+    return [(a, b) for b in across for a in along]
+
+
 def _element(elements, name, prefix):
     """The element ``name`` (``prefix`` and a number from 1) of ``elements``, or None when there is none."""
     number = name[len(prefix) :]
@@ -189,26 +327,24 @@ class DrillHole(ExtrudedCutout):
             "App::PropertyDistance",
             "OffsetAlong",
             "DrillHole",
-            translate("frameforge", "Distance from the vertex to the first hole, along the profile"),
+            translate(
+                "frameforge",
+                "Distance from the picked point to the pattern origin (the hole at the point), along the profile",
+            ),
         )
         obj.addProperty(
             "App::PropertyDistance",
             "OffsetAcross",
             "DrillHole",
-            translate("frameforge", "Distance from the vertex to the holes, across the profile"),
+            translate(
+                "frameforge",
+                "Distance from the picked point to the pattern origin (the hole at the point), across the profile",
+            ),
         )
         obj.addProperty(
             "App::PropertyLength", "Diameter", "DrillHole", translate("frameforge", "Hole diameter")
         ).Diameter = DEFAULT_DIAMETER
-        obj.addProperty(
-            "App::PropertyIntegerConstraint", "Count", "DrillHole", translate("frameforge", "Number of holes")
-        ).Count = (1, 1, 1000, 1)
-        obj.addProperty(
-            "App::PropertyLength",
-            "Pitch",
-            "DrillHole",
-            translate("frameforge", "Distance between two holes, along the profile"),
-        ).Pitch = DEFAULT_PITCH
+        _add_pattern_properties(obj)
         # Snapshot of the reference, local to the profile, taken from the face and vertex named ReferenceName.
         for name, kind, tip in (
             (
@@ -239,8 +375,14 @@ class DrillHole(ExtrudedCutout):
         _add_center_properties(obj)
 
     def onDocumentRestored(self, obj):
-        """Drill holes saved before CenterAlong and CenterAcross gain them off: measured from their vertex."""
+        """Drill holes saved before CenterAlong and CenterAcross gain them off: measured from their vertex.
+
+        Drill holes saved with Count and Pitch (1.5.0) get the same holes as a pattern; any other one
+        gains the pattern properties it lacks: one hole at the point.
+        """
         _add_center_properties(obj)
+        _migrate_count_pitch(obj)
+        _add_pattern_properties(obj)
 
     def onBeforeChange(self, fp, prop):
         if prop == "baseObject" and fp.baseObject:
@@ -306,7 +448,8 @@ class DrillHole(ExtrudedCutout):
 
         The offsets are measured from the vertex, positive into the face, or from the middle of the face
         along (CenterAlong) or across (CenterAcross) the profile, positive toward the end of the path of
-        the profile along and to a fixed side across.
+        the profile along and to a fixed side across. They give the point; the pattern adds holes on each
+        side of it, forward in the positive direction of each offset (see pattern_positions).
         """
         vertex, normal, center, face = self.reference(fp)
         profile = get_profile_from_extrudedcutout(fp)
@@ -316,8 +459,9 @@ class DrillHole(ExtrudedCutout):
         center_along, center_across = getattr(fp, "CenterAlong", False), getattr(fp, "CenterAcross", False)
         along, across = _plane_axes(normal, axis, vertex, center, center_along, center_across)
         origin = offset_origin(face, vertex, along, across, center_along, center_across)
-        first = origin + along * fp.OffsetAlong.Value + across * fp.OffsetAcross.Value
-        return normal, [first + along * (fp.Pitch.Value * index) for index in range(fp.Count)]
+        point = origin + along * fp.OffsetAlong.Value + across * fp.OffsetAcross.Value
+        positions = pattern_positions(*_pattern(fp))
+        return normal, [point + along * a + across * b for a, b in positions]
 
     def execute(self, fp):
         """Drill the holes when the object is recomputed."""

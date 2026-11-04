@@ -1086,7 +1086,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Holes</source><translation>Agujeros</translation></message>
     <message><source>Offset along</source><translation>Desplazamiento longitudinal</translation></message>
     <message><source>Offset across</source><translation>Desplazamiento transversal</translation></message>
-    <message><source>Count</source><translation>Cantidad</translation></message>
+    <message><source>Holes per side</source><translation>Agujeros por lado</translation></message>
     <message><source>Pitch</source><translation>Paso</translation></message>
     <message><source>{}: {} is not used, a drill hole takes one face</source><translation>{}: {} no se usa, un agujero lleva una sola cara</translation></message>
     <message><source>{}: {} is not used, a drill hole takes one vertex</source><translation>{}: {} no se usa, un agujero lleva un solo vértice</translation></message>
@@ -1105,8 +1105,8 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Drill Hole: no face to drill.</source><translation>Agujero: no hay ninguna cara para agujerear.</translation></message>
     <message><source>The reference vertex changed: check the hole.</source><translation>La referencia cambió, revisá el agujero.</translation></message>
     <message><source>Vertex of the face the hole is placed from</source><translation>Vértice de la cara a partir del cual se ubica el agujero</translation></message>
-    <message><source>Distance from the vertex to the first hole, along the profile</source><translation>Distancia del vértice al primer agujero, a lo largo del perfil</translation></message>
-    <message><source>Distance from the vertex to the holes, across the profile</source><translation>Distancia del vértice a los agujeros, transversal al perfil</translation></message>
+    <message><source>Distance from the picked point to the pattern origin (the hole at the point), along the profile</source><translation>Distancia del punto elegido al origen del patrón (el agujero del punto), a lo largo del perfil</translation></message>
+    <message><source>Distance from the picked point to the pattern origin (the hole at the point), across the profile</source><translation>Distancia del punto elegido al origen del patrón (el agujero del punto), transversal al perfil</translation></message>
     <message><source>Measure the offset along from the middle of the face length</source><translation>Medir el desplazamiento longitudinal desde el medio del largo de la cara</translation></message>
     <message><source>Measure the offset across from the middle of the face width</source><translation>Medir el desplazamiento transversal desde el medio del ancho de la cara</translation></message>
     <message><source>Hole diameter</source><translation>Diámetro del agujero</translation></message>
@@ -1116,6 +1116,34 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Reference face normal, local to the profile</source><translation>Normal de la cara de referencia, local al perfil</translation></message>
     <message><source>Face and vertex the reference was taken from</source><translation>Cara y vértice de los que se tomó la referencia</translation></message>
     <message><source>Set when the reference vertex is gone and the hole kept its place</source><translation>Se completa cuando el vértice de referencia ya no está y el agujero conservó su posición</translation></message>
+    <message><source>Pattern</source><translation>Patrón</translation></message>
+    <message><source>Hole at the point</source><translation>Agujero en el punto</translation></message>
+    <message><source>Along ← backward</source><translation>Longitudinal ← atrás</translation></message>
+    <message><source>Along → forward</source><translation>Longitudinal → adelante</translation></message>
+    <message><source>Across ← backward</source><translation>Transversal ← atrás</translation></message>
+    <message><source>Across → forward</source><translation>Transversal → adelante</translation></message>
+    <message><source>Pattern: {}</source><translation>Patrón: {}</translation></message>
+    <message><source>← {} × {}</source><translation>← {} × {}</translation></message>
+    <message><source>{} × {} →</source><translation>{} × {} →</translation></message>
+    <message><source>across {}</source><translation>transversal {}</translation></message>
+    <message><source>no hole at the point</source><translation>sin agujero en el punto</translation></message>
+    <message><source>{} hole</source><translation>{} agujero</translation></message>
+    <message><source>{} holes</source><translation>{} agujeros</translation></message>
+    <message><source>The holes overlap: the pitch along ({}) is smaller than the diameter ({}).</source><translation>Los agujeros se superponen: el paso longitudinal ({}) es menor que el diámetro ({}).</translation></message>
+    <message><source>The holes overlap: with no hole at the point, the holes along on each side of the point are {} apart, less than the diameter ({}).</source><translation>Los agujeros se superponen: sin agujero en el punto, los agujeros longitudinales a cada lado del punto quedan a {} entre sí, menos que el diámetro ({}).</translation></message>
+    <message><source>The holes overlap: the pitch across ({}) is smaller than the diameter ({}).</source><translation>Los agujeros se superponen: el paso transversal ({}) es menor que el diámetro ({}).</translation></message>
+    <message><source>The holes overlap: with no hole at the point, the holes across on each side of the point are {} apart, less than the diameter ({}).</source><translation>Los agujeros se superponen: sin agujero en el punto, los agujeros transversales a cada lado del punto quedan a {} entre sí, menos que el diámetro ({}).</translation></message>
+    <message><source>Drill Hole: no hole to drill. Check Hole at the point or set a count in the pattern.</source><translation>Agujero: no hay ningún agujero para perforar. Marcá Agujero en el punto o poné una cantidad en el patrón.</translation></message>
+    <message><source>Drill Hole: the pattern makes {} holes, at most {}.</source><translation>Agujero: el patrón da {} agujeros, como máximo {}.</translation></message>
+    <message><source>Number of holes backward of the point, along the profile</source><translation>Cantidad de agujeros hacia atrás del punto, a lo largo del perfil</translation></message>
+    <message><source>Distance between the holes backward of the point, along the profile</source><translation>Distancia entre los agujeros hacia atrás del punto, a lo largo del perfil</translation></message>
+    <message><source>Number of holes forward of the point, along the profile</source><translation>Cantidad de agujeros hacia adelante del punto, a lo largo del perfil</translation></message>
+    <message><source>Distance between the holes forward of the point, along the profile</source><translation>Distancia entre los agujeros hacia adelante del punto, a lo largo del perfil</translation></message>
+    <message><source>Number of holes backward of the point, across the profile</source><translation>Cantidad de agujeros hacia atrás del punto, transversal al perfil</translation></message>
+    <message><source>Distance between the holes backward of the point, across the profile</source><translation>Distancia entre los agujeros hacia atrás del punto, transversal al perfil</translation></message>
+    <message><source>Number of holes forward of the point, across the profile</source><translation>Cantidad de agujeros hacia adelante del punto, transversal al perfil</translation></message>
+    <message><source>Distance between the holes forward of the point, across the profile</source><translation>Distancia entre los agujeros hacia adelante del punto, transversal al perfil</translation></message>
+    <message><source>Drill a hole at the point the offsets give</source><translation>Perforar un agujero en el punto que dan los desplazamientos</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ParametricLine</name>
@@ -1155,7 +1183,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
 <context>
     <name>MaxProFrame_DrillHole</name>
     <message><source>Drill Hole</source><translation>Agujero</translation></message>
-    <message><source>&lt;b&gt;Drill Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile or a cutout, then one of its nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the offsets from that point, one or a row of them, with a diameter and a depth.</source><translation>&lt;b&gt;Agujero&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego en uno de sus nueve círculos para medir desde ahí: una esquina, el medio de un borde o el centro. Se perforan agujeros redondos a las distancias indicadas desde ese punto, uno solo o una fila, con un diámetro y una profundidad.</translation></message>
+    <message><source>&lt;b&gt;Drill Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile or a cutout, then one of its nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the offsets from that point: one, or a pattern on both sides of it along and across the profile, with a diameter and a depth.</source><translation>&lt;b&gt;Agujero&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego en uno de sus nueve círculos para medir desde ahí: una esquina, el medio de un borde o el centro. Se perforan agujeros redondos a las distancias indicadas desde ese punto: uno solo, o un patrón a ambos lados, a lo largo y a lo ancho del perfil, con un diámetro y una profundidad.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_Link</name>
