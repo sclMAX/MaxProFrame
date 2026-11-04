@@ -425,6 +425,53 @@ class TestDrillHolePreview(DrillHolePanelFixture):
         self.assertAlmostEqual(obj.Diameter.Value, 12.0, places=6)
         self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - hole_volume(12.0, WALL), places=3)
 
+    def press_during_next_recompute(self, hooks, panel, button, value=None):
+        """The next drill hole recompute gets ``value`` typed in the Diameter, then OK or Cancel pressed.
+
+        Returns what the button returned, once that recompute ran.
+        """
+        returned = []
+
+        def press(fp):
+            if value is not None:
+                panel.form.spin_diameter.setValue(value)
+            returned.append(getattr(panel, button)())
+
+        hooks.append(press)
+        return returned
+
+    def test_ok_pressed_during_a_recompute_creates_the_hole_with_the_last_values_once_it_ends(self):
+        hooks = self.hook_execute()
+        body, panel, obj, before = self.previewed_panel()
+        counter = self.count_recomputes(panel)
+        returned = self.press_during_next_recompute(hooks, panel, "accept", 14.0)
+        panel.form.spin_diameter.setValue(12.0)
+        wait(SETTLE)
+        # The dialog stays open until the recompute ends, then OK runs and closes it.
+        self.assertEqual(returned, [False])
+        self.assertFalse(Gui.Control.activeDialog())
+        self.assertEqual(counter.nested, 0)
+        self.assertEqual(self.new_objects(before), [obj])
+        self.assertAlmostEqual(obj.Diameter.Value, 14.0, places=6)
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - hole_volume(14.0, WALL), places=3)
+        self.assertEqual(obj.getStatusString(), "Valid")
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.assertEqual(self.doc.UndoNames, ["Create Drill Hole"])
+
+    def test_cancel_pressed_during_a_recompute_leaves_the_document_unchanged_once_it_ends(self):
+        hooks = self.hook_execute()
+        body, panel, obj, before = self.previewed_panel()
+        counter = self.count_recomputes(panel)
+        returned = self.press_during_next_recompute(hooks, panel, "reject")
+        panel.form.spin_diameter.setValue(12.0)
+        wait(SETTLE)
+        self.assertEqual(returned, [False])
+        self.assertFalse(Gui.Control.activeDialog())
+        self.assertEqual(counter.nested, 0)
+        self.assertEqual(self.names(), before)
+        self.assertEqual(self.doc.UndoCount, 0)
+        self.assertTrue(body.ViewObject.Visibility)
+
     def test_quick_changes_are_previewed_once_after_the_delay_and_cancel_stops_a_pending_one(self):
         # S9: debounced.
         body, panel, obj, before = self.previewed_panel()
