@@ -14,7 +14,7 @@ Branch: feat/drill-hole-pattern (worktree ../MaxProFrame-drill-pattern). One PR.
 
 - T1 (S1-S5) Model, migration, geometry, panel, translations, docs. Route: worker (context backstop). Commit: 157966a. Done.
 
-- T2 (S6) Overlap warning, total in the title, per-side column label. Route: worker (context backstop). Commit: pending.
+- T2 (S6) Overlap warning, total in the title, per-side column label. Route: worker (context backstop). Commit: 88e636b. Done.
 
 ## Log
 
