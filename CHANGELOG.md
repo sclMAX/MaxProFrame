@@ -2,6 +2,7 @@
 
 * Unreleased
 
+  - **Drill Hole** picks its corner without hitting the vertex: a click on a face takes the face and its corner nearest to the click, a click near another corner of the same face moves it there, and **Next corner** (Spanish *Siguiente esquina*) steps through the corners of the face. The picked corner is marked in the 3D view. Clicking the vertex itself still works.
   - Drill round holes without a sketch with the new **Drill Hole** command (Spanish *Agujero*), next to **Cutout / Hole** (see the [tutorial](docs/tutorial.md#drill-hole)): click a planar face of a profile, a trimmed profile or a cutout, then one of its vertices, and set the **Offset along** and **Offset across** the profile from that vertex, the **Diameter**, a **Count** and **Pitch** for a row of holes, and the **Cut type** (**One wall**, **Through All** or **Distance**) with its **Depth**. The holes are previewed under **Update automatically**; **OK** creates them in one Undo step and **Cancel** leaves the document unchanged. Double-clicking a drill hole opens the same panel. The hole keeps its place when the profile changes and its vertices are renumbered; when its vertex is gone it stays where it was and its **Reference Warning** says so. Curved faces are refused with a message. A hole moved to another profile shows the profile it left again and is labelled after the new one. The cut list treats a drill hole like a cutout.
 
 * v1.4.1 (2026-11-03)

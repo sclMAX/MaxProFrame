@@ -103,6 +103,12 @@ class DrillHolePanelFixture(CutoutFixture, DrillHoleFixture):
         super().click(obj, sub)
         self.events()
 
+    def click_at(self, obj, sub, point):
+        """A click on ``sub`` of ``obj`` at the global ``point``, as the 3D view reports it."""
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(self.doc.Name, obj.Name, sub, *point)
+        self.events()
+
     def new_objects(self, before):
         return [obj for obj in self.doc.Objects if obj.Name not in before]
 
@@ -227,7 +233,12 @@ class TestDrillHoleCommand(DrillHolePanelFixture):
         self.assertIn("MaxProFrame_DrillHole", Gui.listCommands())
         resources = DrillHoleCommand().GetResources()
         self.assertEqual(resources["MenuText"], "Drill Hole")
-        self.assertTrue(resources["ToolTip"].startswith("<b>Drill Hole</b>"))
+        self.assertEqual(
+            resources["ToolTip"],
+            "<b>Drill Hole</b><br><br>Click a planar face of a profile, a trimmed profile or a cutout near the corner to "
+            "measure from: round holes are drilled at the offsets from that corner, one or a row of them, with a diameter "
+            "and a depth.",
+        )
         self.assertEqual(os.path.basename(resources["Pixmap"]), "drill-hole.svg")
         self.assertTrue(os.path.isfile(resources["Pixmap"]))
         body = self.tube()
@@ -344,6 +355,118 @@ class TestDrillHolePicks(DrillHolePanelFixture):
         self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
         self.assertTrue(self.empty(obj.Shape, 320, 0, 24))
         self.assertFalse(self.empty(obj.Shape, -20, 0, 24))
+
+
+class TestDrillHoleCornerPicks(DrillHolePanelFixture):
+    """A click on a face near a corner takes that corner: the vertex itself need not be hit."""
+
+    def test_a_click_on_a_face_takes_the_face_and_its_corner_nearest_to_the_click(self):
+        body = self.tube()
+        top, side = self.face_towards(body, UP), self.face_towards(body, SIDE)
+        corner, far = self.vertex_at(body, CORNER), self.vertex_at(body, FAR_CORNER)
+        self.doc.clearUndos()
+        before = self.names()
+        panel = self.run_command()
+        self.assertEqual(
+            panel.form.hint_label.text(),
+            "Click a face near the corner the holes are placed from, or the vertex itself. Click again to change it.",
+        )
+        self.click_at(body, top, (-40, -18, 25))
+        self.assertEqual((panel.face, panel.vertex), ((body, top), corner))
+        self.assertEqual(panel.form.vertex_label.text(), corner)
+        self.assertEqual(self.message(panel), "")
+        wait()
+        obj = self.preview(before)
+        self.assertEqual(obj.ReferenceVertex, corner)
+        # Another click on the same face moves the corner.
+        self.click_at(body, top, (330, 15, 25))
+        self.assertEqual((panel.face, panel.vertex), ((body, top), far))
+        wait()
+        self.assertEqual(obj.ReferenceVertex, far)
+        # A click on another face takes its own nearest corner.
+        side_face = body.Shape.getElement(side)
+        nearest = min(side_face.Vertexes, key=lambda v: v.Point.distanceToPoint(App.Vector(-49, -25, -24)))
+        self.click_at(body, side, (-49, -25, -24))
+        self.assertEqual((panel.face, panel.vertex), ((body, side), self.vertex_at(body, nearest.Point)))
+        self.assertEqual(self.message(panel), "")
+        self.assertTrue(panel.reject())
+        self.assertEqual(self.names(), before)
+        self.assertEqual(self.doc.UndoCount, 0)
+
+    def test_a_click_on_a_vertex_and_a_click_without_a_point_keep_their_meaning(self):
+        # A click on the vertex itself still takes it; a selection without a point (tree, script) only takes the face.
+        body = self.tube()
+        top = self.face_towards(body, UP)
+        corner, far = self.vertex_at(body, CORNER), self.vertex_at(body, FAR_CORNER)
+        panel = self.run_command()
+        self.click(body, top)
+        self.assertEqual((panel.face, panel.vertex), ((body, top), None))
+        self.click_at(body, far, FAR_CORNER)
+        self.assertEqual(panel.vertex, far)
+        self.click(body, top)
+        self.assertEqual((panel.face, panel.vertex), ((body, top), far))
+        self.click_at(body, corner, CORNER)
+        self.assertEqual(panel.vertex, corner)
+
+    def test_the_click_point_is_global_for_a_profile_in_a_moved_container(self):
+        body = self.tube()
+        part = self.doc.addObject("App::Part", "Part")
+        part.addObjects([body.AttachmentSupport[0][0], body])
+        part.Placement.Base = App.Vector(0, 500, 0)
+        self.doc.recompute()
+        top = self.face_towards(body, UP)
+        panel = self.run_command()
+        # Near FAR_CORNER once the container moves it 500 mm along y; near CORNER in the profile's own coordinates.
+        self.click_at(body, top, (330, 515, 25))
+        self.assertEqual((panel.face, panel.vertex), ((body, top), self.vertex_at(body, FAR_CORNER)))
+        marker = panel.corner_marker()
+        self.assertTrue(marker.isEqual(App.Vector(350, 525, 25), 1e-6), marker)
+
+    def test_a_marker_shows_the_corner_until_the_panel_closes(self):
+        body = self.tube()
+        top = self.face_towards(body, UP)
+        bottom = self.face_towards(body, App.Vector(0, 0, -1))
+        panel = self.run_command()
+        self.assertIsNone(panel.corner_marker())
+        self.click(body, top)
+        self.assertIsNone(panel.corner_marker())
+        self.click_at(body, top, (-40, -18, 25))
+        self.assertTrue(panel.corner_marker().isEqual(App.Vector(*CORNER), 1e-6))
+        self.click_at(body, top, (330, 15, 25))
+        self.assertTrue(panel.corner_marker().isEqual(App.Vector(*FAR_CORNER), 1e-6))
+        # A face the corner is not on drops the corner and its marker.
+        self.click(body, bottom)
+        self.assertIsNone(panel.vertex)
+        self.assertIsNone(panel.corner_marker())
+        self.click_at(body, bottom, (-40, -18, -25))
+        self.assertTrue(panel.corner_marker().isEqual(App.Vector(*BOTTOM_CORNER), 1e-6))
+        self.assertTrue(panel.reject())
+        self.assertIsNone(panel.corner_marker())
+
+    def test_next_corner_steps_through_the_corners_of_the_face(self):
+        body = self.tube()
+        top = self.face_towards(body, UP)
+        corners = [self.vertex_at(body, v.Point) for v in body.Shape.getElement(top).Vertexes]
+        self.doc.clearUndos()
+        before = self.names()
+        panel = self.run_command()
+        button = panel.form.button_next_corner
+        self.assertEqual(button.text(), "Next corner")
+        self.assertFalse(button.isEnabled())
+        self.click(body, top)
+        self.assertTrue(button.isEnabled())
+        seen = []
+        for _ in range(len(corners) + 1):
+            button.click()
+            self.events()
+            seen.append(panel.vertex)
+            self.assertEqual(panel.form.vertex_label.text(), panel.vertex)
+        self.assertEqual(seen, corners + corners[:1])
+        wait()
+        self.assertEqual(self.preview(before).ReferenceVertex, corners[0])
+        self.assertTrue(panel.reject())
+        self.assertEqual(self.names(), before)
+        self.assertEqual(self.doc.UndoCount, 0)
 
 
 class TestDrillHolePreview(DrillHolePanelFixture):
@@ -770,10 +893,13 @@ class TestDrillHoleSpanish(DrillHolePanelFixture):
         use_language(self, "Spanish", "es_ES")
         resources = DrillHoleCommand().GetResources()
         self.assertEqual(App.Qt.translate("MaxProFrame_DrillHole", resources["MenuText"]), "Agujero")
-        self.assertTrue(
-            App.Qt.translate("MaxProFrame_DrillHole", resources["ToolTip"]).startswith(
-                "<b>Agujero</b><br><br>Hacé clic en una cara plana de un perfil, un perfil recortado o un calado"
-            )
+        self.assertEqual(
+            App.Qt.translate("MaxProFrame_DrillHole", resources["ToolTip"]),
+            (
+                "<b>Agujero</b><br><br>Hacé clic en una cara plana de un perfil, un perfil recortado o un calado cerca de "
+                "la esquina desde la que se mide: se perforan agujeros redondos a las distancias indicadas desde esa "
+                "esquina, uno solo o una fila, con un diámetro y una profundidad."
+            ),
         )
         panel = self.run_command()
         form = panel.form
@@ -801,9 +927,10 @@ class TestDrillHoleSpanish(DrillHolePanelFixture):
         self.assertEqual(form.cb_auto_update.text(), "Actualizar automáticamente")
         self.assertEqual(
             form.hint_label.text(),
-            "Hacé clic en una cara y luego en uno de sus vértices: los agujeros se ubican a partir de ese vértice. "
-            "Hacé clic de nuevo para cambiarlos.",
+            "Hacé clic en una cara cerca de la esquina desde la que se ubican los agujeros, o en el vértice mismo. "
+            "Hacé clic de nuevo para cambiarla.",
         )
+        self.assertEqual(form.button_next_corner.text(), "Siguiente esquina")
         self.assertEqual(
             form.face_label.text(), "Hacé clic en una cara plana de un perfil, un perfil recortado o un calado."
         )
