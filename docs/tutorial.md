@@ -366,7 +366,9 @@ The cut types are:
 - **Through All**: the shapes cut through the whole profile, every wall they cross.
 - **Distance**: the shapes cut as deep as **Depth** (the **Extrusion Length** property).
 
-To change the cut type or the depth, double-click the cutout: the same panel opens with the stored values, and **Cancel** restores them. To change the holes, press **Edit sketch** in that panel: the cut type and depth shown are kept (one Undo step), the sketch opens, and closing it opens the panel again. **Cancel** there restores the cut type and depth only; the drawing stays as you left it, and **Undo** takes it back. Right-click the cutout in the tree and choose **Edit sketch** to open the sketch alone.
+The **Pattern** group (Spanish *Patrón*) repeats the sketch in one row along the profile. It is unchecked for a new cutout, which cuts the sketch alone. Checked, it has a row for each side of the sketch, **← Backward** (toward the start of the profile's path) and **Forward →** (toward its end), each with its **Cutouts per side** and **Pitch**. The sketch always stays where you drew it, so "1 every 50 mm backward, the sketch, 2 every 30 mm forward" is one cutout of 4 cuts, and the group title shows the total: **Pattern: 4 cutouts** (Spanish *Patrón: 4 calados*). Each copy cuts like the sketch does, with **One wall** the wall under it. The panel warns, without stopping **OK**, when a used **Pitch** is smaller than the sketch along the profile (the cutouts overlap) or a cutout reaches past the end of the face. Unchecking the group cuts the sketch alone again and keeps the values in the fields. More than 1000 cutouts fail with a message. The pattern needs a face along the profile: an end face has no direction for it.
+
+To change the cut type, the depth or the pattern, double-click the cutout: the same panel opens with the stored values, and **Cancel** restores them. To change the holes, press **Edit sketch** in that panel: the cut type and depth shown are kept (one Undo step), the sketch opens, and closing it opens the panel again. **Cancel** there restores the cut type and depth only; the drawing stays as you left it, and **Undo** takes it back. Right-click the cutout in the tree and choose **Edit sketch** to open the sketch alone.
 
 ### With your own sketch
 
@@ -405,7 +407,7 @@ The cut list and the IDs treat a drill hole like a cutout.
 The number fields of the panels that edit one object take FreeCAD expressions, as in the Part Design panels: click the **Fx** icon at the right of the field, or type `=`, and enter a formula such as `VarSet.HoleDiameter`, `Spreadsheet.Pitch * 2` or `20 mm + 5 mm`. The field then shows the value of the expression and the object keeps the expression, so changing the VarSet or the spreadsheet updates the object.
 
 - **Drill Hole**: every field (**Offset along**, **Offset across**, **Diameter**, the **Holes per side** and **Pitch** of each **Pattern** row, **Depth**). When creating a drill hole the **Fx** icon appears once a face and a point are picked and the preview exists; an expression stays when you pick another face or point.
-- **Cutout / Hole**: **Depth**.
+- **Cutout / Hole**: **Depth**, and the **Cutouts per side** and **Pitch** of each **Pattern** row.
 - **Extend / Cut** and **Notch**: **Gap**, while editing (double-click the trim). When creating, one trim is made for each profile, so the Gap is a plain field there.
 - **Edit Profile**: the section sizes, **Length**, the weight, the price and the offsets. Choosing another material, family or size fills the section sizes from the catalog again and removes their expressions; the expressions of the other fields stay. The rotation is a list and takes no expression in the panel.
 

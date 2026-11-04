@@ -20,6 +20,7 @@ from freecad.maxproframe.extruded_cutout import (
     ExtrudedCutout,
     ViewProviderExtrudedCutout,
     _uncut_shape,
+    axis_positions,
     cut_tools,
 )
 from freecad.maxproframe.ff_tools import ICONPATH, translate
@@ -194,19 +195,6 @@ def _pattern(fp):
     }
 
 
-def axis_positions(backward, forward, at_point):
-    """Positions of the holes on one axis from the point: ``backward`` and ``forward`` are (count, pitch).
-
-    Backward first, from the farthest; then 0 when ``at_point``; then forward, from the nearest.
-    """
-    (backward_count, backward_pitch), (forward_count, forward_pitch) = backward, forward
-    return (
-        [-index * backward_pitch for index in range(backward_count, 0, -1)]
-        + ([0.0] if at_point else [])
-        + [index * forward_pitch for index in range(1, forward_count + 1)]
-    )
-
-
 def _pattern_axes(at_point, sides):
     """(along, across) positions of the pattern ``sides``, ([], []) when it has no hole at all.
 
@@ -373,6 +361,9 @@ class DrillHole(ExtrudedCutout):
         )
         obj.setEditorMode("ReferenceWarning", 1)
         _add_center_properties(obj)
+
+    def add_pattern_properties(self, obj):
+        """None of a cutout's: a drill hole has its own pattern, in its DrillHole group (_add_pattern_properties)."""
 
     def onDocumentRestored(self, obj):
         """Drill holes saved before CenterAlong and CenterAcross gain them off: measured from their vertex.

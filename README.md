@@ -21,7 +21,7 @@ It is made for metal workshops, makers and engineers who build frames in steel, 
 - **Your own sections**: capture any closed Sketcher section or import a DXF into a portable folder library, with weight calculated from area and material density.
 - **Profile Library Manager**: create, duplicate, share (ZIP or shared folder) and edit libraries, with section cards and a built-in English and Spanish guide.
 - **Placement control**: nine alignment anchors, rotation, mirrors and X/Y offsets per edge, with a live preview of the section.
-- **Joints**: end miters with live preview, extension and gap; **Notch** to fit profiles against the shape of another profile; **Extend / Cut** to bring several profiles up to a face; **Cutout / Hole** for holes and clearances drawn on a face; **Drill Hole** for round holes, one or a pattern on both sides along and across, placed with one click from a corner, the middle of an edge or the center of a face.
+- **Joints**: end miters with live preview, extension and gap; **Notch** to fit profiles against the shape of another profile; **Extend / Cut** to bring several profiles up to a face; **Cutout / Hole** for holes and clearances drawn on a face, one or a row of them along the profile; **Drill Hole** for round holes, one or a pattern on both sides along and across, placed with one click from a corner, the middle of an edge or the center of a face.
 - **Expressions**: the **Fx** icon of the panel number fields links a value to a VarSet, a spreadsheet or a formula, as in FreeCAD's own panels.
 - **Fabrication output**: bill of materials and cut list with cutting angles, stock length and blade kerf; part IDs and TechDraw balloons.
 

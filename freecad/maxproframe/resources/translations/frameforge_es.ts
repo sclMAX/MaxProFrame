@@ -1129,6 +1129,19 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>no hole at the point</source><translation>sin agujero en el punto</translation></message>
     <message><source>{} hole</source><translation>{} agujero</translation></message>
     <message><source>{} holes</source><translation>{} agujeros</translation></message>
+    <message><source>Cutouts per side</source><translation>Calados por lado</translation></message>
+    <message><source>← Backward</source><translation>← Atrás</translation></message>
+    <message><source>Forward →</source><translation>Adelante →</translation></message>
+    <message><source>{} cutout</source><translation>{} calado</translation></message>
+    <message><source>{} cutouts</source><translation>{} calados</translation></message>
+    <message><source>The cutouts overlap: the pitch ({}) is smaller than the sketch along the profile ({}).</source><translation>Los calados se superponen: el paso ({}) es menor que el croquis a lo largo del perfil ({}).</translation></message>
+    <message><source>A cutout reaches past the end of the face.</source><translation>Un calado sobrepasa el extremo de la cara.</translation></message>
+    <message><source>Cutout / Hole: the pattern makes {} cutouts, at most {}.</source><translation>Calado: el patrón hace {} calados, como máximo {}.</translation></message>
+    <message><source>Cutout / Hole: the face is square to the profile axis, the pattern has no direction.</source><translation>Calado: la cara es perpendicular al eje del perfil, el patrón no tiene dirección.</translation></message>
+    <message><source>Cutouts the pattern adds before the sketch, toward the start of the profile path</source><translation>Calados que el patrón agrega antes del croquis, hacia el inicio del recorrido del perfil</translation></message>
+    <message><source>Distance between the cutouts before the sketch</source><translation>Distancia entre los calados antes del croquis</translation></message>
+    <message><source>Cutouts the pattern adds after the sketch, toward the end of the profile path</source><translation>Calados que el patrón agrega después del croquis, hacia el final del recorrido del perfil</translation></message>
+    <message><source>Distance between the cutouts after the sketch</source><translation>Distancia entre los calados después del croquis</translation></message>
     <message><source>The holes overlap: the pitch along ({}) is smaller than the diameter ({}).</source><translation>Los agujeros se superponen: el paso longitudinal ({}) es menor que el diámetro ({}).</translation></message>
     <message><source>The holes overlap: with no hole at the point, the holes along on each side of the point are {} apart, less than the diameter ({}).</source><translation>Los agujeros se superponen: sin agujero en el punto, los agujeros longitudinales a cada lado del punto quedan a {} entre sí, menos que el diámetro ({}).</translation></message>
     <message><source>The holes overlap: the pitch across ({}) is smaller than the diameter ({}).</source><translation>Los agujeros se superponen: el paso transversal ({}) es menor que el diámetro ({}).</translation></message>
