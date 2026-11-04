@@ -1105,8 +1105,8 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Drill Hole: no face to drill.</source><translation>Agujero: no hay ninguna cara para agujerear.</translation></message>
     <message><source>The reference vertex changed: check the hole.</source><translation>La referencia cambió, revisá el agujero.</translation></message>
     <message><source>Vertex of the face the hole is placed from</source><translation>Vértice de la cara a partir del cual se ubica el agujero</translation></message>
-    <message><source>Distance from the vertex to the first hole, along the profile</source><translation>Distancia del vértice al primer agujero, a lo largo del perfil</translation></message>
-    <message><source>Distance from the vertex to the holes, across the profile</source><translation>Distancia del vértice a los agujeros, transversal al perfil</translation></message>
+    <message><source>Distance from the picked point to the pattern origin (the hole at the point), along the profile</source><translation>Distancia del punto elegido al origen del patrón (el agujero del punto), a lo largo del perfil</translation></message>
+    <message><source>Distance from the picked point to the pattern origin (the hole at the point), across the profile</source><translation>Distancia del punto elegido al origen del patrón (el agujero del punto), transversal al perfil</translation></message>
     <message><source>Measure the offset along from the middle of the face length</source><translation>Medir el desplazamiento longitudinal desde el medio del largo de la cara</translation></message>
     <message><source>Measure the offset across from the middle of the face width</source><translation>Medir el desplazamiento transversal desde el medio del ancho de la cara</translation></message>
     <message><source>Hole diameter</source><translation>Diámetro del agujero</translation></message>
@@ -1183,7 +1183,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
 <context>
     <name>MaxProFrame_DrillHole</name>
     <message><source>Drill Hole</source><translation>Agujero</translation></message>
-    <message><source>&lt;b&gt;Drill Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile or a cutout, then one of its nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the offsets from that point, one or a row of them, with a diameter and a depth.</source><translation>&lt;b&gt;Agujero&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego en uno de sus nueve círculos para medir desde ahí: una esquina, el medio de un borde o el centro. Se perforan agujeros redondos a las distancias indicadas desde ese punto, uno solo o una fila, con un diámetro y una profundidad.</translation></message>
+    <message><source>&lt;b&gt;Drill Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile or a cutout, then one of its nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the offsets from that point: one, or a pattern on both sides of it along and across the profile, with a diameter and a depth.</source><translation>&lt;b&gt;Agujero&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego en uno de sus nueve círculos para medir desde ahí: una esquina, el medio de un borde o el centro. Se perforan agujeros redondos a las distancias indicadas desde ese punto: uno solo, o un patrón a ambos lados, a lo largo y a lo ancho del perfil, con un diámetro y una profundidad.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_Link</name>

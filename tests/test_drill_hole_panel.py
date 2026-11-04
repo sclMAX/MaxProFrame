@@ -253,7 +253,8 @@ class TestDrillHoleCommand(DrillHolePanelFixture):
             resources["ToolTip"],
             "<b>Drill Hole</b><br><br>Click a planar face of a profile, a trimmed profile or a cutout, then one of its "
             "nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the "
-            "offsets from that point, one or a row of them, with a diameter and a depth.",
+            "offsets from that point: one, or a pattern on both sides of it along and across the profile, with a "
+            "diameter and a depth.",
         )
         self.assertEqual(os.path.basename(resources["Pixmap"]), "drill-hole.svg")
         self.assertTrue(os.path.isfile(resources["Pixmap"]))
@@ -1318,6 +1319,17 @@ class TestDrillHoleCreation(DrillHolePanelFixture):
         self.doc.undo()
         self.assertEqual(self.names(), before)
 
+    def test_the_offsets_are_documented_from_the_picked_point_to_the_pattern_origin(self):
+        body, obj = self.existing()
+        self.assertEqual(
+            obj.getDocumentationOfProperty("OffsetAlong"),
+            "Distance from the picked point to the pattern origin (the hole at the point), along the profile",
+        )
+        self.assertEqual(
+            obj.getDocumentationOfProperty("OffsetAcross"),
+            "Distance from the picked point to the pattern origin (the hole at the point), across the profile",
+        )
+
     def test_a_new_hole_starts_with_both_offsets_at_zero(self):
         # The hole starts on the picked point: a corner, the middle of an edge or the face center.
         body = self.tube()
@@ -1534,8 +1546,8 @@ class TestDrillHoleSpanish(DrillHolePanelFixture):
             (
                 "<b>Agujero</b><br><br>Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego "
                 "en uno de sus nueve círculos para medir desde ahí: una esquina, el medio de un borde o el centro. Se "
-                "perforan agujeros redondos a las distancias indicadas desde ese punto, uno solo o una fila, con un "
-                "diámetro y una profundidad."
+                "perforan agujeros redondos a las distancias indicadas desde ese punto: uno solo, o un patrón a ambos "
+                "lados, a lo largo y a lo ancho del perfil, con un diámetro y una profundidad."
             ),
         )
         panel = self.run_command()

@@ -327,13 +327,19 @@ class DrillHole(ExtrudedCutout):
             "App::PropertyDistance",
             "OffsetAlong",
             "DrillHole",
-            translate("frameforge", "Distance from the vertex to the first hole, along the profile"),
+            translate(
+                "frameforge",
+                "Distance from the picked point to the pattern origin (the hole at the point), along the profile",
+            ),
         )
         obj.addProperty(
             "App::PropertyDistance",
             "OffsetAcross",
             "DrillHole",
-            translate("frameforge", "Distance from the vertex to the holes, across the profile"),
+            translate(
+                "frameforge",
+                "Distance from the picked point to the pattern origin (the hole at the point), across the profile",
+            ),
         )
         obj.addProperty(
             "App::PropertyLength", "Diameter", "DrillHole", translate("frameforge", "Hole diameter")
