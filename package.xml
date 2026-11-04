@@ -11,7 +11,7 @@
   <tag>Miter cut</tag>
   <tag>Miter-joint</tag>
   <tag>Trim Cut</tag>
-  <version>1.5.0</version>
+  <version>1.6.0</version>
   <date>2026-11-04</date>
   <maintainer email="maxi.indumatics@gmail.com">sclMAX</maintainer>
   <license file="LICENSE">LGPL-3.0-only</license>
