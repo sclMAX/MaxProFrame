@@ -14,6 +14,7 @@ from PySide import QtCore, QtGui, QtWidgets
 from freecad.maxproframe.alignment_widget import AlignmentWidget
 from freecad.maxproframe.custom_profile_cards import custom_section_cache_key, render_custom_section_thumbnail
 from freecad.maxproframe.custom_section_geometry import build_custom_section_face
+from freecad.maxproframe.expression_fields import length_field
 from freecad.maxproframe.ff_tools import (
     ICONPATH,
     PROFILEIMAGES_PATH,
@@ -55,9 +56,12 @@ def _bind_ui_children(form, path):
     # before any layout moves or FormProxy snapshots use those aliases.
     from xml.etree import ElementTree
 
-    for element in ElementTree.parse(path).iter():
+    tree = ElementTree.parse(path)
+    # Promoted FreeCAD widgets (Gui::DoubleSpinBox) resolve as the Qt class they extend.
+    extends = {custom.findtext("class"): custom.findtext("extends") for custom in tree.iter("customwidget")}
+    for element in tree.iter():
         if element.tag in ("widget", "layout"):
-            kind = getattr(QtWidgets, element.get("class", ""), None)
+            kind = getattr(QtWidgets, extends.get(element.get("class", ""), element.get("class", "")), None)
             name = element.get("name", "")
             if kind is not None and name:
                 child = form.findChild(kind, name)
@@ -458,12 +462,10 @@ class BaseProfileTaskPanel(ABC):
             ("x", "Displacement from the edge, in the sketch plane"),
             ("y", "Displacement from the edge, along the sketch normal"),
         ):
-            spin = QtWidgets.QDoubleSpinBox(self.widget_offset)
+            spin = length_field(-100000.0, 100000.0, 0.0)
+            spin.setParent(self.widget_offset)
             spin.setObjectName(f"sb_offset_{axis}")
-            spin.setRange(-100000.0, 100000.0)
-            spin.setDecimals(2)
             spin.setPrefix(f"{axis.upper()} ")
-            spin.setSuffix(" mm")
             spin.setKeyboardTracking(False)
             spin.setAccessibleName(f"{translate('frameforge', 'Offset')} {axis.upper()}")
             spin.setToolTip(translate("frameforge", tip))

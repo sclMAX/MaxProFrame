@@ -8,9 +8,41 @@ import FreeCADGui as Gui
 from PySide import QtCore, QtGui
 
 from freecad.maxproframe.create_profiles_tool import BaseProfileTaskPanel
+from freecad.maxproframe.expression_fields import bind, expression_of, expressions_of, restore_expressions
 from freecad.maxproframe.ff_tools import translate
 from freecad.maxproframe.library_manager import get_canonical_family
 from freecad.maxproframe.profile import ANCHOR_X, ANCHOR_Y, Profile, ViewProviderProfile
+
+# Each field takes an expression (Fx) bound to the profile property it edits.
+BOUND_FIELDS = (
+    ("sb_width", "ProfileWidth"),
+    ("sb_height", "ProfileHeight"),
+    ("sb_main_thickness", "Thickness"),
+    ("sb_flange_thickness", "ThicknessFlange"),
+    ("sb_radius1", "RadiusLarge"),
+    ("sb_radius2", "RadiusSmall"),
+    ("sb_lip_length", "LipLength"),
+    ("sb_length", "ProfileLength"),
+    ("sb_weight", "LinearWeight"),
+    ("sb_unitprice", "UnitPrice"),
+    ("sb_offset_x", "OffsetX"),
+    ("sb_offset_y", "OffsetY"),
+)
+# The section a material, family or size change refills from the catalog.
+CATALOG_SECTION = (
+    "ProfileWidth",
+    "ProfileHeight",
+    "Thickness",
+    "ThicknessFlange",
+    "RadiusLarge",
+    "RadiusSmall",
+    "LipLength",
+)
+
+
+def _value(obj, prop):
+    value = getattr(obj, prop)
+    return getattr(value, "Value", value)
 
 
 class EditProfileTaskPanel(BaseProfileTaskPanel):
@@ -19,6 +51,10 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
         self.profile = profile
         self.dump = profile.dumpContent()
         self._original_appearance = None
+        self._bound_fields = [(name, prop) for name, prop in BOUND_FIELDS if hasattr(profile, prop)]
+        props = [prop for _name, prop in self._bound_fields]
+        self._initial_expressions = expressions_of(profile, props)
+        self._initial_values = {prop: _value(profile, prop) for prop in props}
 
         super().__init__()
 
@@ -119,6 +155,9 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
             translate("frameforge", "Profile" if canonical_family == "Custom Profile" else "Size")
         )
         self.update_image()
+        for name, prop in self._bound_fields:
+            if hasattr(self.form_proxy, name):
+                bind(getattr(self.form_proxy, name), self.profile, prop)
         self.enable_signals(True)
         if hasattr(self, "btn_mirror_h"):
             self.btn_mirror_h.setChecked(self.form_proxy.cb_mirror_h.isChecked())
@@ -144,9 +183,35 @@ class EditProfileTaskPanel(BaseProfileTaskPanel):
             self.profile.ViewObject.Transparency = 50
             self.profile.ViewObject.ShapeColor = (0.8, 0.2, 0.1)
 
+    def on_size_changed(self, index):
+        # The catalog refills the section fields: that changes them, so their expressions go.
+        if not getattr(self, "_initializing", False) and self.form_proxy.combo_size.currentText() != "":
+            for prop in CATALOG_SECTION:
+                if expression_of(self.profile, prop) is not None:
+                    self.profile.setExpression(prop, None)
+        super().on_size_changed(index)
+        self._show_expression_values()
+
+    def _show_expression_values(self):
+        """Expression-driven fields show their property, not the catalog value filled over them."""
+        for name, prop in self._bound_fields:
+            if expression_of(self.profile, prop) is not None and hasattr(self.form_proxy, name):
+                field = getattr(self.form_proxy, name)
+                blocked = field.blockSignals(True)
+                field.setValue(_value(self.profile, prop))
+                field.blockSignals(blocked)
+
     def reject(self):
         self._release_layout_item_wrappers()
         App.ActiveDocument.abortTransaction()
+        # Abort undoes the panel; set expressions and values again in case the transaction held nothing.
+        changed = restore_expressions(self.profile, self._initial_expressions)
+        for prop, value in self._initial_values.items():
+            if self._initial_expressions[prop] is None and _value(self.profile, prop) != value:
+                setattr(self.profile, prop, value)
+                changed = True
+        if changed:
+            self.profile.Document.recompute()
         Gui.ActiveDocument.resetEdit()
 
         return True

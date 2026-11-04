@@ -11,6 +11,7 @@ from freecad.maxproframe._utils import (
     normalize_anchor,
 )
 from freecad.maxproframe.custom_section_geometry import build_custom_section_face
+from freecad.maxproframe.expression_fields import expression_of
 from freecad.maxproframe.extrusions import (
     tslot20x20,
     tslot20x20_one_slot,
@@ -358,15 +359,20 @@ class Profile:
             )
         obj.CatalogFamily = catalog_fam
 
-        obj.ProfileHeight = init_h
-        obj.ProfileWidth = init_w
-        obj.ProfileLength = init_len  # should it be ?
+        def assign(prop, value):
+            # An expression drives the property on its own: a typed value never goes over it.
+            if expression_of(obj, prop) is None:
+                setattr(obj, prop, value)
 
-        obj.Thickness = init_mt
-        obj.ThicknessFlange = init_ft
+        assign("ProfileHeight", init_h)
+        assign("ProfileWidth", init_w)
+        assign("ProfileLength", init_len)  # should it be ?
 
-        obj.RadiusLarge = init_r1
-        obj.RadiusSmall = init_r2
+        assign("Thickness", init_mt)
+        assign("ThicknessFlange", init_ft)
+
+        assign("RadiusLarge", init_r1)
+        assign("RadiusSmall", init_r2)
         obj.MakeFillet = init_mf
 
         if fam == "C":
@@ -375,7 +381,7 @@ class Profile:
                     0.0
                 )
             if init_lip_length is not None:
-                obj.LipLength = float(init_lip_length)
+                assign("LipLength", float(init_lip_length))
 
         # if not bevels_combined:
         #     obj.BevelACutY", "Profile",
@@ -396,18 +402,18 @@ class Profile:
         #     obj.BevelEndRotate", "Profile",
         #                     "Rotate the second cut on Profile axle").BevelEndRotate = 0
 
-        obj.LinearWeight = init_wg
-        obj.UnitPrice = init_unit_price
+        assign("LinearWeight", init_wg)
+        assign("UnitPrice", init_unit_price)
 
         obj.AnchorX = ANCHOR_X[normalize_anchor(init_anchor_x)]
         obj.AnchorY = ANCHOR_Y[normalize_anchor(init_anchor_y)]
         obj.MirrorH = bool(init_mirror_h)
         obj.MirrorV = bool(init_mirror_v)
-        obj.RotationAngle = float(init_rotation)
+        assign("RotationAngle", float(init_rotation))
         if init_offset_x is not None:
-            obj.OffsetX = float(init_offset_x)
+            assign("OffsetX", float(init_offset_x))
         if init_offset_y is not None:
-            obj.OffsetY = float(init_offset_y)
+            assign("OffsetY", float(init_offset_y))
 
         # obj.OffsetA = .0  # Property for structure
         # obj.OffsetB = .0  # Property for structure

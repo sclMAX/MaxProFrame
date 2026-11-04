@@ -250,7 +250,7 @@ class TestExtendCutPanel(PanelFixture):
         self.assertEqual(self.doc.UndoCount, 0)
 
 
-class TestEditExtendCut(PanelFixture):
+class EditFixture(PanelFixture):
     def existing(self, gap=0.0):
         target = self.target()
         body = self.profile(0, 300)
@@ -259,6 +259,9 @@ class TestEditExtendCut(PanelFixture):
         self.assertEqual(obj.getStatusString(), "Valid")
         self.doc.clearUndos()
         return target, body, obj
+
+
+class TestEditExtendCut(EditFixture):
 
     def test_editing_changes_target_and_gap_in_one_undo_step(self):
         target, body, obj = self.existing()
@@ -290,6 +293,139 @@ class TestEditExtendCut(PanelFixture):
         self.assertAlmostEqual(obj.TrimGap.Value, 1.0)
         self.assertAlmostEqual(obj.Shape.BoundBox.XMax, NEAR - 1.0, places=5)
         self.assertEqual(self.doc.UndoCount, 0)
+
+
+class TestExtendCutGapExpressions(EditFixture):
+    """While editing, the Gap takes a FreeCAD expression (Fx) bound to the trim's TrimGap."""
+
+    def varset(self, gap):
+        varset = self.doc.addObject("App::VarSet", "VarSet")
+        varset.addProperty("App::PropertyLength", "Gap")
+        varset.Gap = gap
+        self.doc.recompute()
+        self.doc.clearUndos()
+        return varset
+
+    def edit(self, obj):
+        return self.capture_panel(obj.ViewObject.Proxy.edit)
+
+    def set_gap_expression(self, obj, varset):
+        """What the Fx editor does: the expression goes on the bound property at once."""
+        obj.setExpression("TrimGap", f"{varset.Name}.Gap")
+        self.doc.recompute()
+
+    def test_the_edit_gap_is_bound_and_the_create_gap_is_not(self):
+        target = self.target()
+        body = self.profile(0, 300)
+        panel = self.run_command((target, self.near_face(target)), (body, ""))
+        # One preview per profile: no single property to bind.
+        self.assertFalse(Gui.ExpressionBinding(panel.form.sb_gap).isBound())
+        panel.form.sb_gap.setValue(2.0)
+        self.assertTrue(panel.accept())
+        (created,) = self.extend_cuts()
+        self.assertAlmostEqual(created.TrimGap.Value, 2.0)
+        self.assertEqual(dict(created.ExpressionEngine), {})
+        varset = self.varset(3.0)
+        panel = self.edit(created)
+        self.assertTrue(Gui.ExpressionBinding(panel.form.sb_gap).isBound())
+        self.set_gap_expression(created, varset)
+        self.assertTrue(Gui.ExpressionBinding(panel.form.sb_gap).hasExpression())
+        self.assertAlmostEqual(panel.form.sb_gap.value(), 3.0, places=6)
+        self.assertTrue(panel.reject())
+
+    def test_ok_keeps_an_expression_set_in_the_panel_in_one_undo_step(self):
+        _, _, obj = self.existing()
+        varset = self.varset(2.0)
+        panel = self.edit(obj)
+        self.set_gap_expression(obj, varset)
+        self.assertTrue(panel.accept())
+        self.assertEqual(dict(obj.ExpressionEngine), {"TrimGap": f"{varset.Name}.Gap"})
+        self.assertAlmostEqual(obj.TrimGap.Value, 2.0)
+        self.assertAlmostEqual(obj.Shape.BoundBox.XMax, NEAR - 2.0, places=5)
+        varset.Gap = 3.0
+        self.doc.recompute()
+        self.assertAlmostEqual(obj.Shape.BoundBox.XMax, NEAR - 3.0, places=5)
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.doc.undo()
+        self.doc.recompute()
+        self.assertEqual(dict(obj.ExpressionEngine), {})
+        self.assertAlmostEqual(obj.TrimGap.Value, 0.0)
+
+    def test_ok_with_only_an_expression_set_keeps_it_in_one_undo_step(self):
+        # The expression gives the gap it already had: only the expression changes.
+        _, _, obj = self.existing(gap=1.0)
+        varset = self.varset(1.0)
+        panel = self.edit(obj)
+        self.set_gap_expression(obj, varset)
+        self.assertTrue(panel.accept())
+        self.assertEqual(dict(obj.ExpressionEngine), {"TrimGap": f"{varset.Name}.Gap"})
+        self.assertEqual(self.doc.UndoCount, 1)
+
+    def test_cancel_removes_an_expression_set_in_the_panel(self):
+        _, _, obj = self.existing(gap=1.0)
+        varset = self.varset(2.0)
+        panel = self.edit(obj)
+        self.set_gap_expression(obj, varset)
+        self.assertAlmostEqual(obj.TrimGap.Value, 2.0)
+        self.assertTrue(panel.reject())
+        self.assertEqual(dict(obj.ExpressionEngine), {})
+        self.assertAlmostEqual(obj.TrimGap.Value, 1.0)
+        self.assertAlmostEqual(obj.Shape.BoundBox.XMax, NEAR - 1.0, places=5)
+        self.assertEqual(self.doc.UndoCount, 0)
+
+    def test_cancel_with_undo_off_removes_an_expression_set_in_the_panel(self):
+        _, _, obj = self.existing(gap=1.0)
+        varset = self.varset(2.0)
+        panel = self.edit(obj)
+        self.doc.UndoMode = 0
+        self.addCleanup(setattr, self.doc, "UndoMode", 1)
+        self.set_gap_expression(obj, varset)
+        self.assertAlmostEqual(obj.TrimGap.Value, 2.0)
+        self.assertTrue(panel.reject())
+        self.assertEqual(dict(obj.ExpressionEngine), {})
+        self.assertAlmostEqual(obj.TrimGap.Value, 1.0)
+        self.assertAlmostEqual(obj.Shape.BoundBox.XMax, NEAR - 1.0, places=5)
+
+    def test_an_existing_expression_is_shown_and_kept_while_the_target_changes(self):
+        target, _, obj = self.existing()
+        varset = self.varset(2.0)
+        self.set_gap_expression(obj, varset)
+        self.doc.clearUndos()
+        panel = self.edit(obj)
+        self.assertTrue(Gui.ExpressionBinding(panel.form.sb_gap).hasExpression())
+        self.assertAlmostEqual(panel.form.sb_gap.value(), 2.0, places=6)
+        far_face = self.face_towards(target, App.Vector(1, 0, 0))
+        self.click(target, far_face)
+        self.assertTrue(panel.accept())
+        self.assertEqual(obj.TrimmingBoundary, [(target, (far_face,))])
+        self.assertEqual(dict(obj.ExpressionEngine), {"TrimGap": f"{varset.Name}.Gap"})
+        self.assertAlmostEqual(obj.Shape.BoundBox.XMax, FAR - 2.0, places=5)
+        varset.Gap = 3.0
+        self.doc.recompute()
+        self.assertAlmostEqual(obj.Shape.BoundBox.XMax, FAR - 3.0, places=5)
+        self.assertEqual(self.doc.UndoCount, 1)
+
+    def test_an_expression_set_after_a_failing_ok_is_in_the_undo_step(self):
+        target, _, obj = self.existing()
+        tube = self.doc.addObject("Part::Feature", "Tube")
+        tube.Shape = Part.makeCylinder(10, 100, App.Vector(400, 0, -50))
+        lateral = next(
+            f"Face{index}"
+            for index, face in enumerate(tube.Shape.Faces, start=1)
+            if isinstance(face.Surface, Part.Cylinder)
+        )
+        varset = self.varset(2.0)
+        panel = self.edit(obj)
+        self.click(tube, lateral)
+        self.assertFalse(panel.accept())
+        # The panel stays open: the Fx editor still changes the trim inside the edit transaction.
+        self.click(target, self.near_face(target))
+        self.set_gap_expression(obj, varset)
+        self.assertTrue(panel.accept())
+        self.assertEqual(dict(obj.ExpressionEngine), {"TrimGap": f"{varset.Name}.Gap"})
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.doc.undo()
+        self.assertEqual(dict(obj.ExpressionEngine), {})
 
 
 class TestExtendCutTranslations(PanelFixture):

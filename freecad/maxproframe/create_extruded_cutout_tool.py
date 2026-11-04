@@ -10,6 +10,7 @@ from PySide import QtCore, QtGui
 from freecad.maxproframe.create_end_miter_tool import _alive, _base_profile, _failures
 from freecad.maxproframe.create_extend_cut_tool import _selected_items, show_panel, trimmed_body_problem
 from freecad.maxproframe.create_profiles_tool import place_in_container_of
+from freecad.maxproframe.expression_fields import bind, expression_of, expressions_of, length_field, restore_expressions
 from freecad.maxproframe.extruded_cutout import CUT_TYPES, ExtrudedCutout, ViewProviderExtrudedCutout, wall_thickness
 from freecad.maxproframe.ff_tools import (
     ICONPATH,
@@ -313,6 +314,7 @@ class CreateExtrudedCutoutTaskPanel:
         self.created = created
         self.doc = obj.Document
         self._initial = (obj.CutType, obj.ExtrusionLength.Value)
+        self._initial_expressions = expressions_of(obj, ("ExtrusionLength",))
         self.form = self._build_form()
         self.doc.openTransaction("Edit Cutout")
 
@@ -326,11 +328,8 @@ class CreateExtrudedCutoutTaskPanel:
             form.combo_cut_type.addItem(translate("frameforge", CUT_TYPE_LABELS[cut_type]), cut_type)
         form.combo_cut_type.setCurrentIndex(max(form.combo_cut_type.findData(self.obj.CutType), 0))
         form.label_depth = QtGui.QLabel(translate("frameforge", "Depth"))
-        form.spin_depth = QtGui.QDoubleSpinBox()
-        form.spin_depth.setRange(MIN_DEPTH, MAX_DEPTH)
-        form.spin_depth.setDecimals(2)
-        form.spin_depth.setSuffix(" mm")
-        form.spin_depth.setValue(self._initial_depth())
+        form.spin_depth = length_field(MIN_DEPTH, MAX_DEPTH, self._initial_depth())
+        bind(form.spin_depth, self.obj, "ExtrusionLength")
         form.button_edit_sketch = QtGui.QPushButton(translate("frameforge", "Edit sketch"))
         form.button_edit_sketch.setEnabled(self.obj.Sketch is not None)
         if self.obj.Sketch is not None and getattr(self.obj.Sketch, "ViewObject", None) is not None:
@@ -359,7 +358,8 @@ class CreateExtrudedCutoutTaskPanel:
         cut_type = self.form.combo_cut_type.currentData()
         self.form.spin_depth.setEnabled(cut_type == "Distance")
         self.obj.CutType = cut_type
-        if cut_type == "Distance":
+        # An expression drives the depth on its own: the field only shows its value.
+        if cut_type == "Distance" and expression_of(self.obj, "ExtrusionLength") is None:
             self.obj.ExtrusionLength = self.form.spin_depth.value()
         self.doc.recompute()
 
@@ -408,6 +408,7 @@ class CreateExtrudedCutoutTaskPanel:
             self._delete_cutout()
         else:
             # Abort undoes the preview; set the values again in case the transaction held nothing.
+            restore_expressions(self.obj, self._initial_expressions)
             cut_type, depth = self._initial
             if self.obj.CutType != cut_type:
                 self.obj.CutType = cut_type

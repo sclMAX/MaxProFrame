@@ -18,6 +18,7 @@ from freecad.maxproframe.create_end_miter_tool import (
     scene_graph,
 )
 from freecad.maxproframe.create_profiles_tool import place_in_container_of
+from freecad.maxproframe.expression_fields import bind, expression_of, expressions_of, restore_expressions
 from freecad.maxproframe.ff_tools import (
     ICONPATH,
     QT_TRANSLATE_NOOP,
@@ -157,6 +158,9 @@ class ExtendCutTaskPanel:
     Cancel puts it back as it was. While the panel is open the target, the profiles and the pieces the
     previews cut off are drawn over the 3D view in their HIGHLIGHT_COLORS.
 
+    While editing, the Gap takes a FreeCAD expression (Fx) bound to the trim's TrimGap; creating makes
+    one preview per profile, so there the Gap is a plain field.
+
     Flip side keeps the other piece of the selected profiles when the target crosses them: their
     KeepEnd becomes the other end, or Auto again when that is the piece Auto keeps.
     """
@@ -239,7 +243,12 @@ class ExtendCutTaskPanel:
                 self.keep_ends[edited.TrimmedBody.Name] = keep_end
             # The values Cancel puts back, also when undo is disabled.
             self._edit_before = self._edit_values(edited)
+            self._edit_expressions = expressions_of(edited, ("TrimGap",))
+            if self.has_gap and hasattr(edited, "TrimGap"):
+                bind(self.form.sb_gap, edited, "TrimGap")
             self._previewed = self._wanted()
+            # The expression editor (Fx) changes the edited trim at once: inside the edit transaction.
+            self._open_edit_transaction()
         elif selection:
             messages += self._set_target(*selection[0])
             for obj, _ in selection[1:]:
@@ -524,12 +533,15 @@ class ExtendCutTaskPanel:
         gap = obj.TrimGap.Value if hasattr(obj, "TrimGap") else 0.0
         return list(obj.TrimmingBoundary), gap, getattr(obj, "KeepEnd", None)
 
+    def _open_edit_transaction(self):
+        if not self._transaction_open:
+            self.edited.Document.openTransaction(f"Edit {self.joint}")
+            self._transaction_open = True
+
     def _preview_edit(self):
         """Apply the panel to the edited trim inside the edit transaction, and show what it cuts off."""
         doc = self.edited.Document
-        if not self._transaction_open:
-            doc.openTransaction(f"Edit {self.joint}")
-            self._transaction_open = True
+        self._open_edit_transaction()
         self._error = ""
         self._discarded = {}
         try:
@@ -569,6 +581,8 @@ class ExtendCutTaskPanel:
         self._transaction_open = False
         self._discarded = {}
         self._previewed = ()
+        # Expressions first: one would drive the gap put back.
+        expressions_restored = restore_expressions(obj, self._edit_expressions)
         restored = self._edit_values(obj) != self._edit_before
         if restored:
             boundary, gap, keep_end = self._edit_before
@@ -579,7 +593,7 @@ class ExtendCutTaskPanel:
                 obj.KeepEnd = keep_end
             elif hasattr(obj, "KeepEnd"):
                 obj.KeepEnd = AUTO
-        if aborted or restored:
+        if aborted or restored or expressions_restored:
             doc.recompute()
 
     def _retarget(self, obj, gap, keep_end):
@@ -587,7 +601,8 @@ class ExtendCutTaskPanel:
         boundary = [(self.target[0], self.target[1] or ("",))]
         if obj.TrimmingBoundary != boundary:
             obj.TrimmingBoundary = boundary
-        if self.has_gap and abs(obj.TrimGap.Value - gap) > 1e-9:
+        # An expression drives the gap on its own: the field only shows its value.
+        if self.has_gap and expression_of(obj, "TrimGap") is None and abs(obj.TrimGap.Value - gap) > 1e-9:
             obj.TrimGap = gap
         # A trim saved before KeepEnd existed gains it only when a side is chosen.
         if not hasattr(obj, "KeepEnd") and keep_end != AUTO:
@@ -862,9 +877,7 @@ class ExtendCutTaskPanel:
         doc = self.edited.Document
         # OK keeps the current values even when a change is still pending.
         self._preview_timer.stop()
-        if not self._transaction_open:
-            doc.openTransaction(f"Edit {self.joint}")
-            self._transaction_open = True
+        self._open_edit_transaction()
         try:
             self._retarget(self.edited, gap, self.keep_ends.get(self.edited.TrimmedBody.Name, AUTO))
             doc.recompute()
@@ -872,12 +885,17 @@ class ExtendCutTaskPanel:
         except Exception as exception:
             error = str(exception)
         if error:
-            # Keep the panel open with the trim as it was before the panel opened.
+            # Keep the panel open with the trim as it was before the panel opened; later Fx changes
+            # go in a new edit transaction.
             self._restore_edit()
+            self._open_edit_transaction()
             self._show([error])
             self._draw_highlights()
             return False
-        if self._edit_values(self.edited) == self._edit_before:
+        if (
+            self._edit_values(self.edited) == self._edit_before
+            and expressions_of(self.edited, ("TrimGap",)) == self._edit_expressions
+        ):
             # Nothing changed in the end: no Undo step.
             try:
                 doc.abortTransaction()

@@ -28,6 +28,14 @@ from freecad.maxproframe.drill_hole import (
     REFERENCE_TOLERANCE,
     make_drill_hole,
 )
+from freecad.maxproframe.expression_fields import (
+    bind,
+    count_field,
+    expression_of,
+    expressions_of,
+    length_field,
+    restore_expressions,
+)
 from freecad.maxproframe.extruded_cutout import CUT_TYPES, wall_thickness
 from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, get_param_group, translate
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
@@ -88,7 +96,8 @@ def _spin_changed(spin, stored):
     A stored length finer than the field (4.7625 shown as 4.76) is kept until the field is changed.
     """
     # Rounded the way the field rounds it: Python's round(30.125, 2) is 30.12, the field shows 30.13.
-    shown = spin.valueFromText(spin.textFromValue(stored))
+    # Not through the field's textFromValue: FreeCAD's expression field gives every decimal there.
+    shown = float(QtCore.QLocale.c().toString(stored, "f", spin.decimals()))
     return abs(shown - spin.value()) > TOLERANCE
 
 
@@ -131,6 +140,10 @@ def _base_element(base, element):
         overlaps.append((face.common(element).Area, f"Face{index}"))
     area, name = max(overlaps, default=(0.0, None))
     return name if area > TOLERANCE else None
+
+
+# Properties of a drill hole its panel fields bind to, for expressions.
+EXPRESSION_PROPERTIES = ("OffsetAlong", "OffsetAcross", "Diameter", "Count", "Pitch", "ExtrusionLength")
 
 
 class DrillHoleTaskPanel:
@@ -179,6 +192,8 @@ class DrillHoleTaskPanel:
         self._pending = False
         # OK or Cancel pressed during a recompute: it runs once the recompute ends.
         self._deferred = None
+        # Expressions of the dropped preview, given to the next one.
+        self._expressions = {}
         # Value changes fire one by one while typing: the preview waits this long for the next one.
         self._preview_timer = QtCore.QTimer()
         self._preview_timer.setSingleShot(True)
@@ -190,11 +205,14 @@ class DrillHoleTaskPanel:
             self.vertex = edited.ReferenceVertex
             # The values Cancel puts back, also when undo is disabled.
             self._edit_before = self._values(edited)
+            self._edit_expressions = expressions_of(edited, EXPRESSION_PROPERTIES)
         self.form = keep_alive_until_destroyed(self._build_form())
         # FreeCAD may close the dialog without OK or Cancel: the form is then deleted.
         self.form.destroyed.connect(self._form_gone)
         if edited is not None:
             self._previewed = self._wanted()
+            # The expression editor (Fx) changes the edited hole at once: inside the edit transaction.
+            self._open_transaction()
         messages = []
         if edited is None:
             messages = self._add_items(selection)
@@ -238,9 +256,7 @@ class DrillHoleTaskPanel:
         form.spin_diameter = self._length_spin(
             MIN_DIAMETER, MAX_OFFSET, obj.Diameter.Value if obj else DEFAULT_DIAMETER
         )
-        form.spin_count = QtGui.QSpinBox()
-        form.spin_count.setRange(1, MAX_COUNT)
-        form.spin_count.setValue(obj.Count if obj else 1)
+        form.spin_count = count_field(1, MAX_COUNT, obj.Count if obj else 1)
         form.spin_pitch = self._length_spin(MIN_DEPTH, MAX_OFFSET, obj.Pitch.Value if obj else DEFAULT_PITCH)
         form.combo_cut_type = QtGui.QComboBox()
         for cut_type in CUT_TYPES:
@@ -279,6 +295,8 @@ class DrillHoleTaskPanel:
         layout.addStretch()
 
         self.form = form
+        if obj is not None:
+            self._bind_fields()
         self._set_depth()
         self._enable_fields()
         for spin in (
@@ -296,12 +314,24 @@ class DrillHoleTaskPanel:
 
     @staticmethod
     def _length_spin(minimum, maximum, value):
-        spin = QtGui.QDoubleSpinBox()
-        spin.setRange(minimum, maximum)
-        spin.setDecimals(2)
-        spin.setSuffix(" mm")
-        spin.setValue(value)
-        return spin
+        return length_field(minimum, maximum, value)
+
+    def _fields(self):
+        """(property, field) of every field that takes an expression."""
+        form = self.form
+        return (
+            ("OffsetAlong", form.spin_offset_along),
+            ("OffsetAcross", form.spin_offset_across),
+            ("Diameter", form.spin_diameter),
+            ("Count", form.spin_count),
+            ("Pitch", form.spin_pitch),
+            ("ExtrusionLength", form.spin_depth),
+        )
+
+    def _bind_fields(self):
+        """Bind the fields to the drill hole shown, for the expression editor (Fx)."""
+        for prop, spin in self._fields():
+            bind(spin, self.obj, prop)
 
     def _set_depth(self):
         """Keep the depth of a Distance cut, else show the thickness of the wall under the face."""
@@ -367,20 +397,25 @@ class DrillHoleTaskPanel:
             obj.baseObject = (base, [face])
         if obj.ReferenceVertex != self.vertex:
             obj.ReferenceVertex = self.vertex
+        # An expression drives its property on its own: the field only shows its value.
         for prop, spin in (
             ("OffsetAlong", form.spin_offset_along),
             ("OffsetAcross", form.spin_offset_across),
             ("Diameter", form.spin_diameter),
             ("Pitch", form.spin_pitch),
         ):
-            if _spin_changed(spin, getattr(obj, prop).Value):
+            if expression_of(obj, prop) is None and _spin_changed(spin, getattr(obj, prop).Value):
                 setattr(obj, prop, spin.value())
-        if obj.Count != form.spin_count.value():
+        if expression_of(obj, "Count") is None and obj.Count != form.spin_count.value():
             obj.Count = form.spin_count.value()
         cut_type = form.combo_cut_type.currentData()
         if obj.CutType != cut_type:
             obj.CutType = cut_type
-        if cut_type == "Distance" and _spin_changed(form.spin_depth, obj.ExtrusionLength.Value):
+        if (
+            cut_type == "Distance"
+            and expression_of(obj, "ExtrusionLength") is None
+            and _spin_changed(form.spin_depth, obj.ExtrusionLength.Value)
+        ):
             obj.ExtrusionLength = form.spin_depth.value()
 
     def _restore(self, obj, values):
@@ -670,12 +705,15 @@ class DrillHoleTaskPanel:
         ]
         self.obj = make_drill_hole((base, (face,)), self.vertex)
         place_in_container_of(self.obj, base)
+        restore_expressions(self.obj, self._expressions)
+        self._bind_fields()
 
     def _drop_preview(self):
         """Remove the preview and show the bodies it hid as they were before."""
         if self.edited is not None:
             return
         if self.obj is not None and _in_document(self.obj):
+            self._expressions = expressions_of(self.obj, EXPRESSION_PROPERTIES)
             self.doc.removeObject(self.obj.Name)
         self.obj = None
         for body, visible in self._visibility:
@@ -703,6 +741,7 @@ class DrillHoleTaskPanel:
         self._transaction_open = False
         if not _in_document(self.edited):
             return
+        restore_expressions(self.edited, self._edit_expressions)
         if self._values(self.edited) != self._edit_before:
             self._restore(self.edited, self._edit_before)
         self.doc.recompute()
@@ -806,7 +845,11 @@ class DrillHoleTaskPanel:
         if self._error:
             # The panel stays open with the error, to change the values.
             return False
-        if self.edited is not None and self._values(self.edited) == self._edit_before:
+        if (
+            self.edited is not None
+            and self._values(self.edited) == self._edit_before
+            and expressions_of(self.edited, EXPRESSION_PROPERTIES) == self._edit_expressions
+        ):
             # Nothing changed in the end: no Undo step.
             self._restore_edit()
         else:
