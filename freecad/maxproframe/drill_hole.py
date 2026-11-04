@@ -207,21 +207,40 @@ def axis_positions(backward, forward, at_point):
     )
 
 
+def _pattern_axes(at_point, sides):
+    """(along, across) positions of the pattern ``sides``, ([], []) when it has no hole at all.
+
+    An axis without holes still holds the point's line (position 0) for the holes of the other axis.
+    """
+    along = axis_positions(sides["AlongBackward"], sides["AlongForward"], at_point)
+    across = axis_positions(sides["AcrossBackward"], sides["AcrossForward"], at_point)
+    if not along and not across:
+        return [], []
+    return along or [0.0], across or [0.0]
+
+
+def pattern_count(at_point, sides):
+    """Number of holes of the pattern, as pattern_positions makes them: 0 when it has none.
+
+    Not limited to MAX_HOLES, which pattern_positions refuses.
+    """
+    along, across = _pattern_axes(at_point, sides)
+    return len(along) * len(across)
+
+
 def pattern_positions(at_point, sides):
     """(along, across) positions of the holes from the point: every combination of one along and one across.
 
     An axis without holes still holds the point's line (position 0) for the holes of the other axis.
     Raise when there is no hole at all or more than MAX_HOLES.
     """
-    along = axis_positions(sides["AlongBackward"], sides["AlongForward"], at_point)
-    across = axis_positions(sides["AcrossBackward"], sides["AcrossForward"], at_point)
-    if not along and not across:
+    along, across = _pattern_axes(at_point, sides)
+    if not along:
         raise FrameForgeException(
             translate(
                 "frameforge", "Drill Hole: no hole to drill. Check Hole at the point or set a count in the pattern."
             )
         )
-    along, across = along or [0.0], across or [0.0]
     total = len(along) * len(across)
     if total > MAX_HOLES:
         raise FrameForgeException(

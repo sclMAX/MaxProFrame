@@ -30,6 +30,7 @@ from freecad.maxproframe.drill_hole import (
     face_axes,
     make_drill_hole,
     offset_origin,
+    pattern_count,
 )
 from freecad.maxproframe.expression_fields import (
     bind,
@@ -442,7 +443,7 @@ class DrillHoleTaskPanel:
         form.cb_hole_at_point = QtGui.QCheckBox(translate("frameforge", "Hole at the point"))
         form.cb_hole_at_point.setChecked(bool(obj.HoleAtPoint) if obj else True)
         grid.addWidget(form.cb_hole_at_point, 0, 0, 1, 3)
-        form.label_pattern_count = QtGui.QLabel(translate("frameforge", "Count"))
+        form.label_pattern_count = QtGui.QLabel(translate("frameforge", "Holes per side"))
         form.label_pattern_pitch = QtGui.QLabel(translate("frameforge", "Pitch"))
         grid.addWidget(form.label_pattern_count, 1, 1)
         grid.addWidget(form.label_pattern_pitch, 1, 2)
@@ -473,17 +474,28 @@ class DrillHoleTaskPanel:
         form = self.form
         return [getattr(form, f"spin_{row}_{kind}") for row, _ in PATTERN_ROWS for kind in ("count", "pitch")]
 
-    def _pattern_title(self):
-        """Title of the Pattern group: "Pattern", followed by the holes each side adds when checked.
+    def _pattern_sides(self):
+        """(hole at the point, {side: (count, pitch)}) the fields of the Pattern group show, as drill_hole takes them."""
+        form = self.form
+        return form.cb_hole_at_point.isChecked(), {
+            prop: (getattr(form, f"spin_{row}_count").value(), getattr(form, f"spin_{row}_pitch").value())
+            for row, prop in PATTERN_ROWS
+        }
 
-        For example "Pattern: ← 3 × 20 mm | 5 × 30 mm →", the holes across after "across", and "no hole at
-        the point" when that is unchecked.
+    def _pattern_title(self):
+        """Title of the Pattern group: "Pattern", followed by the total and the holes each side adds when checked.
+
+        For example "Pattern: 9 holes, ← 3 × 20 mm | 5 × 30 mm →", the holes across after "across", and "no
+        hole at the point" when that is unchecked. The total is the number of holes drilled ("1 hole").
         """
         form = self.form
         title = translate("frameforge", "Pattern")
         if not form.groupBox_pattern.isChecked():
             return title
-        parts = []
+        total = pattern_count(*self._pattern_sides())
+        parts = [
+            (translate("frameforge", "{} hole") if total == 1 else translate("frameforge", "{} holes")).format(total)
+        ]
         for axis in ("along", "across"):
             sides = []
             for side, text in (
@@ -498,10 +510,56 @@ class DrillHoleTaskPanel:
                 parts.append(sides if axis == "along" else translate("frameforge", "across {}").format(sides))
         if not form.cb_hole_at_point.isChecked():
             parts.append(translate("frameforge", "no hole at the point"))
-        return translate("frameforge", "Pattern: {}").format(", ".join(parts)) if parts else title
+        return translate("frameforge", "Pattern: {}").format(", ".join(parts))
 
     def _show_pattern_title(self):
         self.form.groupBox_pattern.setTitle(self._pattern_title())
+
+    def _overlap_warnings(self):
+        """One line for each axis whose holes overlap, while the Pattern group is checked.
+
+        Two holes of a side overlap when its pitch is smaller than the diameter, and so do its first hole
+        and the hole at the point. Without the hole at the point, the nearest holes on each side of the
+        point overlap each other when closer than the diameter: the sum of the two pitches.
+        """
+        form = self.form
+        if not form.groupBox_pattern.isChecked():
+            return []
+        diameter = form.spin_diameter.value()
+        at_point, sides = self._pattern_sides()
+        lines = []
+        for prefix, pitch_text, pair_text in (
+            (
+                "Along",
+                translate("frameforge", "The holes overlap: the pitch along ({}) is smaller than the diameter ({})."),
+                translate(
+                    "frameforge",
+                    "The holes overlap: with no hole at the point, the holes along on each side of the point are {} "
+                    "apart, less than the diameter ({}).",
+                ),
+            ),
+            (
+                "Across",
+                translate("frameforge", "The holes overlap: the pitch across ({}) is smaller than the diameter ({})."),
+                translate(
+                    "frameforge",
+                    "The holes overlap: with no hole at the point, the holes across on each side of the point are {} "
+                    "apart, less than the diameter ({}).",
+                ),
+            ),
+        ):
+            backward, forward = sides[f"{prefix}Backward"], sides[f"{prefix}Forward"]
+            pitches = [
+                pitch
+                for count, pitch in (backward, forward)
+                if pitch < diameter - TOLERANCE and (count > 1 or (count == 1 and at_point))
+            ]
+            apart = backward[1] + forward[1]
+            if pitches:
+                lines.append(pitch_text.format(_length_text(min(pitches)), _length_text(diameter)))
+            elif not at_point and backward[0] > 0 and forward[0] > 0 and apart < diameter - TOLERANCE:
+                lines.append(pair_text.format(_length_text(apart), _length_text(diameter)))
+        return lines
 
     def _on_pattern_toggled(self, checked):
         self.form.pattern_fields.setHidden(not checked)
@@ -1071,8 +1129,9 @@ class DrillHoleTaskPanel:
         self.form.status_label.setText(text)
 
     def _show_warning(self):
-        """Show the ReferenceWarning of the shown drill hole, hidden when it is empty."""
-        warning = self.obj.ReferenceWarning if self.obj is not None and _in_document(self.obj) else ""
+        """Show the ReferenceWarning of the shown drill hole, then the overlapping holes; hidden when empty."""
+        reference = self.obj.ReferenceWarning if self.obj is not None and _in_document(self.obj) else ""
+        warning = "\n".join(([reference] if reference else []) + self._overlap_warnings())
         self.form.warning_label.setText(warning)
         self.form.warning_label.setVisible(bool(warning))
 
@@ -1084,6 +1143,7 @@ class DrillHoleTaskPanel:
             return
         self._enable_fields()
         self._show_pattern_title()
+        self._show_warning()
         self._show_status()
         self._preview_timer.start()
 

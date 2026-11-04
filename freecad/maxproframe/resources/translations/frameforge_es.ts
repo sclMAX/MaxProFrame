@@ -1086,7 +1086,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Holes</source><translation>Agujeros</translation></message>
     <message><source>Offset along</source><translation>Desplazamiento longitudinal</translation></message>
     <message><source>Offset across</source><translation>Desplazamiento transversal</translation></message>
-    <message><source>Count</source><translation>Cantidad</translation></message>
+    <message><source>Holes per side</source><translation>Agujeros por lado</translation></message>
     <message><source>Pitch</source><translation>Paso</translation></message>
     <message><source>{}: {} is not used, a drill hole takes one face</source><translation>{}: {} no se usa, un agujero lleva una sola cara</translation></message>
     <message><source>{}: {} is not used, a drill hole takes one vertex</source><translation>{}: {} no se usa, un agujero lleva un solo vértice</translation></message>
@@ -1127,6 +1127,12 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>{} × {} →</source><translation>{} × {} →</translation></message>
     <message><source>across {}</source><translation>transversal {}</translation></message>
     <message><source>no hole at the point</source><translation>sin agujero en el punto</translation></message>
+    <message><source>{} hole</source><translation>{} agujero</translation></message>
+    <message><source>{} holes</source><translation>{} agujeros</translation></message>
+    <message><source>The holes overlap: the pitch along ({}) is smaller than the diameter ({}).</source><translation>Los agujeros se superponen: el paso longitudinal ({}) es menor que el diámetro ({}).</translation></message>
+    <message><source>The holes overlap: with no hole at the point, the holes along on each side of the point are {} apart, less than the diameter ({}).</source><translation>Los agujeros se superponen: sin agujero en el punto, los agujeros longitudinales a cada lado del punto quedan a {} entre sí, menos que el diámetro ({}).</translation></message>
+    <message><source>The holes overlap: the pitch across ({}) is smaller than the diameter ({}).</source><translation>Los agujeros se superponen: el paso transversal ({}) es menor que el diámetro ({}).</translation></message>
+    <message><source>The holes overlap: with no hole at the point, the holes across on each side of the point are {} apart, less than the diameter ({}).</source><translation>Los agujeros se superponen: sin agujero en el punto, los agujeros transversales a cada lado del punto quedan a {} entre sí, menos que el diámetro ({}).</translation></message>
     <message><source>Drill Hole: no hole to drill. Check Hole at the point or set a count in the pattern.</source><translation>Agujero: no hay ningún agujero para perforar. Marcá Agujero en el punto o poné una cantidad en el patrón.</translation></message>
     <message><source>Drill Hole: the pattern makes {} holes, at most {}.</source><translation>Agujero: el patrón da {} agujeros, como máximo {}.</translation></message>
     <message><source>Number of holes backward of the point, along the profile</source><translation>Cantidad de agujeros hacia atrás del punto, a lo largo del perfil</translation></message>

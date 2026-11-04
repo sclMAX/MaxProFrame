@@ -1773,7 +1773,7 @@ PATTERN_ROWS = (
     ("across_forward", "AcrossForward"),
 )
 USER_EXAMPLE = dict(along_backward=(3, 20.0), along_forward=(5, 30.0))
-USER_EXAMPLE_TITLE = "Pattern: ← 3 × 20 mm | 5 × 30 mm →"
+USER_EXAMPLE_SIDES = "← 3 × 20 mm | 5 × 30 mm →"
 
 
 class PatternPanelFixture(DrillHolePanelFixture):
@@ -1816,7 +1816,9 @@ class TestDrillHolePatternPanel(PatternPanelFixture):
             [getattr(form, f"label_{row}").text() for row, _ in PATTERN_ROWS],
             ["Along ← backward", "Along → forward", "Across ← backward", "Across → forward"],
         )
-        self.assertEqual((form.label_pattern_count.text(), form.label_pattern_pitch.text()), ("Count", "Pitch"))
+        self.assertEqual(
+            (form.label_pattern_count.text(), form.label_pattern_pitch.text()), ("Holes per side", "Pitch")
+        )
         self.assertEqual(self.fields_of(panel), (True, 0, 50.0, 0, 50.0, 0, 50.0, 0, 50.0))
         self.set_values(panel)
         wait()
@@ -1833,23 +1835,23 @@ class TestDrillHolePatternPanel(PatternPanelFixture):
         body, panel, obj, before = self.previewed_panel()
         form = panel.form
         self.set_pattern(panel, along_backward=(3, 20.0))
-        self.assertEqual(form.groupBox_pattern.title(), "Pattern: ← 3 × 20 mm")
+        self.assertEqual(form.groupBox_pattern.title(), "Pattern: 4 holes, ← 3 × 20 mm")
         self.set_pattern(panel, **USER_EXAMPLE)
-        self.assertEqual(form.groupBox_pattern.title(), USER_EXAMPLE_TITLE)
+        self.assertEqual(form.groupBox_pattern.title(), f"Pattern: 9 holes, {USER_EXAMPLE_SIDES}")
         self.set_pattern(panel, along_backward=(0, 20.0), along_forward=(5, 12.5))
-        self.assertEqual(form.groupBox_pattern.title(), "Pattern: 5 × 12.5 mm →")
+        self.assertEqual(form.groupBox_pattern.title(), "Pattern: 6 holes, 5 × 12.5 mm →")
         self.set_pattern(panel, **USER_EXAMPLE, across_forward=(2, 25.0))
-        self.assertEqual(form.groupBox_pattern.title(), f"{USER_EXAMPLE_TITLE}, across 2 × 25 mm →")
+        self.assertEqual(form.groupBox_pattern.title(), f"Pattern: 27 holes, {USER_EXAMPLE_SIDES}, across 2 × 25 mm →")
         self.set_pattern(panel, False, **USER_EXAMPLE, across_backward=(1, 10.0))
         self.assertEqual(
             form.groupBox_pattern.title(),
-            f"{USER_EXAMPLE_TITLE}, across ← 1 × 10 mm | 2 × 25 mm →, no hole at the point",
+            f"Pattern: 24 holes, {USER_EXAMPLE_SIDES}, across ← 1 × 10 mm | 2 × 25 mm →, no hole at the point",
         )
         # Every count back to 0: one hole at the point, or none.
         self.set_pattern(panel, **{row: (0, 50.0) for row, _ in PATTERN_ROWS})
-        self.assertEqual(form.groupBox_pattern.title(), "Pattern")
+        self.assertEqual(form.groupBox_pattern.title(), "Pattern: 1 hole")
         form.cb_hole_at_point.setChecked(False)
-        self.assertEqual(form.groupBox_pattern.title(), "Pattern: no hole at the point")
+        self.assertEqual(form.groupBox_pattern.title(), "Pattern: 0 holes, no hole at the point")
         self.set_pattern(panel, **USER_EXAMPLE)
         form.groupBox_pattern.setChecked(False)
         self.assertEqual(form.groupBox_pattern.title(), "Pattern")
@@ -1933,7 +1935,7 @@ class TestDrillHolePatternEdit(PatternPanelFixture):
         self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 2 * ONE_HOLE, places=3)
         panel = self.edit(obj)
         form = panel.form
-        self.assertEqual(form.groupBox_pattern.title(), "Pattern: 2 × 40 mm →, no hole at the point")
+        self.assertEqual(form.groupBox_pattern.title(), "Pattern: 2 holes, 2 × 40 mm →, no hole at the point")
         form.groupBox_pattern.setChecked(False)
         wait()
         self.assertEqual(form.groupBox_pattern.title(), "Pattern")
@@ -2039,6 +2041,177 @@ class TestDrillHolePatternEdit(PatternPanelFixture):
         self.assertEqual(self.doc.UndoCount, 1)
 
 
+# Image#7 (L8): across 2 every 5 mm on both sides, 8 mm holes; along 3 every 30 mm backward, 4 every 20 mm forward.
+IMAGE_7 = dict(along_backward=(3, 30.0), along_forward=(4, 20.0), across_backward=(2, 5.0), across_forward=(2, 5.0))
+
+
+def sides_of(rows):
+    """The ``sides`` of drill_hole.pattern_positions for the panel rows ``rows`` (along_forward=(count, pitch), ...)."""
+    sides = {prop: (0, 50.0) for _, prop in PATTERN_ROWS}
+    sides.update({prop: rows[row] for row, prop in PATTERN_ROWS if row in rows})
+    return sides
+
+
+def overlap(axis, pitch, diameter):
+    return f"The holes overlap: the pitch {axis} ({pitch}) is smaller than the diameter ({diameter})."
+
+
+def pair_overlap(axis, apart, diameter):
+    return (
+        f"The holes overlap: with no hole at the point, the holes {axis} on each side of the point are {apart} apart, "
+        f"less than the diameter ({diameter})."
+    )
+
+
+class TestDrillHolePatternFeedback(PatternPanelFixture):
+    """S6 (L10): the overlap warning, the total in the title and the per-side count column."""
+
+    def warning(self, panel):
+        """Text of the warning area, and whether it shows."""
+        label = panel.form.warning_label
+        return label.text(), not label.isHidden()
+
+    def test_the_warning_names_each_axis_whose_pitch_is_smaller_than_the_diameter_and_clears_when_fixed(self):
+        body, panel, obj, before = self.previewed_panel(diameter=8.0)
+        self.assertEqual(self.warning(panel), ("", False))
+        self.set_pattern(panel, along_forward=(2, 5.0))
+        self.assertEqual(self.warning(panel), (overlap("along", "5 mm", "8 mm"), True))
+        self.set_pattern(panel, along_forward=(0, 5.0), across_backward=(2, 5.5))
+        self.assertEqual(self.warning(panel), (overlap("across", "5.5 mm", "8 mm"), True))
+        # Both axes: one line each, along first; the smallest pitch of an axis is named.
+        self.set_pattern(panel, along_backward=(1, 6.0), along_forward=(3, 4.0))
+        self.assertEqual(
+            self.warning(panel),
+            (f"{overlap('along', '4 mm', '8 mm')}\n{overlap('across', '5.5 mm', '8 mm')}", True),
+        )
+        # Live with the diameter too.
+        panel.form.spin_diameter.setValue(5.0)
+        self.assertEqual(self.warning(panel), (overlap("along", "4 mm", "5 mm"), True))
+        # A pitch equal to the diameter does not overlap.
+        self.set_pattern(panel, along_forward=(3, 5.0), across_backward=(2, 5.0))
+        self.assertEqual(self.warning(panel), ("", False))
+        self.assertTrue(panel.reject())
+
+    def test_a_pair_without_the_hole_at_the_point_closer_than_the_diameter_is_warned(self):
+        body, panel, obj, before = self.previewed_panel(diameter=8.0)
+        self.set_pattern(panel, False, along_backward=(1, 3.0), along_forward=(1, 3.0))
+        self.assertEqual(self.warning(panel), (pair_overlap("along", "6 mm", "8 mm"), True))
+        self.set_pattern(panel, False, along_backward=(0, 3.0), along_forward=(0, 3.0))
+        self.set_pattern(panel, False, across_backward=(1, 2.5), across_forward=(1, 3.0))
+        self.assertEqual(self.warning(panel), (pair_overlap("across", "5.5 mm", "8 mm"), True))
+        # 2 x 5 mm apart: the pair does not overlap, and a lone first hole meets no hole at the point.
+        self.set_pattern(panel, False, across_backward=(1, 5.0), across_forward=(1, 5.0))
+        self.assertEqual(self.warning(panel), ("", False))
+        # With the hole at the point the same pitch overlaps it.
+        panel.form.cb_hole_at_point.setChecked(True)
+        self.assertEqual(self.warning(panel), (overlap("across", "5 mm", "8 mm"), True))
+        self.assertTrue(panel.reject())
+
+    def test_the_warning_shows_only_while_the_pattern_group_is_checked(self):
+        body, panel, obj, before = self.previewed_panel(diameter=8.0)
+        self.set_pattern(panel, across_forward=(2, 5.0))
+        self.assertEqual(self.warning(panel), (overlap("across", "5 mm", "8 mm"), True))
+        panel.form.groupBox_pattern.setChecked(False)
+        self.assertEqual(self.warning(panel), ("", False))
+        panel.form.groupBox_pattern.setChecked(True)
+        self.assertEqual(self.warning(panel), (overlap("across", "5 mm", "8 mm"), True))
+        self.assertTrue(panel.reject())
+
+    def test_ok_creates_overlapping_holes_in_one_undo_step(self):
+        # Overlapping can be on purpose: a warning, not an error.
+        body, panel, obj, before = self.previewed_panel(diameter=8.0)
+        self.set_pattern(panel, across_backward=(2, 5.0), across_forward=(2, 5.0))
+        wait()
+        self.assertEqual(self.warning(panel), (overlap("across", "5 mm", "8 mm"), True))
+        self.assertEqual(self.message(panel), "")
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.preview(before), obj)
+        self.assertEqual(self.pattern_of(obj), (True, 0, 50.0, 0, 50.0, 2, 5.0, 2, 5.0))
+        self.assertEqual(obj.getStatusString(), "Valid")
+        self.assertTrue(self.empty(obj.Shape, -20, 0, 24))
+        self.assertEqual(self.doc.UndoCount, 1)
+
+    def test_the_title_starts_with_the_total_of_holes_drilled(self):
+        body, panel, obj, before = self.previewed_panel()
+        form = panel.form
+        self.set_pattern(panel, False, **IMAGE_7)
+        total = len(drill_hole.pattern_positions(False, sides_of(IMAGE_7)))
+        self.assertEqual(total, 28)
+        self.assertEqual(
+            form.groupBox_pattern.title(),
+            f"Pattern: {total} holes, ← 3 × 30 mm | 4 × 20 mm →, across ← 2 × 5 mm | 2 × 5 mm →, no hole at the point",
+        )
+        form.cb_hole_at_point.setChecked(True)
+        self.assertEqual(len(drill_hole.pattern_positions(True, sides_of(IMAGE_7))), 40)
+        self.assertEqual(
+            form.groupBox_pattern.title(),
+            "Pattern: 40 holes, ← 3 × 30 mm | 4 × 20 mm →, across ← 2 × 5 mm | 2 × 5 mm →",
+        )
+        self.assertTrue(panel.reject())
+
+    def test_one_hole_is_singular_in_the_title(self):
+        body, panel, obj, before = self.previewed_panel()
+        form = panel.form
+        self.set_pattern(panel)
+        self.assertEqual(form.groupBox_pattern.title(), "Pattern: 1 hole")
+        self.set_pattern(panel, False, across_forward=(1, 15.0))
+        self.assertEqual(form.groupBox_pattern.title(), "Pattern: 1 hole, across 1 × 15 mm →, no hole at the point")
+        self.assertTrue(panel.reject())
+
+    def test_the_count_column_is_holes_per_side(self):
+        body, panel, obj, before = self.previewed_panel()
+        form = panel.form
+        self.assertEqual(
+            (form.label_pattern_count.text(), form.label_pattern_pitch.text()), ("Holes per side", "Pitch")
+        )
+        self.assertTrue(panel.reject())
+
+
+class TestDrillHolePatternFeedbackSpanish(PatternPanelFixture):
+    def test_the_total_the_count_column_and_the_overlap_warning_are_spanish(self):
+        use_language(self, "Spanish", "es_ES")
+        body, panel, obj, before = self.previewed_panel(diameter=8.0)
+        form = panel.form
+        self.assertEqual(
+            (form.label_pattern_count.text(), form.label_pattern_pitch.text()), ("Agujeros por lado", "Paso")
+        )
+        self.set_pattern(panel, False, **IMAGE_7)
+        self.assertEqual(
+            form.groupBox_pattern.title(),
+            "Patrón: 28 agujeros, ← 3 × 30 mm | 4 × 20 mm →, transversal ← 2 × 5 mm | 2 × 5 mm →, "
+            "sin agujero en el punto",
+        )
+        self.assertEqual(
+            form.warning_label.text(),
+            "Los agujeros se superponen: el paso transversal (5 mm) es menor que el diámetro (8 mm).",
+        )
+        self.set_pattern(panel, False, along_backward=(1, 3.0), along_forward=(1, 3.0))
+        self.set_pattern(panel, False, across_backward=(0, 5.0), across_forward=(0, 5.0))
+        self.assertEqual(
+            form.groupBox_pattern.title(), "Patrón: 2 agujeros, ← 1 × 3 mm | 1 × 3 mm →, sin agujero en el punto"
+        )
+        self.assertEqual(
+            form.warning_label.text(),
+            "Los agujeros se superponen: sin agujero en el punto, los agujeros longitudinales a cada lado del punto "
+            "quedan a 6 mm entre sí, menos que el diámetro (8 mm).",
+        )
+        self.set_pattern(panel, True, along_backward=(0, 3.0), along_forward=(0, 3.0))
+        self.assertEqual(form.groupBox_pattern.title(), "Patrón: 1 agujero")
+        self.assertTrue(panel.reject())
+
+    def test_both_overlap_lines_are_spanish(self):
+        use_language(self, "Spanish", "es_ES")
+        body, panel, obj, before = self.previewed_panel(diameter=8.0)
+        self.set_pattern(panel, False, across_backward=(1, 2.0), across_forward=(1, 3.0), along_forward=(2, 6.0))
+        self.assertEqual(
+            panel.form.warning_label.text(),
+            "Los agujeros se superponen: el paso longitudinal (6 mm) es menor que el diámetro (8 mm).\n"
+            "Los agujeros se superponen: sin agujero en el punto, los agujeros transversales a cada lado del punto "
+            "quedan a 5 mm entre sí, menos que el diámetro (8 mm).",
+        )
+        self.assertTrue(panel.reject())
+
+
 class TestDrillHolePatternSpanish(PatternPanelFixture):
     def test_the_pattern_group_its_title_the_properties_and_the_errors_are_spanish(self):
         use_language(self, "Spanish", "es_ES")
@@ -2050,11 +2223,13 @@ class TestDrillHolePatternSpanish(PatternPanelFixture):
             [getattr(form, f"label_{row}").text() for row, _ in PATTERN_ROWS],
             ["Longitudinal ← atrás", "Longitudinal → adelante", "Transversal ← atrás", "Transversal → adelante"],
         )
-        self.assertEqual((form.label_pattern_count.text(), form.label_pattern_pitch.text()), ("Cantidad", "Paso"))
+        self.assertEqual(
+            (form.label_pattern_count.text(), form.label_pattern_pitch.text()), ("Agujeros por lado", "Paso")
+        )
         self.set_pattern(panel, False, **USER_EXAMPLE, across_forward=(2, 25.0))
         self.assertEqual(
             form.groupBox_pattern.title(),
-            "Patrón: ← 3 × 20 mm | 5 × 30 mm →, transversal 2 × 25 mm →, sin agujero en el punto",
+            "Patrón: 16 agujeros, ← 3 × 20 mm | 5 × 30 mm →, transversal 2 × 25 mm →, sin agujero en el punto",
         )
         self.assertEqual(
             [obj.getDocumentationOfProperty(name) for name in drill_hole_properties()],
@@ -2071,7 +2246,7 @@ class TestDrillHolePatternSpanish(PatternPanelFixture):
             ],
         )
         self.set_pattern(panel, False, **{row: (0, 50.0) for row, _ in PATTERN_ROWS})
-        self.assertEqual(form.groupBox_pattern.title(), "Patrón: sin agujero en el punto")
+        self.assertEqual(form.groupBox_pattern.title(), "Patrón: 0 agujeros, sin agujero en el punto")
         # Pending events can hold the preview timer past the default wait here: give it room.
         wait(SETTLE)
         self.assertIn(
