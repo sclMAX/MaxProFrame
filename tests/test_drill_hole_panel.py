@@ -18,6 +18,7 @@ from test_extend_cut_preview import keep_auto_preview, wait
 
 from freecad.maxproframe import create_drill_hole_tool, drill_hole
 from freecad.maxproframe.create_drill_hole_tool import DrillHoleCommand
+from freecad.maxproframe.create_end_miter_tool import make_end_miter_profile
 from freecad.maxproframe.create_extend_cut_tool import ExtendCutTaskPanel, make_extend_cut_profile
 from freecad.maxproframe.create_notch_tool import make_notch_profile
 from freecad.maxproframe.drill_hole import make_drill_hole
@@ -573,15 +574,21 @@ class TestDrillHoleCreation(DrillHolePanelFixture):
         self.assertEqual(panel.face, (body, top))
         self.assertEqual(self.names(), before)
 
-    def test_a_hole_on_an_extend_cut_trim_or_a_notch_is_created_and_valid(self):
+    def test_a_hole_on_an_extend_cut_trim_a_notch_or_an_end_miter_is_created_and_valid(self):
         # L10 follow-up: the base can be a trim of the profile.
-        for joint in ("Extend / Cut", "Notch"):
+        for joint in ("Extend / Cut", "Notch", "End Miter"):
             with self.subTest(joint=joint):
                 self.close_dialog()
                 body = self.tube()
-                target = self.make_profile(self.make_sketch(((250, -200, 0), (250, 200, 0))), "Edge1", **CENTER)
+                if joint == "End Miter":
+                    # A corner at the end of the tube, at x = 300.
+                    target = self.make_profile(self.make_sketch(((300, 0, 0), (300, 200, 0))), "Edge1", **CENTER)
+                else:
+                    target = self.make_profile(self.make_sketch(((250, -200, 0), (250, 200, 0))), "Edge1", **CENTER)
                 if joint == "Notch":
                     trim = make_notch_profile(body, target)
+                elif joint == "End Miter":
+                    trim = make_end_miter_profile(body, [target])
                 else:
                     trim = make_extend_cut_profile(body, (target, (self.face_towards(target, -END),)))
                 self.doc.recompute()
