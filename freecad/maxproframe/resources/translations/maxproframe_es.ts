@@ -1081,7 +1081,8 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>{}: {} is not used, a cutout takes one face</source><translation>{}: {} no se usa, un calado lleva una sola cara</translation></message>
     <message><source>Drill Hole</source><translation>Agujero</translation></message>
     <message><source>Reference</source><translation>Referencia</translation></message>
-    <message><source>Click a face, then one of its vertices: the holes are placed from that vertex. Click again to change them.</source><translation>Hacé clic en una cara y luego en uno de sus vértices: los agujeros se ubican a partir de ese vértice. Hacé clic de nuevo para cambiarlos.</translation></message>
+    <message><source>Click a face near the corner the holes are placed from, or the vertex itself. Click again to change it.</source><translation>Hacé clic en una cara cerca de la esquina desde la que se ubican los agujeros, o en el vértice mismo. Hacé clic de nuevo para cambiarla.</translation></message>
+    <message><source>Next corner</source><translation>Siguiente esquina</translation></message>
     <message><source>Holes</source><translation>Agujeros</translation></message>
     <message><source>Offset along</source><translation>Desplazamiento longitudinal</translation></message>
     <message><source>Offset across</source><translation>Desplazamiento transversal</translation></message>
@@ -1146,7 +1147,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
 <context>
     <name>MaxProFrame_DrillHole</name>
     <message><source>Drill Hole</source><translation>Agujero</translation></message>
-    <message><source>&lt;b&gt;Drill Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile or a cutout, then one of its vertices: round holes are drilled at the offsets from that vertex, one or a row of them, with a diameter and a depth.</source><translation>&lt;b&gt;Agujero&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego en uno de sus vértices: se perforan agujeros redondos a las distancias indicadas desde ese vértice, uno solo o una fila, con un diámetro y una profundidad.</translation></message>
+    <message><source>&lt;b&gt;Drill Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile or a cutout near the corner to measure from: round holes are drilled at the offsets from that corner, one or a row of them, with a diameter and a depth.</source><translation>&lt;b&gt;Agujero&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en una cara plana de un perfil, un perfil recortado o un calado cerca de la esquina desde la que se mide: se perforan agujeros redondos a las distancias indicadas desde esa esquina, uno solo o una fila, con un diámetro y una profundidad.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_Link</name>

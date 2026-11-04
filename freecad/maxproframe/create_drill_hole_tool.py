@@ -5,7 +5,13 @@ import FreeCADGui as Gui
 import Part
 from PySide import QtCore, QtGui
 
-from freecad.maxproframe.create_end_miter_tool import GAP_DELAY_MS, _alive_document, _failures
+from freecad.maxproframe.create_end_miter_tool import (
+    GAP_DELAY_MS,
+    _alive_document,
+    _failures,
+    remove_overlay,
+    scene_graph,
+)
 from freecad.maxproframe.create_extend_cut_tool import (
     _in_document,
     _selected_items,
@@ -42,6 +48,46 @@ MIN_DIAMETER = 0.01
 MAX_COUNT = 1000
 # Two values closer than this are the same.
 TOLERANCE = 1e-9
+# Color of the marker on the reference corner.
+CORNER_MARKER_COLOR = (1.0, 0.6, 0.0)
+
+
+def _click_point(other):
+    """The global point of a 3D view click from the selection observer, or None.
+
+    A selection made without a point (the tree, a script) reports the origin: it stands for no point.
+    """
+    try:
+        point = App.Vector(*other[:3])
+    except Exception:
+        return None
+    return None if point.Length == 0 else point
+
+
+def _container_placement(obj):
+    """Placement from the coordinates of the shape of ``obj`` to global coordinates."""
+    try:
+        return obj.getGlobalPlacement().multiply(obj.Placement.inverse())
+    except Exception:
+        return App.Placement()
+
+
+def _nearest_corner(obj, face, point):
+    """Name of the vertex of the face ``face`` of ``obj`` nearest to the global ``point``, or None."""
+    face_shape = _element(obj, face)
+    if not isinstance(face_shape, Part.Face) or not face_shape.Vertexes:
+        return None
+    local = _container_placement(obj).inverse().multVec(point)
+    nearest = min(face_shape.Vertexes, key=lambda vertex: vertex.Point.distanceToPoint(local))
+    return _base_element(obj, nearest)
+
+
+def _face_corners(obj, face):
+    """Names of the vertices of the face ``face`` of ``obj``, in the order of the face."""
+    face_shape = _element(obj, face)
+    if not isinstance(face_shape, Part.Face):
+        return []
+    return [name for name in (_base_element(obj, vertex) for vertex in face_shape.Vertexes) if name]
 
 
 def _spin_changed(spin, stored):
@@ -102,8 +148,9 @@ EXPRESSION_PROPERTIES = ("OffsetAlong", "OffsetAcross", "Diameter", "Count", "Pi
 class DrillHoleTaskPanel:
     """Face, vertex, offsets, diameter, linear pattern and depth of a drill hole, previewed live.
 
-    A click on a planar face of a profile, a trimmed profile or a cutout picks the face; a click on
-    one of its vertices picks the vertex the holes are placed from. Every other pick is explained.
+    A click on a planar face of a profile, a trimmed profile or a cutout picks the face and its corner
+    nearest to the click, the vertex the holes are placed from; a click on one of its vertices, or Next
+    corner, picks that vertex. Every other pick is explained. The picked corner is marked in the 3D view.
     A click on the drill hole being previewed or edited (it hides its base) stands for the face or
     vertex of its base under the click.
 
@@ -129,6 +176,9 @@ class DrillHoleTaskPanel:
         self.vertex = None
         self._closed = False
         self._transaction_open = False
+        # (scene, node) of the marker on the reference corner, and its global point.
+        self._corner_node = None
+        self._corner_point = None
         # (body, visibility) of the bodies the preview hides, as they were before.
         self._visibility = []
         # Message area: what the last pick explained, then the last preview or OK failure.
@@ -182,12 +232,15 @@ class DrillHoleTaskPanel:
         form.hint_label = QtGui.QLabel(
             translate(
                 "frameforge",
-                "Click a face, then one of its vertices: the holes are placed from that vertex. Click again to change them.",
+                "Click a face near the corner the holes are placed from, or the vertex itself. Click again to change it.",
             )
         )
         for label in (form.face_label, form.vertex_label, form.hint_label):
             label.setWordWrap(True)
             reference.addWidget(label)
+        form.button_next_corner = QtGui.QPushButton(translate("frameforge", "Next corner"))
+        form.button_next_corner.clicked.connect(self._next_corner)
+        reference.addWidget(form.button_next_corner)
         layout.addWidget(form.groupBox_reference)
 
         form.groupBox_holes = QtGui.QGroupBox(translate("frameforge", "Holes"))
@@ -432,8 +485,11 @@ class DrillHoleTaskPanel:
             return translate("frameforge", "{}: {} is not a vertex of {}").format(obj.Label, sub, face)
         return None
 
-    def _pick(self, obj, sub):
-        """Take the face or vertex ``sub`` of ``obj``: (whether the reference changed, problems)."""
+    def _pick(self, obj, sub, point=None):
+        """Take the face or vertex ``sub`` of ``obj``: (whether the reference changed, problems).
+
+        A face clicked at the global ``point`` also takes its corner nearest to the click.
+        """
         problem = trimmed_body_problem(None, obj)
         if problem is not None:
             return False, [problem]
@@ -448,13 +504,31 @@ class DrillHoleTaskPanel:
         problem = face_problem(obj, sub) or trimmed_body_problem(self.obj, obj)
         if problem is not None:
             return False, [problem]
+        corner = _nearest_corner(obj, sub, point) if point is not None else None
         if self.face == (obj, sub):
-            return False, []
-        if self.vertex is not None and not (self.face[0] == obj and _on_face(obj, sub, self.vertex)):
+            changed = corner is not None and corner != self.vertex
+            if changed:
+                self.vertex = corner
+            return changed, []
+        if corner is not None:
+            self.vertex = corner
+        elif self.vertex is not None and not (self.face[0] == obj and _on_face(obj, sub, self.vertex)):
             self.vertex = None
         self.face = (obj, sub)
         self._set_depth()
         return True, []
+
+    def _next_corner(self):
+        """Take the corner of the face after the current one, the first one without a current one."""
+        if self.face is None or not _in_document(self.face[0]):
+            return
+        corners = _face_corners(*self.face)
+        if not corners:
+            return
+        index = corners.index(self.vertex) + 1 if self.vertex in corners else 0
+        self.vertex = corners[index % len(corners)]
+        self._show([])
+        self._update_preview()
 
     def _on_base(self, obj, sub):
         """(object, element) a click on ``sub`` of ``obj`` stands for: the base of the shown drill hole, else itself."""
@@ -477,10 +551,53 @@ class DrillHoleTaskPanel:
             text = f"{obj.Label} ({obj.Name}) {face}"
         self.form.face_label.setText(text)
         self.form.vertex_label.setText(self.vertex or translate("frameforge", "Click a vertex of the face."))
+        self.form.button_next_corner.setEnabled(self.face is not None)
+        self._draw_corner_marker()
         self._messages = list(messages)
         self._error = ""
         self._show_messages()
         self._show_status()
+
+    def corner_marker(self):
+        """Global point of the marker on the reference corner, or None when none is shown."""
+        return self._corner_point
+
+    def _draw_corner_marker(self):
+        """Mark the reference corner over the 3D view in place of the previous mark."""
+        self._remove_corner_marker()
+        if self._closed or self.face is None or self.vertex is None:
+            return
+        vertex = _element(self.face[0], self.vertex)
+        if not isinstance(vertex, Part.Vertex):
+            return
+        self._corner_point = _container_placement(self.face[0]).multVec(vertex.Point)
+        scene = scene_graph(self.doc)
+        if scene is None:
+            return  # No 3D view (offscreen or another view type): the point is still kept.
+        from pivy import coin
+
+        try:
+            index = Gui.getMarkerIndex("CIRCLE_FILLED", 9)
+        except Exception:
+            index = coin.SoMarkerSet.CIRCLE_FILLED_9_9
+        # An annotation is drawn over the shapes, so the corner stays visible behind the preview.
+        node = coin.SoAnnotation()
+        color = coin.SoBaseColor()
+        color.rgb.setValue(*CORNER_MARKER_COLOR)
+        coordinates = coin.SoCoordinate3()
+        point = self._corner_point
+        coordinates.point.setValues(0, 1, [(point.x, point.y, point.z)])
+        marker = coin.SoMarkerSet()
+        marker.markerIndex.setValue(index)
+        for child in (color, coordinates, marker):
+            node.addChild(child)
+        scene.addChild(node)
+        self._corner_node = (scene, node)
+
+    def _remove_corner_marker(self):
+        remove_overlay(self._corner_node)
+        self._corner_node = None
+        self._corner_point = None
 
     def _show_messages(self):
         self.form.message_label.setText("\n".join(self._messages + ([self._error] if self._error else [])))
@@ -637,7 +754,7 @@ class DrillHoleTaskPanel:
         source = document.getObject(getattr(obj, "Name", obj)) if document else None
         if source is None:
             return
-        changed, messages = self._pick(*self._on_base(source, sub))
+        changed, messages = self._pick(*self._on_base(source, sub), _click_point(other))
         self._show(messages)
         if changed:
             # Never recompute during FreeCAD's selection observer dispatch.
@@ -671,6 +788,7 @@ class DrillHoleTaskPanel:
     def clean(self):
         self._closed = True
         self._preview_timer.stop()
+        self._remove_corner_marker()
         try:
             Gui.Selection.removeObserver(self)
         except Exception:
@@ -751,7 +869,7 @@ class DrillHoleCommand:
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_DrillHole", "Drill Hole"),
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_DrillHole",
-                "<b>Drill Hole</b><br><br>Click a planar face of a profile, a trimmed profile or a cutout, then one of its vertices: round holes are drilled at the offsets from that vertex, one or a row of them, with a diameter and a depth.",
+                "<b>Drill Hole</b><br><br>Click a planar face of a profile, a trimmed profile or a cutout near the corner to measure from: round holes are drilled at the offsets from that corner, one or a row of them, with a diameter and a depth.",
             ),
         }
 
