@@ -30,7 +30,7 @@
          </widget>
         </item>
         <item row="0" column="1">
-         <widget class="QDoubleSpinBox" name="sb_height">
+         <widget class="Gui::DoubleSpinBox" name="sb_height">
           <property name="toolTip">
            <string>Adjust Height</string>
           </property>
@@ -59,7 +59,7 @@
          </widget>
         </item>
         <item row="1" column="1">
-         <widget class="QDoubleSpinBox" name="sb_width">
+         <widget class="Gui::DoubleSpinBox" name="sb_width">
           <property name="decimals">
            <number>1</number>
           </property>
@@ -85,7 +85,7 @@
          </widget>
         </item>
         <item row="2" column="1">
-         <widget class="QDoubleSpinBox" name="sb_lip_length">
+         <widget class="Gui::DoubleSpinBox" name="sb_lip_length">
           <property name="decimals">
            <number>1</number>
           </property>
@@ -111,7 +111,7 @@
          </widget>
         </item>
         <item row="3" column="1">
-         <widget class="QDoubleSpinBox" name="sb_main_thickness">
+         <widget class="Gui::DoubleSpinBox" name="sb_main_thickness">
           <property name="maximum">
            <double>100.000000000000000</double>
           </property>
@@ -128,7 +128,7 @@
          </widget>
         </item>
         <item row="4" column="1">
-         <widget class="QDoubleSpinBox" name="sb_flange_thickness">
+         <widget class="Gui::DoubleSpinBox" name="sb_flange_thickness">
           <property name="decimals">
            <number>1</number>
           </property>
@@ -145,7 +145,7 @@
          </widget>
         </item>
         <item row="5" column="1">
-         <widget class="QDoubleSpinBox" name="sb_radius1">
+         <widget class="Gui::DoubleSpinBox" name="sb_radius1">
           <property name="decimals">
            <number>1</number>
           </property>
@@ -165,7 +165,7 @@
          </widget>
         </item>
         <item row="6" column="1">
-         <widget class="QDoubleSpinBox" name="sb_radius2">
+         <widget class="Gui::DoubleSpinBox" name="sb_radius2">
           <property name="decimals">
            <number>1</number>
           </property>
@@ -185,7 +185,7 @@
          </widget>
         </item>
         <item row="7" column="1">
-         <widget class="QDoubleSpinBox" name="sb_weight">
+         <widget class="Gui::DoubleSpinBox" name="sb_weight">
           <property name="maximum">
            <double>500.000000000000000</double>
           </property>
@@ -427,6 +427,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>Gui::DoubleSpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>Gui/SpinBox.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>
