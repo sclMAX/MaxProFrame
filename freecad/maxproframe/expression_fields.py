@@ -6,7 +6,7 @@ property at once, inside the transaction the panel holds open; OK keeps it, Canc
 """
 
 import FreeCADGui as Gui
-from PySide import QtGui
+from PySide import QtCore, QtGui
 
 
 def _widget(class_name, fallback):
@@ -38,7 +38,19 @@ def bind(widget, obj, prop):
         Gui.ExpressionBinding(widget).bind(obj, prop)
     except Exception:
         return False
+    _place_icon(widget)
     return True
+
+
+def _place_icon(widget):
+    """Put the Fx icon of ``widget`` at the right end of the field, vertically centered.
+
+    FreeCAD places the icon only when the field is resized, and the icon is sized when the field is
+    bound: a field bound once shown (the Drill Hole panel binds to its first preview) keeps the icon
+    where its unbound size put it, short of the right end and above the middle.
+    """
+    size = widget.size()
+    QtCore.QCoreApplication.sendEvent(widget, QtGui.QResizeEvent(size, size))
 
 
 def expression_of(obj, prop):
