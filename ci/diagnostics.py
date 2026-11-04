@@ -40,6 +40,9 @@ class Session:
         # frames/thread and 500 characters/string. No locals or source lines.
         try:
             faulthandler.dump_traceback_later(120, repeat=False, file=self.stack_file)
+            # A native crash (SIGSEGV, SIGABRT) dumps the Python stack of every thread here, then
+            # chains to the handler installed before (FreeCAD's): the exit code does not change.
+            faulthandler.enable(file=self.stack_file, all_threads=True)
         except Exception:
             self.stack_file.close()
             raise
@@ -69,6 +72,7 @@ class Session:
         if self.timer is not None:
             self.timer.stop()
         faulthandler.cancel_dump_traceback_later()
+        faulthandler.disable()
         self.stack_file.close()
 
 

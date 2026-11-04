@@ -127,6 +127,11 @@ failure artifacts), without changing the runner deadline, verdicts or dialogs:
   macro entry, independently of the Qt event loop. CPython bounds this to 100
   threads, 100 frames per thread and 500 characters per string; no locals or
   source lines are collected. A successful suite cancels the pending dump.
+  A native crash (SIGSEGV, SIGABRT, SIGBUS, SIGFPE, SIGILL) appends a
+  `Fatal Python error` and the all-thread stack at the moment of the crash, with
+  the same bounds, then chains to FreeCAD's own handler, so the exit code and the
+  crash diagnosis do not change. This is the only Python trace of a crash that
+  does not reproduce in the gdb rerun.
 - `modal-state.jsonl`: at most 12 snapshots, every 30 seconds on the GUI thread,
   each limited to 32 top-level widgets. Only bounded class names, visibility,
   modality, active modal class and elapsed time are recorded. No window titles,
