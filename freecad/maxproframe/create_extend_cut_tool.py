@@ -551,6 +551,15 @@ class ExtendCutTaskPanel:
         The panel values are then no longer shown by the trim: the preview applies them again on the next update.
         """
         doc = self.doc
+        obj = self.edited
+        if getattr(obj, "Removing", False) or not _in_document(obj):
+            # The trim was deleted: the deletion closes the panel from inside removeObject, while its
+            # dialog is destroyed. Aborting would bring the trim back and a recompute there crashes
+            # FreeCAD, so the document is left alone: the deletion stays in the open transaction.
+            self._transaction_open = False
+            self._discarded = {}
+            self._previewed = ()
+            return
         aborted = self._transaction_open and _alive_document(doc)
         if aborted:
             try:
@@ -560,9 +569,6 @@ class ExtendCutTaskPanel:
         self._transaction_open = False
         self._discarded = {}
         self._previewed = ()
-        obj = self.edited
-        if not _in_document(obj):
-            return
         restored = self._edit_values(obj) != self._edit_before
         if restored:
             boundary, gap, keep_end = self._edit_before
