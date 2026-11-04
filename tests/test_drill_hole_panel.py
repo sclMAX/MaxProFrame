@@ -130,6 +130,15 @@ class DrillHolePanelFixture(CutoutFixture, DrillHoleFixture):
         for name, value in values.items():
             getattr(form, f"spin_{name}").setValue(value)
 
+    def set_pattern(self, panel, hole_at_point=True, **sides):
+        """Check the Pattern group and set ``sides`` (along_forward=(count, pitch), ...) and Hole at the point."""
+        form = panel.form
+        form.groupBox_pattern.setChecked(True)
+        form.cb_hole_at_point.setChecked(hole_at_point)
+        for side, (count, pitch) in sides.items():
+            getattr(form, f"spin_{side}_count").setValue(count)
+            getattr(form, f"spin_{side}_pitch").setValue(pitch)
+
     def set_cut_type(self, panel, cut_type):
         combo = panel.form.combo_cut_type
         combo.setCurrentIndex(combo.findData(cut_type))
@@ -140,10 +149,17 @@ class DrillHolePanelFixture(CutoutFixture, DrillHoleFixture):
             round(obj.OffsetAlong.Value, 6),
             round(obj.OffsetAcross.Value, 6),
             round(obj.Diameter.Value, 6),
-            obj.Count,
-            round(obj.Pitch.Value, 6),
+            obj.AlongForwardCount,
+            round(obj.AlongForwardPitch.Value, 6),
             obj.CutType,
             round(obj.ExtrusionLength.Value, 6),
+            obj.HoleAtPoint,
+            obj.AlongBackwardCount,
+            round(obj.AlongBackwardPitch.Value, 6),
+            obj.AcrossBackwardCount,
+            round(obj.AcrossBackwardPitch.Value, 6),
+            obj.AcrossForwardCount,
+            round(obj.AcrossForwardPitch.Value, 6),
         )
 
     def existing(self, **values):
@@ -1083,8 +1099,8 @@ class TestDrillHolePreview(DrillHolePanelFixture):
             ["Through All", "Distance", "One wall"],
         )
         self.assertAlmostEqual(form.spin_diameter.value(), DIAMETER, places=6)
-        self.assertEqual(form.spin_count.value(), 1)
-        self.assertFalse(form.spin_pitch.isEnabled())
+        self.assertEqual(form.spin_along_forward_count.value(), 0)
+        self.assertFalse(form.spin_along_forward_pitch.isEnabled())
         self.assertFalse(form.spin_depth.isEnabled())
         # The depth starts at the wall under the face.
         self.assertAlmostEqual(form.spin_depth.value(), WALL, places=6)
@@ -1093,9 +1109,10 @@ class TestDrillHolePreview(DrillHolePanelFixture):
         wait()
         self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
         self.assertTrue(self.empty(obj.Shape, -20, 0, 24))
-        form.spin_count.setValue(3)
-        self.assertTrue(form.spin_pitch.isEnabled())
-        form.spin_pitch.setValue(40.0)
+        form.groupBox_pattern.setChecked(True)
+        form.spin_along_forward_count.setValue(2)
+        self.assertTrue(form.spin_along_forward_pitch.isEnabled())
+        form.spin_along_forward_pitch.setValue(40.0)
         wait()
         self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 3 * ONE_HOLE, places=3)
         self.assertTrue(self.empty(obj.Shape, 60, 0, 24))
@@ -1111,8 +1128,8 @@ class TestDrillHolePreview(DrillHolePanelFixture):
         form.spin_depth.setValue(1.0)
         wait()
         self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 3 * hole_volume(6.0, 1.0), places=3)
-        form.spin_count.setValue(1)
-        self.assertFalse(form.spin_pitch.isEnabled())
+        form.spin_along_forward_count.setValue(0)
+        self.assertFalse(form.spin_along_forward_pitch.isEnabled())
         wait()
         self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - hole_volume(6.0, 1.0), places=3)
         self.assertEqual(self.preview(before), obj)
@@ -1255,14 +1272,15 @@ class TestDrillHolePreview(DrillHolePanelFixture):
         self.assertEqual(self.names(), before)
         self.assertEqual(self.status(panel), "Pending changes")
         counter = self.count_recomputes(panel)
-        self.set_values(panel, diameter=12.0, count=2, pitch=40.0)
+        self.set_values(panel, diameter=12.0)
+        self.set_pattern(panel, along_forward=(1, 40.0))
         wait()
         self.assertEqual(counter.calls, 0)
         self.assertEqual(self.names(), before)
         self.assertEqual(self.status(panel), "Pending changes")
         self.assertTrue(panel.accept())
         obj = self.preview(before)
-        self.assertEqual(self.values(obj)[:7], (corner, 30.0, 25.0, 12.0, 2, 40.0, "One wall"))
+        self.assertEqual(self.values(obj)[:7], (corner, 30.0, 25.0, 12.0, 1, 40.0, "One wall"))
         self.assertEqual(obj.getStatusString(), "Valid")
         self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 2 * hole_volume(12.0, WALL), places=3)
         self.assertEqual(self.doc.UndoCount, 1)
@@ -1284,7 +1302,8 @@ class TestDrillHoleCreation(DrillHolePanelFixture):
         self.doc.clearUndos()
         before = self.names()
         panel = self.run_command((body, top), (body, corner))
-        self.set_values(panel, count=2, pitch=40.0, diameter=8.0)
+        self.set_values(panel, diameter=8.0)
+        self.set_pattern(panel, along_forward=(1, 40.0))
         self.set_cut_type(panel, "Through All")
         self.assertTrue(panel.accept())
         obj = self.preview(before)
@@ -1292,7 +1311,7 @@ class TestDrillHoleCreation(DrillHolePanelFixture):
         self.assertEqual(obj.Label, "Profile_TC50x50x2_000_Dh")
         self.assertEqual(obj.getParentGeoFeatureGroup(), part)
         self.assertEqual(obj.baseObject, (body, [top]))
-        self.assertEqual(self.values(obj)[:7], (corner, 30.0, 25.0, 8.0, 2, 40.0, "Through All"))
+        self.assertEqual(self.values(obj)[:7], (corner, 30.0, 25.0, 8.0, 1, 40.0, "Through All"))
         self.assertEqual(obj.getStatusString(), "Valid")
         self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 4 * hole_volume(8.0, WALL), places=3)
         self.assertEqual(self.doc.UndoCount, 1)
@@ -1400,7 +1419,7 @@ class TestDrillHoleCreation(DrillHolePanelFixture):
 class TestDrillHoleEdit(DrillHolePanelFixture):
     def test_double_click_shows_the_stored_values_and_ok_keeps_the_changes_in_one_undo_step(self):
         # S6: edit by double-click.
-        body, obj = self.existing(Diameter=8.0, Count=2, Pitch=60.0)
+        body, obj = self.existing(Diameter=8.0, AlongForwardCount=1, AlongForwardPitch=60.0)
         top = self.face_towards(body, UP)
         stored = self.values(obj)
         panel = self.edit(obj)
@@ -1411,9 +1430,10 @@ class TestDrillHoleEdit(DrillHolePanelFixture):
         self.assertAlmostEqual(form.spin_offset_along.value(), 30.0, places=6)
         self.assertAlmostEqual(form.spin_offset_across.value(), 25.0, places=6)
         self.assertAlmostEqual(form.spin_diameter.value(), 8.0, places=6)
-        self.assertEqual(form.spin_count.value(), 2)
-        self.assertTrue(form.spin_pitch.isEnabled())
-        self.assertAlmostEqual(form.spin_pitch.value(), 60.0, places=6)
+        self.assertTrue(form.groupBox_pattern.isChecked())
+        self.assertEqual(form.spin_along_forward_count.value(), 1)
+        self.assertTrue(form.spin_along_forward_pitch.isEnabled())
+        self.assertAlmostEqual(form.spin_along_forward_pitch.value(), 60.0, places=6)
         self.assertEqual(form.combo_cut_type.currentData(), "One wall")
         self.assertEqual(form.warning_label.text(), "")
         self.assertTrue(form.warning_label.isHidden())
@@ -1421,13 +1441,13 @@ class TestDrillHoleEdit(DrillHolePanelFixture):
         # A click on the edited hole picks the vertex of its base.
         self.click(obj, self.vertex_at(obj, FAR_CORNER))
         form.spin_diameter.setValue(DIAMETER)
-        form.spin_count.setValue(1)
+        form.spin_along_forward_count.setValue(0)
         wait()
         self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
         self.assertTrue(panel.accept())
         self.assertEqual(self.names(), before)
         self.assertEqual(obj.ReferenceVertex, self.vertex_at(body, FAR_CORNER))
-        self.assertEqual((obj.Diameter.Value, obj.Count), (DIAMETER, 1))
+        self.assertEqual((obj.Diameter.Value, obj.AlongForwardCount), (DIAMETER, 0))
         self.assertTrue(self.empty(obj.Shape, 320, 0, 24))
         self.assertEqual(obj.getStatusString(), "Valid")
         self.assertEqual(self.doc.UndoCount, 1)
@@ -1437,8 +1457,8 @@ class TestDrillHoleEdit(DrillHolePanelFixture):
 
     def test_stored_lengths_finer_than_the_fields_are_kept_unless_that_field_is_changed(self):
         # R3-001: the fields show two decimals; OK must not write their rounded values back.
-        fine = dict(OffsetAlong=30.125, OffsetAcross=24.875, Diameter=4.7625, Pitch=50.0625)
-        body, obj = self.existing(Count=2, CutType="Distance", ExtrusionLength=1.0625, **fine)
+        fine = dict(OffsetAlong=30.125, OffsetAcross=24.875, Diameter=4.7625, AlongForwardPitch=50.0625)
+        body, obj = self.existing(AlongForwardCount=1, CutType="Distance", ExtrusionLength=1.0625, **fine)
         stored = self.values(obj)
         panel = self.edit(obj)
         self.assertTrue(panel.accept())
@@ -1446,11 +1466,11 @@ class TestDrillHoleEdit(DrillHolePanelFixture):
         self.assertEqual(self.values(obj), stored)
         self.assertEqual(self.doc.UndoCount, 0)
         panel = self.edit(obj)
-        panel.form.spin_count.setValue(3)
+        panel.form.spin_along_forward_count.setValue(2)
         wait()
         self.assertTrue(panel.accept())
         self.events()
-        self.assertEqual(obj.Count, 3)
+        self.assertEqual(obj.AlongForwardCount, 2)
         self.assertEqual(self.values(obj)[1:4] + self.values(obj)[5:], stored[1:4] + stored[5:])
         self.assertEqual(self.doc.UndoCount, 1)
 
@@ -1479,7 +1499,7 @@ class TestDrillHoleEdit(DrillHolePanelFixture):
         form = panel.form
         self.assertEqual(form.combo_cut_type.currentData(), "Distance")
         self.assertAlmostEqual(form.spin_depth.value(), 1.5, places=6)
-        form.spin_count.setValue(3)
+        self.set_pattern(panel, along_forward=(2, 50.0))
         self.set_cut_type(panel, "Through All")
         wait()
         self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 6 * ONE_HOLE, places=3)
@@ -1528,14 +1548,12 @@ class TestDrillHoleSpanish(DrillHolePanelFixture):
         self.assertEqual(
             [
                 getattr(form, f"label_{name}").text()
-                for name in ("offset_along", "offset_across", "diameter", "count", "pitch", "cut_type", "depth")
+                for name in ("offset_along", "offset_across", "diameter", "cut_type", "depth")
             ],
             [
                 "Desplazamiento longitudinal",
                 "Desplazamiento transversal",
                 "Diámetro",
-                "Cantidad",
-                "Paso",
                 "Tipo de corte",
                 "Profundidad",
             ],
@@ -1564,7 +1582,10 @@ class TestDrillHoleSpanish(DrillHolePanelFixture):
         wait()
         obj = self.preview(before)
         self.assertEqual(self.status(panel), "Previsualización actualizada")
-        self.assertEqual(obj.getDocumentationOfProperty("Count"), "Cantidad de agujeros")
+        self.assertEqual(
+            obj.getDocumentationOfProperty("AlongForwardCount"),
+            "Cantidad de agujeros hacia adelante del punto, a lo largo del perfil",
+        )
         self.assertTrue(panel.accept())
         # S4: the warning of a hole whose corner is gone.
         obj.OffsetAlong = 230.0
@@ -1610,8 +1631,14 @@ class TestDrillHoleExpressions(DrillHolePanelFixture):
         ("spin_offset_along", "OffsetAlong"),
         ("spin_offset_across", "OffsetAcross"),
         ("spin_diameter", "Diameter"),
-        ("spin_count", "Count"),
-        ("spin_pitch", "Pitch"),
+        ("spin_along_backward_count", "AlongBackwardCount"),
+        ("spin_along_backward_pitch", "AlongBackwardPitch"),
+        ("spin_along_forward_count", "AlongForwardCount"),
+        ("spin_along_forward_pitch", "AlongForwardPitch"),
+        ("spin_across_backward_count", "AcrossBackwardCount"),
+        ("spin_across_backward_pitch", "AcrossBackwardPitch"),
+        ("spin_across_forward_count", "AcrossForwardCount"),
+        ("spin_across_forward_pitch", "AcrossForwardPitch"),
         ("spin_depth", "ExtrusionLength"),
     )
 
@@ -1648,11 +1675,11 @@ class TestDrillHoleExpressions(DrillHolePanelFixture):
         varset = self.varset(6.0)
         body, panel, hole, before = self.previewed_panel()
         hole.setExpression("Diameter", f"{varset.Name}.Diameter")
-        panel.form.spin_count.setValue(2)
+        self.set_pattern(panel, along_forward=(1, 50.0))
         wait()
         self.assertTrue(panel.accept())
         self.assertEqual(dict(hole.ExpressionEngine), {"Diameter": f"{varset.Name}.Diameter"})
-        self.assertEqual((hole.Diameter.Value, hole.Count), (6.0, 2))
+        self.assertEqual((hole.Diameter.Value, hole.AlongForwardCount), (6.0, 1))
         self.assertAlmostEqual(hole.Shape.Volume, body.Shape.Volume - 2 * hole_volume(6.0, WALL), places=3)
         varset.Diameter = 4.0
         self.doc.recompute()
@@ -1701,11 +1728,11 @@ class TestDrillHoleExpressions(DrillHolePanelFixture):
         self.assertEqual(set(self.bindings(panel).values()), {True})
         self.assertTrue(Gui.ExpressionBinding(form.spin_diameter).hasExpression())
         self.assertAlmostEqual(form.spin_diameter.value(), 8.0, places=6)
-        form.spin_count.setValue(2)
+        self.set_pattern(panel, along_forward=(1, 50.0))
         wait()
         self.assertTrue(panel.accept())
         self.assertEqual(dict(obj.ExpressionEngine), {"Diameter": f"{varset.Name}.Diameter"})
-        self.assertEqual(obj.Count, 2)
+        self.assertEqual(obj.AlongForwardCount, 1)
         varset.Diameter = 6.0
         self.doc.recompute()
         self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 2 * hole_volume(6.0, WALL), places=3)
@@ -1736,6 +1763,330 @@ class TestDrillHoleExpressions(DrillHolePanelFixture):
         self.assertEqual(dict(obj.ExpressionEngine), {})
         self.assertEqual(self.values(obj), stored)
         self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
+
+
+# The pattern rows of the panel, in order, and the drill hole properties they set.
+PATTERN_ROWS = (
+    ("along_backward", "AlongBackward"),
+    ("along_forward", "AlongForward"),
+    ("across_backward", "AcrossBackward"),
+    ("across_forward", "AcrossForward"),
+)
+USER_EXAMPLE = dict(along_backward=(3, 20.0), along_forward=(5, 30.0))
+USER_EXAMPLE_TITLE = "Pattern: ← 3 × 20 mm | 5 × 30 mm →"
+
+
+class PatternPanelFixture(DrillHolePanelFixture):
+    def pattern_of(self, obj):
+        """(HoleAtPoint, then count and pitch of each row) of the drill hole ``obj``."""
+        values = [obj.HoleAtPoint]
+        for _, prop in PATTERN_ROWS:
+            values += [getattr(obj, f"{prop}Count"), round(getattr(obj, f"{prop}Pitch").Value, 6)]
+        return tuple(values)
+
+    def fields_of(self, panel):
+        """(Hole at the point, then count and pitch of each row) shown by the panel."""
+        form = panel.form
+        values = [form.cb_hole_at_point.isChecked()]
+        for row, _ in PATTERN_ROWS:
+            values += [getattr(form, f"spin_{row}_count").value(), round(getattr(form, f"spin_{row}_pitch").value(), 6)]
+        return tuple(values)
+
+    def pattern_existing(self, **values):
+        """A drill hole from CORNER, offsets 100 and 25: the point at (50, 0), with the pattern ``values``."""
+        return self.existing(**{"OffsetAlong": 100.0, **values})
+
+
+class TestDrillHolePatternPanel(PatternPanelFixture):
+    """S1, S3, S5: the checkable Pattern group, its title, its fields and the hole at the point (L6)."""
+
+    def test_a_new_hole_has_the_pattern_unchecked_with_its_fields_hidden_and_drills_one_hole(self):
+        body = self.tube()
+        before = self.names()
+        panel = self.run_command((body, self.face_towards(body, UP)), (body, self.vertex_at(body, CORNER)))
+        form = panel.form
+        box = form.groupBox_pattern
+        self.assertTrue(box.isCheckable())
+        self.assertFalse(box.isChecked())
+        self.assertEqual(box.title(), "Pattern")
+        self.assertTrue(form.pattern_fields.isHidden())
+        self.assertTrue(form.cb_hole_at_point.isChecked())
+        self.assertEqual(form.cb_hole_at_point.text(), "Hole at the point")
+        self.assertEqual(
+            [getattr(form, f"label_{row}").text() for row, _ in PATTERN_ROWS],
+            ["Along ← backward", "Along → forward", "Across ← backward", "Across → forward"],
+        )
+        self.assertEqual((form.label_pattern_count.text(), form.label_pattern_pitch.text()), ("Count", "Pitch"))
+        self.assertEqual(self.fields_of(panel), (True, 0, 50.0, 0, 50.0, 0, 50.0, 0, 50.0))
+        self.set_values(panel)
+        wait()
+        obj = self.preview(before)
+        self.assertEqual(self.pattern_of(obj), (True, 0, 50.0, 0, 50.0, 0, 50.0, 0, 50.0))
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
+        box.setChecked(True)
+        self.assertFalse(form.pattern_fields.isHidden())
+        box.setChecked(False)
+        self.assertTrue(form.pattern_fields.isHidden())
+        self.assertTrue(panel.reject())
+
+    def test_the_title_sums_up_the_pattern(self):
+        body, panel, obj, before = self.previewed_panel()
+        form = panel.form
+        self.set_pattern(panel, along_backward=(3, 20.0))
+        self.assertEqual(form.groupBox_pattern.title(), "Pattern: ← 3 × 20 mm")
+        self.set_pattern(panel, **USER_EXAMPLE)
+        self.assertEqual(form.groupBox_pattern.title(), USER_EXAMPLE_TITLE)
+        self.set_pattern(panel, along_backward=(0, 20.0), along_forward=(5, 12.5))
+        self.assertEqual(form.groupBox_pattern.title(), "Pattern: 5 × 12.5 mm →")
+        self.set_pattern(panel, **USER_EXAMPLE, across_forward=(2, 25.0))
+        self.assertEqual(form.groupBox_pattern.title(), f"{USER_EXAMPLE_TITLE}, across 2 × 25 mm →")
+        self.set_pattern(panel, False, **USER_EXAMPLE, across_backward=(1, 10.0))
+        self.assertEqual(
+            form.groupBox_pattern.title(),
+            f"{USER_EXAMPLE_TITLE}, across ← 1 × 10 mm | 2 × 25 mm →, no hole at the point",
+        )
+        # Every count back to 0: one hole at the point, or none.
+        self.set_pattern(panel, **{row: (0, 50.0) for row, _ in PATTERN_ROWS})
+        self.assertEqual(form.groupBox_pattern.title(), "Pattern")
+        form.cb_hole_at_point.setChecked(False)
+        self.assertEqual(form.groupBox_pattern.title(), "Pattern: no hole at the point")
+        self.set_pattern(panel, **USER_EXAMPLE)
+        form.groupBox_pattern.setChecked(False)
+        self.assertEqual(form.groupBox_pattern.title(), "Pattern")
+        self.assertTrue(panel.reject())
+
+    def test_each_pitch_is_enabled_only_while_its_count_is_above_zero(self):
+        body, panel, obj, before = self.previewed_panel()
+        form = panel.form
+        form.groupBox_pattern.setChecked(True)
+        for row, _ in PATTERN_ROWS:
+            with self.subTest(row=row):
+                count, pitch = getattr(form, f"spin_{row}_count"), getattr(form, f"spin_{row}_pitch")
+                self.assertFalse(pitch.isEnabled())
+                count.setValue(1)
+                self.assertTrue(pitch.isEnabled())
+                others = [getattr(form, f"spin_{other}_pitch").isEnabled() for other, _ in PATTERN_ROWS if other != row]
+                self.assertEqual(others, [False, False, False])
+                count.setValue(0)
+                self.assertFalse(pitch.isEnabled())
+        self.assertTrue(panel.reject())
+
+    def test_the_users_example_is_previewed_and_ok_creates_it_in_one_undo_step(self):
+        # S2 through the panel: 9 holes, the point 100 mm into the face from the corner.
+        body = self.tube()
+        self.doc.clearUndos()
+        before = self.names()
+        panel = self.run_command((body, self.face_towards(body, UP)), (body, self.vertex_at(body, CORNER)))
+        self.set_values(panel, along=100.0)
+        self.set_pattern(panel, **USER_EXAMPLE)
+        wait()
+        obj = self.preview(before)
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 9 * ONE_HOLE, places=3)
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.pattern_of(obj), (True, 3, 20.0, 5, 30.0, 0, 50.0, 0, 50.0))
+        self.assertEqual(obj.getStatusString(), "Valid")
+        for x in (-10, 10, 30, 50, 80, 110, 140, 170, 200):
+            self.assertTrue(self.empty(obj.Shape, x, 0, 24), x)
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.doc.undo()
+        self.assertEqual(self.names(), before)
+
+    def test_without_the_hole_at_the_point_or_any_count_the_panel_shows_the_error(self):
+        body, panel, obj, before = self.previewed_panel()
+        self.set_pattern(panel, False)
+        wait()
+        self.assertIn(
+            "Drill Hole: no hole to drill. Check Hole at the point or set a count in the pattern.", self.message(panel)
+        )
+        self.assertFalse(panel.accept())
+        self.assertTrue(Gui.Control.activeDialog())
+        self.set_pattern(panel, False, across_forward=(1, 15.0))
+        wait()
+        self.assertEqual(self.message(panel), "")
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.pattern_of(obj), (False, 0, 50.0, 0, 50.0, 0, 50.0, 1, 15.0))
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
+        self.assertTrue(self.empty(obj.Shape, -20, 15, 24))
+
+
+class TestDrillHolePatternEdit(PatternPanelFixture):
+    def test_the_group_opens_checked_for_a_hole_with_a_count_or_without_the_hole_at_the_point(self):
+        for values, checked in (
+            ({}, False),
+            ({"AlongForwardCount": 2, "AlongForwardPitch": 40.0}, True),
+            ({"AcrossBackwardCount": 1, "AcrossBackwardPitch": 15.0}, True),
+            ({"HoleAtPoint": False, "AlongBackwardCount": 1}, True),
+        ):
+            with self.subTest(values=values):
+                self.close_dialog()
+                _, obj = self.pattern_existing(**values)
+                panel = self.edit(obj)
+                form = panel.form
+                self.assertEqual(form.groupBox_pattern.isChecked(), checked)
+                self.assertEqual(form.pattern_fields.isHidden(), not checked)
+                self.assertEqual(self.fields_of(panel), self.pattern_of(obj))
+                self.assertTrue(panel.reject())
+
+    def test_unchecking_the_group_previews_one_hole_keeps_the_fields_and_ok_keeps_it_in_one_undo_step(self):
+        body, obj = self.pattern_existing(HoleAtPoint=False, AlongForwardCount=2, AlongForwardPitch=40.0)
+        stored = self.values(obj)
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 2 * ONE_HOLE, places=3)
+        panel = self.edit(obj)
+        form = panel.form
+        self.assertEqual(form.groupBox_pattern.title(), "Pattern: 2 × 40 mm →, no hole at the point")
+        form.groupBox_pattern.setChecked(False)
+        wait()
+        self.assertEqual(form.groupBox_pattern.title(), "Pattern")
+        self.assertEqual(self.pattern_of(obj), (True, 0, 50.0, 0, 40.0, 0, 50.0, 0, 50.0))
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
+        self.assertTrue(self.empty(obj.Shape, 50, 0, 24))
+        # The fields keep their values for when the group is checked again.
+        self.assertEqual(self.fields_of(panel), (False, 0, 50.0, 2, 40.0, 0, 50.0, 0, 50.0))
+        form.groupBox_pattern.setChecked(True)
+        wait()
+        self.assertEqual(self.pattern_of(obj), (False, 0, 50.0, 2, 40.0, 0, 50.0, 0, 50.0))
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 2 * ONE_HOLE, places=3)
+        form.groupBox_pattern.setChecked(False)
+        self.assertTrue(panel.accept())
+        self.events()
+        self.assertEqual(self.pattern_of(obj), (True, 0, 50.0, 0, 40.0, 0, 50.0, 0, 50.0))
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.doc.undo()
+        self.doc.recompute()
+        self.assertEqual(self.values(obj), stored)
+
+    def test_ok_keeps_a_changed_pattern_in_one_undo_step(self):
+        body, obj = self.pattern_existing(AlongForwardCount=1, AlongForwardPitch=40.0)
+        stored = self.values(obj)
+        panel = self.edit(obj)
+        self.set_pattern(panel, **USER_EXAMPLE, across_forward=(1, 15.0))
+        wait()
+        self.assertTrue(panel.accept())
+        self.events()
+        self.assertEqual(self.pattern_of(obj), (True, 3, 20.0, 5, 30.0, 0, 50.0, 1, 15.0))
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 18 * ONE_HOLE, places=3)
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.doc.undo()
+        self.doc.recompute()
+        self.assertEqual(self.values(obj), stored)
+
+    def test_cancel_restores_the_pattern_also_with_undo_off(self):
+        for undo in (1, 0):
+            with self.subTest(undo=undo):
+                self.close_dialog()
+                body, obj = self.pattern_existing(HoleAtPoint=False, AlongBackwardCount=1, AlongBackwardPitch=30.0)
+                stored = self.values(obj)
+                panel = self.edit(obj)
+                self.doc.UndoMode = undo
+                self.addCleanup(setattr, self.doc, "UndoMode", 1)
+                self.set_pattern(panel, **USER_EXAMPLE, across_backward=(1, 12.0), across_forward=(1, 12.0))
+                wait()
+                self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 27 * ONE_HOLE, places=3)
+                self.assertTrue(panel.reject())
+                self.assertEqual(self.values(obj), stored)
+                self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
+                self.assertTrue(self.empty(obj.Shape, 20, 0, 24))
+                self.assertEqual(self.doc.UndoCount, 0)
+
+    def test_ok_without_a_change_to_the_pattern_leaves_no_undo_step(self):
+        body, obj = self.pattern_existing(
+            AlongForwardCount=2, AlongForwardPitch=40.0, AcrossForwardCount=1, AcrossForwardPitch=15.0
+        )
+        stored = self.values(obj)
+        for toggle in (False, True):
+            with self.subTest(toggle=toggle):
+                panel = self.edit(obj)
+                if toggle:
+                    # Unchecked and previewed, then checked again: nothing changed in the end.
+                    panel.form.groupBox_pattern.setChecked(False)
+                    wait()
+                    self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
+                    panel.form.groupBox_pattern.setChecked(True)
+                self.assertTrue(panel.accept())
+                self.events()
+                self.assertEqual(self.values(obj), stored)
+                self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 6 * ONE_HOLE, places=3)
+                self.assertEqual(self.doc.UndoCount, 0)
+
+    def test_an_expression_on_a_pattern_field_is_shown_and_kept(self):
+        # S5: the pattern fields take Fx like the others.
+        body, obj = self.pattern_existing(AlongForwardCount=1)
+        varset = self.doc.addObject("App::VarSet", "VarSet")
+        varset.addProperty("App::PropertyInteger", "Holes")
+        varset.Holes = 2
+        varset.addProperty("App::PropertyLength", "Spacing")
+        varset.Spacing = 30.0
+        obj.setExpression("AlongForwardCount", f"{varset.Name}.Holes")
+        obj.setExpression("AcrossForwardPitch", f"{varset.Name}.Spacing / 2")
+        self.doc.recompute()
+        self.doc.clearUndos()
+        panel = self.edit(obj)
+        form = panel.form
+        for spin in (form.spin_along_forward_count, form.spin_across_forward_pitch):
+            self.assertTrue(Gui.ExpressionBinding(spin).hasExpression())
+        self.assertEqual(form.spin_along_forward_count.value(), 2)
+        self.assertAlmostEqual(form.spin_across_forward_pitch.value(), 15.0, places=6)
+        form.spin_across_forward_count.setValue(1)
+        wait()
+        self.assertTrue(panel.accept())
+        self.assertEqual(
+            dict(obj.ExpressionEngine),
+            {"AlongForwardCount": f"{varset.Name}.Holes", "AcrossForwardPitch": f"{varset.Name}.Spacing / 2"},
+        )
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 6 * ONE_HOLE, places=3)
+        self.assertTrue(self.empty(obj.Shape, 100, 15, 24))
+        self.assertEqual(self.doc.UndoCount, 1)
+
+
+class TestDrillHolePatternSpanish(PatternPanelFixture):
+    def test_the_pattern_group_its_title_the_properties_and_the_errors_are_spanish(self):
+        use_language(self, "Spanish", "es_ES")
+        body, panel, obj, before = self.previewed_panel()
+        form = panel.form
+        self.assertEqual(form.groupBox_pattern.title(), "Patrón")
+        self.assertEqual(form.cb_hole_at_point.text(), "Agujero en el punto")
+        self.assertEqual(
+            [getattr(form, f"label_{row}").text() for row, _ in PATTERN_ROWS],
+            ["Longitudinal ← atrás", "Longitudinal → adelante", "Transversal ← atrás", "Transversal → adelante"],
+        )
+        self.assertEqual((form.label_pattern_count.text(), form.label_pattern_pitch.text()), ("Cantidad", "Paso"))
+        self.set_pattern(panel, False, **USER_EXAMPLE, across_forward=(2, 25.0))
+        self.assertEqual(
+            form.groupBox_pattern.title(),
+            "Patrón: ← 3 × 20 mm | 5 × 30 mm →, transversal 2 × 25 mm →, sin agujero en el punto",
+        )
+        self.assertEqual(
+            [obj.getDocumentationOfProperty(name) for name in drill_hole_properties()],
+            [
+                "Cantidad de agujeros hacia atrás del punto, a lo largo del perfil",
+                "Distancia entre los agujeros hacia atrás del punto, a lo largo del perfil",
+                "Cantidad de agujeros hacia adelante del punto, a lo largo del perfil",
+                "Distancia entre los agujeros hacia adelante del punto, a lo largo del perfil",
+                "Cantidad de agujeros hacia atrás del punto, transversal al perfil",
+                "Distancia entre los agujeros hacia atrás del punto, transversal al perfil",
+                "Cantidad de agujeros hacia adelante del punto, transversal al perfil",
+                "Distancia entre los agujeros hacia adelante del punto, transversal al perfil",
+                "Perforar un agujero en el punto que dan los desplazamientos",
+            ],
+        )
+        self.set_pattern(panel, False, **{row: (0, 50.0) for row, _ in PATTERN_ROWS})
+        self.assertEqual(form.groupBox_pattern.title(), "Patrón: sin agujero en el punto")
+        # Pending events can hold the preview timer past the default wait here: give it room.
+        wait(SETTLE)
+        self.assertIn(
+            "Agujero: no hay ningún agujero para perforar. Marcá Agujero en el punto o poné una cantidad en el patrón.",
+            self.message(panel),
+        )
+        self.set_pattern(panel, True, along_forward=(1000, 1.0))
+        wait(SETTLE)
+        self.assertIn("Agujero: el patrón da 1001 agujeros, como máximo 1000.", self.message(panel))
+        self.assertTrue(panel.reject())
+
+
+def drill_hole_properties():
+    """The pattern properties of a drill hole, in the order of the panel rows, then HoleAtPoint."""
+    return [f"{prop}{kind}" for _, prop in PATTERN_ROWS for kind in ("Count", "Pitch")] + ["HoleAtPoint"]
 
 
 if __name__ == "__main__":

@@ -45,7 +45,7 @@ from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 
 # Offsets of a new drill hole from its reference point, in mm: the hole starts on the picked point.
 DEFAULT_OFFSET = 0.0
-# Ranges of the panel fields: offsets and pitch in mm, diameter in mm, count as the Count property allows.
+# Ranges of the panel fields: offsets and pitches in mm, diameter in mm, counts as the count properties allow.
 MAX_OFFSET = 1e6
 MIN_DIAMETER = 0.01
 MAX_COUNT = 1000
@@ -222,12 +222,25 @@ def _base_element(base, element):
     return name if area > TOLERANCE else None
 
 
+# Rows of the Pattern group: (field name, prefix of the count and pitch properties of the drill hole).
+PATTERN_ROWS = (
+    ("along_backward", "AlongBackward"),
+    ("along_forward", "AlongForward"),
+    ("across_backward", "AcrossBackward"),
+    ("across_forward", "AcrossForward"),
+)
+PATTERN_PROPERTIES = tuple(f"{prop}{kind}" for _, prop in PATTERN_ROWS for kind in ("Count", "Pitch"))
 # Properties of a drill hole its panel fields bind to, for expressions.
-EXPRESSION_PROPERTIES = ("OffsetAlong", "OffsetAcross", "Diameter", "Count", "Pitch", "ExtrusionLength")
+EXPRESSION_PROPERTIES = ("OffsetAlong", "OffsetAcross", "Diameter", *PATTERN_PROPERTIES, "ExtrusionLength")
+
+
+def _length_text(value):
+    """``value`` in mm as the pattern title shows it: up to two decimals, no trailing zeros (12.5 mm)."""
+    return f"{value:.2f}".rstrip("0").rstrip(".") + " mm"
 
 
 class DrillHoleTaskPanel:
-    """Face, vertex, offsets, diameter, linear pattern and depth of a drill hole, previewed live.
+    """Face, vertex, offsets, diameter, pattern and depth of a drill hole, previewed live.
 
     The face shows nine clickable markers: its corners, the middles of its straight edges and its center.
     One click on a marker is the whole reference (L15): a corner measures the offsets from it; the middle
@@ -244,6 +257,11 @@ class DrillHoleTaskPanel:
     picked, inside one transaction that Cancel aborts. With ``edited`` (an existing drill hole) the
     edited hole itself is the preview, inside the edit transaction: OK keeps the changes in one Undo
     step, or none when nothing changed; Cancel puts the stored values back.
+
+    The checkable Pattern group adds holes on each side of the point, along and across, and can leave
+    out the hole at the point. Unchecked, the drill hole is one hole at the point: no count on any side
+    and the hole at the point, while the fields keep their values for when it is checked again. It
+    opens checked for a drill hole with a count or without the hole at the point.
 
     The preview follows the panel under the Update automatically check box, like Extend / Cut does:
     value changes once typing pauses, picks at once. OK applies the panel values in any case.
@@ -351,8 +369,7 @@ class DrillHoleTaskPanel:
         form.spin_diameter = self._length_spin(
             MIN_DIAMETER, MAX_OFFSET, obj.Diameter.Value if obj else DEFAULT_DIAMETER
         )
-        form.spin_count = count_field(1, MAX_COUNT, obj.Count if obj else 1)
-        form.spin_pitch = self._length_spin(MIN_DEPTH, MAX_OFFSET, obj.Pitch.Value if obj else DEFAULT_PITCH)
+        self._build_pattern(form, obj)
         form.combo_cut_type = QtGui.QComboBox()
         for cut_type in CUT_TYPES:
             form.combo_cut_type.addItem(translate("frameforge", CUT_TYPE_LABELS[cut_type]), cut_type)
@@ -364,11 +381,13 @@ class DrillHoleTaskPanel:
             ("offset_along", translate("frameforge", "Offset along"), form.spin_offset_along),
             ("offset_across", translate("frameforge", "Offset across"), form.spin_offset_across),
             ("diameter", translate("frameforge", "Diameter"), form.spin_diameter),
-            ("count", translate("frameforge", "Count"), form.spin_count),
-            ("pitch", translate("frameforge", "Pitch"), form.spin_pitch),
+            ("pattern", None, form.groupBox_pattern),
             ("cut_type", translate("frameforge", "Cut type"), form.combo_cut_type),
             ("depth", translate("frameforge", "Depth"), form.spin_depth),
         ):
+            if label is None:
+                fields.addRow(widget)
+                continue
             setattr(form, f"label_{name}", QtGui.QLabel(label))
             fields.addRow(getattr(form, f"label_{name}"), widget)
         layout.addWidget(form.groupBox_holes)
@@ -394,18 +413,99 @@ class DrillHoleTaskPanel:
             self._bind_fields()
         self._set_depth()
         self._enable_fields()
+        self._show_pattern_title()
         for spin in (
             form.spin_offset_along,
             form.spin_offset_across,
             form.spin_diameter,
-            form.spin_count,
-            form.spin_pitch,
+            *self._pattern_spins(),
             form.spin_depth,
         ):
             spin.valueChanged.connect(self._changed)
         form.combo_cut_type.currentIndexChanged.connect(self._changed)
+        form.cb_hole_at_point.toggled.connect(self._changed)
+        form.groupBox_pattern.toggled.connect(self._on_pattern_toggled)
         form.cb_auto_update.toggled.connect(self._on_auto_update_toggled)
         return form
+
+    def _build_pattern(self, form, obj):
+        """The checkable Pattern group: Hole at the point, then a count and a pitch for each side of each axis.
+
+        The fields sit in ``form.pattern_fields``, hidden while the group is unchecked.
+        """
+        form.groupBox_pattern = QtGui.QGroupBox(translate("frameforge", "Pattern"))
+        form.groupBox_pattern.setCheckable(True)
+        form.pattern_fields = QtGui.QWidget()
+        QtGui.QVBoxLayout(form.groupBox_pattern).addWidget(form.pattern_fields)
+        grid = QtGui.QGridLayout(form.pattern_fields)
+        grid.setContentsMargins(0, 0, 0, 0)
+        form.cb_hole_at_point = QtGui.QCheckBox(translate("frameforge", "Hole at the point"))
+        form.cb_hole_at_point.setChecked(bool(obj.HoleAtPoint) if obj else True)
+        grid.addWidget(form.cb_hole_at_point, 0, 0, 1, 3)
+        form.label_pattern_count = QtGui.QLabel(translate("frameforge", "Count"))
+        form.label_pattern_pitch = QtGui.QLabel(translate("frameforge", "Pitch"))
+        grid.addWidget(form.label_pattern_count, 1, 1)
+        grid.addWidget(form.label_pattern_pitch, 1, 2)
+        labels = (
+            translate("frameforge", "Along ← backward"),
+            translate("frameforge", "Along → forward"),
+            translate("frameforge", "Across ← backward"),
+            translate("frameforge", "Across → forward"),
+        )
+        for line, ((row, prop), label) in enumerate(zip(PATTERN_ROWS, labels), start=2):
+            count = count_field(0, MAX_COUNT, getattr(obj, f"{prop}Count") if obj else 0)
+            pitch = self._length_spin(
+                MIN_DEPTH, MAX_OFFSET, getattr(obj, f"{prop}Pitch").Value if obj else DEFAULT_PITCH
+            )
+            setattr(form, f"label_{row}", QtGui.QLabel(label))
+            setattr(form, f"spin_{row}_count", count)
+            setattr(form, f"spin_{row}_pitch", pitch)
+            for column, widget in enumerate((getattr(form, f"label_{row}"), count, pitch)):
+                grid.addWidget(widget, line, column)
+        checked = obj is not None and (
+            not obj.HoleAtPoint or any(getattr(obj, f"{prop}Count") > 0 for _, prop in PATTERN_ROWS)
+        )
+        form.groupBox_pattern.setChecked(checked)
+        form.pattern_fields.setHidden(not checked)
+
+    def _pattern_spins(self):
+        """The count and pitch fields of the Pattern group, row by row."""
+        form = self.form
+        return [getattr(form, f"spin_{row}_{kind}") for row, _ in PATTERN_ROWS for kind in ("count", "pitch")]
+
+    def _pattern_title(self):
+        """Title of the Pattern group: "Pattern", followed by the holes each side adds when checked.
+
+        For example "Pattern: ← 3 × 20 mm | 5 × 30 mm →", the holes across after "across", and "no hole at
+        the point" when that is unchecked.
+        """
+        form = self.form
+        title = translate("frameforge", "Pattern")
+        if not form.groupBox_pattern.isChecked():
+            return title
+        parts = []
+        for axis in ("along", "across"):
+            sides = []
+            for side, text in (
+                ("backward", translate("frameforge", "← {} × {}")),
+                ("forward", translate("frameforge", "{} × {} →")),
+            ):
+                count = getattr(form, f"spin_{axis}_{side}_count").value()
+                if count > 0:
+                    sides.append(text.format(count, _length_text(getattr(form, f"spin_{axis}_{side}_pitch").value())))
+            if sides:
+                sides = " | ".join(sides)
+                parts.append(sides if axis == "along" else translate("frameforge", "across {}").format(sides))
+        if not form.cb_hole_at_point.isChecked():
+            parts.append(translate("frameforge", "no hole at the point"))
+        return translate("frameforge", "Pattern: {}").format(", ".join(parts)) if parts else title
+
+    def _show_pattern_title(self):
+        self.form.groupBox_pattern.setTitle(self._pattern_title())
+
+    def _on_pattern_toggled(self, checked):
+        self.form.pattern_fields.setHidden(not checked)
+        self._changed()
 
     @staticmethod
     def _length_spin(minimum, maximum, value):
@@ -418,8 +518,7 @@ class DrillHoleTaskPanel:
             ("OffsetAlong", form.spin_offset_along),
             ("OffsetAcross", form.spin_offset_across),
             ("Diameter", form.spin_diameter),
-            ("Count", form.spin_count),
-            ("Pitch", form.spin_pitch),
+            *zip(PATTERN_PROPERTIES, self._pattern_spins()),
             ("ExtrusionLength", form.spin_depth),
         )
 
@@ -446,12 +545,17 @@ class DrillHoleTaskPanel:
                 spin.blockSignals(blocked)
 
     def _enable_fields(self):
-        self.form.spin_pitch.setEnabled(self.form.spin_count.value() > 1)
+        form = self.form
+        for row, _ in PATTERN_ROWS:
+            getattr(form, f"spin_{row}_pitch").setEnabled(getattr(form, f"spin_{row}_count").value() > 0)
         self.form.spin_depth.setEnabled(self.form.combo_cut_type.currentData() == "Distance")
 
     @staticmethod
     def _values(obj):
-        """(base, face, vertex, centers, offsets, diameter, count, pitch, cut type, depth) of the drill hole ``obj``."""
+        """(base, face, vertex, centers, offsets, diameter, cut type, depth, hole at the point, pattern) of ``obj``.
+
+        The pattern is the (count, pitch) of each row of the Pattern group.
+        """
         base, (face, *_) = obj.baseObject
         return (
             base,
@@ -462,10 +566,27 @@ class DrillHoleTaskPanel:
             round(obj.OffsetAlong.Value, 9),
             round(obj.OffsetAcross.Value, 9),
             round(obj.Diameter.Value, 9),
-            obj.Count,
-            round(obj.Pitch.Value, 9),
             obj.CutType,
             round(obj.ExtrusionLength.Value, 9),
+            bool(obj.HoleAtPoint),
+            tuple(
+                (getattr(obj, f"{prop}Count"), round(getattr(obj, f"{prop}Pitch").Value, 9)) for _, prop in PATTERN_ROWS
+            ),
+        )
+
+    def _pattern_wanted(self):
+        """(hole at the point, (count, pitch) of each row) the drill hole gets: one hole while unchecked."""
+        form = self.form
+        checked = form.groupBox_pattern.isChecked()
+        return (
+            form.cb_hole_at_point.isChecked() or not checked,
+            tuple(
+                (
+                    getattr(form, f"spin_{row}_count").value() if checked else 0,
+                    round(getattr(form, f"spin_{row}_pitch").value(), 9),
+                )
+                for row, _ in PATTERN_ROWS
+            ),
         )
 
     def _wanted(self):
@@ -482,10 +603,9 @@ class DrillHoleTaskPanel:
             round(form.spin_offset_along.value(), 9),
             round(form.spin_offset_across.value(), 9),
             round(form.spin_diameter.value(), 9),
-            form.spin_count.value(),
-            round(form.spin_pitch.value(), 9),
             cut_type,
             round(form.spin_depth.value(), 9) if cut_type == "Distance" else None,
+            *self._pattern_wanted(),
         )
 
     def _apply_to(self, obj):
@@ -504,12 +624,16 @@ class DrillHoleTaskPanel:
             ("OffsetAlong", form.spin_offset_along),
             ("OffsetAcross", form.spin_offset_across),
             ("Diameter", form.spin_diameter),
-            ("Pitch", form.spin_pitch),
+            *((f"{prop}Pitch", getattr(form, f"spin_{row}_pitch")) for row, prop in PATTERN_ROWS),
         ):
             if expression_of(obj, prop) is None and _spin_changed(spin, getattr(obj, prop).Value):
                 setattr(obj, prop, spin.value())
-        if expression_of(obj, "Count") is None and obj.Count != form.spin_count.value():
-            obj.Count = form.spin_count.value()
+        hole_at_point, pattern = self._pattern_wanted()
+        if obj.HoleAtPoint != hole_at_point:
+            obj.HoleAtPoint = hole_at_point
+        for (_, prop), (count, _) in zip(PATTERN_ROWS, pattern):
+            if expression_of(obj, f"{prop}Count") is None and getattr(obj, f"{prop}Count") != count:
+                setattr(obj, f"{prop}Count", count)
         cut_type = form.combo_cut_type.currentData()
         if obj.CutType != cut_type:
             obj.CutType = cut_type
@@ -521,7 +645,9 @@ class DrillHoleTaskPanel:
             obj.ExtrusionLength = form.spin_depth.value()
 
     def _restore(self, obj, values):
-        base, face, vertex, center_along, center_across, along, across, diameter, count, pitch, cut_type, depth = values
+        base, face, vertex, center_along, center_across, along, across, diameter, cut_type, depth, at_point, pattern = (
+            values
+        )
         if obj.baseObject[0] != base or tuple(obj.baseObject[1]) != (face,):
             obj.baseObject = (base, [face])
         if obj.ReferenceVertex != vertex:
@@ -533,13 +659,16 @@ class DrillHoleTaskPanel:
             ("OffsetAlong", along),
             ("OffsetAcross", across),
             ("Diameter", diameter),
-            ("Pitch", pitch),
+            *((f"{prop}Pitch", pitch) for (_, prop), (_, pitch) in zip(PATTERN_ROWS, pattern)),
             ("ExtrusionLength", depth),
         ):
             if abs(getattr(obj, prop).Value - value) > TOLERANCE:
                 setattr(obj, prop, value)
-        if obj.Count != count:
-            obj.Count = count
+        for (_, prop), (count, _) in zip(PATTERN_ROWS, pattern):
+            if getattr(obj, f"{prop}Count") != count:
+                setattr(obj, f"{prop}Count", count)
+        if obj.HoleAtPoint != at_point:
+            obj.HoleAtPoint = at_point
         if obj.CutType != cut_type:
             obj.CutType = cut_type
 
@@ -954,6 +1083,7 @@ class DrillHoleTaskPanel:
         if not self._active():
             return
         self._enable_fields()
+        self._show_pattern_title()
         self._show_status()
         self._preview_timer.start()
 

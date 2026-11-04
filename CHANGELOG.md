@@ -1,5 +1,10 @@
 ## Changelog
 
+* Unreleased
+
+  - Drill a pattern of holes with **Drill Hole**: the **Count** and **Pitch** rows are now a checkable **Pattern** group (Spanish *Patrón*), unchecked for a new hole, one hole at the point (see the [tutorial](docs/tutorial.md#drill-hole)). Checked, it adds holes on each side of the point, along and across the profile, each side with its own **Count** and **Pitch**, so "3 every 20 mm backward, the hole at the point, 5 every 30 mm forward" is one drill hole of 9 holes; holes along and across make a grid. **Hole at the point** (Spanish *Agujero en el punto*, on by default) can leave out the middle hole of a centered pair. The group title sums up the pattern, for example **Pattern: ← 3 × 20 mm | 5 × 30 mm →**. Every new field takes expressions (**Fx**). A drill hole with no hole at all, or more than 1000, fails with a message.
+  - Drill holes saved by 1.5.0 open with the same holes: their **Count** and **Pitch** become holes forward along the profile, and expressions on them move to the new properties.
+
 * v1.5.0 (2026-11-04)
 
   - Drill round holes without a sketch with the new **Drill Hole** command (Spanish *Agujero*), next to **Cutout / Hole** (see the [tutorial](docs/tutorial.md#drill-hole)). Click a planar face of a profile, a trimmed profile or a cutout: the face shows nine clickable circles, its corners, the middle of every straight edge and its center. One click on a circle sets where the holes are measured from, and a click on the face takes the nearest circle. A corner measures both offsets from it; the middle of an edge measures one offset from the middle of the face and the other from that edge; the center measures both from the middle of the face. The one filled orange circle is the point the offsets are measured from, and the panel names it.

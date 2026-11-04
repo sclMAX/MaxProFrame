@@ -1116,6 +1116,28 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Reference face normal, local to the profile</source><translation>Normal de la cara de referencia, local al perfil</translation></message>
     <message><source>Face and vertex the reference was taken from</source><translation>Cara y vértice de los que se tomó la referencia</translation></message>
     <message><source>Set when the reference vertex is gone and the hole kept its place</source><translation>Se completa cuando el vértice de referencia ya no está y el agujero conservó su posición</translation></message>
+    <message><source>Pattern</source><translation>Patrón</translation></message>
+    <message><source>Hole at the point</source><translation>Agujero en el punto</translation></message>
+    <message><source>Along ← backward</source><translation>Longitudinal ← atrás</translation></message>
+    <message><source>Along → forward</source><translation>Longitudinal → adelante</translation></message>
+    <message><source>Across ← backward</source><translation>Transversal ← atrás</translation></message>
+    <message><source>Across → forward</source><translation>Transversal → adelante</translation></message>
+    <message><source>Pattern: {}</source><translation>Patrón: {}</translation></message>
+    <message><source>← {} × {}</source><translation>← {} × {}</translation></message>
+    <message><source>{} × {} →</source><translation>{} × {} →</translation></message>
+    <message><source>across {}</source><translation>transversal {}</translation></message>
+    <message><source>no hole at the point</source><translation>sin agujero en el punto</translation></message>
+    <message><source>Drill Hole: no hole to drill. Check Hole at the point or set a count in the pattern.</source><translation>Agujero: no hay ningún agujero para perforar. Marcá Agujero en el punto o poné una cantidad en el patrón.</translation></message>
+    <message><source>Drill Hole: the pattern makes {} holes, at most {}.</source><translation>Agujero: el patrón da {} agujeros, como máximo {}.</translation></message>
+    <message><source>Number of holes backward of the point, along the profile</source><translation>Cantidad de agujeros hacia atrás del punto, a lo largo del perfil</translation></message>
+    <message><source>Distance between the holes backward of the point, along the profile</source><translation>Distancia entre los agujeros hacia atrás del punto, a lo largo del perfil</translation></message>
+    <message><source>Number of holes forward of the point, along the profile</source><translation>Cantidad de agujeros hacia adelante del punto, a lo largo del perfil</translation></message>
+    <message><source>Distance between the holes forward of the point, along the profile</source><translation>Distancia entre los agujeros hacia adelante del punto, a lo largo del perfil</translation></message>
+    <message><source>Number of holes backward of the point, across the profile</source><translation>Cantidad de agujeros hacia atrás del punto, transversal al perfil</translation></message>
+    <message><source>Distance between the holes backward of the point, across the profile</source><translation>Distancia entre los agujeros hacia atrás del punto, transversal al perfil</translation></message>
+    <message><source>Number of holes forward of the point, across the profile</source><translation>Cantidad de agujeros hacia adelante del punto, transversal al perfil</translation></message>
+    <message><source>Distance between the holes forward of the point, across the profile</source><translation>Distancia entre los agujeros hacia adelante del punto, transversal al perfil</translation></message>
+    <message><source>Drill a hole at the point the offsets give</source><translation>Perforar un agujero en el punto que dan los desplazamientos</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ParametricLine</name>
