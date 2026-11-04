@@ -27,7 +27,9 @@ from freecad.maxproframe.drill_hole import (
     DEFAULT_DIAMETER,
     DEFAULT_PITCH,
     REFERENCE_TOLERANCE,
+    face_axes,
     make_drill_hole,
+    offset_origin,
 )
 from freecad.maxproframe.expression_fields import (
     bind,
@@ -49,9 +51,9 @@ MIN_DIAMETER = 0.01
 MAX_COUNT = 1000
 # Two values closer than this are the same.
 TOLERANCE = 1e-9
-# Color of the marker on the reference corner and on the edge middles the holes are centered from.
+# Color of the one filled marker: the point the offsets are measured from.
 CORNER_MARKER_COLOR = (1.0, 0.6, 0.0)
-# Color of the clickable markers on the other corners and edge middles of the face.
+# Color of the clickable markers on the corners and edge middles of the face.
 PICK_MARKER_COLOR = (1.0, 1.0, 1.0)
 # Size (pixels) of the corner markers and of the smaller edge middle markers.
 CORNER_MARKER_SIZE = 11
@@ -222,10 +224,11 @@ class DrillHoleTaskPanel:
 
     A click on a planar face of a profile, a trimmed profile or a cutout picks the face and its corner
     nearest to the click, the vertex the holes are placed from; a click on one of its vertices, or Next
-    corner, picks that vertex. Every other pick is explained. The picked corner is marked in the 3D view,
-    with clickable markers on the other corners and on the middles of the edges of the face: the middle of
-    an edge along the profile measures the offset along from the middle of the face length, of an edge
-    across the offset across from the middle of the face width.
+    corner, picks that vertex. Every other pick is explained. The point the offsets are measured from is
+    marked in the 3D view, with clickable markers on the corners and on the middles of the edges of the
+    face: the middle of an edge along the profile measures the offset along from the middle of the face
+    length, of an edge across the offset across from the middle of the face width. What FreeCAD selects
+    under a clicked marker is no pick.
     A click on the drill hole being previewed or edited (it hides its base) stands for the face or
     vertex of its base under the click.
 
@@ -254,12 +257,16 @@ class DrillHoleTaskPanel:
         self.center_across = False
         self._closed = False
         self._transaction_open = False
-        # (scene, node) of the markers on the face corners, and the global point of the reference corner.
+        # (scene, node) of the markers on the face, and the global points of the reference corner and of
+        # the point the offsets are measured from.
         self._corner_node = None
         self._corner_point = None
+        self._origin_point = None
         # (view, callback) listening to mouse clicks on the markers, and whether a press hit one.
         self._mouse_callback = None
         self._marker_pressed = False
+        # From a press on a marker until its release is processed: FreeCAD's selection is no pick then.
+        self._marker_click = False
         # (body, visibility) of the bodies the preview hides, as they were before.
         self._visibility = []
         # Message area: what the last pick explained, then the last preview or OK failure.
@@ -677,8 +684,15 @@ class DrillHoleTaskPanel:
         return self.vertex
 
     def corner_marker(self):
-        """Global point of the marker on the reference corner, or None when none is shown."""
+        """Global point of the reference corner, or None when there is none on the face."""
         return self._corner_point
+
+    def origin_marker(self):
+        """Global point of the filled marker, the point the offsets are measured from, or None when none is shown.
+
+        The reference corner; with a center on, the middle of the face along, across or both from it.
+        """
+        return self._origin_point
 
     def _markers(self):
         """(name, global point, kind, ends) of the markers of the picked face.
@@ -707,15 +721,28 @@ class DrillHoleTaskPanel:
         """Kind of the marker ``name`` of the picked face (corner, along or across), None when it is none."""
         return next((kind for marker, _, kind, _ in self._markers() if marker == name), None)
 
-    def _is_active(self, kind, ends):
-        """Whether an edge middle of ``kind`` between ``ends`` is the one the holes are centered from."""
-        centered = self.center_along if kind == "along" else self.center_across if kind == "across" else False
-        return centered and self.vertex in ends
-
     def highlighted_markers(self):
-        """Global points of the filled markers: the reference corner and the middles the holes are centered from."""
-        points = [self._corner_point] if self._corner_point is not None else []
-        return points + [point for _, point, kind, ends in self._markers() if self._is_active(kind, ends)]
+        """Global points of the filled markers: only the point the offsets are measured from, when shown."""
+        return [self._origin_point] if self._origin_point is not None else []
+
+    def _offset_origin(self):
+        """Point the offsets are measured from, in the coordinates of the shape, as the drill hole places it.
+
+        None without a reference corner on the face.
+        """
+        obj, face = self.face
+        face_shape = _element(obj, face)
+        vertex = _element(obj, self.vertex) if self.vertex is not None else None
+        if not isinstance(face_shape, Part.Face) or not isinstance(vertex, Part.Vertex):
+            return None
+        axis = _profile_axis(obj)
+        if not self._centered() or axis is None:
+            return vertex.Point
+        try:
+            along, across = face_axes(face_shape, axis, vertex.Point)
+        except Exception:
+            return vertex.Point
+        return offset_origin(face_shape, vertex.Point, along, across, self.center_along, self.center_across)
 
     def _edge_end(self, ends):
         """The end of ``ends`` nearest the reference corner, the first one without a reference corner."""
@@ -758,15 +785,20 @@ class DrillHoleTaskPanel:
     def _draw_corner_marker(self):
         """Mark the corners and edge middles of the face over the 3D view, in place of the previous marks.
 
-        The reference corner and the middles the holes are centered from are filled, the others open.
+        The point the offsets are measured from is filled: the reference corner, an edge middle or the face
+        center. The other markers, the reference corner too when a center is on, are open.
         """
         self._remove_corner_marker()
         if self._closed or self.face is None:
             return
         markers = self._markers()
+        placement = _container_placement(self.face[0])
         vertex = _element(self.face[0], self.vertex) if self.vertex is not None else None
         if isinstance(vertex, Part.Vertex):
-            self._corner_point = _container_placement(self.face[0]).multVec(vertex.Point)
+            self._corner_point = placement.multVec(vertex.Point)
+        origin = self._offset_origin()
+        if origin is not None:
+            self._origin_point = placement.multVec(origin)
         scene = scene_graph(self.doc)
         if scene is None:
             return  # No 3D view (offscreen or another view type): the points are still kept.
@@ -774,18 +806,30 @@ class DrillHoleTaskPanel:
 
         # An annotation is drawn over the shapes, so the corners stay visible behind the preview.
         node = coin.SoAnnotation()
-        corners = [point for name, point, kind, _ in markers if kind == "corner" and name != self.vertex]
-        middles = [point for _, point, kind, ends in markers if kind != "corner" and not self._is_active(kind, ends)]
-        active = [point for _, point, kind, ends in markers if kind != "corner" and self._is_active(kind, ends)]
+        # The marker at the origin is drawn once, filled.
+        others = [
+            (point, kind)
+            for _, point, kind, _ in markers
+            if self._origin_point is None or not point.isEqual(self._origin_point, REFERENCE_TOLERANCE)
+        ]
         for points, rgb, style, size in (
-            (corners, PICK_MARKER_COLOR, "CIRCLE_LINE", CORNER_MARKER_SIZE),
-            (middles, PICK_MARKER_COLOR, "CIRCLE_LINE", MIDDLE_MARKER_SIZE),
-            (active, CORNER_MARKER_COLOR, "CIRCLE_FILLED", MIDDLE_MARKER_SIZE),
             (
-                [self._corner_point] if self._corner_point is not None else [],
+                [point for point, kind in others if kind == "corner"],
+                PICK_MARKER_COLOR,
+                "CIRCLE_LINE",
+                CORNER_MARKER_SIZE,
+            ),
+            (
+                [point for point, kind in others if kind != "corner"],
+                PICK_MARKER_COLOR,
+                "CIRCLE_LINE",
+                MIDDLE_MARKER_SIZE,
+            ),
+            (
+                self.highlighted_markers(),
                 CORNER_MARKER_COLOR,
                 "CIRCLE_FILLED",
-                CORNER_MARKER_SIZE,
+                MIDDLE_MARKER_SIZE if self._centered() else CORNER_MARKER_SIZE,
             ),
         ):
             if points:
@@ -815,6 +859,7 @@ class DrillHoleTaskPanel:
         remove_overlay(self._corner_node)
         self._corner_node = None
         self._corner_point = None
+        self._origin_point = None
 
     # Clicks on the markers.
 
@@ -857,7 +902,7 @@ class DrillHoleTaskPanel:
         return view.getPointOnViewport(point)
 
     def _on_mouse_button(self, event_callback):
-        """A left click on a marker picks it; the 3D view then does not select what lies under it."""
+        """A left click on a marker picks it; what the 3D view selects under it meanwhile is no pick (addSelection)."""
         from pivy import coin
 
         event = event_callback.getEvent()
@@ -868,6 +913,7 @@ class DrillHoleTaskPanel:
             if self._active():
                 marker = marker_at(self.reference_markers(), event.getPosition().getValue(), self._viewport_point)
             self._marker_pressed = marker is not None
+            self._marker_click = marker is not None
             if marker is not None:
                 event_callback.setHandled()
                 self.pick_marker(marker[0])
@@ -875,6 +921,16 @@ class DrillHoleTaskPanel:
             # The release of a click on a marker is not a click on the face under it.
             self._marker_pressed = False
             event_callback.setHandled()
+            # setHandled does not keep FreeCAD from selecting under the marker: the click lasts until
+            # the release is processed.
+            QtCore.QTimer.singleShot(0, self._end_marker_click)
+
+    def _end_marker_click(self):
+        self._marker_click = False
+
+    def _clear_selection(self):
+        if self._active():
+            Gui.Selection.clearSelection()
 
     def _show_messages(self):
         self.form.message_label.setText("\n".join(self._messages + ([self._error] if self._error else [])))
@@ -1027,6 +1083,11 @@ class DrillHoleTaskPanel:
     def addSelection(self, doc, obj, sub, other):
         if not self._active():
             return
+        if self._marker_click:
+            # FreeCAD selects what lies under a clicked marker: not a pick, and not left selected.
+            # Never change the selection during FreeCAD's selection observer dispatch.
+            QtCore.QTimer.singleShot(0, self._clear_selection)
+            return
         document = App.getDocument(doc)
         source = document.getObject(getattr(obj, "Name", obj)) if document else None
         if source is None:
@@ -1065,6 +1126,7 @@ class DrillHoleTaskPanel:
     def clean(self):
         self._closed = True
         self._preview_timer.stop()
+        self._marker_pressed = self._marker_click = False
         self._remove_corner_marker()
         self._stop_listening_to_mouse()
         try:

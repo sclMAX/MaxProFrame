@@ -79,6 +79,16 @@ def _middle_shift(face, vertex, direction):
     return (min(distances) + max(distances)) / 2
 
 
+def offset_origin(face, vertex, along, across, center_along, center_across):
+    """Point the offsets are measured from: ``vertex``, moved to the middle of ``face`` along and/or across."""
+    origin = vertex
+    if center_along:
+        origin = origin + along * _middle_shift(face, vertex, along)
+    if center_across:
+        origin = origin + across * _middle_shift(face, vertex, across)
+    return origin
+
+
 def _add_center_properties(obj):
     """Add CenterAlong and CenterAcross, off, when ``obj`` has not got them."""
     for name, tip in (
@@ -292,13 +302,10 @@ class DrillHole(ExtrudedCutout):
         axis = profile.Placement.Rotation.multVec(App.Vector(0, 0, 1))
         along, across = _plane_axes(normal, axis, vertex, center)
         # A drill hole saved before the centers has not got them until it is restored.
-        along_offset = fp.OffsetAlong.Value
-        if getattr(fp, "CenterAlong", False):
-            along_offset += _middle_shift(face, vertex, along)
-        across_offset = fp.OffsetAcross.Value
-        if getattr(fp, "CenterAcross", False):
-            across_offset += _middle_shift(face, vertex, across)
-        first = vertex + along * along_offset + across * across_offset
+        origin = offset_origin(
+            face, vertex, along, across, getattr(fp, "CenterAlong", False), getattr(fp, "CenterAcross", False)
+        )
+        first = origin + along * fp.OffsetAlong.Value + across * fp.OffsetAcross.Value
         return normal, [first + along * (fp.Pitch.Value * index) for index in range(fp.Count)]
 
     def execute(self, fp):
