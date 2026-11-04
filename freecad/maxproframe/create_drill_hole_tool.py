@@ -50,6 +50,27 @@ MAX_COUNT = 1000
 TOLERANCE = 1e-9
 # Color of the marker on the reference corner.
 CORNER_MARKER_COLOR = (1.0, 0.6, 0.0)
+# Color of the clickable markers on the other corners of the face.
+PICK_MARKER_COLOR = (1.0, 1.0, 1.0)
+# A click this close (screen pixels) to a marker picks it.
+MARKER_HIT_RADIUS = 10.0
+
+
+def marker_at(markers, position, project, radius=MARKER_HIT_RADIUS):
+    """The marker of ``markers`` (name, global point) nearest to the screen ``position``, or None.
+
+    ``project`` maps a global point to screen coordinates; a marker farther than ``radius`` is not hit.
+    """
+    best, best_distance = None, radius
+    for marker in markers:
+        try:
+            x, y = project(marker[1])[:2]
+        except Exception:
+            continue
+        distance = ((x - position[0]) ** 2 + (y - position[1]) ** 2) ** 0.5
+        if distance <= best_distance:
+            best, best_distance = marker, distance
+    return best
 
 
 def _click_point(other):
@@ -177,9 +198,12 @@ class DrillHoleTaskPanel:
         self.vertex = None
         self._closed = False
         self._transaction_open = False
-        # (scene, node) of the marker on the reference corner, and its global point.
+        # (scene, node) of the markers on the face corners, and the global point of the reference corner.
         self._corner_node = None
         self._corner_point = None
+        # (view, callback) listening to mouse clicks on the markers, and whether a press hit one.
+        self._mouse_callback = None
+        self._marker_pressed = False
         # (body, visibility) of the bodies the preview hides, as they were before.
         self._visibility = []
         # Message area: what the last pick explained, then the last preview or OK failure.
@@ -563,42 +587,137 @@ class DrillHoleTaskPanel:
         """Global point of the marker on the reference corner, or None when none is shown."""
         return self._corner_point
 
+    def reference_markers(self):
+        """(vertex name, global point) of the clickable markers: the corners of the picked face."""
+        if self._closed or self.face is None or not _in_document(self.face[0]):
+            return []
+        obj = self.face[0]
+        placement = _container_placement(obj)
+        markers = []
+        for name in _face_corners(*self.face):
+            vertex = _element(obj, name)
+            if isinstance(vertex, Part.Vertex):
+                markers.append((name, placement.multVec(vertex.Point)))
+        return markers
+
+    def pick_marker(self, name):
+        """Take the marker ``name`` (a corner of the face) as the reference, as a click on it does."""
+        if not self._active() or name not in dict(self.reference_markers()):
+            return False
+        changed = name != self.vertex
+        self.vertex = name
+        self._show([])
+        if changed:
+            # Never recompute during the 3D view's event dispatch.
+            QtCore.QTimer.singleShot(0, self._update_preview)
+        return True
+
     def _draw_corner_marker(self):
-        """Mark the reference corner over the 3D view in place of the previous mark."""
+        """Mark the corners of the face over the 3D view, the reference one apart, in place of the previous marks."""
         self._remove_corner_marker()
-        if self._closed or self.face is None or self.vertex is None:
+        if self._closed or self.face is None:
             return
-        vertex = _element(self.face[0], self.vertex)
-        if not isinstance(vertex, Part.Vertex):
-            return
-        self._corner_point = _container_placement(self.face[0]).multVec(vertex.Point)
+        markers = self.reference_markers()
+        vertex = _element(self.face[0], self.vertex) if self.vertex is not None else None
+        if isinstance(vertex, Part.Vertex):
+            self._corner_point = _container_placement(self.face[0]).multVec(vertex.Point)
         scene = scene_graph(self.doc)
         if scene is None:
-            return  # No 3D view (offscreen or another view type): the point is still kept.
+            return  # No 3D view (offscreen or another view type): the points are still kept.
         from pivy import coin
 
-        try:
-            index = Gui.getMarkerIndex("CIRCLE_FILLED", 9)
-        except Exception:
-            index = coin.SoMarkerSet.CIRCLE_FILLED_9_9
-        # An annotation is drawn over the shapes, so the corner stays visible behind the preview.
+        # An annotation is drawn over the shapes, so the corners stay visible behind the preview.
         node = coin.SoAnnotation()
+        others = [point for name, point in markers if name != self.vertex]
+        if others:
+            self._add_markers(coin, node, others, PICK_MARKER_COLOR, "CIRCLE_LINE", 11)
+        if self._corner_point is not None:
+            self._add_markers(coin, node, [self._corner_point], CORNER_MARKER_COLOR, "CIRCLE_FILLED", 11)
+        scene.addChild(node)
+        self._corner_node = (scene, node)
+        self._listen_to_mouse()
+
+    @staticmethod
+    def _add_markers(coin, node, points, rgb, style, size):
+        try:
+            index = Gui.getMarkerIndex(style, size)
+        except Exception:
+            index = getattr(coin.SoMarkerSet, f"{style}_{size}_{size}")
+        group = coin.SoSeparator()
         color = coin.SoBaseColor()
-        color.rgb.setValue(*CORNER_MARKER_COLOR)
+        color.rgb.setValue(*rgb)
         coordinates = coin.SoCoordinate3()
-        point = self._corner_point
-        coordinates.point.setValues(0, 1, [(point.x, point.y, point.z)])
+        coordinates.point.setValues(0, len(points), [(point.x, point.y, point.z) for point in points])
         marker = coin.SoMarkerSet()
         marker.markerIndex.setValue(index)
         for child in (color, coordinates, marker):
-            node.addChild(child)
-        scene.addChild(node)
-        self._corner_node = (scene, node)
+            group.addChild(child)
+        node.addChild(group)
 
     def _remove_corner_marker(self):
         remove_overlay(self._corner_node)
         self._corner_node = None
         self._corner_point = None
+
+    # Clicks on the markers.
+
+    def _view(self):
+        try:
+            return Gui.getDocument(self.doc.Name).ActiveView
+        except Exception:
+            return None
+
+    def _listen_to_mouse(self):
+        """Listen to the mouse buttons of the 3D view, once, while the panel is open."""
+        if self._mouse_callback is not None or self._closed:
+            return
+        view = self._view()
+        if view is None or not hasattr(view, "addEventCallbackPivy"):
+            return
+        from pivy import coin
+
+        try:
+            callback = view.addEventCallbackPivy(coin.SoMouseButtonEvent.getClassTypeId(), self._on_mouse_button)
+        except Exception:
+            return
+        self._mouse_callback = (view, callback)
+
+    def _stop_listening_to_mouse(self):
+        if self._mouse_callback is None:
+            return
+        view, callback = self._mouse_callback
+        self._mouse_callback = None
+        try:
+            from pivy import coin
+
+            view.removeEventCallbackPivy(coin.SoMouseButtonEvent.getClassTypeId(), callback)
+        except Exception:
+            pass
+
+    def _viewport_point(self, point):
+        """Screen coordinates (pixels from the bottom left, as Coin events give them) of the global ``point``."""
+        view = self._mouse_callback[0] if self._mouse_callback is not None else self._view()
+        return view.getPointOnViewport(point)
+
+    def _on_mouse_button(self, event_callback):
+        """A left click on a marker picks it; the 3D view then does not select what lies under it."""
+        from pivy import coin
+
+        event = event_callback.getEvent()
+        if event.getButton() != coin.SoMouseButtonEvent.BUTTON1:
+            return
+        if event.getState() == coin.SoMouseButtonEvent.DOWN:
+            marker = None
+            if self._active():
+                marker = marker_at(self.reference_markers(), event.getPosition().getValue(), self._viewport_point)
+            self._marker_pressed = marker is not None
+            if marker is not None:
+                event_callback.setHandled()
+                self.pick_marker(marker[0])
+        elif self._marker_pressed:
+            # The release of a click on a marker is not a click on the face under it.
+            self._marker_pressed = False
+            event_callback.setHandled()
 
     def _show_messages(self):
         self.form.message_label.setText("\n".join(self._messages + ([self._error] if self._error else [])))
@@ -790,6 +909,7 @@ class DrillHoleTaskPanel:
         self._closed = True
         self._preview_timer.stop()
         self._remove_corner_marker()
+        self._stop_listening_to_mouse()
         try:
             Gui.Selection.removeObserver(self)
         except Exception:

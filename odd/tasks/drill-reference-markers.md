@@ -11,9 +11,9 @@ Branches (chain, one PR each): fix/fx-icon-alignment -> feat/drill-corner-marker
 
 ## Tasks
 
-- T1 (S1) Reposition the Fx icon after binding, in expression_fields.py. Route: inline. Commit: pending.
+- T1 (S1) Reposition the Fx icon after binding, in expression_fields.py. Route: inline. Commit: 98e6673. Done.
 - T2 (S2) Clickable corner markers on the picked face in the Drill Hole panel; Next corner stays. Route: inline. Commit: pending.
-- T3 (S3-S5) Midpoint markers and centered offsets (new properties, defaults keep the corner). Route: inline. Commit: pending.
+- T3 (S3-S5) Midpoint markers and centered offsets, design in L6. Route: worker (context backstop), branch feat/drill-midpoint-reference. Commit: pending.
 
 ## Log
 
@@ -22,3 +22,12 @@ Branches (chain, one PR each): fix/fx-icon-alignment -> feat/drill-corner-marker
 - L3. User answers: sign "Lejos de la esquina elegida (recomendado)"; scope "Las tres: Fx, esquinas, medios", each its own PR.
 - L4. T1 cause: FreeCAD's ExpressionSpinBox::resizeWidget (src/Gui/SpinBox.cpp) places the icon only on a resize, at (lineedit width - icon width - margin, (lineedit height - icon height) / 2). Unbound, the icon is 100x30; bind sizes it 17x17. A field bound once shown (Drill Hole binds on the first preview) keeps the place computed for 100x30. RED tests/test_expression_fields.py on stable and weekly-2026.10.28: `AssertionError: 85 not less than or equal to 6 : (QRect(5, 1, 226, 26), QRect(124, -2, 17, 17))`. Fix: bind() sends the field a resize event. GREEN 3/3 on stable and weekly. Weekly runtime downloaded (sha256 checked) to .freecad-test/runtimes/weekly.
 - L5. T2: the panel draws a white open circle on each other corner of the picked face and the filled orange one on the reference; a left click within 10 px (projected with getPointOnViewport, Coin coordinates) picks it and the press and release are kept from the view (no face selection under it). RED (base code): 4 new tests AttributeError (marker_at, reference_markers, _on_mouse_button); GREEN test_drill_hole_panel 40/40 on stable. The offscreen suite has a real View3DInventorPy: the callback is registered and removed; the real screen hit is checked by hand only.
+- L6. T3 design (parent, from S3-S5):
+  - Model: two new DrillHole properties `CenterAlong` and `CenterAcross` (App::PropertyBool, group DrillHole, default False). `onDocumentRestored` adds them when missing, False, so an old document keeps its holes where they were (S5).
+  - Geometry (`DrillHole.centers`): with `CenterAlong` the along origin moves from the reference corner by half the extent of the face along the profile (max over the face vertices of `(p - vertex) . along`); `CenterAcross` the same across. The offsets add on top, with today's directions: positive away from the reference corner (S4). Both on: the hole is centered on the face with offsets 0.
+  - Panel markers: besides the corners, a marker on the middle of every straight edge of the picked face. An edge parallel to the profile axis is an "along" midpoint (centers along); any other straight edge an "across" midpoint. `reference_markers()` keeps (name, global point), names `VertexN` or `EdgeN`.
+  - Picks: a midpoint marker turns its center on and keeps the other one; the reference corner becomes the end of that edge nearest the current corner (its first end when there is none), so the side the offsets measure from is the clicked edge. A corner marker, a face click near a corner, a vertex click or Next corner measure from the corner: both centers off.
+  - Display: active midpoints filled orange like the reference corner, others white open circles. The vertex label tells the centering (translated, Spanish in both .ts files).
+  - Panel state: `_values`, `_wanted`, `_apply_to`, `_restore` carry both flags; OK keeps them in one Undo step, Cancel restores them (also with undo disabled), unchanged values leave no Undo step.
+  - Docs: tutorial Drill Hole section and CHANGELOG.
+- L7. T2 full stable suite: `Test suite succeeded (1114 tests executed)`. T1 full stable suite: 1110 tests, no failure.
