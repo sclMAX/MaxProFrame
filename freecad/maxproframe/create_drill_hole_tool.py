@@ -50,6 +50,8 @@ DEFAULT_OFFSET = 0.0
 MAX_OFFSET = 1e6
 MIN_DIAMETER = 0.01
 MAX_COUNT = 1000
+# Longest pitch the Pattern fields are sized for, in mm: a longer one still fits, scrolled in its field.
+LONGEST_PITCH = 9999.99
 # Two values closer than this are the same.
 TOLERANCE = 1e-9
 # Color of the one filled marker: the point the offsets are measured from.
@@ -233,6 +235,21 @@ PATTERN_ROWS = (
 PATTERN_PROPERTIES = tuple(f"{prop}{kind}" for _, prop in PATTERN_ROWS for kind in ("Count", "Pitch"))
 # Properties of a drill hole its panel fields bind to, for expressions.
 EXPRESSION_PROPERTIES = ("OffsetAlong", "OffsetAcross", "Diameter", *PATTERN_PROPERTIES, "ExtrusionLength")
+
+
+def _fit_width(spin, longest):
+    """Fix the width of ``spin`` to show the text of ``longest`` beside its Fx icon.
+
+    FreeCAD draws the icon over the end of the text and no layout keeps the field wide enough for both:
+    a Pattern field would be squeezed under its value in a narrow panel and stretched in a wide one.
+    """
+    spin.ensurePolished()
+    metrics = spin.fontMetrics()
+    hint = spin.sizeHint()
+    # The size hint fits the text of the maximum; the rest is the frame, the margins and the arrows.
+    frame = hint.width() - metrics.horizontalAdvance(spin.textFromValue(spin.maximum()) + spin.suffix())
+    # The icon is a square as high as the field.
+    spin.setFixedWidth(frame + metrics.horizontalAdvance(spin.textFromValue(longest) + spin.suffix()) + hint.height())
 
 
 def _length_text(value):
@@ -440,6 +457,8 @@ class DrillHoleTaskPanel:
         QtGui.QVBoxLayout(form.groupBox_pattern).addWidget(form.pattern_fields)
         grid = QtGui.QGridLayout(form.pattern_fields)
         grid.setContentsMargins(0, 0, 0, 0)
+        # The fields keep their width: the labels take the room left.
+        grid.setColumnStretch(0, 1)
         form.cb_hole_at_point = QtGui.QCheckBox(translate("frameforge", "Hole at the point"))
         form.cb_hole_at_point.setChecked(bool(obj.HoleAtPoint) if obj else True)
         grid.addWidget(form.cb_hole_at_point, 0, 0, 1, 3)
@@ -458,6 +477,8 @@ class DrillHoleTaskPanel:
             pitch = self._length_spin(
                 MIN_DEPTH, MAX_OFFSET, getattr(obj, f"{prop}Pitch").Value if obj else DEFAULT_PITCH
             )
+            _fit_width(count, MAX_COUNT)
+            _fit_width(pitch, LONGEST_PITCH)
             setattr(form, f"label_{row}", QtGui.QLabel(label))
             setattr(form, f"spin_{row}_count", count)
             setattr(form, f"spin_{row}_pitch", pitch)
