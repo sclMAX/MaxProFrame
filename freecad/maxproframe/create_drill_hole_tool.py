@@ -36,6 +36,16 @@ MAX_COUNT = 1000
 TOLERANCE = 1e-9
 
 
+def _spin_changed(spin, stored):
+    """Whether ``spin`` shows another value than ``stored``, as far as its decimals tell.
+
+    A stored length finer than the field (4.7625 shown as 4.76) is kept until the field is changed.
+    """
+    # Rounded the way the field rounds it: Python's round(30.125, 2) is 30.12, the field shows 30.13.
+    shown = spin.valueFromText(spin.textFromValue(stored))
+    return abs(shown - spin.value()) > TOLERANCE
+
+
 def _element(obj, sub):
     """The element ``sub`` of the shape of ``obj``, or None when it has none by that name."""
     try:
@@ -302,20 +312,20 @@ class DrillHoleTaskPanel:
             obj.baseObject = (base, [face])
         if obj.ReferenceVertex != self.vertex:
             obj.ReferenceVertex = self.vertex
-        for prop, value in (
-            ("OffsetAlong", form.spin_offset_along.value()),
-            ("OffsetAcross", form.spin_offset_across.value()),
-            ("Diameter", form.spin_diameter.value()),
-            ("Pitch", form.spin_pitch.value()),
+        for prop, spin in (
+            ("OffsetAlong", form.spin_offset_along),
+            ("OffsetAcross", form.spin_offset_across),
+            ("Diameter", form.spin_diameter),
+            ("Pitch", form.spin_pitch),
         ):
-            if abs(getattr(obj, prop).Value - value) > TOLERANCE:
-                setattr(obj, prop, value)
+            if _spin_changed(spin, getattr(obj, prop).Value):
+                setattr(obj, prop, spin.value())
         if obj.Count != form.spin_count.value():
             obj.Count = form.spin_count.value()
         cut_type = form.combo_cut_type.currentData()
         if obj.CutType != cut_type:
             obj.CutType = cut_type
-        if cut_type == "Distance" and abs(obj.ExtrusionLength.Value - form.spin_depth.value()) > TOLERANCE:
+        if cut_type == "Distance" and _spin_changed(form.spin_depth, obj.ExtrusionLength.Value):
             obj.ExtrusionLength = form.spin_depth.value()
 
     def _restore(self, obj, values):

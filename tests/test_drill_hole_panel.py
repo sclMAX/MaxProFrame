@@ -642,6 +642,25 @@ class TestDrillHoleEdit(DrillHolePanelFixture):
         self.doc.recompute()
         self.assertEqual(self.values(obj), stored)
 
+    def test_stored_lengths_finer_than_the_fields_are_kept_unless_that_field_is_changed(self):
+        # R3-001: the fields show two decimals; OK must not write their rounded values back.
+        fine = dict(OffsetAlong=30.125, OffsetAcross=24.875, Diameter=4.7625, Pitch=50.0625)
+        body, obj = self.existing(Count=2, CutType="Distance", ExtrusionLength=1.0625, **fine)
+        stored = self.values(obj)
+        panel = self.edit(obj)
+        self.assertTrue(panel.accept())
+        self.events()
+        self.assertEqual(self.values(obj), stored)
+        self.assertEqual(self.doc.UndoCount, 0)
+        panel = self.edit(obj)
+        panel.form.spin_count.setValue(3)
+        wait()
+        self.assertTrue(panel.accept())
+        self.events()
+        self.assertEqual(obj.Count, 3)
+        self.assertEqual(self.values(obj)[1:4] + self.values(obj)[5:], stored[1:4] + stored[5:])
+        self.assertEqual(self.doc.UndoCount, 1)
+
     def test_ok_without_changes_leaves_no_undo_step(self):
         body, obj = self.existing()
         stored = self.values(obj)
