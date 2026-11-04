@@ -278,7 +278,7 @@ class TestNotchPanel(NotchPanelFixture):
         self.assertTrue(trimmed.ViewObject.Visibility)
 
 
-class TestEditNotch(NotchPanelFixture):
+class EditNotchFixture(NotchPanelFixture):
     def existing(self, gap=0.0):
         trimmed, boundary = self.t_joint()
         far = self.far()
@@ -289,6 +289,8 @@ class TestEditNotch(NotchPanelFixture):
         self.doc.clearUndos()
         return trimmed, boundary, far, trim
 
+
+class TestEditNotch(EditNotchFixture):
     def test_editing_opens_the_notch_panel_and_changes_the_target_in_one_undo_step(self):
         trimmed, boundary, far, trim = self.existing()
         panel = self.capture_panel(trim.ViewObject.Proxy.edit)
@@ -347,6 +349,54 @@ class TestEditNotch(NotchPanelFixture):
         self.assertAlmostEqual(trim.Shape.Volume, volume, places=5)
         self.assertAlmostEqual(trim.Shape.BoundBox.XMin, HALF + 1.0, places=5)
         self.assertEqual(self.doc.UndoCount, 0)
+
+
+class TestNotchGapExpressions(EditNotchFixture):
+    """The Notch panel is the Extend / Cut one: while editing, its Gap takes an expression (Fx) too."""
+
+    def varset(self, gap):
+        varset = self.doc.addObject("App::VarSet", "VarSet")
+        varset.addProperty("App::PropertyLength", "Gap")
+        varset.Gap = gap
+        self.doc.recompute()
+        self.doc.clearUndos()
+        return varset
+
+    def test_the_edit_gap_is_bound_and_the_create_gap_is_not(self):
+        trimmed, boundary, far, trim = self.existing()
+        panel = self.run_command((boundary, ""), (far, ""))
+        self.assertFalse(Gui.ExpressionBinding(panel.form.sb_gap).isBound())
+        self.assertTrue(panel.reject())
+        panel = self.capture_panel(trim.ViewObject.Proxy.edit)
+        self.assertTrue(Gui.ExpressionBinding(panel.form.sb_gap).isBound())
+        self.assertTrue(panel.reject())
+
+    def test_ok_keeps_an_expression_set_in_the_panel_in_one_undo_step(self):
+        trimmed, boundary, far, trim = self.existing()
+        varset = self.varset(2.0)
+        panel = self.capture_panel(trim.ViewObject.Proxy.edit)
+        trim.setExpression("TrimGap", f"{varset.Name}.Gap")
+        self.doc.recompute()
+        self.assertTrue(panel.accept())
+        self.assertEqual(dict(trim.ExpressionEngine), {"TrimGap": f"{varset.Name}.Gap"})
+        self.assertAlmostEqual(trim.Shape.BoundBox.XMin, HALF + 2.0, places=5)
+        varset.Gap = 3.0
+        self.doc.recompute()
+        self.assertAlmostEqual(trim.Shape.BoundBox.XMin, HALF + 3.0, places=5)
+        self.assertEqual(self.doc.UndoCount, 1)
+
+    def test_cancel_with_undo_off_removes_an_expression_set_in_the_panel(self):
+        trimmed, boundary, far, trim = self.existing(gap=1.0)
+        varset = self.varset(2.0)
+        panel = self.capture_panel(trim.ViewObject.Proxy.edit)
+        self.doc.UndoMode = 0
+        self.addCleanup(setattr, self.doc, "UndoMode", 1)
+        trim.setExpression("TrimGap", f"{varset.Name}.Gap")
+        self.doc.recompute()
+        self.assertTrue(panel.reject())
+        self.assertEqual(dict(trim.ExpressionEngine), {})
+        self.assertAlmostEqual(trim.TrimGap.Value, 1.0)
+        self.assertAlmostEqual(trim.Shape.BoundBox.XMin, HALF + 1.0, places=5)
 
 
 class TestNotchTranslations(NotchPanelFixture):
