@@ -1096,6 +1096,9 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>{} (centered on the face)</source><translation>{} (centrado en la cara)</translation></message>
     <message><source>{} (centered along)</source><translation>{} (centrado longitudinal)</translation></message>
     <message><source>{} (centered across)</source><translation>{} (centrado transversal)</translation></message>
+    <message><source>Click a circle on the face to place the holes from it: a corner, the middle of an edge or the center. A click on the face takes the nearest circle.</source><translation>Hacé clic en un círculo de la cara para ubicar los agujeros desde ahí: una esquina, el medio de un borde o el centro. Un clic en la cara toma el círculo más cercano.</translation></message>
+    <message><source>Center of the face</source><translation>Centro de la cara</translation></message>
+    <message><source>Middle of {}</source><translation>Medio de {}</translation></message>
     <message><source>Select a vertex of the face.</source><translation>Seleccioná un vértice de la cara.</translation></message>
     <message><source>Drill Hole: the face is square to the profile axis.</source><translation>Agujero: la cara es perpendicular al eje del perfil.</translation></message>
     <message><source>Drill Hole: {} of {} is not planar.</source><translation>Agujero: {} de {} no es plana.</translation></message>

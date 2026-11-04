@@ -130,8 +130,10 @@ class TestDrillHoleGeometry(DrillHoleFixture):
 
 
 class TestDrillHoleCentered(DrillHoleFixture):
-    """CenterAlong and CenterAcross measure the offsets from the middle of the face (S3), away from the corner (S4).
+    """CenterAlong and CenterAcross measure the offsets from the middle of the face (S3).
 
+    A centered direction is fixed (S7): along toward the end of the profile (+x), across +y on the top face.
+    A direction measured from the corner goes into the face from it (S4).
     The top face of the tube runs from x = -50 to 350 and y = -25 to 25: its middle is (150, 0).
     """
 
@@ -176,27 +178,37 @@ class TestDrillHoleCentered(DrillHoleFixture):
                 obj = self.centered(corner, 0.0, 0.0, CenterAlong=True, CenterAcross=True)
                 self.assertTrue(self.empty(obj.Shape, 150, 0, 24))
 
-    def test_offsets_from_the_middle_are_positive_away_from_the_corner_and_negative_toward_it(self):
-        # S4: from CORNER away is +x and +y; from FAR_CORNER away is -x and -y.
-        for corner, along, across, center in (
-            (self.CORNER, 30.0, 10.0, (180, 10)),
-            (self.CORNER, -30.0, -10.0, (120, -10)),
-            (self.FAR_CORNER, 30.0, 10.0, (120, -10)),
-            (self.FAR_CORNER, -30.0, -10.0, (180, 10)),
-        ):
-            with self.subTest(corner=corner, along=along, across=across):
-                obj = self.centered(corner, along, across, CenterAlong=True, CenterAcross=True)
-                self.assertTrue(self.empty(obj.Shape, *center, 24), center)
-                self.assertFalse(self.empty(obj.Shape, 150, 0, 24))
+    def test_centered_offsets_are_positive_toward_the_profile_end_and_a_fixed_side_whatever_the_corner(self):
+        # S7: from the middle, positive along is +x (the end of the profile) and across +y, from either corner.
+        for corner in (self.CORNER, self.FAR_CORNER):
+            for along, across, center in ((30.0, 10.0, (180, 10)), (-30.0, -10.0, (120, -10))):
+                with self.subTest(corner=corner, along=along, across=across):
+                    obj = self.centered(corner, along, across, CenterAlong=True, CenterAcross=True)
+                    self.assertTrue(self.empty(obj.Shape, *center, 24), center)
+                    self.assertFalse(self.empty(obj.Shape, 150, 0, 24))
 
-    def test_a_row_of_holes_starts_at_the_middle_and_goes_away_from_the_corner(self):
+    def test_a_direction_measured_from_the_corner_stays_positive_into_the_face(self):
+        # S7, S4: only a centered direction is fixed; the other one goes into the face from the corner.
+        for corner, centers, center in (
+            (self.FAR_CORNER, {"CenterAlong": True}, (180, 15)),
+            (self.FAR_CORNER, {"CenterAcross": True}, (320, 10)),
+            (self.CORNER, {"CenterAlong": True}, (180, -15)),
+            (self.CORNER, {"CenterAcross": True}, (-20, 10)),
+            (self.FAR_CORNER, {}, (320, 15)),
+            (self.CORNER, {}, (-20, -15)),
+        ):
+            with self.subTest(corner=corner, centers=centers):
+                obj = self.centered(corner, 30.0, 10.0, **centers)
+                self.assertTrue(self.empty(obj.Shape, *center, 24), center)
+
+    def test_a_centered_row_of_holes_goes_toward_the_profile_end_whatever_the_corner(self):
         body = self.tube()
         top = self.face_towards(body, UP)
         corner = self.vertex_at(body, self.FAR_CORNER)
         obj = self.hole(body, top, corner, 0.0, 0.0, CenterAlong=True, CenterAcross=True, Count=3, Pitch=40.0)
         self.assertEqual(obj.getStatusString(), "Valid")
         self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 3 * ONE_HOLE, places=3)
-        for x in (150, 110, 70):
+        for x in (150, 190, 230):
             self.assertTrue(self.empty(obj.Shape, x, 0, 24), x)
 
     def test_a_hole_saved_before_the_centers_keeps_its_place_and_gains_them_off(self):

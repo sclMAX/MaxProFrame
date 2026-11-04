@@ -53,22 +53,33 @@ def _inward(direction, vertex, center):
     return -direction if (center - vertex).dot(direction) < -TOLERANCE else direction
 
 
-def face_axes(face, axis, vertex):
-    """(along, across) unit directions on ``face`` from ``vertex``, both pointing into the face.
+def face_axes(face, axis, vertex, center_along=False, center_across=False):
+    """(along, across) unit directions the offsets go in on ``face`` (see _plane_axes).
 
     ``along`` follows the profile ``axis``; ``across`` is square to it on the face.
     """
-    return _plane_axes(face.normalAt(0, 0), axis, vertex, face.CenterOfMass)
+    return _plane_axes(face.normalAt(0, 0), axis, vertex, face.CenterOfMass, center_along, center_across)
 
 
-def _plane_axes(normal, axis, vertex, center):
-    """(along, across) unit directions on the plane of ``normal`` from ``vertex``, both pointing to ``center``."""
+def _plane_axes(normal, axis, vertex, center, center_along=False, center_across=False):
+    """(along, across) unit directions the offsets go in on the plane of ``normal``.
+
+    A direction measured from ``vertex`` points from it to ``center``, into the face. A centered one
+    (``center_along``, ``center_across``) is fixed whatever the vertex: along toward the end of the
+    path of the profile, across ``normal`` x that along.
+    """
     along = axis - normal * axis.dot(normal)
     if along.Length < TOLERANCE:
         raise FrameForgeException(translate("frameforge", "Drill Hole: the face is square to the profile axis."))
     along.normalize()
     across = normal.cross(along)
-    return _inward(along, vertex, center), _inward(across, vertex, center)
+    # A profile is attached at the end of its path and extruded back to its start: its path runs against
+    # its ``axis``.
+    path = -along
+    return (
+        path if center_along else _inward(along, vertex, center),
+        normal.cross(path) if center_across else _inward(across, vertex, center),
+    )
 
 
 def _middle_shift(face, vertex, direction):
@@ -293,18 +304,18 @@ class DrillHole(ExtrudedCutout):
     def centers(self, fp):
         """(face normal, centers of the holes on the face plane).
 
-        The offsets are measured from the vertex, or from the middle of the face along (CenterAlong) or
-        across (CenterAcross) the profile; positive is away from the vertex in any case.
+        The offsets are measured from the vertex, positive into the face, or from the middle of the face
+        along (CenterAlong) or across (CenterAcross) the profile, positive toward the end of the path of
+        the profile along and to a fixed side across.
         """
         vertex, normal, center, face = self.reference(fp)
         profile = get_profile_from_extrudedcutout(fp)
         # Profiles are extruded along their local Z.
         axis = profile.Placement.Rotation.multVec(App.Vector(0, 0, 1))
-        along, across = _plane_axes(normal, axis, vertex, center)
         # A drill hole saved before the centers has not got them until it is restored.
-        origin = offset_origin(
-            face, vertex, along, across, getattr(fp, "CenterAlong", False), getattr(fp, "CenterAcross", False)
-        )
+        center_along, center_across = getattr(fp, "CenterAlong", False), getattr(fp, "CenterAcross", False)
+        along, across = _plane_axes(normal, axis, vertex, center, center_along, center_across)
+        origin = offset_origin(face, vertex, along, across, center_along, center_across)
         first = origin + along * fp.OffsetAlong.Value + across * fp.OffsetAcross.Value
         return normal, [first + along * (fp.Pitch.Value * index) for index in range(fp.Count)]
 
