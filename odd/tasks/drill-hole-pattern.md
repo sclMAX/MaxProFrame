@@ -11,7 +11,7 @@ Branch: feat/drill-hole-pattern (worktree ../MaxProFrame-drill-pattern). One PR.
 
 ## Tasks
 
-- T1 (S1-S5) Model, migration, geometry, panel, translations, docs. Route: worker (context backstop). Commit: pending.
+- T1 (S1-S5) Model, migration, geometry, panel, translations, docs. Route: worker (context backstop). Commit: 157966a. Done.
 
 ## Log
 
