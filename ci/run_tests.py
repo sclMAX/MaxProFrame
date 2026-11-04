@@ -302,6 +302,7 @@ def main() -> None:
         isolated_profiles.mkdir()
 
         user_cfg = isolated_config / "user.cfg"
+        # The tests run in English whatever the system language; a test that needs another one sets it.
         # Prevent popup reentry from offscreen Qt warnings, including repeated messages.
         # Keep the notification area, Console observers and severity settings intact.
         user_cfg.write_text(
@@ -309,6 +310,9 @@ def main() -> None:
   <FCParamGroup Name="Root">
     <FCParamGroup Name="BaseApp">
       <FCParamGroup Name="Preferences">
+        <FCParamGroup Name="General">
+          <FCText Name="Language">English</FCText>
+        </FCParamGroup>
         <FCParamGroup Name="NotificationArea">
           <FCBool Name="NonIntrusiveNotificationsEnabled" Value="0"/>
           <FCInt Name="MaxOpenNotifications" Value="0"/>

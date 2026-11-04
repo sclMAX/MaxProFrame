@@ -387,14 +387,24 @@ class TestRunTestsPolicy(unittest.TestCase):
         self.assertEqual(root.tag, "FCParameters")
         self.assertEqual(root.attrib, {})
         group = root
-        for name in ("Root", "BaseApp", "Preferences", "NotificationArea"):
+        for name in ("Root", "BaseApp", "Preferences"):
             self.assertEqual(len(group), 1)
             group = group[0]
             self.assertEqual(group.tag, "FCParamGroup")
             self.assertEqual(group.attrib, {"Name": name})
+        self.assertEqual(
+            [(child.tag, child.attrib) for child in group],
+            [("FCParamGroup", {"Name": "General"}), ("FCParamGroup", {"Name": "NotificationArea"})],
+        )
+        general, notifications = group
+        # The tests run in English whatever the system language: a test that needs another one sets it.
+        self.assertEqual(
+            [(leaf.tag, leaf.attrib, leaf.text, len(leaf)) for leaf in general],
+            [("FCText", {"Name": "Language"}, "English", 0)],
+        )
         # Exact leaves exclude NotificationAreaEnabled and any log/severity suppression.
         self.assertEqual(
-            [(leaf.tag, leaf.attrib, len(leaf)) for leaf in group],
+            [(leaf.tag, leaf.attrib, len(leaf)) for leaf in notifications],
             [
                 ("FCBool", {"Name": "NonIntrusiveNotificationsEnabled", "Value": "0"}, 0),
                 ("FCInt", {"Name": "MaxOpenNotifications", "Value": "0"}, 0),
