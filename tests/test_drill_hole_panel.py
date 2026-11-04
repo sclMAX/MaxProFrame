@@ -454,7 +454,8 @@ class TestDrillHoleCornerPicks(DrillHolePanelFixture):
         panel = self.run_command()
         self.assertEqual(panel.reference_markers(), [])
         self.click(body, top)
-        markers = panel.reference_markers()
+        # The corners come first; the edge middles (TestDrillHoleMidpoints) follow them.
+        markers = [(name, point) for name, point in panel.reference_markers() if name.startswith("Vertex")]
         self.assertEqual([name for name, _ in markers], corners)
         for (name, point), vertex in zip(markers, top_face.Vertexes):
             self.assertTrue(point.isEqual(vertex.Point, 1e-6), (name, point))
@@ -563,6 +564,253 @@ class TestDrillHoleCornerPicks(DrillHolePanelFixture):
         self.assertTrue(panel.reject())
         self.assertEqual(self.names(), before)
         self.assertEqual(self.doc.UndoCount, 0)
+
+
+# Ends of the edges of the top face of the tube, and the middle of each one with its kind.
+LONG_NEAR = ((-50, -25, 25), (350, -25, 25))
+LONG_FAR = ((-50, 25, 25), (350, 25, 25))
+SHORT_START = ((-50, -25, 25), (-50, 25, 25))
+SHORT_END = ((350, -25, 25), (350, 25, 25))
+TOP_MIDDLES = {
+    LONG_NEAR: ((150, -25, 25), "along"),
+    LONG_FAR: ((150, 25, 25), "along"),
+    SHORT_START: ((-50, 0, 25), "across"),
+    SHORT_END: ((350, 0, 25), "across"),
+}
+
+
+class MidpointFixture(DrillHolePanelFixture):
+    def edge_at(self, obj, ends):
+        """Name of the edge of ``obj`` between the two points ``ends``."""
+        wanted = [App.Vector(*point) for point in ends]
+        for index, edge in enumerate(obj.Shape.Edges, start=1):
+            points = [vertex.Point for vertex in edge.Vertexes]
+            if len(points) == 2 and all(any(p.isEqual(w, 1e-6) for p in points) for w in wanted):
+                return f"Edge{index}"
+        self.fail(f"no edge between {ends}")
+
+    def centers(self, panel):
+        return (panel.center_along, panel.center_across)
+
+    def assert_points(self, points, expected):
+        self.assertEqual(len(points), len(expected), points)
+        for point in expected:
+            self.assertTrue(any(p.isEqual(App.Vector(*point), 1e-6) for p in points), (point, points))
+
+
+class TestDrillHoleMidpoints(MidpointFixture):
+    """S3: the middles of the edges of the picked face are markers that center the holes along or across."""
+
+    def test_the_middles_of_the_edges_of_the_picked_face_are_markers_with_their_kind(self):
+        body = self.tube()
+        top = self.face_towards(body, UP)
+        top_face = body.Shape.getElement(top)
+        corners = [self.vertex_at(body, v.Point) for v in top_face.Vertexes]
+        panel = self.run_command()
+        self.click(body, top)
+        markers = panel.reference_markers()
+        self.assertEqual([name for name, _ in markers if name.startswith("Vertex")], corners)
+        middles = dict((name, point) for name, point in markers if not name.startswith("Vertex"))
+        self.assertEqual(len(middles), 4, list(middles))
+        for ends, (middle, kind) in TOP_MIDDLES.items():
+            name = self.edge_at(body, ends)
+            with self.subTest(edge=name, kind=kind):
+                self.assertTrue(middles[name].isEqual(App.Vector(*middle), 1e-6), middles[name])
+                self.assertEqual(panel.marker_kind(name), kind)
+        self.assertEqual(panel.marker_kind(corners[0]), "corner")
+        self.assertIsNone(panel.marker_kind("Edge999"))
+        self.assertTrue(panel.reject())
+        self.assertEqual(panel.reference_markers(), [])
+
+    def test_a_long_edge_middle_centers_along_from_the_end_of_that_edge_nearest_the_corner(self):
+        body = self.tube()
+        before = self.names()
+        panel = self.run_command((body, self.face_towards(body, UP)), (body, self.vertex_at(body, CORNER)))
+        self.assertEqual(self.centers(panel), (False, False))
+        self.set_values(panel, along=0.0, across=10.0)
+        self.assertTrue(panel.pick_marker(self.edge_at(body, LONG_FAR)))
+        start = self.vertex_at(body, LONG_FAR[0])
+        self.assertEqual((panel.vertex, self.centers(panel)), (start, (True, False)))
+        self.assertEqual(panel.form.vertex_label.text(), f"{start} (centered along)")
+        self.assertTrue(panel.corner_marker().isEqual(App.Vector(*LONG_FAR[0]), 1e-6))
+        self.assert_points(panel.highlighted_markers(), [LONG_FAR[0], TOP_MIDDLES[LONG_FAR][0]])
+        wait()
+        obj = self.preview(before)
+        self.assertEqual((obj.ReferenceVertex, obj.CenterAlong, obj.CenterAcross), (start, True, False))
+        # Across from the far long edge, 10 mm into the face; along from the middle.
+        self.assertTrue(self.empty(obj.Shape, 150, 15, 24))
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
+        self.assertTrue(panel.reject())
+        self.assertEqual(self.names(), before)
+
+    def test_a_short_edge_middle_centers_across_and_both_center_the_hole_on_the_face(self):
+        body = self.tube()
+        before = self.names()
+        panel = self.run_command((body, self.face_towards(body, UP)), (body, self.vertex_at(body, CORNER)))
+        self.set_values(panel, along=0.0, across=0.0)
+        self.assertTrue(panel.pick_marker(self.edge_at(body, SHORT_END)))
+        end = self.vertex_at(body, SHORT_END[0])
+        self.assertEqual((panel.vertex, self.centers(panel)), (end, (False, True)))
+        self.assertEqual(panel.form.vertex_label.text(), f"{end} (centered across)")
+        # The other middle keeps the first one: both center the hole on the face.
+        self.assertTrue(panel.pick_marker(self.edge_at(body, LONG_FAR)))
+        far = self.vertex_at(body, FAR_CORNER)
+        self.assertEqual((panel.vertex, self.centers(panel)), (far, (True, True)))
+        self.assertEqual(panel.form.vertex_label.text(), f"{far} (centered on the face)")
+        self.assert_points(
+            panel.highlighted_markers(), [FAR_CORNER, TOP_MIDDLES[LONG_FAR][0], TOP_MIDDLES[SHORT_END][0]]
+        )
+        wait()
+        obj = self.preview(before)
+        self.assertEqual((obj.CenterAlong, obj.CenterAcross), (True, True))
+        self.assertTrue(self.empty(obj.Shape, 150, 0, 24))
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
+        self.assertTrue(panel.reject())
+
+    def test_a_middle_picked_without_a_corner_takes_the_first_end_of_its_edge(self):
+        body = self.tube()
+        top = self.face_towards(body, UP)
+        panel = self.run_command()
+        self.click(body, top)
+        self.assertIsNone(panel.vertex)
+        name = self.edge_at(body, SHORT_START)
+        self.assertTrue(panel.pick_marker(name))
+        first = body.Shape.getElement(name).Vertexes[0].Point
+        self.assertEqual((panel.vertex, self.centers(panel)), (self.vertex_at(body, first), (False, True)))
+        self.assertTrue(panel.reject())
+
+    def test_a_left_click_on_a_middle_picks_it(self):
+        from pivy import coin
+
+        body = self.tube()
+        panel = self.run_command((body, self.face_towards(body, UP)), (body, self.vertex_at(body, CORNER)))
+        panel._viewport_point = lambda point: (point.x, point.y)
+        event = coin.SoMouseButtonEvent()
+        event.setButton(coin.SoMouseButtonEvent.BUTTON1)
+        event.setState(coin.SoMouseButtonEvent.DOWN)
+        event.setPosition(coin.SbVec2s(152, -22))
+        handled = []
+        panel._on_mouse_button(SimpleNamespace(getEvent=lambda: event, setHandled=lambda: handled.append(1)))
+        self.events()
+        self.assertEqual(handled, [1])
+        self.assertEqual((panel.vertex, self.centers(panel)), (self.vertex_at(body, CORNER), (True, False)))
+        self.assertTrue(panel.reject())
+
+    def test_a_corner_marker_a_face_click_a_vertex_click_or_next_corner_measure_from_the_corner(self):
+        body = self.tube()
+        top = self.face_towards(body, UP)
+        corner, far = self.vertex_at(body, CORNER), self.vertex_at(body, FAR_CORNER)
+        before = self.names()
+        panel = self.run_command((body, top), (body, corner))
+
+        def center_both():
+            panel.pick_marker(self.edge_at(body, LONG_NEAR))
+            panel.pick_marker(self.edge_at(body, SHORT_START))
+            self.assertEqual((panel.vertex, self.centers(panel)), (corner, (True, True)))
+
+        for name, action, vertex in (
+            ("corner marker", lambda: panel.pick_marker(far), far),
+            ("corner marker on the reference", lambda: panel.pick_marker(corner), corner),
+            ("face click near a corner", lambda: self.click_at(body, top, (-40, -18, 25)), corner),
+            ("vertex click", lambda: self.click(body, corner), corner),
+            ("next corner", lambda: (panel.form.button_next_corner.click(), self.events()), None),
+        ):
+            with self.subTest(name):
+                center_both()
+                action()
+                self.assertEqual(self.centers(panel), (False, False))
+                if vertex is not None:
+                    self.assertEqual(panel.vertex, vertex)
+                self.assertEqual(panel.form.vertex_label.text(), panel.vertex)
+                self.assert_points(panel.highlighted_markers(), [panel.corner_marker()])
+                wait()
+                obj = self.preview(before)
+                self.assertEqual((obj.ReferenceVertex, obj.CenterAlong, obj.CenterAcross), (panel.vertex, False, False))
+        self.assertTrue(panel.reject())
+        self.assertEqual(self.names(), before)
+
+    def test_ok_creates_a_centered_hole_in_one_undo_step(self):
+        body = self.tube()
+        self.doc.clearUndos()
+        before = self.names()
+        panel = self.run_command((body, self.face_towards(body, UP)), (body, self.vertex_at(body, CORNER)))
+        self.set_values(panel, along=0.0, across=0.0)
+        panel.pick_marker(self.edge_at(body, LONG_NEAR))
+        panel.pick_marker(self.edge_at(body, SHORT_START))
+        self.assertTrue(panel.accept())
+        obj = self.preview(before)
+        self.assertEqual((obj.CenterAlong, obj.CenterAcross), (True, True))
+        self.assertTrue(self.empty(obj.Shape, 150, 0, 24))
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.doc.undo()
+        self.assertEqual(self.names(), before)
+
+
+class TestDrillHoleMidpointEdit(MidpointFixture):
+    """S3 when editing: the centers are part of the edit, like the other values."""
+
+    def test_double_click_shows_the_centers_and_ok_keeps_them_in_one_undo_step(self):
+        body, obj = self.existing(OffsetAcross=10.0)
+        self.assertTrue(self.empty(obj.Shape, -20, -15, 24))
+        panel = self.edit(obj)
+        self.assertEqual(self.centers(panel), (False, False))
+        panel.pick_marker(self.edge_at(body, LONG_NEAR))
+        panel.pick_marker(self.edge_at(body, SHORT_START))
+        wait()
+        self.assertTrue(self.empty(obj.Shape, 180, 10, 24))
+        self.assertTrue(panel.accept())
+        self.events()
+        self.assertEqual((obj.CenterAlong, obj.CenterAcross), (True, True))
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.doc.undo()
+        self.doc.recompute()
+        self.assertEqual((obj.CenterAlong, obj.CenterAcross), (False, False))
+        self.assertTrue(self.empty(obj.Shape, -20, -15, 24))
+        panel = self.edit(obj)
+        self.assertEqual(self.centers(panel), (False, False))
+        self.assertTrue(panel.reject())
+
+    def test_a_centered_hole_shows_its_centers_and_cancel_restores_them(self):
+        for undo_mode in (1, 0):
+            with self.subTest(undo_mode=undo_mode):
+                body, obj = self.existing(OffsetAlong=10.0, OffsetAcross=10.0, CenterAlong=True, CenterAcross=True)
+                corner = self.vertex_at(body, CORNER)
+                panel = self.edit(obj)
+                self.assertEqual(self.centers(panel), (True, True))
+                self.assertEqual(panel.form.vertex_label.text(), f"{corner} (centered on the face)")
+                self.assert_points(
+                    panel.highlighted_markers(), [CORNER, TOP_MIDDLES[LONG_NEAR][0], TOP_MIDDLES[SHORT_START][0]]
+                )
+                self.doc.UndoMode = undo_mode
+                self.addCleanup(setattr, self.doc, "UndoMode", 1)
+                panel.pick_marker(corner)
+                wait()
+                self.assertEqual((obj.CenterAlong, obj.CenterAcross), (False, False))
+                self.assertTrue(self.empty(obj.Shape, -40, -15, 24))
+                self.assertTrue(panel.reject())
+                self.assertEqual((obj.CenterAlong, obj.CenterAcross), (True, True))
+                self.assertTrue(self.empty(obj.Shape, 160, 10, 24))
+                self.assertEqual(self.doc.UndoCount, 0)
+                self.doc.UndoMode = 1
+
+    def test_ok_without_changes_to_the_centers_leaves_no_undo_step(self):
+        body, obj = self.existing(CenterAlong=True)
+        corner = self.vertex_at(body, CORNER)
+        for change_back in (False, True):
+            with self.subTest(change_back=change_back):
+                panel = self.edit(obj)
+                self.assertEqual(self.centers(panel), (True, False))
+                if change_back:
+                    # Off, previewed, then on again from the same corner: nothing changed in the end.
+                    panel.pick_marker(corner)
+                    wait()
+                    self.assertFalse(obj.CenterAlong)
+                    panel.pick_marker(self.edge_at(body, LONG_NEAR))
+                self.assertTrue(panel.accept())
+                self.events()
+                self.assertEqual((obj.ReferenceVertex, obj.CenterAlong, obj.CenterAcross), (corner, True, False))
+                self.assertTrue(self.empty(obj.Shape, 180, 0, 24))
+                self.assertEqual(self.doc.UndoCount, 0)
 
 
 class TestDrillHolePreview(DrillHolePanelFixture):
@@ -1051,6 +1299,34 @@ class TestDrillHoleSpanish(DrillHolePanelFixture):
         body.OffsetB = -100.0
         self.doc.recompute()
         self.assertEqual(obj.ReferenceWarning, "La referencia cambió, revisá el agujero.")
+
+
+class TestDrillHoleMidpointsSpanish(MidpointFixture):
+    def test_the_centering_of_the_reference_is_spanish(self):
+        body = self.tube()
+        top = self.face_towards(body, UP)
+        corner = self.vertex_at(body, CORNER)
+        use_language(self, "Spanish", "es_ES")
+        panel = self.run_command((body, top), (body, corner))
+        panel.pick_marker(self.edge_at(body, LONG_NEAR))
+        self.assertEqual(panel.form.vertex_label.text(), f"{corner} (centrado longitudinal)")
+        panel.pick_marker(self.edge_at(body, SHORT_START))
+        self.assertEqual(panel.form.vertex_label.text(), f"{corner} (centrado en la cara)")
+        panel.pick_marker(corner)
+        panel.pick_marker(self.edge_at(body, SHORT_START))
+        self.assertEqual(panel.form.vertex_label.text(), f"{corner} (centrado transversal)")
+        wait()
+        obj = panel.obj
+        self.assertEqual((obj.CenterAlong, obj.CenterAcross), (False, True))
+        self.assertEqual(
+            obj.getDocumentationOfProperty("CenterAlong"),
+            "Medir el desplazamiento longitudinal desde el medio del largo de la cara",
+        )
+        self.assertEqual(
+            obj.getDocumentationOfProperty("CenterAcross"),
+            "Medir el desplazamiento transversal desde el medio del ancho de la cara",
+        )
+        self.assertTrue(panel.reject())
 
 
 class TestDrillHoleExpressions(DrillHolePanelFixture):

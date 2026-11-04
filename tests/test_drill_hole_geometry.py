@@ -1,6 +1,9 @@
 """Drill Hole geometry: round holes on a planar face, placed from a vertex of that face."""
 
 import math
+import os
+import shutil
+import tempfile
 import unittest
 
 import FreeCAD as App
@@ -124,6 +127,120 @@ class TestDrillHoleGeometry(DrillHoleFixture):
         self.assertEqual((obj.PID, obj.SizeName, obj.Family), (body.PID, body.SizeName, body.Family))
         self.assertAlmostEqual(obj.Length.Value, 400.0, places=5)
         self.assertEqual(obj.Label, f"{body.Label}_Dh")
+
+
+class TestDrillHoleCentered(DrillHoleFixture):
+    """CenterAlong and CenterAcross measure the offsets from the middle of the face (S3), away from the corner (S4).
+
+    The top face of the tube runs from x = -50 to 350 and y = -25 to 25: its middle is (150, 0).
+    """
+
+    CORNER = (-50, -25, 25)
+    FAR_CORNER = (350, 25, 25)
+
+    def centered(self, corner, along, across, **values):
+        body = self.tube()
+        obj = self.hole(body, self.face_towards(body, UP), self.vertex_at(body, corner), along, across, **values)
+        self.assertEqual(obj.getStatusString(), "Valid")
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
+        return obj
+
+    def test_a_new_hole_measures_from_its_corner(self):
+        body = self.tube()
+        obj = make_drill_hole((body, (self.face_towards(body, UP),)), self.vertex_at(body, self.CORNER))
+        self.assertEqual((obj.CenterAlong, obj.CenterAcross), (False, False))
+        self.assertEqual(obj.getGroupOfProperty("CenterAlong"), "DrillHole")
+        self.assertEqual(obj.getGroupOfProperty("CenterAcross"), "DrillHole")
+        self.assertEqual(
+            obj.getDocumentationOfProperty("CenterAlong"),
+            "Measure the offset along from the middle of the face length",
+        )
+        self.assertEqual(
+            obj.getDocumentationOfProperty("CenterAcross"),
+            "Measure the offset across from the middle of the face width",
+        )
+
+    def test_center_along_measures_the_offset_along_from_the_middle_of_the_face_length(self):
+        obj = self.centered(self.CORNER, 0.0, 10.0, CenterAlong=True)
+        self.assertTrue(self.empty(obj.Shape, 150, -15, 24))
+        self.assertFalse(self.empty(obj.Shape, -50, -15, 24))
+
+    def test_center_across_measures_the_offset_across_from_the_middle_of_the_face_width(self):
+        obj = self.centered(self.CORNER, 30.0, 0.0, CenterAcross=True)
+        self.assertTrue(self.empty(obj.Shape, -20, 0, 24))
+        self.assertFalse(self.empty(obj.Shape, -20, -25 + 5.5, 24))
+
+    def test_both_centers_put_the_hole_in_the_middle_of_the_face_with_offsets_zero(self):
+        for corner in (self.CORNER, self.FAR_CORNER):
+            with self.subTest(corner=corner):
+                obj = self.centered(corner, 0.0, 0.0, CenterAlong=True, CenterAcross=True)
+                self.assertTrue(self.empty(obj.Shape, 150, 0, 24))
+
+    def test_offsets_from_the_middle_are_positive_away_from_the_corner_and_negative_toward_it(self):
+        # S4: from CORNER away is +x and +y; from FAR_CORNER away is -x and -y.
+        for corner, along, across, center in (
+            (self.CORNER, 30.0, 10.0, (180, 10)),
+            (self.CORNER, -30.0, -10.0, (120, -10)),
+            (self.FAR_CORNER, 30.0, 10.0, (120, -10)),
+            (self.FAR_CORNER, -30.0, -10.0, (180, 10)),
+        ):
+            with self.subTest(corner=corner, along=along, across=across):
+                obj = self.centered(corner, along, across, CenterAlong=True, CenterAcross=True)
+                self.assertTrue(self.empty(obj.Shape, *center, 24), center)
+                self.assertFalse(self.empty(obj.Shape, 150, 0, 24))
+
+    def test_a_row_of_holes_starts_at_the_middle_and_goes_away_from_the_corner(self):
+        body = self.tube()
+        top = self.face_towards(body, UP)
+        corner = self.vertex_at(body, self.FAR_CORNER)
+        obj = self.hole(body, top, corner, 0.0, 0.0, CenterAlong=True, CenterAcross=True, Count=3, Pitch=40.0)
+        self.assertEqual(obj.getStatusString(), "Valid")
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 3 * ONE_HOLE, places=3)
+        for x in (150, 110, 70):
+            self.assertTrue(self.empty(obj.Shape, x, 0, 24), x)
+
+    def test_a_hole_saved_before_the_centers_keeps_its_place_and_gains_them_off(self):
+        # S5: a document saved before CenterAlong and CenterAcross opens with the holes where they were.
+        body = self.tube()
+        obj = self.hole(body, self.face_towards(body, UP), self.vertex_at(body, self.CORNER), 30.0, 25.0)
+        for name in ("CenterAlong", "CenterAcross"):
+            obj.removeProperty(name)
+        self.assertFalse(hasattr(obj, "CenterAlong"))
+        obj.touch()
+        self.doc.recompute()
+        self.assertEqual(obj.getStatusString(), "Valid")
+        self.assertTrue(self.empty(obj.Shape, -20, 0, 24))
+        obj.Proxy.onDocumentRestored(obj)
+        self.assertEqual((obj.CenterAlong, obj.CenterAcross), (False, False))
+        self.assertEqual(obj.getGroupOfProperty("CenterAcross"), "DrillHole")
+        obj.touch()
+        self.doc.recompute()
+        self.assertEqual(obj.getStatusString(), "Valid")
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
+        self.assertTrue(self.empty(obj.Shape, -20, 0, 24))
+        # Restored again: nothing changes.
+        obj.Proxy.onDocumentRestored(obj)
+        self.assertEqual((obj.CenterAlong, obj.CenterAcross), (False, False))
+
+    def test_a_saved_document_without_the_centers_opens_with_the_holes_in_place(self):
+        # S5 through a real save and open.
+        body = self.tube()
+        obj = self.hole(body, self.face_towards(body, UP), self.vertex_at(body, self.FAR_CORNER), 30.0, 10.0)
+        for name in ("CenterAlong", "CenterAcross"):
+            obj.removeProperty(name)
+        folder = tempfile.mkdtemp(prefix="drill_hole_restore_")
+        self.addCleanup(shutil.rmtree, folder, True)
+        path = os.path.join(folder, "old.FCStd")
+        self.doc.saveCopy(path)
+        doc = App.openDocument(path)
+        self.addCleanup(App.closeDocument, doc.Name)
+        restored = doc.getObject(obj.Name)
+        self.assertEqual((restored.CenterAlong, restored.CenterAcross), (False, False))
+        restored.touch()
+        doc.recompute()
+        self.assertEqual(restored.getStatusString(), "Valid")
+        self.assertAlmostEqual(restored.Shape.Volume, doc.getObject(body.Name).Shape.Volume - ONE_HOLE, places=3)
+        self.assertTrue(self.empty(restored.Shape, 320, 15, 24))
 
 
 if __name__ == "__main__":

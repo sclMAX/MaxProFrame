@@ -5,6 +5,7 @@ import FreeCADGui as Gui
 import Part
 from PySide import QtCore, QtGui
 
+from freecad.maxproframe._utils import get_profile_from_trimmedbody
 from freecad.maxproframe.create_end_miter_tool import (
     GAP_DELAY_MS,
     _alive_document,
@@ -48,10 +49,13 @@ MIN_DIAMETER = 0.01
 MAX_COUNT = 1000
 # Two values closer than this are the same.
 TOLERANCE = 1e-9
-# Color of the marker on the reference corner.
+# Color of the marker on the reference corner and on the edge middles the holes are centered from.
 CORNER_MARKER_COLOR = (1.0, 0.6, 0.0)
-# Color of the clickable markers on the other corners of the face.
+# Color of the clickable markers on the other corners and edge middles of the face.
 PICK_MARKER_COLOR = (1.0, 1.0, 1.0)
+# Size (pixels) of the corner markers and of the smaller edge middle markers.
+CORNER_MARKER_SIZE = 11
+MIDDLE_MARKER_SIZE = 9
 # A click this close (screen pixels) to a marker picks it.
 MARKER_HIT_RADIUS = 10.0
 
@@ -109,6 +113,52 @@ def _face_corners(obj, face):
     if not isinstance(face_shape, Part.Face):
         return []
     return [name for name in (_base_element(obj, vertex) for vertex in face_shape.Vertexes) if name]
+
+
+def _profile_axis(obj):
+    """Direction of the profile ``obj`` is made from, in the coordinates of the shape of ``obj``, or None."""
+    try:
+        # Profiles are extruded along their local Z.
+        return get_profile_from_trimmedbody(obj).Placement.Rotation.multVec(App.Vector(0, 0, 1))
+    except Exception:
+        return None
+
+
+def _edge_name(obj, edge):
+    """Name of the edge of ``obj`` that ``edge`` (an edge of one of its faces) is, or None."""
+    for index, candidate in enumerate(obj.Shape.Edges, start=1):
+        if candidate.isSame(edge):
+            return f"Edge{index}"
+    return None
+
+
+def _face_middles(obj, face):
+    """(edge name, middle, kind, names of its two ends) of every straight edge of the face ``face`` of ``obj``.
+
+    The middle is in the coordinates of the shape. The kind is "along" for an edge parallel to the
+    profile axis, else "across".
+    """
+    face_shape = _element(obj, face)
+    if not isinstance(face_shape, Part.Face):
+        return []
+    axis = _profile_axis(obj)
+    middles = []
+    for edge in face_shape.Edges:
+        if not isinstance(edge.Curve, (Part.Line, Part.LineSegment)) or len(edge.Vertexes) != 2:
+            continue
+        name = _edge_name(obj, edge)
+        ends = tuple(_base_element(obj, vertex) for vertex in edge.Vertexes)
+        if name is None or None in ends:
+            continue
+        start, end = (vertex.Point for vertex in edge.Vertexes)
+        direction = end - start
+        parallel = (
+            axis is not None
+            and direction.Length > TOLERANCE
+            and direction.cross(axis).Length <= TOLERANCE**0.5 * direction.Length * axis.Length
+        )
+        middles.append((name, (start + end) * 0.5, "along" if parallel else "across", ends))
+    return middles
 
 
 def _spin_changed(spin, stored):
@@ -172,7 +222,10 @@ class DrillHoleTaskPanel:
 
     A click on a planar face of a profile, a trimmed profile or a cutout picks the face and its corner
     nearest to the click, the vertex the holes are placed from; a click on one of its vertices, or Next
-    corner, picks that vertex. Every other pick is explained. The picked corner is marked in the 3D view.
+    corner, picks that vertex. Every other pick is explained. The picked corner is marked in the 3D view,
+    with clickable markers on the other corners and on the middles of the edges of the face: the middle of
+    an edge along the profile measures the offset along from the middle of the face length, of an edge
+    across the offset across from the middle of the face width.
     A click on the drill hole being previewed or edited (it hides its base) stands for the face or
     vertex of its base under the click.
 
@@ -196,6 +249,9 @@ class DrillHoleTaskPanel:
         self.doc = edited.Document if edited is not None else App.ActiveDocument
         self.face = None
         self.vertex = None
+        # Whether the offsets are measured from the middle of the face along and across the profile.
+        self.center_along = False
+        self.center_across = False
         self._closed = False
         self._transaction_open = False
         # (scene, node) of the markers on the face corners, and the global point of the reference corner.
@@ -227,6 +283,8 @@ class DrillHoleTaskPanel:
             base, (face, *_) = edited.baseObject
             self.face = (base, face)
             self.vertex = edited.ReferenceVertex
+            self.center_along = bool(getattr(edited, "CenterAlong", False))
+            self.center_across = bool(getattr(edited, "CenterAcross", False))
             # The values Cancel puts back, also when undo is disabled.
             self._edit_before = self._values(edited)
             self._edit_expressions = expressions_of(edited, EXPRESSION_PROPERTIES)
@@ -380,12 +438,14 @@ class DrillHoleTaskPanel:
 
     @staticmethod
     def _values(obj):
-        """(base, face, vertex, offsets, diameter, count, pitch, cut type, depth) of the drill hole ``obj``."""
+        """(base, face, vertex, centers, offsets, diameter, count, pitch, cut type, depth) of the drill hole ``obj``."""
         base, (face, *_) = obj.baseObject
         return (
             base,
             face,
             obj.ReferenceVertex,
+            bool(getattr(obj, "CenterAlong", False)),
+            bool(getattr(obj, "CenterAcross", False)),
             round(obj.OffsetAlong.Value, 9),
             round(obj.OffsetAcross.Value, 9),
             round(obj.Diameter.Value, 9),
@@ -404,6 +464,8 @@ class DrillHoleTaskPanel:
         return (
             *self.face,
             self.vertex,
+            self.center_along,
+            self.center_across,
             round(form.spin_offset_along.value(), 9),
             round(form.spin_offset_across.value(), 9),
             round(form.spin_diameter.value(), 9),
@@ -421,6 +483,9 @@ class DrillHoleTaskPanel:
             obj.baseObject = (base, [face])
         if obj.ReferenceVertex != self.vertex:
             obj.ReferenceVertex = self.vertex
+        for prop, value in (("CenterAlong", self.center_along), ("CenterAcross", self.center_across)):
+            if getattr(obj, prop) != value:
+                setattr(obj, prop, value)
         # An expression drives its property on its own: the field only shows its value.
         for prop, spin in (
             ("OffsetAlong", form.spin_offset_along),
@@ -443,11 +508,14 @@ class DrillHoleTaskPanel:
             obj.ExtrusionLength = form.spin_depth.value()
 
     def _restore(self, obj, values):
-        base, face, vertex, along, across, diameter, count, pitch, cut_type, depth = values
+        base, face, vertex, center_along, center_across, along, across, diameter, count, pitch, cut_type, depth = values
         if obj.baseObject[0] != base or tuple(obj.baseObject[1]) != (face,):
             obj.baseObject = (base, [face])
         if obj.ReferenceVertex != vertex:
             obj.ReferenceVertex = vertex
+        for prop, value in (("CenterAlong", center_along), ("CenterAcross", center_across)):
+            if hasattr(obj, prop) and getattr(obj, prop) != value:
+                setattr(obj, prop, value)
         for prop, value in (
             ("OffsetAlong", along),
             ("OffsetAcross", across),
@@ -522,8 +590,9 @@ class DrillHoleTaskPanel:
             problem = self._vertex_problem(obj, sub)
             if problem is not None:
                 return False, [problem]
-            changed = self.vertex != sub
+            changed = self.vertex != sub or self._centered()
             self.vertex = sub
+            self._measure_from_corner()
             return changed, []
         # The shown drill hole, or one built on it, cannot be its own base.
         problem = face_problem(obj, sub) or trimmed_body_problem(self.obj, obj)
@@ -531,17 +600,27 @@ class DrillHoleTaskPanel:
             return False, [problem]
         corner = _nearest_corner(obj, sub, point) if point is not None else None
         if self.face == (obj, sub):
-            changed = corner is not None and corner != self.vertex
+            changed = corner is not None and (corner != self.vertex or self._centered())
             if changed:
                 self.vertex = corner
+                self._measure_from_corner()
             return changed, []
         if corner is not None:
             self.vertex = corner
         elif self.vertex is not None and not (self.face[0] == obj and _on_face(obj, sub, self.vertex)):
             self.vertex = None
+        # The middles belong to the face they were picked on.
+        self._measure_from_corner()
         self.face = (obj, sub)
         self._set_depth()
         return True, []
+
+    def _centered(self):
+        return self.center_along or self.center_across
+
+    def _measure_from_corner(self):
+        self.center_along = False
+        self.center_across = False
 
     def _next_corner(self):
         """Take the corner of the face after the current one, the first one without a current one."""
@@ -552,6 +631,7 @@ class DrillHoleTaskPanel:
             return
         index = corners.index(self.vertex) + 1 if self.vertex in corners else 0
         self.vertex = corners[index % len(corners)]
+        self._measure_from_corner()
         self._show([])
         self._update_preview()
 
@@ -569,13 +649,14 @@ class DrillHoleTaskPanel:
         """Show the face, the vertex and ``messages``."""
         if self.face is not None and not _in_document(self.face[0]):
             self.face, self.vertex = None, None
+            self._measure_from_corner()
         if self.face is None:
             text = translate("frameforge", "Click a planar face of a profile, a trimmed profile or a cutout.")
         else:
             obj, face = self.face
             text = f"{obj.Label} ({obj.Name}) {face}"
         self.form.face_label.setText(text)
-        self.form.vertex_label.setText(self.vertex or translate("frameforge", "Click a vertex of the face."))
+        self.form.vertex_label.setText(self._vertex_text())
         self.form.button_next_corner.setEnabled(self.face is not None)
         self._draw_corner_marker()
         self._messages = list(messages)
@@ -583,12 +664,28 @@ class DrillHoleTaskPanel:
         self._show_messages()
         self._show_status()
 
+    def _vertex_text(self):
+        """The reference vertex, and from where the offsets are measured when not from it."""
+        if self.vertex is None:
+            return translate("frameforge", "Click a vertex of the face.")
+        if self.center_along and self.center_across:
+            return translate("frameforge", "{} (centered on the face)").format(self.vertex)
+        if self.center_along:
+            return translate("frameforge", "{} (centered along)").format(self.vertex)
+        if self.center_across:
+            return translate("frameforge", "{} (centered across)").format(self.vertex)
+        return self.vertex
+
     def corner_marker(self):
         """Global point of the marker on the reference corner, or None when none is shown."""
         return self._corner_point
 
-    def reference_markers(self):
-        """(vertex name, global point) of the clickable markers: the corners of the picked face."""
+    def _markers(self):
+        """(name, global point, kind, ends) of the markers of the picked face.
+
+        The corners (kind "corner", no ends) come first, then the middles of the straight edges (kind
+        "along" or "across", the names of the two ends of the edge).
+        """
         if self._closed or self.face is None or not _in_document(self.face[0]):
             return []
         obj = self.face[0]
@@ -597,15 +694,61 @@ class DrillHoleTaskPanel:
         for name in _face_corners(*self.face):
             vertex = _element(obj, name)
             if isinstance(vertex, Part.Vertex):
-                markers.append((name, placement.multVec(vertex.Point)))
+                markers.append((name, placement.multVec(vertex.Point), "corner", ()))
+        for name, middle, kind, ends in _face_middles(*self.face):
+            markers.append((name, placement.multVec(middle), kind, ends))
         return markers
 
+    def reference_markers(self):
+        """(name, global point) of the clickable markers: the corners (VertexN) and edge middles (EdgeN) of the face."""
+        return [(name, point) for name, point, *_ in self._markers()]
+
+    def marker_kind(self, name):
+        """Kind of the marker ``name`` of the picked face (corner, along or across), None when it is none."""
+        return next((kind for marker, _, kind, _ in self._markers() if marker == name), None)
+
+    def _is_active(self, kind, ends):
+        """Whether an edge middle of ``kind`` between ``ends`` is the one the holes are centered from."""
+        centered = self.center_along if kind == "along" else self.center_across if kind == "across" else False
+        return centered and self.vertex in ends
+
+    def highlighted_markers(self):
+        """Global points of the filled markers: the reference corner and the middles the holes are centered from."""
+        points = [self._corner_point] if self._corner_point is not None else []
+        return points + [point for _, point, kind, ends in self._markers() if self._is_active(kind, ends)]
+
+    def _edge_end(self, ends):
+        """The end of ``ends`` nearest the reference corner, the first one without a reference corner."""
+        obj = self.face[0]
+        current = _element(obj, self.vertex) if self.vertex is not None else None
+        if not isinstance(current, Part.Vertex):
+            return ends[0]
+        return min(ends, key=lambda end: _element(obj, end).Point.distanceToPoint(current.Point))
+
     def pick_marker(self, name):
-        """Take the marker ``name`` (a corner of the face) as the reference, as a click on it does."""
-        if not self._active() or name not in dict(self.reference_markers()):
+        """Take the marker ``name`` as the reference, as a click on it does.
+
+        A corner measures the offsets from it. The middle of an edge along the profile centers them along,
+        of an edge across centers them across, keeping the other center; the reference corner becomes the
+        end of that edge nearest the current one.
+        """
+        if not self._active():
             return False
-        changed = name != self.vertex
-        self.vertex = name
+        marker = next((marker for marker in self._markers() if marker[0] == name), None)
+        if marker is None:
+            return False
+        _, _, kind, ends = marker
+        before = (self.vertex, self.center_along, self.center_across)
+        if kind == "corner":
+            self.vertex = name
+            self._measure_from_corner()
+        else:
+            self.vertex = self._edge_end(ends)
+            if kind == "along":
+                self.center_along = True
+            else:
+                self.center_across = True
+        changed = (self.vertex, self.center_along, self.center_across) != before
         self._show([])
         if changed:
             # Never recompute during the 3D view's event dispatch.
@@ -613,11 +756,14 @@ class DrillHoleTaskPanel:
         return True
 
     def _draw_corner_marker(self):
-        """Mark the corners of the face over the 3D view, the reference one apart, in place of the previous marks."""
+        """Mark the corners and edge middles of the face over the 3D view, in place of the previous marks.
+
+        The reference corner and the middles the holes are centered from are filled, the others open.
+        """
         self._remove_corner_marker()
         if self._closed or self.face is None:
             return
-        markers = self.reference_markers()
+        markers = self._markers()
         vertex = _element(self.face[0], self.vertex) if self.vertex is not None else None
         if isinstance(vertex, Part.Vertex):
             self._corner_point = _container_placement(self.face[0]).multVec(vertex.Point)
@@ -628,11 +774,22 @@ class DrillHoleTaskPanel:
 
         # An annotation is drawn over the shapes, so the corners stay visible behind the preview.
         node = coin.SoAnnotation()
-        others = [point for name, point in markers if name != self.vertex]
-        if others:
-            self._add_markers(coin, node, others, PICK_MARKER_COLOR, "CIRCLE_LINE", 11)
-        if self._corner_point is not None:
-            self._add_markers(coin, node, [self._corner_point], CORNER_MARKER_COLOR, "CIRCLE_FILLED", 11)
+        corners = [point for name, point, kind, _ in markers if kind == "corner" and name != self.vertex]
+        middles = [point for _, point, kind, ends in markers if kind != "corner" and not self._is_active(kind, ends)]
+        active = [point for _, point, kind, ends in markers if kind != "corner" and self._is_active(kind, ends)]
+        for points, rgb, style, size in (
+            (corners, PICK_MARKER_COLOR, "CIRCLE_LINE", CORNER_MARKER_SIZE),
+            (middles, PICK_MARKER_COLOR, "CIRCLE_LINE", MIDDLE_MARKER_SIZE),
+            (active, CORNER_MARKER_COLOR, "CIRCLE_FILLED", MIDDLE_MARKER_SIZE),
+            (
+                [self._corner_point] if self._corner_point is not None else [],
+                CORNER_MARKER_COLOR,
+                "CIRCLE_FILLED",
+                CORNER_MARKER_SIZE,
+            ),
+        ):
+            if points:
+                self._add_markers(coin, node, points, rgb, style, size)
         scene.addChild(node)
         self._corner_node = (scene, node)
         self._listen_to_mouse()

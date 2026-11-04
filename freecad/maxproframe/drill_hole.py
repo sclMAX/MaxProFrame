@@ -71,6 +71,25 @@ def _plane_axes(normal, axis, vertex, center):
     return _inward(along, vertex, center), _inward(across, vertex, center)
 
 
+def _middle_shift(face, vertex, direction):
+    """Distance along ``direction`` from ``vertex`` to the middle of the extent of ``face``; 0 without a face."""
+    if face is None or not face.Vertexes:
+        return 0.0
+    distances = [(point.Point - vertex).dot(direction) for point in face.Vertexes]
+    return (min(distances) + max(distances)) / 2
+
+
+def _add_center_properties(obj):
+    """Add CenterAlong and CenterAcross, off, when ``obj`` has not got them."""
+    for name, tip in (
+        ("CenterAlong", translate("frameforge", "Measure the offset along from the middle of the face length")),
+        ("CenterAcross", translate("frameforge", "Measure the offset across from the middle of the face width")),
+    ):
+        if not hasattr(obj, name):
+            obj.addProperty("App::PropertyBool", name, "DrillHole", tip)
+            setattr(obj, name, False)
+
+
 def _element(elements, name, prefix):
     """The element ``name`` (``prefix`` and a number from 1) of ``elements``, or None when there is none."""
     number = name[len(prefix) :]
@@ -196,9 +215,11 @@ class DrillHole(ExtrudedCutout):
             translate("frameforge", "Set when the reference vertex is gone and the hole kept its place"),
         )
         obj.setEditorMode("ReferenceWarning", 1)
+        _add_center_properties(obj)
 
     def onDocumentRestored(self, obj):
-        """Nothing to migrate yet: drill holes were created with every property."""
+        """Drill holes saved before CenterAlong and CenterAcross gain them off: measured from their vertex."""
+        _add_center_properties(obj)
 
     def onBeforeChange(self, fp, prop):
         if prop == "baseObject" and fp.baseObject:
@@ -217,7 +238,7 @@ class DrillHole(ExtrudedCutout):
                     _relabel(fp, left, fp.baseObject[0])
 
     def reference(self, fp):
-        """(vertex point, face normal, face center) the holes are placed from.
+        """(vertex point, face normal, face center, face or None) the holes are placed from.
 
         A face or vertex other than the snapshot's (a new hole, or picked by the user) takes a new
         snapshot. Otherwise the snapshot is found again on the base shape: the named vertex, else
@@ -241,7 +262,7 @@ class DrillHole(ExtrudedCutout):
             fp.ReferenceNormal = placement.Rotation.inverted().multVec(normal)
             fp.ReferenceName = name
             self._warn(fp, "")
-            return vertex, normal, face.CenterOfMass
+            return vertex, normal, face.CenterOfMass, face
         point = placement.multVec(fp.ReferencePoint)
         normal = placement.Rotation.multVec(fp.ReferenceNormal)
         vertex = _resolve_vertex(shape, fp.ReferenceVertex, point)
@@ -251,7 +272,7 @@ class DrillHole(ExtrudedCutout):
         else:
             self._warn(fp, "")
         center = face.CenterOfMass if face is not None else shape.BoundBox.Center
-        return (vertex if vertex is not None else point), normal, center
+        return (vertex if vertex is not None else point), normal, center, face
 
     def _warn(self, fp, warning):
         if warning:
@@ -260,13 +281,24 @@ class DrillHole(ExtrudedCutout):
             fp.ReferenceWarning = warning
 
     def centers(self, fp):
-        """(face normal, centers of the holes on the face plane)."""
-        vertex, normal, center = self.reference(fp)
+        """(face normal, centers of the holes on the face plane).
+
+        The offsets are measured from the vertex, or from the middle of the face along (CenterAlong) or
+        across (CenterAcross) the profile; positive is away from the vertex in any case.
+        """
+        vertex, normal, center, face = self.reference(fp)
         profile = get_profile_from_extrudedcutout(fp)
         # Profiles are extruded along their local Z.
         axis = profile.Placement.Rotation.multVec(App.Vector(0, 0, 1))
         along, across = _plane_axes(normal, axis, vertex, center)
-        first = vertex + along * fp.OffsetAlong.Value + across * fp.OffsetAcross.Value
+        # A drill hole saved before the centers has not got them until it is restored.
+        along_offset = fp.OffsetAlong.Value
+        if getattr(fp, "CenterAlong", False):
+            along_offset += _middle_shift(face, vertex, along)
+        across_offset = fp.OffsetAcross.Value
+        if getattr(fp, "CenterAcross", False):
+            across_offset += _middle_shift(face, vertex, across)
+        first = vertex + along * along_offset + across * across_offset
         return normal, [first + along * (fp.Pitch.Value * index) for index in range(fp.Count)]
 
     def execute(self, fp):

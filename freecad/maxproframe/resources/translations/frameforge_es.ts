@@ -1093,6 +1093,9 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Click a face first, then one of its vertices.</source><translation>Hacé clic primero en una cara y luego en uno de sus vértices.</translation></message>
     <message><source>{}: {} is not a vertex of {}</source><translation>{}: {} no es un vértice de {}</translation></message>
     <message><source>Click a vertex of the face.</source><translation>Hacé clic en un vértice de la cara.</translation></message>
+    <message><source>{} (centered on the face)</source><translation>{} (centrado en la cara)</translation></message>
+    <message><source>{} (centered along)</source><translation>{} (centrado longitudinal)</translation></message>
+    <message><source>{} (centered across)</source><translation>{} (centrado transversal)</translation></message>
     <message><source>Select a vertex of the face.</source><translation>Seleccioná un vértice de la cara.</translation></message>
     <message><source>Drill Hole: the face is square to the profile axis.</source><translation>Agujero: la cara es perpendicular al eje del perfil.</translation></message>
     <message><source>Drill Hole: {} of {} is not planar.</source><translation>Agujero: {} de {} no es plana.</translation></message>
@@ -1101,6 +1104,8 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Vertex of the face the hole is placed from</source><translation>Vértice de la cara a partir del cual se ubica el agujero</translation></message>
     <message><source>Distance from the vertex to the first hole, along the profile</source><translation>Distancia del vértice al primer agujero, a lo largo del perfil</translation></message>
     <message><source>Distance from the vertex to the holes, across the profile</source><translation>Distancia del vértice a los agujeros, transversal al perfil</translation></message>
+    <message><source>Measure the offset along from the middle of the face length</source><translation>Medir el desplazamiento longitudinal desde el medio del largo de la cara</translation></message>
+    <message><source>Measure the offset across from the middle of the face width</source><translation>Medir el desplazamiento transversal desde el medio del ancho de la cara</translation></message>
     <message><source>Hole diameter</source><translation>Diámetro del agujero</translation></message>
     <message><source>Number of holes</source><translation>Cantidad de agujeros</translation></message>
     <message><source>Distance between two holes, along the profile</source><translation>Distancia entre dos agujeros, a lo largo del perfil</translation></message>
