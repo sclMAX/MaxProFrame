@@ -1923,6 +1923,53 @@ class TestDrillHolePatternPanel(PatternPanelFixture):
         self.assertTrue(self.empty(obj.Shape, -20, 15, 24))
 
 
+class TestDrillHolePatternFieldWidth(PatternPanelFixture):
+    """The count and pitch fields of the Pattern group: as wide as their values, never squeezed or stretched."""
+
+    def pattern_spins(self, panel):
+        form = panel.form
+        return [getattr(form, f"spin_{row}_{kind}") for row, _ in PATTERN_ROWS for kind in ("count", "pitch")]
+
+    def set_width(self, panel, width):
+        """Show the panel ``width`` wide, in its Tasks dock floated: FreeCAD places the Fx icons of shown fields only."""
+        dock = panel.form.parentWidget()
+        while not isinstance(dock, QtWidgets.QDockWidget):
+            dock = dock.parentWidget()
+        if not dock.isFloating():
+            dock.setFloating(True)
+            self.addCleanup(dock.setFloating, False)
+        dock.show()
+        panel.form.setFixedWidth(width)
+        self.events()
+        self.assertTrue(panel.form.isVisible())
+
+    def test_the_pattern_fields_keep_their_width_when_the_panel_widens(self):
+        body, panel, obj, before = self.previewed_panel()
+        self.set_pattern(panel, along_backward=(1, 50.0))
+        narrowest = panel.form.minimumSizeHint().width()
+        self.set_width(panel, narrowest)
+        widths = [spin.width() for spin in self.pattern_spins(panel)]
+        self.set_width(panel, narrowest + 300)
+        self.assertEqual([spin.width() for spin in self.pattern_spins(panel)], widths)
+        self.assertTrue(panel.reject())
+
+    def test_each_pattern_field_shows_its_whole_value_left_of_the_fx_icon_in_the_narrowest_panel(self):
+        body, panel, obj, before = self.previewed_panel()
+        self.set_pattern(
+            panel,
+            along_backward=(999, 9999.99),
+            **{row: (0, 9999.99) for row, _ in PATTERN_ROWS if row != "along_backward"},
+        )
+        self.set_width(panel, panel.form.minimumSizeHint().width())
+        for spin in self.pattern_spins(panel):
+            line = spin.lineEdit()
+            icons = [label for label in line.findChildren(QtWidgets.QLabel) if label.isVisible()]
+            self.assertEqual(len(icons), 1, icons)
+            text_end = line.textMargins().left() + line.fontMetrics().horizontalAdvance(line.text())
+            self.assertLessEqual(text_end, icons[0].geometry().left(), (spin.objectName(), line.text(), spin.width()))
+        self.assertTrue(panel.reject())
+
+
 class TestDrillHolePatternEdit(PatternPanelFixture):
     def test_the_group_opens_checked_for_a_hole_with_a_count_or_without_the_hole_at_the_point(self):
         for values, checked in (
