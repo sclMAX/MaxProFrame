@@ -43,8 +43,8 @@ from freecad.maxproframe.extruded_cutout import CUT_TYPES, wall_thickness
 from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, get_param_group, translate
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 
-# Offsets of a new drill hole from its vertex, in mm.
-DEFAULT_OFFSET = 10.0
+# Offsets of a new drill hole from its reference point, in mm: the hole starts on the picked point.
+DEFAULT_OFFSET = 0.0
 # Ranges of the panel fields: offsets and pitch in mm, diameter in mm, count as the Count property allows.
 MAX_OFFSET = 1e6
 MIN_DIAMETER = 0.01

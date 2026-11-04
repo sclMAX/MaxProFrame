@@ -1236,7 +1236,8 @@ class TestDrillHolePreview(DrillHolePanelFixture):
         panel = self.run_command((body, self.face_towards(body, UP)), (body, self.vertex_at(body, CORNER)))
         self.assertFalse(panel.form.cb_auto_update.isChecked())
         self.assertEqual(self.names(), before)
-        # Checking it again previews at once.
+        # Checking it again previews at once (a whole hole: off the corner, where new holes start).
+        self.set_values(panel)
         panel.form.cb_auto_update.setChecked(True)
         self.assertAlmostEqual(self.preview(before).Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
         self.assertEqual(self.status(panel), "Preview updated")
@@ -1297,6 +1298,23 @@ class TestDrillHoleCreation(DrillHolePanelFixture):
         self.assertEqual(self.doc.UndoCount, 1)
         self.doc.undo()
         self.assertEqual(self.names(), before)
+
+    def test_a_new_hole_starts_with_both_offsets_at_zero(self):
+        # The hole starts on the picked point: a corner, the middle of an edge or the face center.
+        body = self.tube()
+        top = self.face_towards(body, UP)
+        before = self.names()
+        panel = self.run_command()
+        self.assertEqual(panel.form.spin_offset_along.value(), 0.0)
+        self.assertEqual(panel.form.spin_offset_across.value(), 0.0)
+        self.click_at(body, top, (150, 0, 25))
+        wait()
+        obj = self.preview(before)
+        self.assertEqual((obj.OffsetAlong.Value, obj.OffsetAcross.Value), (0.0, 0.0))
+        normal, centers = obj.Proxy.centers(obj)
+        self.assertTrue(centers[0].isEqual(App.Vector(150, 0, 25), 1e-6), centers[0])
+        self.assertTrue(panel.accept())
+        self.assertEqual(obj.getStatusString(), "Valid")
 
     def test_a_distance_depth_is_kept_as_the_extrusion_length(self):
         body = self.tube()
