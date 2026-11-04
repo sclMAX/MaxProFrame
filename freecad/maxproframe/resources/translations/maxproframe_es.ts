@@ -1081,7 +1081,8 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>{}: {} is not used, a cutout takes one face</source><translation>{}: {} no se usa, un calado lleva una sola cara</translation></message>
     <message><source>Drill Hole</source><translation>Agujero</translation></message>
     <message><source>Reference</source><translation>Referencia</translation></message>
-    <message><source>Click a face, then one of its vertices: the holes are placed from that vertex. Click again to change them.</source><translation>Hacé clic en una cara y luego en uno de sus vértices: los agujeros se ubican a partir de ese vértice. Hacé clic de nuevo para cambiarlos.</translation></message>
+    <message><source>Click a face near the corner the holes are placed from, or the vertex itself. Click again to change it.</source><translation>Hacé clic en una cara cerca de la esquina desde la que se ubican los agujeros, o en el vértice mismo. Hacé clic de nuevo para cambiarla.</translation></message>
+    <message><source>Next corner</source><translation>Siguiente esquina</translation></message>
     <message><source>Holes</source><translation>Agujeros</translation></message>
     <message><source>Offset along</source><translation>Desplazamiento longitudinal</translation></message>
     <message><source>Offset across</source><translation>Desplazamiento transversal</translation></message>
