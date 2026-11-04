@@ -400,6 +400,18 @@ The hole remembers where its vertex was. When the profile changes and FreeCAD re
 The cut list and the IDs treat a drill hole like a cutout.
 
 
+## Expressions in panel fields
+
+The number fields of the panels that edit one object take FreeCAD expressions, as in the Part Design panels: click the **Fx** icon at the right of the field, or type `=`, and enter a formula such as `VarSet.HoleDiameter`, `Spreadsheet.Pitch * 2` or `20 mm + 5 mm`. The field then shows the value of the expression and the object keeps the expression, so changing the VarSet or the spreadsheet updates the object.
+
+- **Drill Hole**: every field (**Offset along**, **Offset across**, **Diameter**, **Count**, **Pitch**, **Depth**). When creating a drill hole the **Fx** icon appears once a face and a vertex are picked and the preview exists; an expression stays when you pick another face or vertex.
+- **Cutout / Hole**: **Depth**.
+- **Extend / Cut** and **Notch**: **Gap**, while editing (double-click the trim). When creating, one trim is made for each profile, so the Gap is a plain field there.
+- **Edit Profile**: the section sizes, **Length**, the weight, the price and the offsets. Choosing another material, family or size fills the section sizes from the catalog again and removes their expressions; the expressions of the other fields stay. The rotation is a list and takes no expression in the panel.
+
+**OK** keeps the expressions with the other values in one Undo step; **Cancel** removes the expressions set in the panel, even with Undo turned off. An expression set before, from the property editor, is shown and kept unless you change or clear it in the panel. The panels that make several objects at once (**Create Profile**, **End Miter**, and **Extend / Cut** and **Notch** while creating) and the **BOM** and **Populate IDs** options have plain fields: set an expression on the created objects from the property editor.
+
+
 ## Add Other elements to your design
 
 Often, when building metallic frames, you will need to add laser-cut parts, or welded nut to your design.
