@@ -498,6 +498,11 @@ class CreateExtrudedCutoutTaskPanel:
         # An expression drives the depth on its own: the field only shows its value.
         if cut_type == "Distance" and expression_of(self.obj, "ExtrusionLength") is None:
             self.obj.ExtrusionLength = self.form.spin_depth.value()
+        if not self.form.groupBox_pattern.isChecked():
+            # Unchecked cuts the sketch alone: an expression on a count would keep the copies. Cancel brings it back.
+            for _, prop in PATTERN_ROWS:
+                if expression_of(self.obj, f"{prop}Count") is not None:
+                    self.obj.setExpression(f"{prop}Count", None)
         self._set_pattern(self._pattern_wanted(self.form))
         self.doc.recompute()
         self._show_pattern(self.form)

@@ -129,6 +129,27 @@ class TestCutoutPatternPanel(PatternPanelFixture):
         self.assertEqual(dict(cutout.ExpressionEngine).get("AlongForwardCount"), f"{varset.Name}.Slots")
         self.assertEqual(self.cut(body, cutout), 5)
 
+    def test_unchecking_removes_an_expression_on_a_count_and_cancel_brings_it_back(self):
+        """S3 with S4: unchecked, the sketch alone is cut even when an expression drove a count."""
+        body, cutout, panel = self.new_panel()
+        varset = self.doc.addObject("App::VarSet", "VarSet")
+        varset.addProperty("App::PropertyInteger", "Slots")
+        varset.Slots = 3
+        self.set_pattern(panel)
+        cutout.setExpression("AlongForwardCount", f"{varset.Name}.Slots")
+        self.doc.recompute()
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.cut(body, cutout), 4)
+        panel = self.edit_cutout(cutout)
+        panel.form.groupBox_pattern.setChecked(False)
+        self.events()
+        self.assertNotIn("AlongForwardCount", dict(cutout.ExpressionEngine))
+        self.assertEqual(cutout.AlongForwardCount, 0)
+        self.assertEqual(self.cut(body, cutout), 1)
+        self.assertTrue(panel.reject())
+        self.assertEqual(dict(cutout.ExpressionEngine).get("AlongForwardCount"), f"{varset.Name}.Slots")
+        self.assertEqual(self.cut(body, cutout), 4)
+
     def test_a_pitch_smaller_than_the_sketch_warns_without_stopping_ok(self):
         """S5: the circle is 10 mm long along the profile."""
         body, cutout, panel = self.new_panel()
