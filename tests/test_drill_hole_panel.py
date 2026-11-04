@@ -830,5 +830,140 @@ class TestDrillHoleSpanish(DrillHolePanelFixture):
         self.assertEqual(obj.ReferenceWarning, "La referencia cambió, revisá el agujero.")
 
 
+class TestDrillHoleExpressions(DrillHolePanelFixture):
+    """Every field takes a FreeCAD expression (Fx), bound to the property of the drill hole shown."""
+
+    FIELDS = (
+        ("spin_offset_along", "OffsetAlong"),
+        ("spin_offset_across", "OffsetAcross"),
+        ("spin_diameter", "Diameter"),
+        ("spin_count", "Count"),
+        ("spin_pitch", "Pitch"),
+        ("spin_depth", "ExtrusionLength"),
+    )
+
+    def varset(self, diameter):
+        varset = self.doc.addObject("App::VarSet", "VarSet")
+        varset.addProperty("App::PropertyLength", "Diameter")
+        varset.Diameter = diameter
+        self.doc.recompute()
+        return varset
+
+    def bindings(self, panel):
+        return {prop: Gui.ExpressionBinding(getattr(panel.form, field)).isBound() for field, prop in self.FIELDS}
+
+    def test_the_fields_are_bound_once_the_preview_exists(self):
+        body = self.tube()
+        top = self.face_towards(body, UP)
+        before = self.names()
+        panel = self.run_command((body, top))
+        # Without a vertex there is no drill hole yet: plain fields.
+        self.assertEqual(set(self.bindings(panel).values()), {False})
+        self.click(body, self.vertex_at(body, CORNER))
+        wait()
+        hole = self.preview(before)
+        self.assertEqual(set(self.bindings(panel).values()), {True})
+        # What the Fx editor does: the expression goes on the bound property and the field shows its value.
+        varset = self.varset(6.0)
+        hole.setExpression("Diameter", f"{varset.Name}.Diameter")
+        self.doc.recompute()
+        self.assertTrue(Gui.ExpressionBinding(panel.form.spin_diameter).hasExpression())
+        self.assertAlmostEqual(panel.form.spin_diameter.value(), 6.0, places=6)
+        self.assertTrue(panel.reject())
+
+    def test_ok_keeps_an_expression_set_in_the_panel_in_one_undo_step(self):
+        varset = self.varset(6.0)
+        body, panel, hole, before = self.previewed_panel()
+        hole.setExpression("Diameter", f"{varset.Name}.Diameter")
+        panel.form.spin_count.setValue(2)
+        wait()
+        self.assertTrue(panel.accept())
+        self.assertEqual(dict(hole.ExpressionEngine), {"Diameter": f"{varset.Name}.Diameter"})
+        self.assertEqual((hole.Diameter.Value, hole.Count), (6.0, 2))
+        self.assertAlmostEqual(hole.Shape.Volume, body.Shape.Volume - 2 * hole_volume(6.0, WALL), places=3)
+        varset.Diameter = 4.0
+        self.doc.recompute()
+        self.assertAlmostEqual(hole.Shape.Volume, body.Shape.Volume - 2 * hole_volume(4.0, WALL), places=3)
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.doc.undo()
+        self.assertEqual(self.names(), before)
+
+    def test_an_expression_is_kept_when_the_preview_is_made_again(self):
+        varset = self.varset(6.0)
+        body, panel, hole, before = self.previewed_panel()
+        hole.setExpression("Diameter", f"{varset.Name}.Diameter")
+        self.doc.recompute()
+        # Another face without the vertex drops the preview; its vertex makes a new one.
+        bottom = self.face_towards(body, App.Vector(0, 0, -1))
+        self.click(body, bottom)
+        wait()
+        self.assertEqual(self.names(), before)
+        self.click(body, self.vertex_at(body, BOTTOM_CORNER))
+        wait()
+        again = self.preview(before)
+        self.assertEqual(dict(again.ExpressionEngine), {"Diameter": f"{varset.Name}.Diameter"})
+        self.assertEqual(set(self.bindings(panel).values()), {True})
+        self.assertTrue(Gui.ExpressionBinding(panel.form.spin_diameter).hasExpression())
+        self.assertTrue(panel.accept())
+        self.assertEqual(again.getStatusString(), "Valid")
+        self.assertAlmostEqual(again.Diameter.Value, 6.0, places=6)
+
+    def test_cancel_of_a_new_hole_with_an_expression_leaves_the_document_unchanged(self):
+        varset = self.varset(6.0)
+        body, panel, hole, before = self.previewed_panel()
+        hole.setExpression("Diameter", f"{varset.Name}.Diameter")
+        self.doc.recompute()
+        self.assertTrue(panel.reject())
+        self.assertEqual(self.names(), before)
+        self.assertTrue(body.ViewObject.Visibility)
+
+    def test_an_existing_expression_is_shown_and_kept_while_other_fields_change(self):
+        body, obj = self.existing()
+        varset = self.varset(8.0)
+        obj.setExpression("Diameter", f"{varset.Name}.Diameter")
+        self.doc.recompute()
+        self.doc.clearUndos()
+        panel = self.edit(obj)
+        form = panel.form
+        self.assertEqual(set(self.bindings(panel).values()), {True})
+        self.assertTrue(Gui.ExpressionBinding(form.spin_diameter).hasExpression())
+        self.assertAlmostEqual(form.spin_diameter.value(), 8.0, places=6)
+        form.spin_count.setValue(2)
+        wait()
+        self.assertTrue(panel.accept())
+        self.assertEqual(dict(obj.ExpressionEngine), {"Diameter": f"{varset.Name}.Diameter"})
+        self.assertEqual(obj.Count, 2)
+        varset.Diameter = 6.0
+        self.doc.recompute()
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - 2 * hole_volume(6.0, WALL), places=3)
+
+    def test_ok_with_only_an_expression_set_keeps_it_in_one_undo_step(self):
+        _, obj = self.existing()
+        varset = self.varset(6.0)
+        self.doc.clearUndos()
+        panel = self.edit(obj)
+        obj.setExpression("Diameter", f"{varset.Name}.Diameter")
+        self.doc.recompute()
+        wait()
+        self.assertTrue(panel.accept())
+        self.assertEqual(dict(obj.ExpressionEngine), {"Diameter": f"{varset.Name}.Diameter"})
+        self.assertEqual(self.doc.UndoCount, 1)
+
+    def test_cancel_with_undo_off_removes_an_expression_set_in_the_panel(self):
+        body, obj = self.existing()
+        varset = self.varset(6.0)
+        stored = self.values(obj)
+        panel = self.edit(obj)
+        self.doc.UndoMode = 0
+        self.addCleanup(setattr, self.doc, "UndoMode", 1)
+        obj.setExpression("Diameter", f"{varset.Name}.Diameter")
+        self.doc.recompute()
+        wait()
+        self.assertTrue(panel.reject())
+        self.assertEqual(dict(obj.ExpressionEngine), {})
+        self.assertEqual(self.values(obj), stored)
+        self.assertAlmostEqual(obj.Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
+
+
 if __name__ == "__main__":
     unittest.main()
