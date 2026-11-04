@@ -127,6 +127,8 @@ class DrillHoleTaskPanel:
         # A recompute pumps Qt events: an update asked for meanwhile runs once it ends.
         self._recomputing = False
         self._pending = False
+        # OK or Cancel pressed during a recompute: it runs once the recompute ends.
+        self._deferred = None
         # Value changes fire one by one while typing: the preview waits this long for the next one.
         self._preview_timer = QtCore.QTimer()
         self._preview_timer.setSingleShot(True)
@@ -500,12 +502,16 @@ class DrillHoleTaskPanel:
                 self._pending = False
                 if force or self.form.cb_auto_update.isChecked():
                     self._preview(force)
-                if not (self._pending and self._active()):
+                # OK pressed meanwhile previews the last values itself, Cancel drops them.
+                if not (self._pending and self._active()) or self._deferred is not None:
                     break
         finally:
             self._recomputing = False
         if self._active():
             self._show_status()
+        deferred, self._deferred = self._deferred, None
+        if deferred is not None and self._active() and deferred():
+            self._close_dialog()
 
     def _preview(self, force):
         """Recompute the shown drill hole for the panel values; without a face and a vertex the preview goes."""
@@ -639,7 +645,21 @@ class DrillHoleTaskPanel:
         if gui_doc is not None and gui_doc.getInEdit() is not None:
             gui_doc.resetEdit()
 
+    def _close_dialog(self):
+        """Close the dialog after OK or Cancel ran on their own (pressed during a recompute)."""
+        if Gui.Control.activeDialog():
+            Gui.Control.closeDialog()
+
+    def _defer(self, button):
+        """A recompute pumps Qt events: OK or Cancel pressed during it waits for it to end."""
+        if not self._recomputing:
+            return False
+        self._deferred = button
+        return True
+
     def reject(self):
+        if self._defer(self.reject):
+            return False
         self.clean()
         if self.edited is None:
             self._discard_preview()
@@ -656,6 +676,8 @@ class DrillHoleTaskPanel:
         return ""
 
     def accept(self):
+        if self._defer(self.accept):
+            return False
         problem = self._missing()
         if problem:
             self._show([problem])
