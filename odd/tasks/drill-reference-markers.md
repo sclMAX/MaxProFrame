@@ -14,7 +14,7 @@ Branches (chain, one PR each): fix/fx-icon-alignment -> feat/drill-corner-marker
 - T1 (S1) Reposition the Fx icon after binding, in expression_fields.py. Route: inline. Commit: 98e6673. Done.
 - T2 (S2) Clickable corner markers on the picked face in the Drill Hole panel; Next corner stays. Route: inline. Commit: 115f7cf. Done.
 - T3 (S3-S5) Midpoint markers and centered offsets, design in L6. Route: worker (context backstop), branch feat/drill-midpoint-reference. Commit: 098105b. Done.
-- T4 (S2, S3, L10-L11) One orange marker at the real measuring origin; a click on a marker selects nothing under it and reports nothing. Route: worker (context backstop), branch feat/drill-midpoint-reference. Commit: pending.
+- T4 (S2, S3, L10-L11) One orange marker at the real measuring origin; a click on a marker selects nothing under it and reports nothing. Route: worker (context backstop), branch feat/drill-midpoint-reference. Commit: 1d38d4b. Done.
 
 ## Log
 
