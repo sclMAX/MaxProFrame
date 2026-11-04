@@ -96,7 +96,8 @@ def _spin_changed(spin, stored):
     A stored length finer than the field (4.7625 shown as 4.76) is kept until the field is changed.
     """
     # Rounded the way the field rounds it: Python's round(30.125, 2) is 30.12, the field shows 30.13.
-    shown = spin.valueFromText(spin.textFromValue(stored))
+    # Not through the field's textFromValue: FreeCAD's expression field gives every decimal there.
+    shown = float(QtCore.QLocale.c().toString(stored, "f", spin.decimals()))
     return abs(shown - spin.value()) > TOLERANCE
 
 
