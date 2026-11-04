@@ -443,6 +443,102 @@ class TestDrillHoleCornerPicks(DrillHolePanelFixture):
         self.assertTrue(panel.reject())
         self.assertIsNone(panel.corner_marker())
 
+    def test_the_corners_of_the_picked_face_are_clickable_markers(self):
+        body = self.tube()
+        top, side = self.face_towards(body, UP), self.face_towards(body, SIDE)
+        top_face = body.Shape.getElement(top)
+        corners = [self.vertex_at(body, v.Point) for v in top_face.Vertexes]
+        far = self.vertex_at(body, FAR_CORNER)
+        self.doc.clearUndos()
+        before = self.names()
+        panel = self.run_command()
+        self.assertEqual(panel.reference_markers(), [])
+        self.click(body, top)
+        markers = panel.reference_markers()
+        self.assertEqual([name for name, _ in markers], corners)
+        for (name, point), vertex in zip(markers, top_face.Vertexes):
+            self.assertTrue(point.isEqual(vertex.Point, 1e-6), (name, point))
+        # A marker picks its corner, as a click on the vertex does.
+        self.assertTrue(panel.pick_marker(far))
+        self.assertEqual((panel.face, panel.vertex), ((body, top), far))
+        self.assertEqual(panel.form.vertex_label.text(), far)
+        self.assertTrue(panel.corner_marker().isEqual(App.Vector(*FAR_CORNER), 1e-6))
+        wait()
+        obj = self.preview(before)
+        self.assertEqual(obj.ReferenceVertex, far)
+        # A vertex off the face is no marker: nothing changes.
+        off_face = next(self.vertex_at(body, v.Point) for v in body.Shape.getElement(side).Vertexes if v.Point.z < 0)
+        self.assertFalse(panel.pick_marker(off_face))
+        self.assertEqual(panel.vertex, far)
+        self.assertTrue(panel.reject())
+        self.assertEqual(panel.reference_markers(), [])
+        self.assertEqual(self.names(), before)
+        self.assertEqual(self.doc.UndoCount, 0)
+
+    def test_markers_follow_a_profile_in_a_moved_container(self):
+        body = self.tube()
+        part = self.doc.addObject("App::Part", "Part")
+        part.addObjects([body.AttachmentSupport[0][0], body])
+        part.Placement.Base = App.Vector(0, 500, 0)
+        self.doc.recompute()
+        top = self.face_towards(body, UP)
+        panel = self.run_command()
+        self.click(body, top)
+        points = dict(panel.reference_markers())
+        self.assertTrue(points[self.vertex_at(body, FAR_CORNER)].isEqual(App.Vector(350, 525, 25), 1e-6))
+        self.assertTrue(panel.reject())
+
+    def test_a_left_click_on_a_marker_picks_it_and_the_view_does_not_select_under_it(self):
+        from pivy import coin
+
+        body = self.tube()
+        top = self.face_towards(body, UP)
+        corner, far = self.vertex_at(body, CORNER), self.vertex_at(body, FAR_CORNER)
+        panel = self.run_command()
+        self.click_at(body, top, (-40, -18, 25))
+        self.assertEqual(panel.vertex, corner)
+        # The screen is the xy plane of the model, in pixels.
+        panel._viewport_point = lambda point: (point.x, point.y)
+
+        def press(x, y, state=coin.SoMouseButtonEvent.DOWN, button=coin.SoMouseButtonEvent.BUTTON1):
+            event = coin.SoMouseButtonEvent()
+            event.setButton(button)
+            event.setState(state)
+            event.setPosition(coin.SbVec2s(x, y))
+            handled = []
+            panel._on_mouse_button(SimpleNamespace(getEvent=lambda: event, setHandled=lambda: handled.append(1)))
+            self.events()
+            return bool(handled)
+
+        # Off every marker: the view goes on as usual.
+        self.assertFalse(press(150, 0))
+        self.assertFalse(press(150, 0, coin.SoMouseButtonEvent.UP))
+        self.assertEqual(panel.vertex, corner)
+        # Another button near a marker: ignored.
+        self.assertFalse(press(345, 21, button=coin.SoMouseButtonEvent.BUTTON3))
+        self.assertEqual(panel.vertex, corner)
+        # Within the hit radius of the far corner: it is picked, press and release are kept from the view.
+        self.assertTrue(press(345, 21))
+        self.assertEqual(panel.vertex, far)
+        self.assertTrue(press(345, 21, coin.SoMouseButtonEvent.UP))
+        self.assertFalse(press(345, 21, coin.SoMouseButtonEvent.UP))
+        # The nearest marker wins.
+        self.assertTrue(press(-48, -24))
+        self.assertEqual(panel.vertex, corner)
+        self.assertTrue(panel.reject())
+        # Closed: clicks go to the view.
+        self.assertFalse(press(345, 21))
+        self.assertEqual(panel.vertex, corner)
+
+    def test_marker_at_takes_the_nearest_marker_within_the_radius(self):
+        markers = [("Vertex1", App.Vector(0, 0, 0)), ("Vertex2", App.Vector(30, 0, 0))]
+        project = lambda point: (point.x, point.y)  # noqa: E731
+        self.assertEqual(create_drill_hole_tool.marker_at(markers, (4, 3), project), markers[0])
+        self.assertEqual(create_drill_hole_tool.marker_at(markers, (22, 0), project), markers[1])
+        self.assertEqual(create_drill_hole_tool.marker_at(markers, (10, 0), project), markers[0])
+        self.assertIsNone(create_drill_hole_tool.marker_at(markers, (15, 0), project))
+        self.assertIsNone(create_drill_hole_tool.marker_at([], (0, 0), project))
+
     def test_next_corner_steps_through_the_corners_of_the_face(self):
         body = self.tube()
         top = self.face_towards(body, UP)
