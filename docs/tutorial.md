@@ -379,6 +379,27 @@ Select the face and the sketch (in either order) and click **Cutout / Hole**: th
 ![alt text](images/92-extrudedcutout-done.png)
 
 
+## Drill Hole
+
+**Drill Hole** (Spanish *Agujero*) drills round holes on a planar face of a profile, placed from a vertex of that face, without drawing a sketch. Use **Cutout / Hole** for slots and free shapes.
+
+1. Click on the **Drill Hole** command, next to **Cutout / Hole**. The button is always active while a document is open.
+2. Click a planar face of a profile, a trimmed profile or a cutout, then one of the vertices of that face: the holes are placed from that vertex. A face and a vertex selected before the command are used too. Click again to change them; a new face keeps the vertex only when the vertex is on it. End faces, edges and curved faces (a round tube, the fillets of a beam) are refused, and the panel says why.
+3. Set the holes:
+   - **Offset along** and **Offset across**: the distance from the vertex to the first hole, measured into the face, along the profile and across it. "25 mm from the corner" keeps its meaning when the profile is rotated.
+   - **Diameter** of the holes.
+   - **Count** and **Pitch**: more than one hole makes a row along the profile, **Pitch** apart, in the same object.
+   - **Cut type** and **Depth**: **One wall** (default) drills only the wall under the face, **Through All** drills every wall the holes cross, and **Distance** drills as deep as **Depth**. With **One wall** and **Through All** the depth box shows the thickness of the wall under the face.
+4. With **Update automatically** checked (the default, remembered), the holes are previewed once you stop typing. Uncheck it to change several values on a heavy model; the panel then says **Pending changes**.
+5. **OK** creates the drill hole with the panel values, also when the preview is out of date, in one Undo step. It goes in the same Part or folder as the profile and is labelled after it, for example `Profile_TC40x40x1.5_000_Dh`. **Cancel** leaves the document unchanged.
+
+To change a drill hole, double-click it: the same panel opens with the stored values, and clicks change the face and the vertex. **OK** keeps the changes in one Undo step, or none when nothing changed; **Cancel** restores the stored values. When you move the hole to another profile, the profile it left is shown again, and a hole still labelled after its old profile is labelled after the new one.
+
+The hole remembers where its vertex was. When the profile changes and FreeCAD renumbers its vertices, the hole finds its vertex again and stays in place. When the vertex is gone (for example an **Extend / Cut** or an end offset removed that corner), the hole keeps its place and its **Reference Warning** property, also shown in the panel, says "The reference vertex changed: check the hole." Double-click the hole and pick a vertex to place it again; the warning also clears when the vertex comes back.
+
+The cut list and the IDs treat a drill hole like a cutout.
+
+
 ## Add Other elements to your design
 
 Often, when building metallic frames, you will need to add laser-cut parts, or welded nut to your design.

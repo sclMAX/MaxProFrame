@@ -5,6 +5,7 @@ import unittest
 
 import FreeCAD as App
 import Part
+from miter_helpers import use_language
 from test_end_miter_geometry import CENTER
 from test_notch_geometry import TrimFixture
 
@@ -21,6 +22,11 @@ ONE_HOLE = math.pi * (DIAMETER / 2) ** 2 * WALL
 
 
 class DrillHoleFixture(TrimFixture):
+    def setUp(self):
+        super().setUp()
+        # Messages are checked in English: an earlier test may leave FreeCAD in Spanish.
+        use_language(self, "English", "en_US")
+
     def tube(self):
         return self.make_profile(self.make_sketch(PATH), "Edge1", **CENTER)
 

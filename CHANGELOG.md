@@ -1,5 +1,9 @@
 ## Changelog
 
+* Unreleased
+
+  - Drill round holes without a sketch with the new **Drill Hole** command (Spanish *Agujero*), next to **Cutout / Hole** (see the [tutorial](docs/tutorial.md#drill-hole)): click a planar face of a profile, a trimmed profile or a cutout, then one of its vertices, and set the **Offset along** and **Offset across** the profile from that vertex, the **Diameter**, a **Count** and **Pitch** for a row of holes, and the **Cut type** (**One wall**, **Through All** or **Distance**) with its **Depth**. The holes are previewed under **Update automatically**; **OK** creates them in one Undo step and **Cancel** leaves the document unchanged. Double-clicking a drill hole opens the same panel. The hole keeps its place when the profile changes and its vertices are renumbered; when its vertex is gone it stays where it was and its **Reference Warning** says so. Curved faces are refused with a message. A hole moved to another profile shows the profile it left again and is labelled after the new one. The cut list treats a drill hole like a cutout.
+
 * v1.4.0 (2026-11-03)
 
   - Leave a **Gap** around the target of a **Notch**: the panel has the same **Gap** box as **Extend / Cut**, 0 mm by default, and the target shape is grown by the gap in every direction before cutting, so the mouth of the notch keeps the same clearance on flat faces, around the edges of a rotated tube and along a round pipe (see the [tutorial](docs/tutorial.md#via-notch-command)). Double-clicking a Notch shows its Gap; the preview, **OK** (one Undo step) and **Cancel** treat it like the other values. The value is stored in the existing **TrimGap** property, so notches saved before keep a gap of 0 and are unchanged. A target that cannot be grown by the gap (for example a single face) makes the Notch fail with the reason.

@@ -9,6 +9,7 @@ from unittest.mock import patch
 import FreeCAD as App
 import FreeCADGui as Gui
 import Part
+from miter_helpers import use_language
 from PySide import QtWidgets
 from test_cutout_flow import END, SIDE, UP, CutoutFixture
 from test_drill_hole_geometry import DIAMETER, ONE_HOLE, WALL, DrillHoleFixture
@@ -685,6 +686,75 @@ class TestDrillHoleEdit(DrillHolePanelFixture):
         self.assertEqual(panel.form.warning_label.text(), WARNING)
         self.assertFalse(panel.form.warning_label.isHidden())
         self.assertTrue(panel.reject())
+
+
+class TestDrillHoleSpanish(DrillHolePanelFixture):
+    def test_the_command_the_panel_and_its_messages_are_spanish(self):
+        # S7: Drill Hole is Agujero in Spanish; the panel, its messages and the warning follow.
+        body = self.tube()
+        top = self.face_towards(body, UP)
+        corner, bottom = self.vertex_at(body, CORNER), self.vertex_at(body, BOTTOM_CORNER)
+        use_language(self, "Spanish", "es_ES")
+        resources = DrillHoleCommand().GetResources()
+        self.assertEqual(App.Qt.translate("MaxProFrame_DrillHole", resources["MenuText"]), "Agujero")
+        self.assertTrue(
+            App.Qt.translate("MaxProFrame_DrillHole", resources["ToolTip"]).startswith(
+                "<b>Agujero</b><br><br>Hacé clic en una cara plana de un perfil, un perfil recortado o un calado"
+            )
+        )
+        panel = self.run_command()
+        form = panel.form
+        self.assertEqual(form.windowTitle(), "Agujero")
+        self.assertEqual(
+            [box.title() for box in (form.groupBox_reference, form.groupBox_holes, form.groupBox_preview)],
+            ["Referencia", "Agujeros", "Previsualización"],
+        )
+        self.assertEqual(
+            [
+                getattr(form, f"label_{name}").text()
+                for name in ("offset_along", "offset_across", "diameter", "count", "pitch", "cut_type", "depth")
+            ],
+            [
+                "Desplazamiento longitudinal",
+                "Desplazamiento transversal",
+                "Diámetro",
+                "Cantidad",
+                "Paso",
+                "Tipo de corte",
+                "Profundidad",
+            ],
+        )
+        self.assertEqual(form.combo_cut_type.currentText(), "Una pared")
+        self.assertEqual(form.cb_auto_update.text(), "Actualizar automáticamente")
+        self.assertEqual(
+            form.hint_label.text(),
+            "Hacé clic en una cara y luego en uno de sus vértices: los agujeros se ubican a partir de ese vértice. "
+            "Hacé clic de nuevo para cambiarlos.",
+        )
+        self.assertEqual(
+            form.face_label.text(), "Hacé clic en una cara plana de un perfil, un perfil recortado o un calado."
+        )
+        self.assertEqual(form.vertex_label.text(), "Hacé clic en un vértice de la cara.")
+        self.assertEqual(self.status(panel), "Sin previsualización")
+        self.click(body, corner)
+        self.assertEqual(self.message(panel), "Hacé clic primero en una cara y luego en uno de sus vértices.")
+        self.click(body, top)
+        self.assertFalse(panel.accept())
+        self.assertEqual(self.message(panel), "Seleccioná un vértice de la cara.")
+        self.click(body, bottom)
+        self.assertEqual(self.message(panel), f"{body.Label}: {bottom} no es un vértice de {top}")
+        before = self.names()
+        self.click(body, corner)
+        wait()
+        obj = self.preview(before)
+        self.assertEqual(self.status(panel), "Previsualización actualizada")
+        self.assertEqual(obj.getDocumentationOfProperty("Count"), "Cantidad de agujeros")
+        self.assertTrue(panel.accept())
+        # S4: the warning of a hole whose corner is gone.
+        obj.OffsetAlong = 230.0
+        body.OffsetB = -100.0
+        self.doc.recompute()
+        self.assertEqual(obj.ReferenceWarning, "La referencia cambió, revisá el agujero.")
 
 
 if __name__ == "__main__":
