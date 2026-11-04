@@ -18,7 +18,7 @@ Branches (chain, one PR each): fix/fx-icon-alignment -> feat/drill-corner-marker
 - T3 (S3-S5) Midpoint markers and centered offsets, design in L6. Route: worker (context backstop), branch feat/drill-midpoint-reference. Commit: 098105b. Done.
 - T4 (S2, S3, L10-L11) One orange marker at the real measuring origin; a click on a marker selects nothing under it and reports nothing. Route: worker (context backstop), branch feat/drill-midpoint-reference. Commit: 1d38d4b. Done.
 
-- T5 (S6, S7, L13-L15) Nine hot points, one click each; face click takes the nearest; no Next corner; fixed sign in centered directions. Route: worker (context backstop), branch feat/drill-midpoint-reference. Commit: pending.
+- T5 (S6, S7, L13-L15) Nine hot points, one click each; face click takes the nearest; no Next corner; fixed sign in centered directions. Route: worker (context backstop), branch feat/drill-midpoint-reference. Commit: 4c69486. Done.
 
 ## Log
 
