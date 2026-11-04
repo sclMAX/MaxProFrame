@@ -1079,6 +1079,34 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>{}: {} is not planar</source><translation>{}: {} no es plana</translation></message>
     <message><source>{}: {} is an end face (wall thickness)</source><translation>{}: {} es una cara de extremo (espesor de pared)</translation></message>
     <message><source>{}: {} is not used, a cutout takes one face</source><translation>{}: {} no se usa, un calado lleva una sola cara</translation></message>
+    <message><source>Drill Hole</source><translation>Agujero</translation></message>
+    <message><source>Reference</source><translation>Referencia</translation></message>
+    <message><source>Click a face, then one of its vertices: the holes are placed from that vertex. Click again to change them.</source><translation>Hacé clic en una cara y luego en uno de sus vértices: los agujeros se ubican a partir de ese vértice. Hacé clic de nuevo para cambiarlos.</translation></message>
+    <message><source>Holes</source><translation>Agujeros</translation></message>
+    <message><source>Offset along</source><translation>Desplazamiento longitudinal</translation></message>
+    <message><source>Offset across</source><translation>Desplazamiento transversal</translation></message>
+    <message><source>Count</source><translation>Cantidad</translation></message>
+    <message><source>Pitch</source><translation>Paso</translation></message>
+    <message><source>{}: {} is not used, a drill hole takes one face</source><translation>{}: {} no se usa, un agujero lleva una sola cara</translation></message>
+    <message><source>{}: {} is not used, a drill hole takes one vertex</source><translation>{}: {} no se usa, un agujero lleva un solo vértice</translation></message>
+    <message><source>Click a face first, then one of its vertices.</source><translation>Hacé clic primero en una cara y luego en uno de sus vértices.</translation></message>
+    <message><source>{}: {} is not a vertex of {}</source><translation>{}: {} no es un vértice de {}</translation></message>
+    <message><source>Click a vertex of the face.</source><translation>Hacé clic en un vértice de la cara.</translation></message>
+    <message><source>Select a vertex of the face.</source><translation>Seleccioná un vértice de la cara.</translation></message>
+    <message><source>Drill Hole: the face is square to the profile axis.</source><translation>Agujero: la cara es perpendicular al eje del perfil.</translation></message>
+    <message><source>Drill Hole: {} of {} is not planar.</source><translation>Agujero: {} de {} no es plana.</translation></message>
+    <message><source>Drill Hole: no face to drill.</source><translation>Agujero: no hay ninguna cara para agujerear.</translation></message>
+    <message><source>The reference vertex changed: check the hole.</source><translation>La referencia cambió, revisá el agujero.</translation></message>
+    <message><source>Vertex of the face the hole is placed from</source><translation>Vértice de la cara a partir del cual se ubica el agujero</translation></message>
+    <message><source>Distance from the vertex to the first hole, along the profile</source><translation>Distancia del vértice al primer agujero, a lo largo del perfil</translation></message>
+    <message><source>Distance from the vertex to the holes, across the profile</source><translation>Distancia del vértice a los agujeros, transversal al perfil</translation></message>
+    <message><source>Hole diameter</source><translation>Diámetro del agujero</translation></message>
+    <message><source>Number of holes</source><translation>Cantidad de agujeros</translation></message>
+    <message><source>Distance between two holes, along the profile</source><translation>Distancia entre dos agujeros, a lo largo del perfil</translation></message>
+    <message><source>Reference vertex position, local to the profile</source><translation>Posición del vértice de referencia, local al perfil</translation></message>
+    <message><source>Reference face normal, local to the profile</source><translation>Normal de la cara de referencia, local al perfil</translation></message>
+    <message><source>Face and vertex the reference was taken from</source><translation>Cara y vértice de los que se tomó la referencia</translation></message>
+    <message><source>Set when the reference vertex is gone and the hole kept its place</source><translation>Se completa cuando el vértice de referencia ya no está y el agujero conservó su posición</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ParametricLine</name>
@@ -1114,6 +1142,11 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <name>MaxProFrame_AddExtrudeCutout</name>
     <message><source>Cutout / Hole</source><translation>Calado</translation></message>
     <message><source>&lt;b&gt;Cutout / Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile or a cutout, then OK: a sketch holding the face outline is created on the face and opened. Draw the hole and close the sketch to cut it.&lt;br&gt;&lt;br&gt;Or preselect one face and one sketch to cut with that sketch directly.</source><translation>&lt;b&gt;Calado&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego en Aceptar: se crea en la cara un croquis con su contorno y se abre. Dibujá el calado y cerrá el croquis para cortar.&lt;br&gt;&lt;br&gt;O preseleccioná una cara y un croquis para cortar directamente con ese croquis.</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_DrillHole</name>
+    <message><source>Drill Hole</source><translation>Agujero</translation></message>
+    <message><source>&lt;b&gt;Drill Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile or a cutout, then one of its vertices: round holes are drilled at the offsets from that vertex, one or a row of them, with a diameter and a depth.</source><translation>&lt;b&gt;Agujero&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego en uno de sus vértices: se perforan agujeros redondos a las distancias indicadas desde ese vértice, uno solo o una fila, con un diámetro y una profundidad.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_Link</name>

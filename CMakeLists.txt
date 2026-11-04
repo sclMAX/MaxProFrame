@@ -14,6 +14,7 @@ set(Namespace_SRCS
         freecad/maxproframe/resources/icons/parts_list.svg
         freecad/maxproframe/resources/icons/corner-end-trim.svg
         freecad/maxproframe/resources/icons/cutout-hole.svg
+        freecad/maxproframe/resources/icons/drill-hole.svg
         freecad/maxproframe/resources/icons/list-remove.svg
         freecad/maxproframe/resources/icons/extendcurve.svg
         freecad/maxproframe/resources/icons/list-add.svg

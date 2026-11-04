@@ -8,6 +8,7 @@ from PySide import QtWidgets
 
 from freecad.maxproframe import (  # noqa: F401  (importing registers the commands)
     create_bom_tool,
+    create_drill_hole_tool,
     create_edit_balloons_tool,
     create_end_miter_tool,
     create_extend_cut_tool,
@@ -58,6 +59,11 @@ EXPECTED = {
         "Cutout / Hole",
         "Calado",
         "Dibujá el calado y cerrá el croquis para cortar.",
+    ),
+    "MaxProFrame_DrillHole": (
+        "Drill Hole",
+        "Agujero",
+        "Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego en uno de sus vértices",
     ),
     "MaxProFrame_Link": (
         "Attached Link",

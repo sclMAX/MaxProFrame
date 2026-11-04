@@ -1,0 +1,702 @@
+import os
+
+import FreeCAD as App
+import FreeCADGui as Gui
+import Part
+from PySide import QtCore, QtGui
+
+from freecad.maxproframe.create_end_miter_tool import GAP_DELAY_MS, _alive_document, _failures
+from freecad.maxproframe.create_extend_cut_tool import (
+    _in_document,
+    _selected_items,
+    _trim_chain,
+    show_panel,
+    trimmed_body_problem,
+)
+from freecad.maxproframe.create_extruded_cutout_tool import CUT_TYPE_LABELS, MAX_DEPTH, MIN_DEPTH, face_problem
+from freecad.maxproframe.create_profiles_tool import place_in_container_of
+from freecad.maxproframe.drill_hole import (
+    DEFAULT_CUT_TYPE,
+    DEFAULT_DIAMETER,
+    DEFAULT_PITCH,
+    REFERENCE_TOLERANCE,
+    make_drill_hole,
+)
+from freecad.maxproframe.extruded_cutout import CUT_TYPES, wall_thickness
+from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, get_param_group, translate
+from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
+
+# Offsets of a new drill hole from its vertex, in mm.
+DEFAULT_OFFSET = 10.0
+# Ranges of the panel fields: offsets and pitch in mm, diameter in mm, count as the Count property allows.
+MAX_OFFSET = 1e6
+MIN_DIAMETER = 0.01
+MAX_COUNT = 1000
+# Two values closer than this are the same.
+TOLERANCE = 1e-9
+
+
+def _spin_changed(spin, stored):
+    """Whether ``spin`` shows another value than ``stored``, as far as its decimals tell.
+
+    A stored length finer than the field (4.7625 shown as 4.76) is kept until the field is changed.
+    """
+    # Rounded the way the field rounds it: Python's round(30.125, 2) is 30.12, the field shows 30.13.
+    shown = spin.valueFromText(spin.textFromValue(stored))
+    return abs(shown - spin.value()) > TOLERANCE
+
+
+def _element(obj, sub):
+    """The element ``sub`` of the shape of ``obj``, or None when it has none by that name."""
+    try:
+        return obj.Shape.getElement(sub) if sub else None
+    except Exception:
+        return None
+
+
+def _on_face(obj, face, vertex):
+    """Whether the vertex ``vertex`` of ``obj`` is a vertex of its face ``face``."""
+    face_shape, vertex_shape = _element(obj, face), _element(obj, vertex)
+    if not isinstance(face_shape, Part.Face) or not isinstance(vertex_shape, Part.Vertex):
+        return False
+    return any(point.Point.isEqual(vertex_shape.Point, REFERENCE_TOLERANCE) for point in face_shape.Vertexes)
+
+
+def _base_element(base, element):
+    """Name of the element of ``base`` that ``element`` (of a drill hole on ``base``) lies on, or None.
+
+    A vertex is the vertex of ``base`` at its place; a planar face is the face of ``base`` in its plane
+    that overlaps it most.
+    """
+    if isinstance(element, Part.Vertex):
+        for index, vertex in enumerate(base.Shape.Vertexes, start=1):
+            if vertex.Point.isEqual(element.Point, REFERENCE_TOLERANCE):
+                return f"Vertex{index}"
+        return None
+    if not isinstance(element, Part.Face) or not isinstance(element.Surface, Part.Plane):
+        return None
+    normal = element.normalAt(0, 0)
+    overlaps = []
+    for index, face in enumerate(base.Shape.Faces, start=1):
+        if not isinstance(face.Surface, Part.Plane) or face.normalAt(0, 0).getAngle(normal) > TOLERANCE**0.5:
+            continue
+        if abs((face.CenterOfMass - element.CenterOfMass).dot(normal)) > REFERENCE_TOLERANCE:
+            continue
+        overlaps.append((face.common(element).Area, f"Face{index}"))
+    area, name = max(overlaps, default=(0.0, None))
+    return name if area > TOLERANCE else None
+
+
+class DrillHoleTaskPanel:
+    """Face, vertex, offsets, diameter, linear pattern and depth of a drill hole, previewed live.
+
+    A click on a planar face of a profile, a trimmed profile or a cutout picks the face; a click on
+    one of its vertices picks the vertex the holes are placed from. Every other pick is explained.
+    A click on the drill hole being previewed or edited (it hides its base) stands for the face or
+    vertex of its base under the click.
+
+    Without ``edited`` the preview is the drill hole OK keeps, made once a face and a vertex are
+    picked, inside one transaction that Cancel aborts. With ``edited`` (an existing drill hole) the
+    edited hole itself is the preview, inside the edit transaction: OK keeps the changes in one Undo
+    step, or none when nothing changed; Cancel puts the stored values back.
+
+    The preview follows the panel under the Update automatically check box, like Extend / Cut does:
+    value changes once typing pauses, picks at once. OK applies the panel values in any case.
+    """
+
+    # Remembered state of the "Update automatically" check box, and its value until first changed.
+    auto_preview_param = "Drill Hole Auto Preview"
+    auto_preview_default = True
+
+    def __init__(self, selection=(), edited=None):
+        self.edited = edited
+        # The drill hole showing the panel: the edited one, or the preview once there is one.
+        self.obj = edited
+        self.doc = edited.Document if edited is not None else App.ActiveDocument
+        self.face = None
+        self.vertex = None
+        self._closed = False
+        self._transaction_open = False
+        # (body, visibility) of the bodies the preview hides, as they were before.
+        self._visibility = []
+        # Message area: what the last pick explained, then the last preview or OK failure.
+        self._messages = []
+        self._error = ""
+        # What the shown drill hole was last recomputed for (see _wanted).
+        self._previewed = ()
+        # A recompute pumps Qt events: an update asked for meanwhile runs once it ends.
+        self._recomputing = False
+        self._pending = False
+        # Value changes fire one by one while typing: the preview waits this long for the next one.
+        self._preview_timer = QtCore.QTimer()
+        self._preview_timer.setSingleShot(True)
+        self._preview_timer.setInterval(GAP_DELAY_MS)
+        self._preview_timer.timeout.connect(self._update_preview)
+        if edited is not None:
+            base, (face, *_) = edited.baseObject
+            self.face = (base, face)
+            self.vertex = edited.ReferenceVertex
+            # The values Cancel puts back, also when undo is disabled.
+            self._edit_before = self._values(edited)
+        self.form = keep_alive_until_destroyed(self._build_form())
+        # FreeCAD may close the dialog without OK or Cancel: the form is then deleted.
+        self.form.destroyed.connect(self._form_gone)
+        if edited is not None:
+            self._previewed = self._wanted()
+        messages = []
+        if edited is None:
+            messages = self._add_items(selection)
+        self._show(messages)
+        self._show_warning()
+        if edited is None:
+            self._update_preview()
+
+    def _build_form(self):
+        form = QtGui.QWidget()
+        form.setWindowTitle(translate("frameforge", "Drill Hole"))
+        layout = QtGui.QVBoxLayout(form)
+
+        form.groupBox_reference = QtGui.QGroupBox(translate("frameforge", "Reference"))
+        reference = QtGui.QVBoxLayout(form.groupBox_reference)
+        form.face_label = QtGui.QLabel()
+        form.vertex_label = QtGui.QLabel()
+        form.hint_label = QtGui.QLabel(
+            translate(
+                "frameforge",
+                "Click a face, then one of its vertices: the holes are placed from that vertex. Click again to change them.",
+            )
+        )
+        for label in (form.face_label, form.vertex_label, form.hint_label):
+            label.setWordWrap(True)
+            reference.addWidget(label)
+        layout.addWidget(form.groupBox_reference)
+
+        form.groupBox_holes = QtGui.QGroupBox(translate("frameforge", "Holes"))
+        fields = QtGui.QFormLayout(form.groupBox_holes)
+        obj = self.edited
+        form.spin_offset_along = self._length_spin(
+            -MAX_OFFSET, MAX_OFFSET, obj.OffsetAlong.Value if obj else DEFAULT_OFFSET
+        )
+        form.spin_offset_across = self._length_spin(
+            -MAX_OFFSET, MAX_OFFSET, obj.OffsetAcross.Value if obj else DEFAULT_OFFSET
+        )
+        form.spin_diameter = self._length_spin(
+            MIN_DIAMETER, MAX_OFFSET, obj.Diameter.Value if obj else DEFAULT_DIAMETER
+        )
+        form.spin_count = QtGui.QSpinBox()
+        form.spin_count.setRange(1, MAX_COUNT)
+        form.spin_count.setValue(obj.Count if obj else 1)
+        form.spin_pitch = self._length_spin(MIN_DEPTH, MAX_OFFSET, obj.Pitch.Value if obj else DEFAULT_PITCH)
+        form.combo_cut_type = QtGui.QComboBox()
+        for cut_type in CUT_TYPES:
+            form.combo_cut_type.addItem(translate("frameforge", CUT_TYPE_LABELS[cut_type]), cut_type)
+        form.combo_cut_type.setCurrentIndex(
+            max(form.combo_cut_type.findData(obj.CutType if obj else DEFAULT_CUT_TYPE), 0)
+        )
+        form.spin_depth = self._length_spin(MIN_DEPTH, MAX_DEPTH, obj.ExtrusionLength.Value if obj else MIN_DEPTH)
+        for name, label, widget in (
+            ("offset_along", translate("frameforge", "Offset along"), form.spin_offset_along),
+            ("offset_across", translate("frameforge", "Offset across"), form.spin_offset_across),
+            ("diameter", translate("frameforge", "Diameter"), form.spin_diameter),
+            ("count", translate("frameforge", "Count"), form.spin_count),
+            ("pitch", translate("frameforge", "Pitch"), form.spin_pitch),
+            ("cut_type", translate("frameforge", "Cut type"), form.combo_cut_type),
+            ("depth", translate("frameforge", "Depth"), form.spin_depth),
+        ):
+            setattr(form, f"label_{name}", QtGui.QLabel(label))
+            fields.addRow(getattr(form, f"label_{name}"), widget)
+        layout.addWidget(form.groupBox_holes)
+
+        form.groupBox_preview = QtGui.QGroupBox(translate("frameforge", "Preview"))
+        preview = QtGui.QVBoxLayout(form.groupBox_preview)
+        form.cb_auto_update = QtGui.QCheckBox(translate("frameforge", "Update automatically"))
+        form.cb_auto_update.setChecked(get_param_group().GetBool(self.auto_preview_param, self.auto_preview_default))
+        form.status_label = QtGui.QLabel()
+        preview.addWidget(form.cb_auto_update)
+        preview.addWidget(form.status_label)
+        layout.addWidget(form.groupBox_preview)
+
+        form.warning_label = QtGui.QLabel()
+        form.message_label = QtGui.QLabel()
+        for label in (form.warning_label, form.message_label):
+            label.setWordWrap(True)
+            layout.addWidget(label)
+        layout.addStretch()
+
+        self.form = form
+        self._set_depth()
+        self._enable_fields()
+        for spin in (
+            form.spin_offset_along,
+            form.spin_offset_across,
+            form.spin_diameter,
+            form.spin_count,
+            form.spin_pitch,
+            form.spin_depth,
+        ):
+            spin.valueChanged.connect(self._changed)
+        form.combo_cut_type.currentIndexChanged.connect(self._changed)
+        form.cb_auto_update.toggled.connect(self._on_auto_update_toggled)
+        return form
+
+    @staticmethod
+    def _length_spin(minimum, maximum, value):
+        spin = QtGui.QDoubleSpinBox()
+        spin.setRange(minimum, maximum)
+        spin.setDecimals(2)
+        spin.setSuffix(" mm")
+        spin.setValue(value)
+        return spin
+
+    def _set_depth(self):
+        """Keep the depth of a Distance cut, else show the thickness of the wall under the face."""
+        if self.form.combo_cut_type.currentData() == "Distance" or self.face is None:
+            return
+        base, face = self.face
+        try:
+            depth = wall_thickness(base.Shape, base.Shape.getElement(face))
+        except Exception:
+            depth = None
+        if depth:
+            spin = self.form.spin_depth
+            blocked = spin.blockSignals(True)
+            try:
+                spin.setValue(depth)
+            finally:
+                spin.blockSignals(blocked)
+
+    def _enable_fields(self):
+        self.form.spin_pitch.setEnabled(self.form.spin_count.value() > 1)
+        self.form.spin_depth.setEnabled(self.form.combo_cut_type.currentData() == "Distance")
+
+    @staticmethod
+    def _values(obj):
+        """(base, face, vertex, offsets, diameter, count, pitch, cut type, depth) of the drill hole ``obj``."""
+        base, (face, *_) = obj.baseObject
+        return (
+            base,
+            face,
+            obj.ReferenceVertex,
+            round(obj.OffsetAlong.Value, 9),
+            round(obj.OffsetAcross.Value, 9),
+            round(obj.Diameter.Value, 9),
+            obj.Count,
+            round(obj.Pitch.Value, 9),
+            obj.CutType,
+            round(obj.ExtrusionLength.Value, 9),
+        )
+
+    def _wanted(self):
+        """What the shown drill hole must be recomputed for to match the panel; () without a face and a vertex."""
+        if self.face is None or self.vertex is None:
+            return ()
+        form = self.form
+        cut_type = form.combo_cut_type.currentData()
+        return (
+            *self.face,
+            self.vertex,
+            round(form.spin_offset_along.value(), 9),
+            round(form.spin_offset_across.value(), 9),
+            round(form.spin_diameter.value(), 9),
+            form.spin_count.value(),
+            round(form.spin_pitch.value(), 9),
+            cut_type,
+            round(form.spin_depth.value(), 9) if cut_type == "Distance" else None,
+        )
+
+    def _apply_to(self, obj):
+        """Set the panel values on ``obj``; unchanged values are left alone, so not recomputed."""
+        form = self.form
+        base, face = self.face
+        if obj.baseObject[0] != base or tuple(obj.baseObject[1]) != (face,):
+            obj.baseObject = (base, [face])
+        if obj.ReferenceVertex != self.vertex:
+            obj.ReferenceVertex = self.vertex
+        for prop, spin in (
+            ("OffsetAlong", form.spin_offset_along),
+            ("OffsetAcross", form.spin_offset_across),
+            ("Diameter", form.spin_diameter),
+            ("Pitch", form.spin_pitch),
+        ):
+            if _spin_changed(spin, getattr(obj, prop).Value):
+                setattr(obj, prop, spin.value())
+        if obj.Count != form.spin_count.value():
+            obj.Count = form.spin_count.value()
+        cut_type = form.combo_cut_type.currentData()
+        if obj.CutType != cut_type:
+            obj.CutType = cut_type
+        if cut_type == "Distance" and _spin_changed(form.spin_depth, obj.ExtrusionLength.Value):
+            obj.ExtrusionLength = form.spin_depth.value()
+
+    def _restore(self, obj, values):
+        base, face, vertex, along, across, diameter, count, pitch, cut_type, depth = values
+        if obj.baseObject[0] != base or tuple(obj.baseObject[1]) != (face,):
+            obj.baseObject = (base, [face])
+        if obj.ReferenceVertex != vertex:
+            obj.ReferenceVertex = vertex
+        for prop, value in (
+            ("OffsetAlong", along),
+            ("OffsetAcross", across),
+            ("Diameter", diameter),
+            ("Pitch", pitch),
+            ("ExtrusionLength", depth),
+        ):
+            if abs(getattr(obj, prop).Value - value) > TOLERANCE:
+                setattr(obj, prop, value)
+        if obj.Count != count:
+            obj.Count = count
+        if obj.CutType != cut_type:
+            obj.CutType = cut_type
+
+    # Picks.
+
+    def _add_items(self, selection):
+        """Take the first usable face, then the first of its vertices, of the preselection; return the problems."""
+        messages = []
+        vertices = []
+        for obj, subs in selection:
+            problem = trimmed_body_problem(None, obj)
+            if problem is not None:
+                messages.append(problem)
+                continue
+            for sub in subs:
+                if isinstance(_element(obj, sub), Part.Vertex):
+                    vertices.append((obj, sub))
+                    continue
+                problem = face_problem(obj, sub)
+                if problem is not None:
+                    messages.append(problem)
+                elif self.face is None:
+                    self.face = (obj, sub)
+                else:
+                    messages.append(
+                        translate("frameforge", "{}: {} is not used, a drill hole takes one face").format(
+                            obj.Label, sub
+                        )
+                    )
+        for obj, sub in vertices:
+            problem = self._vertex_problem(obj, sub)
+            if problem is not None:
+                messages.append(problem)
+            elif self.vertex is None:
+                self.vertex = sub
+            else:
+                messages.append(
+                    translate("frameforge", "{}: {} is not used, a drill hole takes one vertex").format(obj.Label, sub)
+                )
+        self._set_depth()
+        return messages
+
+    def _vertex_problem(self, obj, sub):
+        """Why the vertex ``sub`` of ``obj`` cannot be the vertex of the face, or None when it can."""
+        if self.face is None:
+            return translate("frameforge", "Click a face first, then one of its vertices.")
+        base, face = self.face
+        if obj != base or not _on_face(base, face, sub):
+            return translate("frameforge", "{}: {} is not a vertex of {}").format(obj.Label, sub, face)
+        return None
+
+    def _pick(self, obj, sub):
+        """Take the face or vertex ``sub`` of ``obj``: (whether the reference changed, problems)."""
+        problem = trimmed_body_problem(None, obj)
+        if problem is not None:
+            return False, [problem]
+        if isinstance(_element(obj, sub), Part.Vertex):
+            problem = self._vertex_problem(obj, sub)
+            if problem is not None:
+                return False, [problem]
+            changed = self.vertex != sub
+            self.vertex = sub
+            return changed, []
+        # The shown drill hole, or one built on it, cannot be its own base.
+        problem = face_problem(obj, sub) or trimmed_body_problem(self.obj, obj)
+        if problem is not None:
+            return False, [problem]
+        if self.face == (obj, sub):
+            return False, []
+        if self.vertex is not None and not (self.face[0] == obj and _on_face(obj, sub, self.vertex)):
+            self.vertex = None
+        self.face = (obj, sub)
+        self._set_depth()
+        return True, []
+
+    def _on_base(self, obj, sub):
+        """(object, element) a click on ``sub`` of ``obj`` stands for: the base of the shown drill hole, else itself."""
+        if self.obj is None or obj != self.obj or not _in_document(obj) or not obj.baseObject:
+            return obj, sub
+        base = obj.baseObject[0]
+        name = _base_element(base, _element(obj, sub))
+        return (base, name) if name is not None else (obj, sub)
+
+    # Display.
+
+    def _show(self, messages):
+        """Show the face, the vertex and ``messages``."""
+        if self.face is not None and not _in_document(self.face[0]):
+            self.face, self.vertex = None, None
+        if self.face is None:
+            text = translate("frameforge", "Click a planar face of a profile, a trimmed profile or a cutout.")
+        else:
+            obj, face = self.face
+            text = f"{obj.Label} ({obj.Name}) {face}"
+        self.form.face_label.setText(text)
+        self.form.vertex_label.setText(self.vertex or translate("frameforge", "Click a vertex of the face."))
+        self._messages = list(messages)
+        self._error = ""
+        self._show_messages()
+        self._show_status()
+
+    def _show_messages(self):
+        self.form.message_label.setText("\n".join(self._messages + ([self._error] if self._error else [])))
+
+    def _show_status(self):
+        if self._previewed != self._wanted():
+            text = translate("frameforge", "Pending changes")
+        elif self.obj is not None and _in_document(self.obj):
+            text = translate("frameforge", "Preview updated")
+        else:
+            text = translate("frameforge", "No preview")
+        self.form.status_label.setText(text)
+
+    def _show_warning(self):
+        """Show the ReferenceWarning of the shown drill hole, hidden when it is empty."""
+        warning = self.obj.ReferenceWarning if self.obj is not None and _in_document(self.obj) else ""
+        self.form.warning_label.setText(warning)
+        self.form.warning_label.setVisible(bool(warning))
+
+    # Preview.
+
+    def _changed(self, *args):
+        """A value changed: preview once changes pause."""
+        if not self._active():
+            return
+        self._enable_fields()
+        self._show_status()
+        self._preview_timer.start()
+
+    def _on_auto_update_toggled(self, checked):
+        get_param_group(writable=True).SetBool(self.auto_preview_param, checked)
+        self._update_preview()
+
+    def _open_transaction(self):
+        if not self._transaction_open:
+            self.doc.openTransaction("Edit Drill Hole" if self.edited is not None else "Create Drill Hole")
+            self._transaction_open = True
+
+    def _update_preview(self, *args, force=False):
+        """Make the shown drill hole match the panel when Update automatically is checked (or ``force``).
+
+        Never recomputes while a recompute of the panel runs: an update asked for meanwhile follows it,
+        so the preview ends at the last values.
+        """
+        if not self._active():
+            return
+        if self._recomputing:
+            self._pending = True
+            return
+        self._recomputing = True
+        try:
+            while True:
+                self._pending = False
+                if force or self.form.cb_auto_update.isChecked():
+                    self._preview(force)
+                if not (self._pending and self._active()):
+                    break
+        finally:
+            self._recomputing = False
+        if self._active():
+            self._show_status()
+
+    def _preview(self, force):
+        """Recompute the shown drill hole for the panel values; without a face and a vertex the preview goes."""
+        # Taken before the recompute: a value typed during it is not previewed yet.
+        wanted = self._wanted()
+        if not force and wanted == self._previewed and (not wanted or _in_document(self.obj)):
+            return
+        self._error = ""
+        if not wanted:
+            if self.edited is None:
+                self._drop_preview()
+            self._previewed = ()
+            self._show_messages()
+            self._show_warning()
+            return
+        self._open_transaction()
+        try:
+            if self.edited is None and (
+                self.obj is None or not _in_document(self.obj) or self.obj.baseObject[0] != self.face[0]
+            ):
+                # A drill hole is named after its base: another base makes another preview.
+                self._drop_preview()
+                self._make_preview()
+            self._apply_to(self.obj)
+            self.doc.recompute()
+            self._error = _failures([self.obj])
+        except Exception as error:
+            self._error = str(error)
+        self._previewed = wanted
+        self._show_messages()
+        self._show_warning()
+
+    def _make_preview(self):
+        base, face = self.face
+        self._visibility = [
+            (body, body.ViewObject.Visibility)
+            for body in _trim_chain(base)
+            if getattr(body, "ViewObject", None) is not None
+        ]
+        self.obj = make_drill_hole((base, (face,)), self.vertex)
+        place_in_container_of(self.obj, base)
+
+    def _drop_preview(self):
+        """Remove the preview and show the bodies it hid as they were before."""
+        if self.edited is not None:
+            return
+        if self.obj is not None and _in_document(self.obj):
+            self.doc.removeObject(self.obj.Name)
+        self.obj = None
+        for body, visible in self._visibility:
+            if _in_document(body):
+                body.ViewObject.Visibility = visible
+        self._visibility = []
+
+    def _discard_preview(self):
+        """Abort the preview transaction; a leftover preview (undo disabled) is removed by hand."""
+        if self._transaction_open and _alive_document(self.doc):
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+        self._transaction_open = False
+        self._drop_preview()
+
+    def _restore_edit(self):
+        """Put the edited drill hole back as it was when the panel opened, even with undo disabled."""
+        if self._transaction_open and _alive_document(self.doc):
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+        self._transaction_open = False
+        if not _in_document(self.edited):
+            return
+        if self._values(self.edited) != self._edit_before:
+            self._restore(self.edited, self._edit_before)
+        self.doc.recompute()
+
+    # Selection observer.
+
+    def addSelection(self, doc, obj, sub, other):
+        if not self._active():
+            return
+        document = App.getDocument(doc)
+        source = document.getObject(getattr(obj, "Name", obj)) if document else None
+        if source is None:
+            return
+        changed, messages = self._pick(*self._on_base(source, sub))
+        self._show(messages)
+        if changed:
+            # Never recompute during FreeCAD's selection observer dispatch.
+            QtCore.QTimer.singleShot(0, self._update_preview)
+
+    def removeSelection(self, doc, obj, sub):
+        pass
+
+    def clearSelection(self, other):
+        pass
+
+    # Dialog.
+
+    def _active(self):
+        return not self._closed
+
+    def _form_gone(self, *args):
+        if not self._closed:
+            self.closed()
+
+    def closed(self):
+        # FreeCAD can close the dialog without OK or Cancel (document closed, another dialog shown).
+        if self._closed:
+            return
+        self.clean()
+        if self.edited is None:
+            self._discard_preview()
+        else:
+            self._restore_edit()
+
+    def clean(self):
+        self._closed = True
+        self._preview_timer.stop()
+        try:
+            Gui.Selection.removeObserver(self)
+        except Exception:
+            pass
+
+    def _close_edit(self):
+        if not _alive_document(self.doc):
+            return
+        gui_doc = Gui.getDocument(self.doc.Name)
+        if gui_doc is not None and gui_doc.getInEdit() is not None:
+            gui_doc.resetEdit()
+
+    def reject(self):
+        self.clean()
+        if self.edited is None:
+            self._discard_preview()
+        else:
+            self._restore_edit()
+            self._close_edit()
+        return True
+
+    def _missing(self):
+        if self.face is None:
+            return translate("frameforge", "Select a planar face of a profile, a trimmed profile or a cutout.")
+        if self.vertex is None:
+            return translate("frameforge", "Select a vertex of the face.")
+        return ""
+
+    def accept(self):
+        problem = self._missing()
+        if problem:
+            self._show([problem])
+            return False
+        # OK keeps the current values even when the preview is out of date or a change is pending.
+        self._preview_timer.stop()
+        self._update_preview(force=True)
+        if self._error:
+            # The panel stays open with the error, to change the values.
+            return False
+        if self.edited is not None and self._values(self.edited) == self._edit_before:
+            # Nothing changed in the end: no Undo step.
+            self._restore_edit()
+        else:
+            self.doc.commitTransaction()
+        self._transaction_open = False
+        self.clean()
+        if self.edited is not None:
+            self._close_edit()
+        return True
+
+
+class DrillHoleCommand:
+    """Drill Hole command: round holes on a planar face, placed from a vertex of that face."""
+
+    def GetResources(self):
+        return {
+            "Pixmap": os.path.join(ICONPATH, "drill-hole.svg"),
+            "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_DrillHole", "Drill Hole"),
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_DrillHole",
+                "<b>Drill Hole</b><br><br>Click a planar face of a profile, a trimmed profile or a cutout, then one of its vertices: round holes are drilled at the offsets from that vertex, one or a row of them, with a diameter and a depth.",
+            ),
+        }
+
+    def IsActive(self):
+        # Any selection opens the panel, which explains what it cannot use.
+        return App.ActiveDocument is not None
+
+    def Activated(self):
+        show_panel(DrillHoleTaskPanel(_selected_items()))
+
+
+add_command("MaxProFrame_DrillHole", DrillHoleCommand())
