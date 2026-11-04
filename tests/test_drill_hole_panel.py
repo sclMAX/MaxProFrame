@@ -235,9 +235,9 @@ class TestDrillHoleCommand(DrillHolePanelFixture):
         self.assertEqual(resources["MenuText"], "Drill Hole")
         self.assertEqual(
             resources["ToolTip"],
-            "<b>Drill Hole</b><br><br>Click a planar face of a profile, a trimmed profile or a cutout near the corner to "
-            "measure from: round holes are drilled at the offsets from that corner, one or a row of them, with a diameter "
-            "and a depth.",
+            "<b>Drill Hole</b><br><br>Click a planar face of a profile, a trimmed profile or a cutout, then one of its "
+            "nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the "
+            "offsets from that point, one or a row of them, with a diameter and a depth.",
         )
         self.assertEqual(os.path.basename(resources["Pixmap"]), "drill-hole.svg")
         self.assertTrue(os.path.isfile(resources["Pixmap"]))
@@ -1512,9 +1512,10 @@ class TestDrillHoleSpanish(DrillHolePanelFixture):
         self.assertEqual(
             App.Qt.translate("MaxProFrame_DrillHole", resources["ToolTip"]),
             (
-                "<b>Agujero</b><br><br>Hacé clic en una cara plana de un perfil, un perfil recortado o un calado cerca de "
-                "la esquina desde la que se mide: se perforan agujeros redondos a las distancias indicadas desde esa "
-                "esquina, uno solo o una fila, con un diámetro y una profundidad."
+                "<b>Agujero</b><br><br>Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego "
+                "en uno de sus nueve círculos para medir desde ahí: una esquina, el medio de un borde o el centro. Se "
+                "perforan agujeros redondos a las distancias indicadas desde ese punto, uno solo o una fila, con un "
+                "diámetro y una profundidad."
             ),
         )
         panel = self.run_command()

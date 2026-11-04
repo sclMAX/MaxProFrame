@@ -1206,7 +1206,7 @@ class DrillHoleCommand:
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_DrillHole", "Drill Hole"),
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_DrillHole",
-                "<b>Drill Hole</b><br><br>Click a planar face of a profile, a trimmed profile or a cutout near the corner to measure from: round holes are drilled at the offsets from that corner, one or a row of them, with a diameter and a depth.",
+                "<b>Drill Hole</b><br><br>Click a planar face of a profile, a trimmed profile or a cutout, then one of its nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the offsets from that point, one or a row of them, with a diameter and a depth.",
             ),
         }
 

@@ -63,7 +63,7 @@ EXPECTED = {
     "MaxProFrame_DrillHole": (
         "Drill Hole",
         "Agujero",
-        "Hacé clic en una cara plana de un perfil, un perfil recortado o un calado cerca de la esquina desde la que se mide",
+        "Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego en uno de sus nueve círculos",
     ),
     "MaxProFrame_Link": (
         "Attached Link",
