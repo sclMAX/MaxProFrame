@@ -340,6 +340,10 @@ class CreateExtrudedCutoutTaskPanel:
         self._initial = (obj.CutType, obj.ExtrusionLength.Value)
         self._initial_pattern = self._pattern_of(obj)
         self._initial_expressions = expressions_of(obj, ("ExtrusionLength", *PATTERN_PROPERTIES))
+        # A recompute pumps Qt events: a change, OK or Cancel arriving during it waits for it to end.
+        self._recomputing = False
+        self._pending = False
+        self._deferred = None
         self.form = self._build_form()
         self.doc.openTransaction("Edit Cutout")
 
@@ -492,9 +496,45 @@ class CreateExtrudedCutoutTaskPanel:
         return thickness if thickness else self.obj.ExtrusionLength.Value
 
     def _apply(self, *args):
+        """Preview the panel values; never recomputes inside a recompute of the panel.
+
+        FreeCAD skips a recompute started during another one ("Recursive calling of recompute"), which left
+        the cutout cut for a value typed halfway. A change meanwhile makes the running loop recompute once
+        more, so the preview ends at the last values.
+        """
+        self.form.spin_depth.setEnabled(self.form.combo_cut_type.currentData() == "Distance")
+        if self._recomputing:
+            self._pending = True
+            self._show_pattern(self.form)
+            return
+        self._recomputing = True
+        try:
+            while True:
+                self._pending = False
+                self._write()
+                self.doc.recompute()
+                # OK pressed meanwhile writes the last values itself, Cancel drops them.
+                if not self._pending or self._deferred is not None:
+                    break
+        finally:
+            self._recomputing = False
+        self._show_pattern(self.form)
+        deferred, self._deferred = self._deferred, None
+        if deferred is not None and deferred() and Gui.Control.activeDialog():
+            Gui.Control.closeDialog()
+
+    def _defer(self, button):
+        """OK or Cancel pressed during a recompute of the panel: run it once that recompute ends."""
+        if not self._recomputing:
+            return False
+        self._deferred = button
+        return True
+
+    def _write(self):
+        """Give the cutout the panel values."""
         cut_type = self.form.combo_cut_type.currentData()
-        self.form.spin_depth.setEnabled(cut_type == "Distance")
-        self.obj.CutType = cut_type
+        if self.obj.CutType != cut_type:
+            self.obj.CutType = cut_type
         # An expression drives the depth on its own: the field only shows its value.
         if cut_type == "Distance" and expression_of(self.obj, "ExtrusionLength") is None:
             self.obj.ExtrusionLength = self.form.spin_depth.value()
@@ -504,8 +544,6 @@ class CreateExtrudedCutoutTaskPanel:
                 if expression_of(self.obj, f"{prop}Count") is not None:
                     self.obj.setExpression(f"{prop}Count", None)
         self._set_pattern(self._pattern_wanted(self.form))
-        self.doc.recompute()
-        self._show_pattern(self.form)
 
     def _set_pattern(self, pattern):
         """Give the cutout ``pattern`` ((count, pitch) per row); an expression drives its property on its own."""
@@ -538,6 +576,10 @@ class CreateExtrudedCutoutTaskPanel:
             gui_doc.resetEdit()
 
     def accept(self):
+        if self._defer(self.accept):
+            return False
+        # The last values, also when OK waited for a recompute that a change arrived during.
+        self._write()
         self.doc.commitTransaction()
         self.doc.recompute()
         if self.obj.Sketch is not None and getattr(self.obj.Sketch, "ViewObject", None) is not None:
@@ -546,6 +588,8 @@ class CreateExtrudedCutoutTaskPanel:
         return True
 
     def reject(self):
+        if self._defer(self.reject):
+            return False
         if self.created:
             answer = QtGui.QMessageBox.question(
                 Gui.getMainWindow(),

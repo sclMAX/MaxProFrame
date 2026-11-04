@@ -1,12 +1,17 @@
 """Cutout depth panel: the checkable Pattern group, its title, its expressions and its warnings."""
 
 import unittest
+from unittest.mock import patch
 
 import FreeCAD as App
 import FreeCADGui as Gui
 from miter_helpers import use_language
 from test_cutout_depth_panel import DepthPanelFixture
 from test_cutout_flow import WALL
+from test_drill_hole_panel import RecomputeCounter
+from test_extend_cut_preview import wait
+
+from freecad.maxproframe import extruded_cutout
 
 PATTERN_FIELDS = (
     ("spin_backward_count", "AlongBackwardCount"),
@@ -176,6 +181,71 @@ class TestCutoutPatternPanel(PatternPanelFixture):
         panel.form.groupBox_pattern.setChecked(False)
         self.events()
         self.assertEqual(self.warning(panel), "")
+
+
+class TestCutoutPatternPreview(PatternPanelFixture):
+    """A pitch typed while the preview recomputes: no recompute inside another, the last values win."""
+
+    def hook_execute(self):
+        """Hooks run once each, after the next cutout recomputes; call it before the cutout is made."""
+        execute = extruded_cutout.ExtrudedCutout.execute
+        hooks = []
+
+        def execute_and_hook(proxy, fp):
+            result = execute(proxy, fp)
+            if hooks:
+                hooks.pop(0)(fp)
+            return result
+
+        patcher = patch.object(extruded_cutout.ExtrudedCutout, "execute", execute_and_hook)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return hooks
+
+    def counted_panel(self):
+        hooks = self.hook_execute()
+        body, cutout, panel = self.new_panel()
+        self.set_pattern(panel, forward=(2, 30.0))
+        wait(0.6)
+        counter = RecomputeCounter(panel.doc)
+        panel.doc = counter
+        return hooks, body, cutout, panel, counter
+
+    def test_a_pitch_typed_during_a_recompute_is_cut_in_the_end_without_a_nested_recompute(self):
+        hooks, body, cutout, panel, counter = self.counted_panel()
+
+        def type_pitch(fp):
+            panel.form.spin_forward_pitch.setValue(40.0)
+            self.events()
+
+        hooks.append(type_pitch)
+        panel.form.spin_forward_pitch.setValue(35.0)
+        wait(2.0)
+        self.assertEqual(counter.nested, 0)
+        self.assertAlmostEqual(cutout.AlongForwardPitch.Value, 40.0, places=6)
+        self.assertEqual(self.cut(body, cutout), 3)
+        center = body.Shape.getElement(self.face_towards(body, App.Vector(0, 0, 1))).CenterOfMass
+        for offset, cut in ((40.0, True), (80.0, True), (35.0, False), (70.0, False)):
+            with self.subTest(offset=offset):
+                inside = cutout.Shape.isInside(center + App.Vector(offset, 0, -WALL / 2), 1e-7, True)
+                self.assertEqual(not inside, cut)
+
+    def test_ok_pressed_during_a_recompute_keeps_the_last_values_once_it_ends(self):
+        hooks, body, cutout, panel, counter = self.counted_panel()
+        returned = []
+
+        def press(fp):
+            panel.form.spin_forward_pitch.setValue(40.0)
+            returned.append(panel.accept())
+
+        hooks.append(press)
+        panel.form.spin_forward_pitch.setValue(35.0)
+        wait(2.0)
+        self.assertEqual(returned, [False])
+        self.assertEqual(counter.nested, 0)
+        self.assertFalse(Gui.Control.activeDialog())
+        self.assertAlmostEqual(cutout.AlongForwardPitch.Value, 40.0, places=6)
+        self.assertEqual(self.cut(body, cutout), 3)
 
 
 class TestCutoutPatternPanelSpanish(PatternPanelFixture):
