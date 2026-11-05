@@ -2,7 +2,10 @@
 
 import unittest
 
+import FreeCAD as App
 import FreeCADGui as Gui
+from PySide import QtCore, QtWidgets
+from test_toolbar_translations import action
 
 from freecad.maxproframe import (  # noqa: F401  (importing registers the commands)
     create_bom_tool,
@@ -53,13 +56,43 @@ class TestShortcuts(unittest.TestCase):
         # the check covers the commands of all of them and not only those an earlier test happened to load.
         if "MaxProFrame" not in Gui.listWorkbenches():
             Gui.addWorkbench(MaxProFrame())
+        # BIM queues its modal welcome dialog on its first activation; a later test would wait on it forever.
+        bim = App.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM")
+        first_time = bim.GetBool("FirstTime", True)
+        bim.SetBool("FirstTime", False)
+        cls.addClassCleanup(bim.SetBool, "FirstTime", first_time)
         previous = Gui.activeWorkbench().name() if Gui.activeWorkbench() else None
+        cls.failed = {}
         for name in sorted(Gui.listWorkbenches()):
             try:
                 Gui.activateWorkbench(name)
-            except Exception:
-                pass
+            except Exception as error:
+                cls.failed[name] = str(error)
         Gui.activateWorkbench(previous or "MaxProFrame")
+        cls.dialogs = cls.run_queued_tasks()
+
+    @staticmethod
+    def run_queued_tasks():
+        """Run what the workbenches queued on activation; the modal dialogs it opened, closed."""
+        dialogs = []
+
+        def close_modal():
+            dialog = QtWidgets.QApplication.activeModalWidget()
+            if dialog is not None:
+                dialogs.append(dialog.windowTitle() or dialog.objectName() or type(dialog).__name__)
+                dialog.close()
+                QtCore.QTimer.singleShot(200, close_modal)
+
+        QtCore.QTimer.singleShot(200, close_modal)
+        for _ in range(10):
+            QtWidgets.QApplication.processEvents()
+        QtCore.QThread.msleep(300)
+        QtWidgets.QApplication.processEvents()
+        return dialogs
+
+    def test_every_workbench_loads_without_a_dialog(self):
+        # The clash check below covers only the workbenches that load; none may leave a dialog open.
+        self.assertEqual((self.failed, self.dialogs), ({}, []))
 
     def test_each_command_declares_its_shortcut(self):
         # The declared shortcut, not FreeCAD's: a user may have changed it in Tools > Customize > Keyboard.
@@ -78,6 +111,16 @@ class TestShortcuts(unittest.TestCase):
             if not name.startswith("MaxProFrame_"):
                 taken.setdefault(Gui.Command.get(name).getShortcut(), []).append(name)
         self.assertEqual({text: taken[text] for text in SHORTCUTS.values() if text in taken}, {})
+
+    def test_the_tooltip_shows_the_shortcut_next_to_the_title(self):
+        # FreeCAD adds it after the title: "Drill Hole (M, D)", also above a tooltip of our own markup.
+        Gui.activateWorkbench("MaxProFrame")
+        missing = {
+            name: action(name).toolTip()[:120]
+            for name, text in SHORTCUTS.items()
+            if f"</b> ({text})</p>" not in action(name).toolTip()
+        }
+        self.assertEqual(missing, {})
 
 
 if __name__ == "__main__":
