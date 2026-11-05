@@ -486,34 +486,17 @@ class DrillHoleTaskPanel:
         }
 
     def _pattern_title(self):
-        """Title of the Pattern group: "Pattern", followed by the total and the holes each side adds when checked.
+        """Title of the Pattern group: "Pattern", followed by the total of holes drilled when checked.
 
-        For example "Pattern: 9 holes, ← 3 × 20 mm | 5 × 30 mm →", the holes across after "across", and "no
-        hole at the point" when that is unchecked. The total is the number of holes drilled ("1 hole").
+        For example "Pattern: 9 holes" ("1 hole"); the fields below show each side.
         """
         form = self.form
         title = translate("frameforge", "Pattern")
         if not form.groupBox_pattern.isChecked():
             return title
         total = pattern_count(*self._pattern_sides())
-        parts = [
-            (translate("frameforge", "{} hole") if total == 1 else translate("frameforge", "{} holes")).format(total)
-        ]
-        for axis in ("along", "across"):
-            sides = []
-            for side, text in (
-                ("backward", translate("frameforge", "← {} × {}")),
-                ("forward", translate("frameforge", "{} × {} →")),
-            ):
-                count = getattr(form, f"spin_{axis}_{side}_count").value()
-                if count > 0:
-                    sides.append(text.format(count, length_text(getattr(form, f"spin_{axis}_{side}_pitch").value())))
-            if sides:
-                sides = " | ".join(sides)
-                parts.append(sides if axis == "along" else translate("frameforge", "across {}").format(sides))
-        if not form.cb_hole_at_point.isChecked():
-            parts.append(translate("frameforge", "no hole at the point"))
-        return translate("frameforge", "Pattern: {}").format(", ".join(parts))
+        text = translate("frameforge", "{} hole") if total == 1 else translate("frameforge", "{} holes")
+        return translate("frameforge", "Pattern: {}").format(text.format(total))
 
     def _show_pattern_title(self):
         self.form.groupBox_pattern.setTitle(self._pattern_title())
