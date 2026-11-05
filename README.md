@@ -90,7 +90,7 @@ Every shortcut is **M** followed by one letter: press M, release it, then press 
 |---|---|---|---|
 | Create Profiles | `M, P` | Drill Hole | `M, D` |
 | Create a Parametric Line | `M, L` | Attached Link | `M, K` |
-| End Miter | `M, M` | Populate IDs | `M, I` |
+| End Miter | `M, M` | Populate IDs | `M, U` |
 | Extend / Cut | `M, E` | Create Balloons | `M, O` |
 | Notch | `M, N` | Create BOM | `M, B` |
 | Cutout / Hole | `M, H` | Recompute all profiles | `M, R` |
