@@ -1,6 +1,6 @@
 ## Changelog
 
-* Unreleased
+* v1.7.0 (2026-11-05)
 
   - Show only the total of holes in the **Drill Hole** **Pattern** title, for example **Pattern: 9 holes** (Spanish *Patrón: 9 agujeros*), as the **Cutout / Hole** pattern does; the fields below it show each side.
   - Repeat a **Cutout / Hole** along the profile with the new **Pattern** group of its panel (Spanish *Patrón*), unchecked for a new cutout (see the [tutorial](docs/tutorial.md#cutout--hole)). Checked, **← Backward** and **Forward →** each set **Cutouts per side** and **Pitch**, measured from the sketch, which always stays where it was drawn: "1 every 50 mm backward, the sketch, 2 every 30 mm forward" is one cutout of 4 cuts, and the group title shows the total, **Pattern: 4 cutouts** (Spanish *Patrón: 4 calados*). Each copy cuts like the sketch, with **One wall** the wall under it. The panel warns, without stopping **OK**, when a cutout reaches past the end of the face, and lets cutouts overlap; more than 1000 cutouts fail with a message, and so do copies on an end face of the profile, which gives the pattern no direction; the panel names that one too. The fields take expressions (**Fx**) and keep their width beside the **Fx** icon. Cutouts saved before open unchanged, with no pattern.
