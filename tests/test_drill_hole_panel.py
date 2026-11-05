@@ -10,7 +10,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import Part
 from miter_helpers import use_language
-from PySide import QtWidgets
+from PySide import QtCore, QtGui, QtWidgets
 from test_cutout_flow import END, SIDE, UP, CutoutFixture
 from test_drill_hole_geometry import DIAMETER, ONE_HOLE, WALL, DrillHoleFixture
 from test_end_miter_geometry import CENTER
@@ -1652,6 +1652,64 @@ class TestDrillHoleApplyAndContinue(DrillHolePanelFixture):
         self.doc.undo()
         self.assertEqual(self.new_objects(before), [first])
         self.assertEqual(first.getStatusString(), "Valid")
+
+    def fields(self, panel):
+        """Every field of the panel that takes an expression."""
+        return [spin for _, spin in panel._fields()]
+
+    def shown_fx_icons(self, panel):
+        """How many fields show their Fx icon: FreeCAD's icon is a label inside the field's line edit."""
+        return sum(
+            any(not label.isHidden() for label in spin.lineEdit().findChildren(QtWidgets.QLabel))
+            for spin in self.fields(panel)
+        )
+
+    def press_equal(self, spin):
+        """Type = in ``spin``, as the user does to open the expression editor; the editors it opened, closed.
+
+        FreeCAD shows the editor (DlgExpressionInput) as a window that is not modal.
+        """
+        event = QtGui.QKeyEvent(QtCore.QEvent.KeyPress, QtCore.Qt.Key_Equal, QtCore.Qt.NoModifier, "=")
+        QtWidgets.QApplication.sendEvent(spin, event)
+        self.events()
+        editors = [
+            widget
+            for widget in QtWidgets.QApplication.topLevelWidgets()
+            if widget.objectName() == "DlgExpressionInput" and widget.isVisible()
+        ]
+        opened = [editor.objectName() for editor in editors]
+        for editor in editors:
+            editor.reject()
+        self.events()
+        return opened
+
+    def test_after_apply_the_fields_offer_no_expression_editor_until_the_next_hole_exists(self):
+        # The applied hole is done: no Fx icon and no editor on =, so no expression lands on it.
+        other, top, vertex = self.other_profile()
+        body, panel, first, before = self.previewed_panel()
+        self.assertEqual(self.shown_fx_icons(panel), len(self.fields(panel)))
+        self.assertEqual(self.press_equal(panel.form.spin_diameter), ["DlgExpressionInput"])
+        enabled = [spin.isEnabled() for spin in self.fields(panel)]
+        self.apply(panel)
+        self.assertEqual(self.shown_fx_icons(panel), 0)
+        self.assertEqual(self.press_equal(panel.form.spin_diameter), [])
+        self.assertEqual(list(first.ExpressionEngine), [])
+        self.assertEqual(self.doc.UndoNames, ["Create Drill Hole"])
+        # The values stay editable for the next hole: the closed Pattern group and the depth of a
+        # Through all cut stay disabled as before.
+        self.assertEqual([spin.isEnabled() for spin in self.fields(panel)], enabled)
+        self.assertTrue(all(enabled[:3]))
+        # The next hole's preview binds the fields to it again.
+        self.click(other, top)
+        self.click(other, vertex)
+        wait()
+        second = self.preview(before + [first.Name])
+        self.assertEqual(self.shown_fx_icons(panel), len(self.fields(panel)))
+        self.assertTrue(all(Gui.ExpressionBinding(spin).isBound() for spin in self.fields(panel)))
+        self.assertEqual(self.press_equal(panel.form.spin_diameter), ["DlgExpressionInput"])
+        self.assertEqual(list(second.ExpressionEngine), [])
+        self.assertTrue(panel.reject())
+        self.assertEqual(self.new_objects(before), [first])
 
     def test_a_click_on_the_applied_hole_chains_the_next_hole_on_it_at_the_other_end_of_the_profile(self):
         # S4: the drilled profile shows the applied hole: it is the base of the next one, both stay cut.

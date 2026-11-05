@@ -32,14 +32,43 @@ def count_field(minimum, maximum, value):
     return spin
 
 
+# Object name of the event filter unbind installs on a field.
+_NO_EDITOR = "maxproframe_no_expression_editor"
+
+
+class _NoEditor(QtCore.QObject):
+    """Swallows the = that opens the expression editor of a field: the object it was bound to is done."""
+
+    def eventFilter(self, watched, event):
+        return event.type() == QtCore.QEvent.KeyPress and event.text() == "="
+
+
 def bind(widget, obj, prop):
     """Bind ``widget`` to ``obj.prop`` so it offers the expression editor; False when it cannot."""
+    for blocker in widget.findChildren(QtCore.QObject, _NO_EDITOR):
+        widget.removeEventFilter(blocker)
+        blocker.setObjectName("")
+        blocker.deleteLater()
     try:
         Gui.ExpressionBinding(widget).bind(obj, prop)
     except Exception:
         return False
     _place_icon(widget)
     return True
+
+
+def unbind(widget):
+    """Take the expression editor away from ``widget`` until it is bound again; FreeCAD has no unbind.
+
+    The field stays bound to the object it showed: its Fx icon is hidden and its = swallowed, so the editor
+    cannot set an expression on that object. Binding the field again shows the icon.
+    """
+    for label in widget.lineEdit().findChildren(QtGui.QLabel):
+        label.hide()
+    if not widget.findChildren(QtCore.QObject, _NO_EDITOR):
+        blocker = _NoEditor(widget)
+        blocker.setObjectName(_NO_EDITOR)
+        widget.installEventFilter(blocker)
 
 
 def _place_icon(widget):
