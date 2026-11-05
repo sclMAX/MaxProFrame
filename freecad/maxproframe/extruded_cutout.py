@@ -25,6 +25,127 @@ CUT_TYPES = ["Through All", "Distance", "One wall"]
 TOLERANCE = 1e-6
 # Sample points per side of a sketch region where One wall measures the wall.
 WALL_SAMPLES = 5
+# Pitch of a new pattern side, cutouts a pattern side adds and cutouts a cutout makes at most.
+DEFAULT_PITCH = 50.0
+MAX_COUNT = 1000
+MAX_CUTOUTS = 1000
+# Prefixes of the pattern properties of a cutout: a count and a pitch on each side of the sketch.
+PATTERN_SIDES = ("AlongBackward", "AlongForward")
+
+
+def axis_positions(backward, forward, at_point):
+    """Positions of the holes on one axis from the point: ``backward`` and ``forward`` are (count, pitch).
+
+    Backward first, from the farthest; then 0 when ``at_point``; then forward, from the nearest.
+    """
+    (backward_count, backward_pitch), (forward_count, forward_pitch) = backward, forward
+    return (
+        [-index * backward_pitch for index in range(backward_count, 0, -1)]
+        + ([0.0] if at_point else [])
+        + [index * forward_pitch for index in range(1, forward_count + 1)]
+    )
+
+
+def _pattern_tips():
+    return {
+        "AlongBackwardCount": translate(
+            "frameforge", "Cutouts the pattern adds before the sketch, toward the start of the profile path"
+        ),
+        "AlongBackwardPitch": translate("frameforge", "Distance between the cutouts before the sketch"),
+        "AlongForwardCount": translate(
+            "frameforge", "Cutouts the pattern adds after the sketch, toward the end of the profile path"
+        ),
+        "AlongForwardPitch": translate("frameforge", "Distance between the cutouts after the sketch"),
+    }
+
+
+def _add_pattern_properties(obj):
+    """Add the pattern properties ``obj`` has not got: no cutout on either side of the sketch."""
+    tips = _pattern_tips()
+    for side in PATTERN_SIDES:
+        if not hasattr(obj, f"{side}Count"):
+            obj.addProperty("App::PropertyIntegerConstraint", f"{side}Count", "ExtrudedCutout", tips[f"{side}Count"])
+            setattr(obj, f"{side}Count", (0, 0, MAX_COUNT, 1))
+        if not hasattr(obj, f"{side}Pitch"):
+            obj.addProperty("App::PropertyLength", f"{side}Pitch", "ExtrudedCutout", tips[f"{side}Pitch"])
+            setattr(obj, f"{side}Pitch", DEFAULT_PITCH)
+
+
+def pattern_count(sides):
+    """Number of cutouts of the pattern ``sides`` ({side: (count, pitch)}), the sketch included."""
+    return 1 + sum(count for count, _ in sides.values())
+
+
+def pattern_sides(fp):
+    """{side: (count, pitch)} of the cutout ``fp``; no cutout on either side before it is restored."""
+    if not hasattr(fp, "AlongForwardCount"):
+        return {side: (0, DEFAULT_PITCH) for side in PATTERN_SIDES}
+    return {side: (getattr(fp, f"{side}Count"), getattr(fp, f"{side}Pitch").Value) for side in PATTERN_SIDES}
+
+
+def pattern_offsets(sides):
+    """Offsets of the cutouts from the sketch toward the end of the profile path, 0 for the sketch.
+
+    Raise when there are more than MAX_CUTOUTS.
+    """
+    total = pattern_count(sides)
+    if total > MAX_CUTOUTS:
+        raise FrameForgeException(
+            translate("frameforge", "Cutout / Hole: the pattern makes {} cutouts, at most {}.").format(
+                total, MAX_CUTOUTS
+            )
+        )
+    return axis_positions(sides["AlongBackward"], sides["AlongForward"], True)
+
+
+def path_direction(normal, axis):
+    """Unit direction on the plane of ``normal`` toward the end of the path of a profile extruded along ``axis``."""
+    along = axis - normal * axis.dot(normal)
+    if along.Length < TOLERANCE:
+        raise FrameForgeException(
+            translate(
+                "frameforge", "Cutout / Hole: the face is square to the profile axis, the pattern has no direction."
+            )
+        )
+    # A profile is attached at the end of its path and extruded back to its start: its path runs against
+    # its ``axis``.
+    return -along.normalize()
+
+
+def along_extent(shape, direction):
+    """(min, max) distance of ``shape`` along the unit ``direction``, from the origin."""
+    # Turned about the origin so ``direction`` is X: the distances along it are the X of the exact box.
+    rotation = App.Rotation(direction, App.Vector(1, 0, 0))
+    turned = shape.copy()
+    turned.rotate(App.Vector(), rotation.Axis, math.degrees(rotation.Angle))
+    box = turned.optimalBoundingBox(False)
+    return box.XMin, box.XMax
+
+
+def pattern_extents(fp):
+    """((min, max) of the cut regions of the sketch, (min, max) of the face) of the cutout ``fp``, along the path.
+
+    None when there is nothing to measure: no closed region, or a face square to the profile axis.
+    """
+    if fp.Sketch is None or not fp.baseObject:
+        return None
+    wires = [wire for wire in fp.Sketch.Shape.Wires if wire.isClosed()]
+    if not wires:
+        return None
+    base, (face_name, *_) = fp.baseObject
+    face = base.Shape.getElement(face_name)
+    try:
+        direction = profile_path_direction(fp, face.normalAt(0, 0))
+    except FrameForgeException:
+        return None
+    return along_extent(Part.Compound(wires), direction), along_extent(face, direction)
+
+
+def profile_path_direction(fp, normal):
+    """path_direction on the face of normal ``normal`` of the cutout ``fp``."""
+    profile = get_profile_from_extrudedcutout(fp)
+    # Profiles are extruded along their local Z.
+    return path_direction(normal, profile.Placement.Rotation.multVec(App.Vector(0, 0, 1)))
 
 
 def _wall_samples(face):
@@ -235,14 +356,21 @@ class ExtrudedCutout:
         )
         obj.setEditorMode("CuttingAngleB", 1)
 
+        self.add_pattern_properties(obj)
+
         obj.Proxy = self
 
+    def add_pattern_properties(self, obj):
+        """The pattern of the sketch along the profile (see pattern_offsets)."""
+        _add_pattern_properties(obj)
+
     def onDocumentRestored(self, obj):
-        """Cutouts saved before One wall gain it, keeping their cut type."""
+        """Cutouts saved before One wall gain it, keeping their cut type; those saved before the pattern gain it."""
         if obj.getEnumerationsOfProperty("CutType") != CUT_TYPES:
             current = obj.CutType
             obj.CutType = list(CUT_TYPES)
             obj.CutType = current
+        self.add_pattern_properties(obj)
 
     def onChanged(self, fp, prop):
         """Respond to property changes."""
@@ -254,6 +382,8 @@ class ExtrudedCutout:
 
     def execute(self, fp):
         """Perform the cut when the object is recomputed."""
+        # Out of the try below: too many cutouts fail the recompute, as a drill hole does.
+        offsets = pattern_offsets(pattern_sides(fp))
         try:
             # Ensure the Sketch and baseObject properties are valid.
             if fp.Sketch is None or fp.baseObject is None:
@@ -279,13 +409,19 @@ class ExtrudedCutout:
                 self._update_structure_data(fp)
                 return
 
+            center = cutSketch.Shape.BoundBox.Center
+            if len(offsets) > 1:
+                direction = profile_path_direction(fp, normal_vector)
+                myFacesList = [face.translated(direction * offset) for offset in offsets for face in myFacesList]
+                center = Part.Compound(myFacesList).BoundBox.Center
+
             extruded_shape = cut_tools(
                 selected_object.Shape,
                 myFacesList,
                 -normal_vector,
                 fp.CutType,
                 fp.ExtrusionLength.Value,
-                cutSketch.Shape.BoundBox.Center,
+                center,
             )
             if extruded_shape is None:
                 fp.Shape = _uncut_shape(selected_object.Shape)

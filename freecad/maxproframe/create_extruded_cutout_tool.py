@@ -10,8 +10,24 @@ from PySide import QtCore, QtGui
 from freecad.maxproframe.create_end_miter_tool import _alive, _base_profile, _failures
 from freecad.maxproframe.create_extend_cut_tool import _selected_items, show_panel, trimmed_body_problem
 from freecad.maxproframe.create_profiles_tool import place_in_container_of
-from freecad.maxproframe.expression_fields import bind, expression_of, expressions_of, length_field, restore_expressions
-from freecad.maxproframe.extruded_cutout import CUT_TYPES, ExtrudedCutout, ViewProviderExtrudedCutout, wall_thickness
+from freecad.maxproframe.expression_fields import (
+    bind,
+    count_field,
+    expression_of,
+    expressions_of,
+    fit_width,
+    length_field,
+    restore_expressions,
+)
+from freecad.maxproframe.extruded_cutout import (
+    CUT_TYPES,
+    MAX_COUNT,
+    ExtrudedCutout,
+    ViewProviderExtrudedCutout,
+    axis_positions,
+    pattern_extents,
+    wall_thickness,
+)
 from freecad.maxproframe.ff_tools import (
     ICONPATH,
     PROFILEIMAGES_PATH,
@@ -38,6 +54,13 @@ CUT_TYPE_LABELS = {
 # Depth range of a Distance cut, in mm.
 MIN_DEPTH = 0.01
 MAX_DEPTH = 1e6
+# Rows of the Pattern group: (field name, prefix of the count and pitch properties of the cutout).
+PATTERN_ROWS = (("backward", "AlongBackward"), ("forward", "AlongForward"))
+PATTERN_PROPERTIES = tuple(f"{prop}{kind}" for _, prop in PATTERN_ROWS for kind in ("Count", "Pitch"))
+# Longest pitch a Pattern field is as wide as.
+LONGEST_PITCH = 9999.99
+# Below this two lengths (mm) are the same.
+LENGTH_TOLERANCE = 1e-6
 
 
 def make_extruded_cutout(sketch, selected_face):
@@ -314,7 +337,12 @@ class CreateExtrudedCutoutTaskPanel:
         self.created = created
         self.doc = obj.Document
         self._initial = (obj.CutType, obj.ExtrusionLength.Value)
-        self._initial_expressions = expressions_of(obj, ("ExtrusionLength",))
+        self._initial_pattern = self._pattern_of(obj)
+        self._initial_expressions = expressions_of(obj, ("ExtrusionLength", *PATTERN_PROPERTIES))
+        # A recompute pumps Qt events: a change, OK or Cancel arriving during it waits for it to end.
+        self._recomputing = False
+        self._pending = False
+        self._deferred = None
         self.form = self._build_form()
         self.doc.openTransaction("Edit Cutout")
 
@@ -336,12 +364,114 @@ class CreateExtrudedCutoutTaskPanel:
             form.button_edit_sketch.setIcon(self.obj.Sketch.ViewObject.Icon)
         layout.addRow(form.label_cut_type, form.combo_cut_type)
         layout.addRow(form.label_depth, form.spin_depth)
+        self._build_pattern(form)
+        layout.addRow(form.groupBox_pattern)
+        form.warning_label = QtGui.QLabel()
+        form.warning_label.setWordWrap(True)
+        form.warning_label.setHidden(True)
+        layout.addRow(form.warning_label)
         layout.addRow(form.button_edit_sketch)
         form.button_edit_sketch.clicked.connect(self._edit_sketch)
         form.combo_cut_type.currentIndexChanged.connect(self._apply)
         form.spin_depth.valueChanged.connect(self._apply)
+        form.groupBox_pattern.toggled.connect(self._on_pattern_toggled)
+        for spin in self._pattern_spins(form):
+            spin.valueChanged.connect(self._apply)
         form.spin_depth.setEnabled(self.obj.CutType == "Distance")
+        self._show_pattern(form)
         return form
+
+    @staticmethod
+    def _pattern_of(obj):
+        """(count, pitch) of each row of ``obj``'s pattern."""
+        return tuple((getattr(obj, f"{prop}Count"), getattr(obj, f"{prop}Pitch").Value) for _, prop in PATTERN_ROWS)
+
+    def _build_pattern(self, form):
+        """The checkable Pattern group: a count and a pitch on each side of the sketch, along the profile.
+
+        The fields sit in ``form.pattern_fields``, hidden while the group is unchecked; it opens checked when
+        the cutout has a cutout on either side.
+        """
+        form.groupBox_pattern = QtGui.QGroupBox(translate("frameforge", "Pattern"))
+        form.groupBox_pattern.setCheckable(True)
+        form.pattern_fields = QtGui.QWidget()
+        QtGui.QVBoxLayout(form.groupBox_pattern).addWidget(form.pattern_fields)
+        grid = QtGui.QGridLayout(form.pattern_fields)
+        grid.setContentsMargins(0, 0, 0, 0)
+        # The fields keep their width: the labels take the room left.
+        grid.setColumnStretch(0, 1)
+        form.label_pattern_count = QtGui.QLabel(translate("frameforge", "Cutouts per side"))
+        form.label_pattern_pitch = QtGui.QLabel(translate("frameforge", "Pitch"))
+        grid.addWidget(form.label_pattern_count, 0, 1)
+        grid.addWidget(form.label_pattern_pitch, 0, 2)
+        labels = (translate("frameforge", "← Backward"), translate("frameforge", "Forward →"))
+        for line, ((row, prop), label) in enumerate(zip(PATTERN_ROWS, labels), start=1):
+            count = count_field(0, MAX_COUNT, getattr(self.obj, f"{prop}Count"))
+            pitch = length_field(MIN_DEPTH, MAX_DEPTH, getattr(self.obj, f"{prop}Pitch").Value)
+            fit_width(count, MAX_COUNT)
+            fit_width(pitch, LONGEST_PITCH)
+            bind(count, self.obj, f"{prop}Count")
+            bind(pitch, self.obj, f"{prop}Pitch")
+            setattr(form, f"label_{row}", QtGui.QLabel(label))
+            setattr(form, f"spin_{row}_count", count)
+            setattr(form, f"spin_{row}_pitch", pitch)
+            for column, widget in enumerate((getattr(form, f"label_{row}"), count, pitch)):
+                grid.addWidget(widget, line, column)
+        checked = any(count > 0 for count, _ in self._pattern_of(self.obj))
+        form.groupBox_pattern.setChecked(checked)
+        form.pattern_fields.setHidden(not checked)
+
+    @staticmethod
+    def _pattern_spins(form):
+        """The count and pitch fields of the Pattern group, in PATTERN_PROPERTIES order."""
+        return [getattr(form, f"spin_{row}_{kind}") for row, _ in PATTERN_ROWS for kind in ("count", "pitch")]
+
+    def _pattern_wanted(self, form):
+        """(count, pitch) of each row the cutout gets: none on either side while the group is unchecked."""
+        checked = form.groupBox_pattern.isChecked()
+        return tuple(
+            (getattr(form, f"spin_{row}_count").value() if checked else 0, getattr(form, f"spin_{row}_pitch").value())
+            for row, _ in PATTERN_ROWS
+        )
+
+    def _on_pattern_toggled(self, checked):
+        self.form.pattern_fields.setHidden(not checked)
+        self._apply()
+
+    def _pattern_title(self, form):
+        """ "Pattern", followed by the number of cutouts, the sketch included, when checked: "Pattern: 4 cutouts"."""
+        if not form.groupBox_pattern.isChecked():
+            return translate("frameforge", "Pattern")
+        total = 1 + sum(count for count, _ in self._pattern_wanted(form))
+        text = translate("frameforge", "{} cutout") if total == 1 else translate("frameforge", "{} cutouts")
+        return translate("frameforge", "Pattern: {}").format(text.format(total))
+
+    def _pattern_warnings(self, form):
+        """Lines on the pattern while checked: a cutout past the end of the face.
+
+        No overlap warning: a sketch may be meant to overlap its copies, and the preview shows them.
+        """
+        if not form.groupBox_pattern.isChecked():
+            return []
+        extents = pattern_extents(self.obj)
+        if extents is None:
+            return []
+        (sketch_min, sketch_max), (face_min, face_max) = extents
+        backward, forward = self._pattern_wanted(form)
+        lines = []
+        offsets = axis_positions(backward, forward, True)
+        if (
+            sketch_min + offsets[0] < face_min - LENGTH_TOLERANCE
+            or sketch_max + offsets[-1] > face_max + LENGTH_TOLERANCE
+        ):
+            lines.append(translate("frameforge", "A cutout reaches past the end of the face."))
+        return lines
+
+    def _show_pattern(self, form):
+        form.groupBox_pattern.setTitle(self._pattern_title(form))
+        warnings = self._pattern_warnings(form)
+        form.warning_label.setText("\n".join(warnings))
+        form.warning_label.setHidden(not warnings)
 
     def _initial_depth(self):
         """The stored depth of a Distance cut, else the thickness of the wall under the face."""
@@ -355,13 +485,63 @@ class CreateExtrudedCutoutTaskPanel:
         return thickness if thickness else self.obj.ExtrusionLength.Value
 
     def _apply(self, *args):
+        """Preview the panel values; never recomputes inside a recompute of the panel.
+
+        FreeCAD skips a recompute started during another one ("Recursive calling of recompute"), which left
+        the cutout cut for a value typed halfway. A change meanwhile makes the running loop recompute once
+        more, so the preview ends at the last values.
+        """
+        self.form.spin_depth.setEnabled(self.form.combo_cut_type.currentData() == "Distance")
+        if self._recomputing:
+            self._pending = True
+            self._show_pattern(self.form)
+            return
+        self._recomputing = True
+        try:
+            while True:
+                self._pending = False
+                self._write()
+                self.doc.recompute()
+                # OK pressed meanwhile writes the last values itself, Cancel drops them.
+                if not self._pending or self._deferred is not None:
+                    break
+        finally:
+            self._recomputing = False
+        self._show_pattern(self.form)
+        deferred, self._deferred = self._deferred, None
+        if deferred is not None and deferred() and Gui.Control.activeDialog():
+            Gui.Control.closeDialog()
+
+    def _defer(self, button):
+        """OK or Cancel pressed during a recompute of the panel: run it once that recompute ends."""
+        if not self._recomputing:
+            return False
+        self._deferred = button
+        return True
+
+    def _write(self):
+        """Give the cutout the panel values."""
         cut_type = self.form.combo_cut_type.currentData()
-        self.form.spin_depth.setEnabled(cut_type == "Distance")
-        self.obj.CutType = cut_type
+        if self.obj.CutType != cut_type:
+            self.obj.CutType = cut_type
         # An expression drives the depth on its own: the field only shows its value.
         if cut_type == "Distance" and expression_of(self.obj, "ExtrusionLength") is None:
             self.obj.ExtrusionLength = self.form.spin_depth.value()
-        self.doc.recompute()
+        if not self.form.groupBox_pattern.isChecked():
+            # Unchecked cuts the sketch alone: an expression on a count would keep the copies. Cancel brings it back.
+            for _, prop in PATTERN_ROWS:
+                if expression_of(self.obj, f"{prop}Count") is not None:
+                    self.obj.setExpression(f"{prop}Count", None)
+        self._set_pattern(self._pattern_wanted(self.form))
+
+    def _set_pattern(self, pattern):
+        """Give the cutout ``pattern`` ((count, pitch) per row); an expression drives its property on its own."""
+        for (_, prop), (count, pitch) in zip(PATTERN_ROWS, pattern):
+            for name, value in ((f"{prop}Count", count), (f"{prop}Pitch", pitch)):
+                current = getattr(self.obj, name)
+                current = current.Value if hasattr(current, "Value") else current
+                if expression_of(self.obj, name) is None and abs(current - value) > LENGTH_TOLERANCE:
+                    setattr(self.obj, name, value)
 
     def _edit_sketch(self, *args):
         """Keep the values in one Undo step, close the panel and open the sketch; closing it comes back here."""
@@ -385,6 +565,10 @@ class CreateExtrudedCutoutTaskPanel:
             gui_doc.resetEdit()
 
     def accept(self):
+        if self._defer(self.accept):
+            return False
+        # The last values, also when OK waited for a recompute that a change arrived during.
+        self._write()
         self.doc.commitTransaction()
         self.doc.recompute()
         if self.obj.Sketch is not None and getattr(self.obj.Sketch, "ViewObject", None) is not None:
@@ -393,6 +577,8 @@ class CreateExtrudedCutoutTaskPanel:
         return True
 
     def reject(self):
+        if self._defer(self.reject):
+            return False
         if self.created:
             answer = QtGui.QMessageBox.question(
                 Gui.getMainWindow(),
@@ -414,6 +600,7 @@ class CreateExtrudedCutoutTaskPanel:
                 self.obj.CutType = cut_type
             if abs(self.obj.ExtrusionLength.Value - depth) > 1e-9:
                 self.obj.ExtrusionLength = depth
+            self._set_pattern(self._initial_pattern)
             self._leave_edit()
         self.doc.recompute()
         return True

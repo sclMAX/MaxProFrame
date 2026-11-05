@@ -37,7 +37,9 @@ from freecad.maxproframe.expression_fields import (
     count_field,
     expression_of,
     expressions_of,
+    fit_width,
     length_field,
+    length_text,
     restore_expressions,
 )
 from freecad.maxproframe.extruded_cutout import CUT_TYPES, wall_thickness
@@ -235,26 +237,6 @@ PATTERN_ROWS = (
 PATTERN_PROPERTIES = tuple(f"{prop}{kind}" for _, prop in PATTERN_ROWS for kind in ("Count", "Pitch"))
 # Properties of a drill hole its panel fields bind to, for expressions.
 EXPRESSION_PROPERTIES = ("OffsetAlong", "OffsetAcross", "Diameter", *PATTERN_PROPERTIES, "ExtrusionLength")
-
-
-def _fit_width(spin, longest):
-    """Fix the width of ``spin`` to show the text of ``longest`` beside its Fx icon.
-
-    FreeCAD draws the icon over the end of the text and no layout keeps the field wide enough for both:
-    a Pattern field would be squeezed under its value in a narrow panel and stretched in a wide one.
-    """
-    spin.ensurePolished()
-    metrics = spin.fontMetrics()
-    hint = spin.sizeHint()
-    # The size hint fits the text of the maximum; the rest is the frame, the margins and the arrows.
-    frame = hint.width() - metrics.horizontalAdvance(spin.textFromValue(spin.maximum()) + spin.suffix())
-    # The icon is a square as high as the field.
-    spin.setFixedWidth(frame + metrics.horizontalAdvance(spin.textFromValue(longest) + spin.suffix()) + hint.height())
-
-
-def _length_text(value):
-    """``value`` in mm as the pattern title shows it: up to two decimals, no trailing zeros (12.5 mm)."""
-    return f"{value:.2f}".rstrip("0").rstrip(".") + " mm"
 
 
 class DrillHoleTaskPanel:
@@ -477,8 +459,8 @@ class DrillHoleTaskPanel:
             pitch = self._length_spin(
                 MIN_DEPTH, MAX_OFFSET, getattr(obj, f"{prop}Pitch").Value if obj else DEFAULT_PITCH
             )
-            _fit_width(count, MAX_COUNT)
-            _fit_width(pitch, LONGEST_PITCH)
+            fit_width(count, MAX_COUNT)
+            fit_width(pitch, LONGEST_PITCH)
             setattr(form, f"label_{row}", QtGui.QLabel(label))
             setattr(form, f"spin_{row}_count", count)
             setattr(form, f"spin_{row}_pitch", pitch)
@@ -525,7 +507,7 @@ class DrillHoleTaskPanel:
             ):
                 count = getattr(form, f"spin_{axis}_{side}_count").value()
                 if count > 0:
-                    sides.append(text.format(count, _length_text(getattr(form, f"spin_{axis}_{side}_pitch").value())))
+                    sides.append(text.format(count, length_text(getattr(form, f"spin_{axis}_{side}_pitch").value())))
             if sides:
                 sides = " | ".join(sides)
                 parts.append(sides if axis == "along" else translate("frameforge", "across {}").format(sides))
@@ -577,9 +559,9 @@ class DrillHoleTaskPanel:
             ]
             apart = backward[1] + forward[1]
             if pitches:
-                lines.append(pitch_text.format(_length_text(min(pitches)), _length_text(diameter)))
+                lines.append(pitch_text.format(length_text(min(pitches)), length_text(diameter)))
             elif not at_point and backward[0] > 0 and forward[0] > 0 and apart < diameter - TOLERANCE:
-                lines.append(pair_text.format(_length_text(apart), _length_text(diameter)))
+                lines.append(pair_text.format(length_text(apart), length_text(diameter)))
         return lines
 
     def _on_pattern_toggled(self, checked):

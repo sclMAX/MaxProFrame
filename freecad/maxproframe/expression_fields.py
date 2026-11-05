@@ -74,3 +74,23 @@ def restore_expressions(obj, expressions):
             obj.setExpression(prop, expression)
             changed = True
     return changed
+
+
+def fit_width(spin, longest):
+    """Fix the width of ``spin`` to show the text of ``longest`` beside its Fx icon.
+
+    FreeCAD draws the icon over the end of the text and no layout keeps the field wide enough for both:
+    a Pattern field would be squeezed under its value in a narrow panel and stretched in a wide one.
+    """
+    spin.ensurePolished()
+    metrics = spin.fontMetrics()
+    hint = spin.sizeHint()
+    # The size hint fits the text of the maximum; the rest is the frame, the margins and the arrows.
+    frame = hint.width() - metrics.horizontalAdvance(spin.textFromValue(spin.maximum()) + spin.suffix())
+    # The icon is a square as high as the field.
+    spin.setFixedWidth(frame + metrics.horizontalAdvance(spin.textFromValue(longest) + spin.suffix()) + hint.height())
+
+
+def length_text(value):
+    """``value`` in mm as a pattern shows it: up to two decimals, no trailing zeros (12.5 mm)."""
+    return f"{value:.2f}".rstrip("0").rstrip(".") + " mm"
