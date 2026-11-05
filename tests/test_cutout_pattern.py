@@ -7,10 +7,14 @@ import FreeCAD as App
 from test_cutout_flow import UP, WALL
 from test_cutout_one_wall import RADIUS, OneWallFixture
 
+from freecad.maxproframe import extruded_cutout
+from freecad.maxproframe.frameforge_exceptions import FrameForgeException
+
 # The pattern properties of a cutout: a count and a pitch on each side of the sketch, along the profile.
 PATTERN_PROPERTIES = ("AlongBackwardCount", "AlongBackwardPitch", "AlongForwardCount", "AlongForwardPitch")
 # The tube's path runs from x = 0 to x = 300: forward is +X.
 FORWARD = App.Vector(1, 0, 0)
+SQUARE_FACE = "Cutout / Hole: the face is square to the profile axis, the pattern has no direction."
 
 
 class PatternFixture(OneWallFixture):
@@ -96,6 +100,27 @@ class TestCutoutPattern(PatternFixture):
         hole = make_drill_hole((body, (top,)), vertex)
         self.doc.recompute()
         self.assertEqual([hole.getGroupOfProperty(name) for name in PATTERN_PROPERTIES], ["DrillHole"] * 4)
+
+    def test_a_pattern_on_an_end_face_fails_the_recompute_with_a_message(self):
+        """An end face is square to the profile axis: the pattern has no direction, the cutout shows why."""
+        body, cutout, center = self.top_cutout()
+        cutout.baseObject = (body, [self.face_towards(body, FORWARD)])
+        self.set_pattern(cutout, forward=(2, 30.0))
+        self.assertNotEqual(cutout.getStatusString(), "Valid")
+        self.assertIn(SQUARE_FACE, cutout.getStatusString())
+
+    def test_the_extents_of_an_end_face_pattern_raise_the_same_message(self):
+        body, cutout, center = self.top_cutout()
+        cutout.baseObject = (body, [self.face_towards(body, FORWARD)])
+        with self.assertRaises(FrameForgeException) as raised:
+            extruded_cutout.pattern_extents(cutout)
+        self.assertEqual(str(raised.exception), SQUARE_FACE)
+
+    def test_the_extents_of_a_cutout_whose_face_is_gone_are_none(self):
+        """A face name the body no longer has: nothing to measure, no error."""
+        body, cutout, center = self.top_cutout()
+        cutout.baseObject = (body, ["Face999"])
+        self.assertIsNone(extruded_cutout.pattern_extents(cutout))
 
 
 if __name__ == "__main__":

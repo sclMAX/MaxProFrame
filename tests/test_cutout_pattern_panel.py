@@ -20,6 +20,7 @@ PATTERN_FIELDS = (
     ("spin_forward_pitch", "AlongForwardPitch"),
 )
 PAST_THE_FACE = "A cutout reaches past the end of the face."
+SQUARE_FACE = "Cutout / Hole: the face is square to the profile axis, the pattern has no direction."
 
 
 class PatternPanelFixture(DepthPanelFixture):
@@ -174,6 +175,17 @@ class TestCutoutPatternPanel(PatternPanelFixture):
         self.events()
         self.assertEqual(self.warning(panel), "")
 
+    def test_a_pattern_on_an_end_face_warns_that_it_has_no_direction(self):
+        """The face is square to the profile axis: copies warn why they are not cut, the sketch alone does not."""
+        body, cutout, panel = self.new_panel()
+        cutout.baseObject = (body, [self.face_towards(body, App.Vector(1, 0, 0))])
+        self.set_pattern(panel, forward=(2, 30.0))
+        self.assertEqual(self.warning(panel), SQUARE_FACE)
+        self.assertNotEqual(cutout.getStatusString(), "Valid")
+        panel.form.spin_forward_count.setValue(0)
+        self.events()
+        self.assertEqual(self.warning(panel), "")
+
 
 class TestCutoutPatternPreview(PatternPanelFixture):
     """A pitch typed while the preview recomputes: no recompute inside another, the last values win."""
@@ -238,6 +250,25 @@ class TestCutoutPatternPreview(PatternPanelFixture):
         self.assertFalse(Gui.Control.activeDialog())
         self.assertAlmostEqual(cutout.AlongForwardPitch.Value, 40.0, places=6)
         self.assertEqual(self.cut(body, cutout), 3)
+
+    def test_ok_pressed_during_a_recompute_still_closes_when_the_warnings_fail(self):
+        """An error while the panel updates its warnings never strands the OK pressed meanwhile."""
+        hooks, body, cutout, panel, counter = self.counted_panel()
+
+        def press(fp):
+            returned.append(panel.accept())
+
+        returned = []
+        hooks.append(press)
+        with patch.object(panel, "_pattern_warnings", side_effect=RuntimeError("lookup failed")):
+            try:
+                panel.form.spin_forward_pitch.setValue(35.0)
+                wait(2.0)
+            except RuntimeError:
+                pass
+        self.assertEqual(returned, [False])
+        self.assertFalse(Gui.Control.activeDialog())
+        self.assertAlmostEqual(cutout.AlongForwardPitch.Value, 35.0, places=6)
 
 
 class TestCutoutPatternPanelSpanish(PatternPanelFixture):
