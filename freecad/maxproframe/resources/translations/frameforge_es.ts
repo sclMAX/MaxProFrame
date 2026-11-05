@@ -1123,10 +1123,6 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Across ← backward</source><translation>Transversal ← atrás</translation></message>
     <message><source>Across → forward</source><translation>Transversal → adelante</translation></message>
     <message><source>Pattern: {}</source><translation>Patrón: {}</translation></message>
-    <message><source>← {} × {}</source><translation>← {} × {}</translation></message>
-    <message><source>{} × {} →</source><translation>{} × {} →</translation></message>
-    <message><source>across {}</source><translation>transversal {}</translation></message>
-    <message><source>no hole at the point</source><translation>sin agujero en el punto</translation></message>
     <message><source>{} hole</source><translation>{} agujero</translation></message>
     <message><source>{} holes</source><translation>{} agujeros</translation></message>
     <message><source>Cutouts per side</source><translation>Calados por lado</translation></message>
