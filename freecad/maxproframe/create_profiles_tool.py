@@ -3013,8 +3013,8 @@ class CreateProfilesCommand:
     def GetResources(self):
         return {
             "Pixmap": os.path.join(ICONPATH, "warehouse_profiles.svg"),
-            "Accel": "Shift+S",  # a default shortcut (optional)
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_CreateProfiles", "Create Profile"),
+            "Accel": "M, P",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_CreateProfiles",
                 "Create new profiles from edges",

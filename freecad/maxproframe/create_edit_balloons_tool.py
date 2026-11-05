@@ -84,7 +84,7 @@ class CreateBalloonsCommand:
         return {
             "Pixmap": os.path.join(ICONPATH, "create-balloons.svg"),
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_CreateBalloons", "Create Balloons"),
-            "Accel": "M, B",
+            "Accel": "M, O",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_CreateBalloons",
                 "<b>Automatically create balloons for selected profiles and links</b><br><br>Select profiles and links.",
@@ -159,7 +159,6 @@ class ResfreshBalloonsCommand:
         return {
             "Pixmap": os.path.join(ICONPATH, "refresh-balloons.svg"),
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_RefreshBalloons", "Refresh Balloons"),
-            "Accel": "M, B",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_RefreshBalloons",
                 "<b>Refresh selected balloons</b>",

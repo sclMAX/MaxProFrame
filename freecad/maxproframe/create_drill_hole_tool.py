@@ -1515,6 +1515,7 @@ class DrillHoleCommand:
         return {
             "Pixmap": os.path.join(ICONPATH, "drill-hole.svg"),
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_DrillHole", "Drill Hole"),
+            "Accel": "M, D",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_DrillHole",
                 "<b>Drill Hole</b><br><br>Click a planar face of a profile, a trimmed profile or a cutout, then one of its nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the offsets from that point: one, or a pattern on both sides of it along and across the profile, with a diameter and a depth.",

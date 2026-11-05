@@ -2,6 +2,8 @@
 
 * Unreleased
 
+  - Every MaxProFrame shortcut is now **M** and one letter, none shared, and the README lists them (see [Keyboard shortcuts](README.md#keyboard-shortcuts)): **M, P** Create Profiles (was Shift+S), **M, M** End Miter and **M, N** Notch (both were M, C, so neither ran), **M, H** Cutout / Hole (was E, C), **M, O** Create Balloons and **M, I** Populate IDs (were M, B with Create BOM, which keeps it), and new **M, E** Extend / Cut, **M, D** Drill Hole, **M, L** Create a Parametric Line and **M, K** Attached Link. Manage Profile Libraries, Reset IDs and Refresh Balloons have none. Shortcuts changed in Tools → Customize → Keyboard are kept.
+
   **Fixes**
   - Switching to MaxProFrame first after starting FreeCAD no longer prints **Unknown command** for **Sketcher_NewSketch**, **Part_Fuse**, **Part_Cut** and **PartDesign_Body**, and their toolbar buttons show: the workbench loads Part, Sketcher and PartDesign.
   - After **Apply and continue**, the **Drill Hole** fields show no **Fx** icon and `=` opens no expression editor until the next hole is previewed: an expression set then went on the hole just created, in an Undo step of its own, and not on the next one.

@@ -41,6 +41,7 @@ class LinkCommand:
         return {
             "Pixmap": os.path.join(ICONPATH, "link.svg"),
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_Link", "Attached Link"),
+            "Accel": "M, K",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_Link",
                 "Create a link with attachment",

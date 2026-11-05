@@ -96,6 +96,7 @@ class CreateParametricLineCommand:
         return {
             "Pixmap": TOOL_ICON,
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_ParametricLine", "Create a Parametric Line"),
+            "Accel": "M, L",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_ParametricLine",
                 "Create a parametric line between two vertices.<br><br>Select two vertices, then run this command.",

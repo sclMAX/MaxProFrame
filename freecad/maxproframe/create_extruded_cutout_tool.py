@@ -644,7 +644,7 @@ class AddExtrudedCutoutCommandClass:
             # The name of a svg file available in the resources.
             "Pixmap": os.path.join(ICONPATH, "cutout-hole.svg"),
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_AddExtrudeCutout", "Cutout / Hole"),
-            "Accel": "E, C",
+            "Accel": "M, H",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_AddExtrudeCutout",
                 "<b>Cutout / Hole</b><br><br>Click a planar face of a profile, a trimmed profile or a cutout, then OK: a sketch holding the face outline is created on the face and opened. Draw the hole and close the sketch to cut it.<br><br>Or preselect one face and one sketch to cut with that sketch directly.",
