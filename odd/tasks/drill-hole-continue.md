@@ -12,8 +12,8 @@ Branch: feat/drill-hole-continue. One PR.
 ## Tasks
 
 - T1 [x] S1: remember the diameter in preferences. Route: worker, test-first. Commit: feat(drill-hole) on feat/drill-hole-continue. Done in 839b147.
-- T2 [ ] S2-S5: Apply and continue button, reset to waiting for a face, chaining on the same profile. Route: worker, test-first. Commit: feat(drill-hole) on feat/drill-hole-continue.
-- T3 [ ] S1-S5: Spanish (both .ts, .qm via compile_translations.py), tutorial (docs/tutorial.md#drill-hole), CHANGELOG Unreleased. Route: with T1/T2 commits.
+- T2 [x] S2-S5: Apply and continue button, reset to waiting for a face, chaining on the same profile. Route: worker, test-first. Commit: feat(drill-hole) on feat/drill-hole-continue. Done in 6dd858e.
+- T3 [x] S1-S5: Spanish (both .ts, .qm via compile_translations.py), tutorial (docs/tutorial.md#drill-hole), CHANGELOG Unreleased. Route: with T1/T2 commits. Done in 839b147 (S1 docs) and 6dd858e.
 
 ## Log
 
