@@ -63,8 +63,9 @@ class MaxProFrame(Gui.Workbench):
         for module in ("PartGui", "SketcherGui", "PartDesignGui"):
             try:
                 __import__(module)
-            except ImportError:
-                App.Console.PrintWarning(f"MaxProFrame: {module} is not available\n")
+            except Exception as error:
+                # Without it only its borrowed commands are missing: the workbench still opens.
+                App.Console.PrintWarning(f"MaxProFrame: {module} is not available: {error}\n")
         from freecad.maxproframe import (
             create_bom_tool,
             create_drill_hole_tool,

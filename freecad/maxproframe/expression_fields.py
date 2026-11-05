@@ -44,15 +44,20 @@ class _NoEditor(QtCore.QObject):
 
 
 def bind(widget, obj, prop):
-    """Bind ``widget`` to ``obj.prop`` so it offers the expression editor; False when it cannot."""
-    for blocker in widget.findChildren(QtCore.QObject, _NO_EDITOR):
-        widget.removeEventFilter(blocker)
-        blocker.setObjectName("")
-        blocker.deleteLater()
+    """Bind ``widget`` to ``obj.prop`` so it offers the expression editor; False when it cannot.
+
+    A field unbound before gets its editor back only once bound: a failed bind leaves it bound to the old
+    object, whose editor stays taken away.
+    """
     try:
         Gui.ExpressionBinding(widget).bind(obj, prop)
     except Exception:
         return False
+    for blocker in widget.findChildren(QtCore.QObject, _NO_EDITOR):
+        widget.removeEventFilter(blocker)
+        # deleteLater deletes it on the next event loop: unnamed, unbind no longer takes it for the one in place.
+        blocker.setObjectName("")
+        blocker.deleteLater()
     _place_icon(widget)
     return True
 

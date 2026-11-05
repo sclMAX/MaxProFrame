@@ -1241,7 +1241,10 @@ class DrillHoleTaskPanel:
         self._bind_fields()
 
     def _forget_preview(self):
-        """Show no drill hole: its expressions go to the next one, with the other values. Returns the bodies it hid."""
+        """Stop treating the drill hole shown as the preview, leaving it in the document; the bodies it hid.
+
+        Its expressions go to the next drill hole with the other values. _drop_preview removes it as well.
+        """
         if self.obj is not None and _in_document(self.obj):
             self._expressions = expressions_of(self.obj, EXPRESSION_PROPERTIES)
         hidden = self._visibility

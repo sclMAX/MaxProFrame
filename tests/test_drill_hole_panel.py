@@ -1711,6 +1711,32 @@ class TestDrillHoleApplyAndContinue(DrillHolePanelFixture):
         self.assertTrue(panel.reject())
         self.assertEqual(self.new_objects(before), [first])
 
+    def test_after_apply_an_expression_stays_on_the_applied_hole_and_goes_to_the_next_one(self):
+        # A field driven by an expression: the applied hole keeps it, the field offers no editor on that hole,
+        # and the next hole gets the same expression with the other values.
+        varset = self.doc.addObject("App::VarSet", "VarSet")
+        varset.addProperty("App::PropertyLength", "Diameter")
+        varset.Diameter = 6.0
+        self.doc.recompute()
+        other, top, vertex = self.other_profile()
+        body, panel, first, before = self.previewed_panel()
+        first.setExpression("Diameter", f"{varset.Name}.Diameter")
+        self.doc.recompute()
+        self.apply(panel)
+        self.assertEqual(dict(first.ExpressionEngine), {"Diameter": f"{varset.Name}.Diameter"})
+        self.assertEqual(self.shown_fx_icons(panel), 0)
+        self.assertEqual(self.press_equal(panel.form.spin_diameter), [])
+        self.assertEqual(dict(first.ExpressionEngine), {"Diameter": f"{varset.Name}.Diameter"})
+        self.assertEqual(self.doc.UndoNames, ["Create Drill Hole"])
+        self.click(other, top)
+        self.click(other, vertex)
+        wait()
+        second = self.preview(before + [first.Name])
+        self.assertEqual(dict(second.ExpressionEngine), {"Diameter": f"{varset.Name}.Diameter"})
+        self.assertEqual(second.Diameter.Value, 6.0)
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.doc.UndoNames, ["Create Drill Hole", "Create Drill Hole"])
+
     def test_a_click_on_the_applied_hole_chains_the_next_hole_on_it_at_the_other_end_of_the_profile(self):
         # S4: the drilled profile shows the applied hole: it is the base of the next one, both stay cut.
         body, panel, first, before = self.previewed_panel()
