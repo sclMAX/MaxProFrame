@@ -1520,9 +1520,24 @@ class TestDrillHoleApplyAndContinue(DrillHolePanelFixture):
         top = self.face_towards(other, UP)
         return other, top, self.vertex_of(other, top)
 
+    def dialog_box(self):
+        """The button row of the task dialog: the one button box holding its OK and Cancel."""
+        boxes = [
+            box
+            for box in Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox)
+            if box.button(QtWidgets.QDialogButtonBox.Ok) is not None
+            and box.button(QtWidgets.QDialogButtonBox.Cancel) is not None
+        ]
+        self.assertEqual(len(boxes), 1)
+        return boxes[0]
+
+    def apply_button(self):
+        """Apply and continue in the task dialog's button row, or None."""
+        return self.dialog_box().button(QtWidgets.QDialogButtonBox.Apply)
+
     def apply(self, panel):
         """Click Apply and continue, as the user does."""
-        button = panel.form.button_apply_continue
+        button = self.apply_button()
         self.assertTrue(button.isEnabled())
         button.click()
         self.events()
@@ -1543,7 +1558,7 @@ class TestDrillHoleApplyAndContinue(DrillHolePanelFixture):
         # S2: only while creating a drill hole, not while editing one.
         body = self.tube()
         panel = self.run_command()
-        button = panel.form.button_apply_continue
+        button = self.apply_button()
         self.assertEqual(button.text(), "Apply and continue")
         self.assertFalse(button.isHidden())
         self.assertFalse(button.isEnabled())
@@ -1554,7 +1569,47 @@ class TestDrillHoleApplyAndContinue(DrillHolePanelFixture):
         self.assertTrue(panel.reject())
         self.close_dialog()
         body, obj = self.existing()
-        self.assertTrue(self.edit(obj).form.button_apply_continue.isHidden())
+        self.edit(obj)
+        self.assertIsNone(self.apply_button())
+
+    def test_the_button_sits_next_to_ok_and_cancel_not_in_the_form(self):
+        # S2 (L4): in the task dialog's own button row, not at the bottom of the form.
+        body = self.tube()
+        panel = self.run_command()
+        box = self.dialog_box()
+        button = box.button(QtWidgets.QDialogButtonBox.Apply)
+        self.assertIsNotNone(button)
+        self.assertEqual(button.text(), "Apply and continue")
+        self.assertIs(button.parentWidget(), box.button(QtWidgets.QDialogButtonBox.Ok).parentWidget())
+        self.assertIs(button.parentWidget(), box.button(QtWidgets.QDialogButtonBox.Cancel).parentWidget())
+        self.assertFalse(hasattr(panel.form, "button_apply_continue"))
+        self.assertEqual(
+            [b.text() for b in panel.form.findChildren(QtWidgets.QPushButton) if b.text() == "Apply and continue"],
+            [],
+        )
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+        body, obj = self.existing()
+        self.edit(obj)
+        box = self.dialog_box()
+        self.assertIsNone(box.button(QtWidgets.QDialogButtonBox.Apply))
+        self.assertEqual(
+            [b.text() for b in box.buttons() if b.text() == "Apply and continue"],
+            [],
+        )
+
+    def test_the_button_does_not_run_ok(self):
+        # S2: the standard Apply button only applies and continues; the dialog stays open, OK never runs.
+        body, panel, first, before = self.previewed_panel()
+        with patch.object(panel, "accept", wraps=panel.accept) as accept:
+            self.apply(panel)
+        accept.assert_not_called()
+        self.assertTrue(Gui.Control.activeDialog())
+        self.assertFalse(panel._closed)
+        self.assertEqual(self.new_objects(before), [first])
+        self.assertEqual(self.doc.UndoNames, ["Create Drill Hole"])
+        self.assertIsNotNone(self.apply_button())
+        self.assertFalse(self.apply_button().isEnabled())
 
     def test_apply_creates_the_hole_in_its_own_undo_step_and_the_next_one_on_another_profile_keeps_every_value(self):
         # S2, S3, S1: one Undo step per hole; the panel waits for a face with every value kept.
@@ -1580,7 +1635,7 @@ class TestDrillHoleApplyAndContinue(DrillHolePanelFixture):
         self.assertEqual(panel.reference_markers(), [])
         self.assertEqual(self.status(panel), "No preview")
         self.assertEqual(self.message(panel), "")
-        self.assertFalse(panel.form.button_apply_continue.isEnabled())
+        self.assertFalse(self.apply_button().isEnabled())
         self.assertEqual(self.form_values(panel), kept)
         # Only the face and the point change with the next clicks.
         self.click(other, top)
@@ -1690,7 +1745,7 @@ class TestDrillHoleApplyAndContinue(DrillHolePanelFixture):
 
         def press(fp):
             panel.form.spin_diameter.setValue(14.0)
-            panel.form.button_apply_continue.click()
+            self.apply_button().click()
 
         hooks.append(press)
         panel.form.spin_diameter.setValue(12.0)
@@ -1705,7 +1760,8 @@ class TestDrillHoleApplyAndContinue(DrillHolePanelFixture):
     def test_the_button_and_its_tooltip_are_spanish(self):
         # S2: Aplicar y seguir.
         use_language(self, "Spanish", "es_ES")
-        button = self.run_command().form.button_apply_continue
+        self.run_command()
+        button = self.apply_button()
         self.assertEqual(button.text(), "Aplicar y seguir")
         self.assertEqual(
             button.toolTip(),

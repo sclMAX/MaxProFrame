@@ -44,7 +44,7 @@ from freecad.maxproframe.expression_fields import (
 )
 from freecad.maxproframe.extruded_cutout import CUT_TYPES, wall_thickness
 from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, get_param_group, translate
-from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
+from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
 
 # Offsets of a new drill hole from its reference point, in mm: the hole starts on the picked point.
 DEFAULT_OFFSET = 0.0
@@ -239,6 +239,11 @@ PATTERN_PROPERTIES = tuple(f"{prop}{kind}" for _, prop in PATTERN_ROWS for kind 
 EXPRESSION_PROPERTIES = ("OffsetAlong", "OffsetAcross", "Diameter", *PATTERN_PROPERTIES, "ExtrusionLength")
 
 
+def _button_id(button):
+    """The int of a standard button, given as an int (FreeCAD) or as a PySide enum."""
+    return int(getattr(button, "value", button))
+
+
 class DrillHoleTaskPanel:
     """Face, vertex, offsets, diameter, pattern and depth of a drill hole, previewed live.
 
@@ -290,6 +295,8 @@ class DrillHoleTaskPanel:
         self._transaction_open = False
         # Whether Apply and continue created a hole: OK with no face picked since then just closes.
         self._applied = False
+        # Apply and continue in the dialog's button row, next to OK and Cancel: only while creating.
+        self._apply_button = None
         # (scene, node) of the markers on the face, and the global points of the reference corner and of
         # the point the offsets are measured from.
         self._corner_node = None
@@ -410,19 +417,6 @@ class DrillHoleTaskPanel:
         preview.addWidget(form.status_label)
         layout.addWidget(form.groupBox_preview)
 
-        # Creates the hole and keeps the panel open for the next one: only while creating.
-        form.button_apply_continue = QtGui.QPushButton(translate("frameforge", "Apply and continue"))
-        form.button_apply_continue.setToolTip(
-            translate(
-                "frameforge",
-                "Create this drill hole in its own Undo step and keep the panel open: click a face for the next "
-                "hole, on another profile or on this one, with the same values.",
-            )
-        )
-        form.button_apply_continue.setEnabled(False)
-        form.button_apply_continue.setHidden(obj is not None)
-        layout.addWidget(form.button_apply_continue)
-
         form.warning_label = QtGui.QLabel()
         form.message_label = QtGui.QLabel()
         for label in (form.warning_label, form.message_label):
@@ -448,7 +442,6 @@ class DrillHoleTaskPanel:
         form.cb_hole_at_point.toggled.connect(self._changed)
         form.groupBox_pattern.toggled.connect(self._on_pattern_toggled)
         form.cb_auto_update.toggled.connect(self._on_auto_update_toggled)
-        form.button_apply_continue.clicked.connect(self.apply_and_continue)
         return form
 
     def _build_pattern(self, form, obj):
@@ -854,7 +847,7 @@ class DrillHoleTaskPanel:
             text = f"{obj.Label} ({obj.Name}) {face}"
         self.form.face_label.setText(text)
         self.form.vertex_label.setText(self._vertex_text())
-        self.form.button_apply_continue.setEnabled(self.face is not None and self.vertex is not None)
+        self._enable_apply()
         self._draw_corner_marker()
         self._messages = list(messages)
         self._error = ""
@@ -1302,6 +1295,52 @@ class DrillHoleTaskPanel:
         pass
 
     # Dialog.
+
+    def getStandardButtons(self):
+        """OK and Cancel, and Apply (shown as Apply and continue) while creating."""
+        buttons = QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel
+        if self.edited is None:
+            buttons |= QtGui.QDialogButtonBox.Apply
+        return buttons
+
+    def modifyStandardButtons(self, box):
+        """Turn the Apply button of the dialog's button row into Apply and continue."""
+        # The task view deletes the row when the dialog closes: no wrapper may outlive it.
+        invalidate_wrapper_on_destroy(box)
+        button = box.button(QtGui.QDialogButtonBox.Apply)
+        if button is None:
+            return
+        invalidate_wrapper_on_destroy(button)
+        button.setText(translate("frameforge", "Apply and continue"))
+        button.setToolTip(
+            translate(
+                "frameforge",
+                "Create this drill hole in its own Undo step and keep the panel open: click a face for the next "
+                "hole, on another profile or on this one, with the same values.",
+            )
+        )
+        button.destroyed.connect(self._apply_button_gone)
+        self._apply_button = button
+        self._enable_apply()
+
+    def clicked(self, button):
+        """A button of the dialog's row: Apply creates the hole and continues, OK and Cancel run on their own."""
+        if _button_id(button) == _button_id(QtGui.QDialogButtonBox.Apply):
+            self.apply_and_continue()
+
+    def _apply_button_gone(self, *args):
+        self._apply_button = None
+
+    def _enable_apply(self):
+        """Apply and continue is enabled once a face and a point are picked."""
+        button = self._apply_button
+        if button is None:
+            return
+        try:
+            button.setEnabled(self.face is not None and self.vertex is not None)
+        except RuntimeError:
+            # The dialog closed: its buttons are deleted.
+            self._apply_button = None
 
     def _active(self):
         return not self._closed
