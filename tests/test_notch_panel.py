@@ -127,7 +127,7 @@ class TestNotchCommand(NotchPanelFixture):
         self.assertIn("MaxProFrame_Notch", Gui.listCommands())
         resources = NotchCommand().GetResources()
         self.assertEqual(resources["MenuText"], "Notch")
-        self.assertEqual(resources["Accel"], "M, C")
+        self.assertEqual(resources["Accel"], "M, N")
         self.assertTrue(resources["Pixmap"].endswith("corner-notch.svg"))
         self.assertTrue(os.path.isfile(resources["Pixmap"]))
 

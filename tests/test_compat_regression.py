@@ -64,12 +64,14 @@ class TestNoFrameForgeCommandAliases(unittest.TestCase):
                 self.assertFalse(legacy in commands, f"{legacy} is registered as an alias of {name}")
 
     def test_add_command_registers_only_the_given_name(self):
-        from freecad.maxproframe.ff_tools import add_command
+        from freecad.maxproframe.ff_tools import COMMANDS, add_command
 
         command = object()
         # FreeCADGui exposes no removeCommand, so record registrations instead of leaking probes.
-        with patch.object(Gui, "addCommand") as register:
+        with patch.object(Gui, "addCommand") as register, patch.dict(COMMANDS):
             add_command("MaxProFrame_CompatProbe", command)
+            self.assertIs(COMMANDS["MaxProFrame_CompatProbe"], command)
+        self.assertNotIn("MaxProFrame_CompatProbe", COMMANDS)
 
         self.assertEqual([call.args for call in register.call_args_list], [("MaxProFrame_CompatProbe", command)])
 

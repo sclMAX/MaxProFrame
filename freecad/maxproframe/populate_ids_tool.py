@@ -184,7 +184,7 @@ class PopulateIDsCommand:
         return {
             "Pixmap": os.path.join(ICONPATH, "populate-ids.svg"),
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_PopulateIDs", "Populate IDs"),
-            "Accel": "M, B",
+            "Accel": "M, U",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_PopulateIDs",
                 "<b>Populate IDs of selected MaxProFrame objects</b><br><br>Select profiles, links, groups or parts.",
@@ -219,7 +219,6 @@ class ResetIDsCommand:
         return {
             "Pixmap": os.path.join(ICONPATH, "reset-ids.svg"),
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_ResetIDs", "Reset IDs"),
-            "Accel": "M, B",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_ResetIDs",
                 "<b>Reset IDs of selected MaxProFrame objects</b><br><br>Select profiles, links, groups or parts.",

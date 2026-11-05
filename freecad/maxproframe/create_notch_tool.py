@@ -58,7 +58,7 @@ class NotchCommand:
         return {
             "Pixmap": os.path.join(ICONPATH, "corner-notch.svg"),
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_Notch", "Notch"),
-            "Accel": "M, C",
+            "Accel": "M, N",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_Notch",
                 "<b>Notch</b><br><br>Select a target profile, then the profiles to notch into it. Gap leaves that clearance all around the target.",

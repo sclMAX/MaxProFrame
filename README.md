@@ -82,6 +82,22 @@ The Addon Manager shows an update when a new version is published on the `releas
 
 The [tutorial](docs/tutorial.md) walks through a complete frame step by step, and the [profile task panel reference](docs/commands.md) explains alignment, offsets and per-edge settings.
 
+### Keyboard shortcuts
+
+Every shortcut is **M** followed by one letter: press M, release it, then press the letter.
+
+| Command | Shortcut | Command | Shortcut |
+|---|---|---|---|
+| Create Profiles | `M, P` | Drill Hole | `M, D` |
+| Create a Parametric Line | `M, L` | Attached Link | `M, K` |
+| End Miter | `M, M` | Populate IDs | `M, U` |
+| Extend / Cut | `M, E` | Create Balloons | `M, O` |
+| Notch | `M, N` | Create BOM | `M, B` |
+| Cutout / Hole | `M, H` | Recompute all profiles | `M, R` |
+| | | Export all TechDraw Pages as PDF | `M, T` |
+
+None of them is used by a command of another workbench shipped with FreeCAD. Change them in **Tools → Customize → Keyboard**, category MaxProFrame.
+
 ## Profile libraries
 
 Open **Manage Profile Libraries** to work with your catalogs. System libraries (Metal, Wood, Aluminium Extrusion) are read-only; duplicate one to change it. Folder libraries live in a folder you choose, together with their custom sections, so you can copy or sync them to another computer or exchange them as ZIP files.

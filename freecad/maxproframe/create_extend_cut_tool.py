@@ -916,6 +916,7 @@ class ExtendCutCommand:
         return {
             "Pixmap": os.path.join(ICONPATH, "corner-end-trim.svg"),
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_ExtendCut", "Extend / Cut"),
+            "Accel": "M, E",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_ExtendCut",
                 "<b>Extend / Cut</b><br><br>Select a target face or profile, then the profiles to extend or cut up to it.",

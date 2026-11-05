@@ -628,7 +628,7 @@ class CreateEndMiterCommand:
         return {
             "Pixmap": os.path.join(ICONPATH, "corner-end-miter.svg"),
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_EndMiter", "Create Miter Ends"),
-            "Accel": "M, C",
+            "Accel": "M, M",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_EndMiter",
                 "<b>Create Miter Ends</b><br><br>Click two or more profiles to miter the corners they form.",
