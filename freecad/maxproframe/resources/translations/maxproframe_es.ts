@@ -1134,7 +1134,6 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Forward →</source><translation>Adelante →</translation></message>
     <message><source>{} cutout</source><translation>{} calado</translation></message>
     <message><source>{} cutouts</source><translation>{} calados</translation></message>
-    <message><source>The cutouts overlap: the pitch ({}) is smaller than the sketch along the profile ({}).</source><translation>Los calados se superponen: el paso ({}) es menor que el croquis a lo largo del perfil ({}).</translation></message>
     <message><source>A cutout reaches past the end of the face.</source><translation>Un calado sobrepasa el extremo de la cara.</translation></message>
     <message><source>Cutout / Hole: the pattern makes {} cutouts, at most {}.</source><translation>Calado: el patrón hace {} calados, como máximo {}.</translation></message>
     <message><source>Cutout / Hole: the face is square to the profile axis, the pattern has no direction.</source><translation>Calado: la cara es perpendicular al eje del perfil, el patrón no tiene dirección.</translation></message>

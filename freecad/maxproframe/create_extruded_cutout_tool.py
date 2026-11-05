@@ -17,7 +17,6 @@ from freecad.maxproframe.expression_fields import (
     expressions_of,
     fit_width,
     length_field,
-    length_text,
     restore_expressions,
 )
 from freecad.maxproframe.extruded_cutout import (
@@ -448,10 +447,9 @@ class CreateExtrudedCutoutTaskPanel:
         return translate("frameforge", "Pattern: {}").format(text.format(total))
 
     def _pattern_warnings(self, form):
-        """Lines on the pattern while checked: cutouts that overlap, cutouts past the end of the face.
+        """Lines on the pattern while checked: a cutout past the end of the face.
 
-        Two cutouts of a side overlap when its pitch is smaller than the sketch along the profile, and so do
-        its first cutout and the sketch.
+        No overlap warning: a sketch may be meant to overlap its copies, and the preview shows them.
         """
         if not form.groupBox_pattern.isChecked():
             return []
@@ -459,17 +457,8 @@ class CreateExtrudedCutoutTaskPanel:
         if extents is None:
             return []
         (sketch_min, sketch_max), (face_min, face_max) = extents
-        length = sketch_max - sketch_min
         backward, forward = self._pattern_wanted(form)
         lines = []
-        pitches = [pitch for count, pitch in (backward, forward) if count > 0 and pitch < length - LENGTH_TOLERANCE]
-        if pitches:
-            lines.append(
-                translate(
-                    "frameforge",
-                    "The cutouts overlap: the pitch ({}) is smaller than the sketch along the profile ({}).",
-                ).format(length_text(min(pitches)), length_text(length))
-            )
         offsets = axis_positions(backward, forward, True)
         if (
             sketch_min + offsets[0] < face_min - LENGTH_TOLERANCE

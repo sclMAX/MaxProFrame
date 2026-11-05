@@ -19,7 +19,6 @@ PATTERN_FIELDS = (
     ("spin_forward_count", "AlongForwardCount"),
     ("spin_forward_pitch", "AlongForwardPitch"),
 )
-OVERLAP = "The cutouts overlap: the pitch (8 mm) is smaller than the sketch along the profile (10 mm)."
 PAST_THE_FACE = "A cutout reaches past the end of the face."
 
 
@@ -155,18 +154,11 @@ class TestCutoutPatternPanel(PatternPanelFixture):
         self.assertEqual(dict(cutout.ExpressionEngine).get("AlongForwardCount"), f"{varset.Name}.Slots")
         self.assertEqual(self.cut(body, cutout), 4)
 
-    def test_a_pitch_smaller_than_the_sketch_warns_without_stopping_ok(self):
-        """S5: the circle is 10 mm long along the profile."""
+    def test_overlapping_cutouts_give_no_warning(self):
+        """L7: a sketch may be meant to overlap its copies, and the panel shows them: no overlap warning."""
         body, cutout, panel = self.new_panel()
-        self.set_pattern(panel, forward=(2, 8.0))
-        self.assertEqual(self.warning(panel), OVERLAP)
-        panel.form.spin_forward_pitch.setValue(10.0)
-        self.events()
+        self.set_pattern(panel, backward=(1, 8.0), forward=(2, 8.0))
         self.assertEqual(self.warning(panel), "")
-        panel.form.spin_backward_count.setValue(1)
-        panel.form.spin_backward_pitch.setValue(8.0)
-        self.events()
-        self.assertEqual(self.warning(panel), OVERLAP)
         self.assertTrue(panel.accept())
         self.assertEqual(cutout.getStatusString(), "Valid")
 
@@ -262,10 +254,7 @@ class TestCutoutPatternPanelSpanish(PatternPanelFixture):
         self.assertEqual(form.groupBox_pattern.title(), "Patrón: 1 calado")
         self.set_pattern(panel, backward=(1, 50.0), forward=(2, 8.0))
         self.assertEqual(form.groupBox_pattern.title(), "Patrón: 4 calados")
-        self.assertEqual(
-            self.warning(panel),
-            "Los calados se superponen: el paso (8 mm) es menor que el croquis a lo largo del perfil (10 mm).",
-        )
+        self.assertEqual(self.warning(panel), "")
         form.spin_forward_pitch.setValue(60.0)
         form.spin_forward_count.setValue(4)
         self.events()
