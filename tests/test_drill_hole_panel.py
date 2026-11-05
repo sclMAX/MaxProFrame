@@ -17,7 +17,7 @@ from test_end_miter_geometry import CENTER
 from test_extend_cut_preview import keep_auto_preview, wait
 
 from freecad.maxproframe import create_drill_hole_tool, drill_hole
-from freecad.maxproframe.create_drill_hole_tool import DrillHoleCommand
+from freecad.maxproframe.create_drill_hole_tool import PATTERN_ROWS, DrillHoleCommand
 from freecad.maxproframe.create_end_miter_tool import make_end_miter_profile
 from freecad.maxproframe.create_extend_cut_tool import ExtendCutTaskPanel, make_extend_cut_profile
 from freecad.maxproframe.create_notch_tool import make_notch_profile
@@ -1509,6 +1509,209 @@ class TestDrillHoleRememberedDiameter(DrillHolePanelFixture):
         self.assertTrue(panel.accept())
         self.close_dialog()
         self.assertEqual(remembered_diameter(), 14.0)
+
+
+class TestDrillHoleApplyAndContinue(DrillHolePanelFixture):
+    """S2-S5: Apply and continue creates the hole in its own Undo step and keeps the panel open for the next face."""
+
+    def other_profile(self):
+        """A second profile, across the tube at x = 250: (profile, its top face, a vertex of that face)."""
+        other = self.make_profile(self.make_sketch(((250, -200, 0), (250, 200, 0))), "Edge1", **CENTER)
+        top = self.face_towards(other, UP)
+        return other, top, self.vertex_of(other, top)
+
+    def apply(self, panel):
+        """Click Apply and continue, as the user does."""
+        button = panel.form.button_apply_continue
+        self.assertTrue(button.isEnabled())
+        button.click()
+        self.events()
+
+    def form_values(self, panel):
+        """Every value of the panel fields: offsets, diameter, pattern, cut type and depth."""
+        form = panel.form
+        spins = [form.spin_offset_along, form.spin_offset_across, form.spin_diameter]
+        spins += [getattr(form, f"spin_{row}_{kind}") for row, _ in PATTERN_ROWS for kind in ("count", "pitch")]
+        return (
+            [round(spin.value(), 6) for spin in spins + [form.spin_depth]],
+            form.groupBox_pattern.isChecked(),
+            form.cb_hole_at_point.isChecked(),
+            form.combo_cut_type.currentData(),
+        )
+
+    def test_the_button_shows_only_while_creating_and_is_enabled_once_a_face_and_a_point_are_picked(self):
+        # S2: only while creating a drill hole, not while editing one.
+        body = self.tube()
+        panel = self.run_command()
+        button = panel.form.button_apply_continue
+        self.assertEqual(button.text(), "Apply and continue")
+        self.assertFalse(button.isHidden())
+        self.assertFalse(button.isEnabled())
+        self.click(body, self.face_towards(body, UP))
+        self.assertFalse(button.isEnabled())
+        self.click(body, self.vertex_at(body, CORNER))
+        self.assertTrue(button.isEnabled())
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+        body, obj = self.existing()
+        self.assertTrue(self.edit(obj).form.button_apply_continue.isHidden())
+
+    def test_apply_creates_the_hole_in_its_own_undo_step_and_the_next_one_on_another_profile_keeps_every_value(self):
+        # S2, S3, S1: one Undo step per hole; the panel waits for a face with every value kept.
+        other, top, vertex = self.other_profile()
+        body, panel, first, before = self.previewed_panel(diameter=8.0)
+        self.set_pattern(panel, along_forward=(2, 40.0))
+        self.set_cut_type(panel, "Distance")
+        panel.form.spin_depth.setValue(1.5)
+        wait()
+        kept = self.form_values(panel)
+        self.apply(panel)
+        self.assertTrue(Gui.Control.activeDialog())
+        self.assertEqual(self.new_objects(before), [first])
+        self.assertEqual(first.getStatusString(), "Valid")
+        self.assertEqual(first.baseObject, (body, [self.face_towards(body, UP)]))
+        self.assertEqual(self.values(first)[1:8], (30.0, 25.0, 8.0, 2, 40.0, "Distance", 1.5))
+        self.assertEqual(self.doc.UndoNames, ["Create Drill Hole"])
+        self.assertEqual(remembered_diameter(), 8.0)
+        # Waiting for a face: no reference, no markers, no preview, every value kept.
+        self.assertEqual((panel.face, panel.vertex), (None, None))
+        self.assertEqual(panel.form.face_label.text(), NO_FACE)
+        self.assertEqual(panel.form.vertex_label.text(), NO_VERTEX)
+        self.assertEqual(panel.reference_markers(), [])
+        self.assertEqual(self.status(panel), "No preview")
+        self.assertEqual(self.message(panel), "")
+        self.assertFalse(panel.form.button_apply_continue.isEnabled())
+        self.assertEqual(self.form_values(panel), kept)
+        # Only the face and the point change with the next clicks.
+        self.click(other, top)
+        self.click(other, vertex)
+        wait()
+        second = self.preview(before + [first.Name])
+        self.assertEqual(second.baseObject, (other, [top]))
+        self.assertEqual(self.values(second), (vertex, *self.values(first)[1:]))
+        self.assertTrue(panel.accept())
+        self.assertEqual(second.getStatusString(), "Valid")
+        self.assertAlmostEqual(second.Shape.Volume, other.Shape.Volume - 3 * hole_volume(8.0, 1.5), places=3)
+        self.assertAlmostEqual(first.Shape.Volume, body.Shape.Volume - 3 * hole_volume(8.0, 1.5), places=3)
+        self.assertEqual(self.doc.UndoNames, ["Create Drill Hole", "Create Drill Hole"])
+        self.doc.undo()
+        self.assertEqual(self.new_objects(before), [first])
+        self.assertEqual(first.getStatusString(), "Valid")
+
+    def test_a_click_on_the_applied_hole_chains_the_next_hole_on_it_at_the_other_end_of_the_profile(self):
+        # S4: the drilled profile shows the applied hole: it is the base of the next one, both stay cut.
+        body, panel, first, before = self.previewed_panel()
+        self.apply(panel)
+        self.assertTrue(first.ViewObject.Visibility)
+        top = self.face_towards(first, UP)
+        self.click_at(first, top, (340, 20, 25))
+        self.assertEqual(self.message(panel), "")
+        self.assertEqual(panel.face, (first, top))
+        self.assertEqual(panel.vertex, self.vertex_at(first, FAR_CORNER))
+        wait()
+        second = self.preview(before + [first.Name])
+        self.assertEqual(second.baseObject, (first, [top]))
+        self.assertTrue(panel.accept())
+        for obj in (first, second):
+            self.assertEqual(obj.getStatusString(), "Valid")
+            self.assertEqual(obj.ReferenceWarning, "")
+        self.assertAlmostEqual(second.Shape.Volume, body.Shape.Volume - 2 * ONE_HOLE, places=3)
+        self.assertTrue(self.empty(second.Shape, -20, 0, 24))
+        self.assertTrue(self.empty(second.Shape, 320, 0, 24))
+        self.assertEqual(
+            [obj.ViewObject.Visibility for obj in (body, first, second)],
+            [False, False, True],
+        )
+        self.assertEqual(self.doc.UndoNames, ["Create Drill Hole", "Create Drill Hole"])
+
+    def test_cancel_after_apply_keeps_the_applied_hole_and_drops_the_one_in_progress(self):
+        # S5: on another profile, and chained on the applied hole.
+        other, top, vertex = self.other_profile()
+        body, panel, first, before = self.previewed_panel()
+        self.apply(panel)
+        self.click(other, top)
+        self.click(other, vertex)
+        wait()
+        self.preview(before + [first.Name])
+        self.assertFalse(other.ViewObject.Visibility)
+        self.assertTrue(panel.reject())
+        self.assertEqual(self.new_objects(before), [first])
+        self.assertEqual(first.getStatusString(), "Valid")
+        self.assertAlmostEqual(first.Shape.Volume, body.Shape.Volume - ONE_HOLE, places=3)
+        self.assertEqual(
+            [obj.ViewObject.Visibility for obj in (body, first, other)],
+            [False, True, True],
+        )
+        self.assertEqual(self.doc.UndoNames, ["Create Drill Hole"])
+        self.close_dialog()
+        body, panel, first, before = self.previewed_panel()
+        self.apply(panel)
+        self.click_at(first, self.face_towards(first, UP), (340, 20, 25))
+        wait()
+        self.preview(before + [first.Name])
+        self.assertFalse(first.ViewObject.Visibility)
+        self.assertTrue(panel.reject())
+        self.assertEqual(self.new_objects(before), [first])
+        self.assertEqual([obj.ViewObject.Visibility for obj in (body, first)], [False, True])
+        self.assertEqual(self.doc.UndoNames, ["Create Drill Hole"])
+
+    def test_ok_with_no_face_after_apply_closes_the_panel_and_keeps_the_applied_hole(self):
+        # S5: nothing is in progress, OK just closes.
+        body, panel, first, before = self.previewed_panel()
+        self.apply(panel)
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.message(panel), "")
+        self.assertEqual(self.new_objects(before), [first])
+        self.assertEqual(first.getStatusString(), "Valid")
+        self.assertEqual(self.doc.UndoNames, ["Create Drill Hole"])
+        # Closed: a click picks nothing.
+        self.click(first, self.face_towards(first, UP))
+        self.assertIsNone(panel.face)
+
+    def test_apply_with_a_failing_hole_keeps_it_in_progress_without_an_undo_step(self):
+        # S2: like OK, the panel keeps the hole and shows why.
+        body, panel, obj, before = self.previewed_panel()
+        self.set_pattern(panel, False)
+        wait()
+        self.apply(panel)
+        self.assertIn("Drill Hole: no hole to drill.", self.message(panel))
+        self.assertEqual(panel.face, (body, self.face_towards(body, UP)))
+        self.assertEqual(self.new_objects(before), [obj])
+        self.assertIsNone(remembered_diameter())
+        # Nothing was committed: Cancel leaves the document unchanged.
+        self.assertTrue(panel.reject())
+        self.assertEqual(self.names(), before)
+        self.assertEqual(self.doc.UndoCount, 0)
+
+    def test_apply_pressed_during_a_recompute_applies_the_last_values_once_it_ends(self):
+        # S2: a recompute pumps Qt events; the button waits for it, and the panel stays open.
+        hooks = self.hook_execute()
+        body, panel, first, before = self.previewed_panel()
+
+        def press(fp):
+            panel.form.spin_diameter.setValue(14.0)
+            panel.form.button_apply_continue.click()
+
+        hooks.append(press)
+        panel.form.spin_diameter.setValue(12.0)
+        wait(SETTLE)
+        self.assertTrue(Gui.Control.activeDialog())
+        self.assertEqual(self.new_objects(before), [first])
+        self.assertAlmostEqual(first.Diameter.Value, 14.0, places=6)
+        self.assertEqual(first.getStatusString(), "Valid")
+        self.assertEqual(self.doc.UndoNames, ["Create Drill Hole"])
+        self.assertEqual((panel.face, panel.vertex), (None, None))
+
+    def test_the_button_and_its_tooltip_are_spanish(self):
+        # S2: Aplicar y seguir.
+        use_language(self, "Spanish", "es_ES")
+        button = self.run_command().form.button_apply_continue
+        self.assertEqual(button.text(), "Aplicar y seguir")
+        self.assertEqual(
+            button.toolTip(),
+            "Crea este agujero, que se deshace por separado, y deja el panel abierto: hacé clic en una cara para el "
+            "próximo agujero, en otro perfil o en este, con los mismos valores.",
+        )
 
 
 class TestDrillHoleEdit(DrillHolePanelFixture):

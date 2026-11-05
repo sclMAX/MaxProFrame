@@ -2,7 +2,8 @@
 
 * Unreleased
 
-  - **Drill Hole** remembers the last diameter: a new drill hole opens with the **Diameter** of the last one confirmed with **OK**, also after restarting FreeCAD (see the [tutorial](docs/tutorial.md#drill-hole)). **Cancel** leaves it unchanged, the first drill hole opens with 10 mm as before, and a double-clicked drill hole shows its own diameter.
+  - Drill several holes without running **Drill Hole** again: **Apply and continue** (Spanish *Aplicar y seguir*) creates the hole in its own Undo step and keeps the panel open, waiting for a click on a face, with every value kept; only the face and the point change (see the [tutorial](docs/tutorial.md#drill-hole)). Click another profile, or the one just drilled, for example its other end: the next hole is built on the drill hole just created and both stay cut. **Cancel** then drops only the hole in progress, and **OK** with no face picked since just closes the panel. The button is only shown while creating a drill hole.
+  - **Drill Hole** remembers the last diameter: a new drill hole opens with the **Diameter** of the last one confirmed with **OK** or **Apply and continue**, also after restarting FreeCAD (see the [tutorial](docs/tutorial.md#drill-hole)). **Cancel** leaves it unchanged, the first drill hole opens with 10 mm as before, and a double-clicked drill hole shows its own diameter.
 
   **Fixes**
   - A **Cutout / Hole** drawn on a face the profile no longer has, after a change of its shape, now fails the recompute with a message naming the profile and the face (Spanish *Calado: Perfil ya no tiene la cara Face12.*) instead of a raw error.

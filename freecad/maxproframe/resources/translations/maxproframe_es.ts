@@ -1153,6 +1153,8 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Number of holes forward of the point, across the profile</source><translation>Cantidad de agujeros hacia adelante del punto, transversal al perfil</translation></message>
     <message><source>Distance between the holes forward of the point, across the profile</source><translation>Distancia entre los agujeros hacia adelante del punto, transversal al perfil</translation></message>
     <message><source>Drill a hole at the point the offsets give</source><translation>Perforar un agujero en el punto que dan los desplazamientos</translation></message>
+    <message><source>Apply and continue</source><translation>Aplicar y seguir</translation></message>
+    <message><source>Create this drill hole in its own Undo step and keep the panel open: click a face for the next hole, on another profile or on this one, with the same values.</source><translation>Crea este agujero, que se deshace por separado, y deja el panel abierto: hacé clic en una cara para el próximo agujero, en otro perfil o en este, con los mismos valores.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ParametricLine</name>

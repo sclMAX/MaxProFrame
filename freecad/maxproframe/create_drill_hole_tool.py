@@ -254,7 +254,10 @@ class DrillHoleTaskPanel:
     vertex of its base under the click.
 
     Without ``edited`` the preview is the drill hole OK keeps, made once a face and a vertex are
-    picked, inside one transaction that Cancel aborts. With ``edited`` (an existing drill hole) the
+    picked, inside one transaction that Cancel aborts. Apply and continue keeps it in its own Undo step,
+    as OK does, and leaves the panel open with every value, waiting for the face of the next hole: on
+    another profile, or on the hole just created, which the next one is then built on. Cancel drops only
+    the hole in progress; OK with no face picked since just closes the panel. With ``edited`` (an existing drill hole) the
     edited hole itself is the preview, inside the edit transaction: OK keeps the changes in one Undo
     step, or none when nothing changed; Cancel puts the stored values back.
 
@@ -285,6 +288,8 @@ class DrillHoleTaskPanel:
         self.center_across = False
         self._closed = False
         self._transaction_open = False
+        # Whether Apply and continue created a hole: OK with no face picked since then just closes.
+        self._applied = False
         # (scene, node) of the markers on the face, and the global points of the reference corner and of
         # the point the offsets are measured from.
         self._corner_node = None
@@ -405,6 +410,19 @@ class DrillHoleTaskPanel:
         preview.addWidget(form.status_label)
         layout.addWidget(form.groupBox_preview)
 
+        # Creates the hole and keeps the panel open for the next one: only while creating.
+        form.button_apply_continue = QtGui.QPushButton(translate("frameforge", "Apply and continue"))
+        form.button_apply_continue.setToolTip(
+            translate(
+                "frameforge",
+                "Create this drill hole in its own Undo step and keep the panel open: click a face for the next "
+                "hole, on another profile or on this one, with the same values.",
+            )
+        )
+        form.button_apply_continue.setEnabled(False)
+        form.button_apply_continue.setHidden(obj is not None)
+        layout.addWidget(form.button_apply_continue)
+
         form.warning_label = QtGui.QLabel()
         form.message_label = QtGui.QLabel()
         for label in (form.warning_label, form.message_label):
@@ -430,6 +448,7 @@ class DrillHoleTaskPanel:
         form.cb_hole_at_point.toggled.connect(self._changed)
         form.groupBox_pattern.toggled.connect(self._on_pattern_toggled)
         form.cb_auto_update.toggled.connect(self._on_auto_update_toggled)
+        form.button_apply_continue.clicked.connect(self.apply_and_continue)
         return form
 
     def _build_pattern(self, form, obj):
@@ -835,6 +854,7 @@ class DrillHoleTaskPanel:
             text = f"{obj.Label} ({obj.Name}) {face}"
         self.form.face_label.setText(text)
         self.form.vertex_label.setText(self._vertex_text())
+        self.form.button_apply_continue.setEnabled(self.face is not None and self.vertex is not None)
         self._draw_corner_marker()
         self._messages = list(messages)
         self._error = ""
@@ -1358,6 +1378,11 @@ class DrillHoleTaskPanel:
         if self._defer(self.accept):
             return False
         problem = self._missing()
+        if problem and self._applied and self.face is None:
+            # Nothing in progress since Apply and continue: OK just closes the panel.
+            self.clean()
+            self._discard_preview()
+            return True
         if problem:
             self._show([problem])
             return False
@@ -1382,6 +1407,47 @@ class DrillHoleTaskPanel:
         if self.edited is not None:
             self._close_edit()
         return True
+
+    def apply_and_continue(self, *args):
+        """Create the hole as OK does, in its own Undo step, then wait for the face of the next one.
+
+        Every value stays for the next hole: only the face and the point change with the next clicks.
+        Only while creating. Returns whether the hole was created.
+        """
+        if self.edited is not None or not self._active():
+            return False
+        if self._defer(self._apply_deferred):
+            return False
+        problem = self._missing()
+        if problem:
+            self._show([problem])
+            return False
+        self._preview_timer.stop()
+        self._update_preview(force=True)
+        # OK or Cancel pressed during that recompute may have closed the panel.
+        if self._error or not self._active():
+            return False
+        self.doc.commitTransaction()
+        self._transaction_open = False
+        self._remember_diameter()
+        self._applied = True
+        # The created hole is no preview any more: the bodies it hides stay hidden, as after OK. Its
+        # expressions go to the next hole with the other values; its transaction opens on the next pick.
+        self._expressions = expressions_of(self.obj, EXPRESSION_PROPERTIES)
+        self.obj = None
+        self._visibility = []
+        self.face, self.vertex = None, None
+        self._measure_from_corner()
+        self._previewed = ()
+        self._show([])
+        self._show_warning()
+        self._clear_selection()
+        return True
+
+    def _apply_deferred(self):
+        """Apply and continue pressed during a recompute, once it ends: the panel stays open."""
+        self.apply_and_continue()
+        return False
 
 
 class DrillHoleCommand:
