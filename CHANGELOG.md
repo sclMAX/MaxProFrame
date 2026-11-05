@@ -1,5 +1,10 @@
 ## Changelog
 
+* Unreleased
+
+  **Fixes**
+  - A **Cutout / Hole** drawn on a face the profile no longer has, after a change of its shape, now fails the recompute with a message naming the profile and the face (Spanish *Calado: Perfil ya no tiene la cara Face12.*) instead of a raw error.
+
 * v1.7.0 (2026-11-05)
 
   - Show only the total of holes in the **Drill Hole** **Pattern** title, for example **Pattern: 9 holes** (Spanish *Patrón: 9 agujeros*), as the **Cutout / Hole** pattern does; the fields below it show each side.
