@@ -15,11 +15,13 @@ from freecad.maxproframe.section_outline import build_section_face
 from freecad.maxproframe.version import __version__
 
 ROOT = os.path.join(os.path.dirname(__file__), os.pardir)
+# The released version: the one literal a release bumps here.
+VERSION = "1.7.0"
 
 
 class TestVersionProperty(TrimFixture):
     def assert_version(self, obj, group):
-        self.assertEqual(obj.MaxProFrameVersion, "1.7.0")
+        self.assertEqual(obj.MaxProFrameVersion, VERSION)
         self.assertEqual(obj.getGroupOfProperty("MaxProFrameVersion"), group)
         self.assertEqual(
             obj.getDocumentationOfProperty("MaxProFrameVersion"), "MaxProFrame version used to create the object"
@@ -28,14 +30,14 @@ class TestVersionProperty(TrimFixture):
         for name in obj.PropertiesList:
             self.assertNotEqual(obj.getGroupOfProperty(name).lower(), "frameforge", name)
 
-    def test_version_module_and_package_metadata_are_1_2_0(self):
-        self.assertEqual(__version__, "1.7.0")
+    def test_version_module_and_package_metadata_match_the_release(self):
+        self.assertEqual(__version__, VERSION)
         for name, pattern in (
             ("package.xml", r"<version>([^<]+)</version>"),
             ("pyproject.toml", r'^version = "([^"]+)"'),
         ):
             with open(os.path.join(ROOT, name), encoding="utf-8") as handle:
-                self.assertEqual(re.findall(pattern, handle.read(), re.MULTILINE), ["1.7.0"], name)
+                self.assertEqual(re.findall(pattern, handle.read(), re.MULTILINE), [VERSION], name)
 
     def test_profiles_trims_links_and_cutouts_record_the_maxproframe_version(self):
         profile = self.make_profile(self.make_sketch(TRIMMED_EDGE), "Edge1", **CENTER)
