@@ -134,13 +134,26 @@ def pattern_extents(fp):
     if not wires or get_profile_from_extrudedcutout(fp) is None:
         return None
     try:
-        base, (face_name, *_) = fp.baseObject
-        face = base.Shape.getElement(face_name)
-    except (IndexError, ValueError, Part.OCCError):
-        # A face name the body no longer has, after a change of its shape.
+        _, face = cut_face(fp)
+    except (FrameForgeException, ValueError):
+        # A face name the body no longer has, after a change of its shape, or no face name at all.
         return None
     direction = profile_path_direction(fp, face.normalAt(0, 0))
     return along_extent(Part.Compound(wires), direction), along_extent(face, direction)
+
+
+def cut_face(fp):
+    """(body, face) the cutout ``fp`` is drawn on.
+
+    Raise FrameForgeException when the body no longer has the face, after a change of its shape.
+    """
+    base, (face_name, *_) = fp.baseObject
+    try:
+        return base, base.Shape.getElement(face_name)
+    except (IndexError, ValueError, Part.OCCError) as error:
+        raise FrameForgeException(
+            translate("frameforge", "Cutout / Hole: {} no longer has the face {}.").format(base.Label, face_name)
+        ) from error
 
 
 def profile_path_direction(fp, normal):
@@ -386,11 +399,13 @@ class ExtrudedCutout:
         """Perform the cut when the object is recomputed."""
         # Out of the try below: too many cutouts fail the recompute, as a drill hole does.
         offsets = pattern_offsets(pattern_sides(fp))
-        # Out of the try too: a pattern on a face square to the profile axis, an end face, has no direction.
+        # Out of the try too: a face the body no longer has, and a pattern on a face square to the profile
+        # axis, an end face, which has no direction.
         direction = None
-        if len(offsets) > 1 and fp.baseObject:
-            base, (face_name, *_) = fp.baseObject
-            direction = profile_path_direction(fp, base.Shape.getElement(face_name).normalAt(0, 0))
+        if fp.baseObject:
+            _, face = cut_face(fp)
+            if len(offsets) > 1:
+                direction = profile_path_direction(fp, face.normalAt(0, 0))
         try:
             # Ensure the Sketch and baseObject properties are valid.
             if fp.Sketch is None or fp.baseObject is None:
