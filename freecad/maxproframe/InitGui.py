@@ -57,6 +57,15 @@ class MaxProFrame(Gui.Workbench):
         This function is called at the first activation of the workbench.
         here is the place to import all the commands
         """
+        # The toolbars borrow Sketcher_NewSketch, Part_Fuse, Part_Cut and PartDesign_Body: their workbenches
+        # register them when loaded, which FreeCAD does on their first use. Opened first, MaxProFrame would
+        # show them as unknown commands.
+        for module in ("PartGui", "SketcherGui", "PartDesignGui"):
+            try:
+                __import__(module)
+            except Exception as error:
+                # Without it only its borrowed commands are missing: the workbench still opens.
+                App.Console.PrintWarning(f"MaxProFrame: {module} is not available: {error}\n")
         from freecad.maxproframe import (
             create_bom_tool,
             create_drill_hole_tool,

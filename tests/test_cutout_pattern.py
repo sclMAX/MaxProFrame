@@ -16,6 +16,7 @@ PATTERN_PROPERTIES = ("AlongBackwardCount", "AlongBackwardPitch", "AlongForwardC
 FORWARD = App.Vector(1, 0, 0)
 SQUARE_FACE = "Cutout / Hole: the face is square to the profile axis, the pattern has no direction."
 LOST_FACE = "Cutout / Hole: {} no longer has the face Face999."
+NO_FACE = "Cutout / Hole: no face to cut."
 
 
 class PatternFixture(OneWallFixture):
@@ -126,6 +127,18 @@ class TestCutoutPattern(PatternFixture):
                 self.set_pattern(cutout, forward=forward)
                 self.assertNotEqual(cutout.getStatusString(), "Valid")
                 self.assertIn(LOST_FACE.format(body.Label), cutout.getStatusString())
+
+    def test_a_cutout_with_no_face_name_fails_the_recompute_with_a_message(self):
+        """A link to the body without a face name: the cutout says it has no face, no raw error."""
+        body, cutout, center = self.top_cutout()
+        cutout.baseObject = (body, [])
+        self.doc.recompute()
+        self.assertNotEqual(cutout.getStatusString(), "Valid")
+        self.assertIn(NO_FACE, cutout.getStatusString())
+        with self.assertRaises(FrameForgeException) as raised:
+            extruded_cutout.cut_face(cutout)
+        self.assertEqual(str(raised.exception), NO_FACE)
+        self.assertIsNone(extruded_cutout.pattern_extents(cutout))
 
     def test_the_extents_of_a_cutout_whose_face_is_gone_are_none(self):
         """A face name the body no longer has: nothing to measure, no error."""

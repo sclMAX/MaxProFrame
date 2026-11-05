@@ -41,6 +41,7 @@ from freecad.maxproframe.expression_fields import (
     length_field,
     length_text,
     restore_expressions,
+    unbind,
 )
 from freecad.maxproframe.extruded_cutout import CUT_TYPES, wall_thickness
 from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, get_param_group, translate
@@ -587,6 +588,11 @@ class DrillHoleTaskPanel:
         for prop, spin in self._fields():
             bind(spin, self.obj, prop)
 
+    def _unbind_fields(self):
+        """No expression editor (Fx) until the next drill hole is shown: the last one is done."""
+        for _, spin in self._fields():
+            unbind(spin)
+
     def _set_depth(self):
         """Keep the depth of a Distance cut, else show the thickness of the wall under the face."""
         if self.form.combo_cut_type.currentData() == "Distance" or self.face is None:
@@ -825,6 +831,11 @@ class DrillHoleTaskPanel:
         self.center_along = False
         self.center_across = False
 
+    def _forget_reference(self):
+        """No face and no point: the next clicks pick them."""
+        self.face, self.vertex = None, None
+        self._measure_from_corner()
+
     def _on_base(self, obj, sub):
         """(object, element) a click on ``sub`` of ``obj`` stands for: the base of the shown drill hole, else itself."""
         if self.obj is None or obj != self.obj or not _in_document(obj) or not obj.baseObject:
@@ -838,8 +849,7 @@ class DrillHoleTaskPanel:
     def _show(self, messages):
         """Show the face, the vertex and ``messages``."""
         if self.face is not None and not _in_document(self.face[0]):
-            self.face, self.vertex = None, None
-            self._measure_from_corner()
+            self._forget_reference()
         if self.face is None:
             text = translate("frameforge", "Click a planar face of a profile, a trimmed profile or a cutout.")
         else:
@@ -1230,18 +1240,29 @@ class DrillHoleTaskPanel:
         restore_expressions(self.obj, self._expressions)
         self._bind_fields()
 
+    def _forget_preview(self):
+        """Stop treating the drill hole shown as the preview, leaving it in the document; the bodies it hid.
+
+        Its expressions go to the next drill hole with the other values. _drop_preview removes it as well.
+        """
+        if self.obj is not None and _in_document(self.obj):
+            self._expressions = expressions_of(self.obj, EXPRESSION_PROPERTIES)
+        hidden = self._visibility
+        self.obj = None
+        self._visibility = []
+        return hidden
+
     def _drop_preview(self):
         """Remove the preview and show the bodies it hid as they were before."""
         if self.edited is not None:
             return
-        if self.obj is not None and _in_document(self.obj):
-            self._expressions = expressions_of(self.obj, EXPRESSION_PROPERTIES)
-            self.doc.removeObject(self.obj.Name)
-        self.obj = None
-        for body, visible in self._visibility:
+        obj = self.obj
+        hidden = self._forget_preview()
+        if obj is not None and _in_document(obj):
+            self.doc.removeObject(obj.Name)
+        for body, visible in hidden:
             if _in_document(body):
                 body.ViewObject.Visibility = visible
-        self._visibility = []
 
     def _discard_preview(self):
         """Abort the preview transaction; a leftover preview (undo disabled) is removed by hand."""
@@ -1470,13 +1491,11 @@ class DrillHoleTaskPanel:
         self._transaction_open = False
         self._remember_diameter()
         self._applied = True
-        # The created hole is no preview any more: the bodies it hides stay hidden, as after OK. Its
-        # expressions go to the next hole with the other values; its transaction opens on the next pick.
-        self._expressions = expressions_of(self.obj, EXPRESSION_PROPERTIES)
-        self.obj = None
-        self._visibility = []
-        self.face, self.vertex = None, None
-        self._measure_from_corner()
+        # The created hole is no preview any more: the bodies it hides stay hidden, as after OK, and the
+        # fields offer no expression editor on it. The next hole's transaction opens on the next pick.
+        self._forget_preview()
+        self._unbind_fields()
+        self._forget_reference()
         self._previewed = ()
         self._show([])
         self._show_warning()
