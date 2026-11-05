@@ -270,6 +270,8 @@ class DrillHoleTaskPanel:
     # Remembered state of the "Update automatically" check box, and its value until first changed.
     auto_preview_param = "Drill Hole Auto Preview"
     auto_preview_default = True
+    # Diameter of the last drill hole OK confirmed, the one a new drill hole opens with.
+    diameter_param = "Drill Hole Diameter"
 
     def __init__(self, selection=(), edited=None):
         self.edited = edited
@@ -367,7 +369,9 @@ class DrillHoleTaskPanel:
             -MAX_OFFSET, MAX_OFFSET, obj.OffsetAcross.Value if obj else DEFAULT_OFFSET
         )
         form.spin_diameter = self._length_spin(
-            MIN_DIAMETER, MAX_OFFSET, obj.Diameter.Value if obj else DEFAULT_DIAMETER
+            MIN_DIAMETER,
+            MAX_OFFSET,
+            obj.Diameter.Value if obj else get_param_group().GetFloat(self.diameter_param, DEFAULT_DIAMETER),
         )
         self._build_pattern(form, obj)
         form.combo_cut_type = QtGui.QComboBox()
@@ -1337,6 +1341,12 @@ class DrillHoleTaskPanel:
             self._close_edit()
         return True
 
+    def _remember_diameter(self):
+        """Keep the diameter of the confirmed drill hole for the next new one, also after a restart."""
+        obj = self.obj
+        diameter = obj.Diameter.Value if obj is not None and _in_document(obj) else self.form.spin_diameter.value()
+        get_param_group(writable=True).SetFloat(self.diameter_param, diameter)
+
     def _missing(self):
         if self.face is None:
             return translate("frameforge", "Select a planar face of a profile, a trimmed profile or a cutout.")
@@ -1367,6 +1377,7 @@ class DrillHoleTaskPanel:
         else:
             self.doc.commitTransaction()
         self._transaction_open = False
+        self._remember_diameter()
         self.clean()
         if self.edited is not None:
             self._close_edit()

@@ -2,6 +2,8 @@
 
 * Unreleased
 
+  - **Drill Hole** remembers the last diameter: a new drill hole opens with the **Diameter** of the last one confirmed with **OK**, also after restarting FreeCAD (see the [tutorial](docs/tutorial.md#drill-hole)). **Cancel** leaves it unchanged, the first drill hole opens with 10 mm as before, and a double-clicked drill hole shows its own diameter.
+
   **Fixes**
   - A **Cutout / Hole** drawn on a face the profile no longer has, after a change of its shape, now fails the recompute with a message naming the profile and the face (Spanish *Calado: Perfil ya no tiene la cara Face12.*) instead of a raw error.
 

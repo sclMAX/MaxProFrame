@@ -35,6 +35,30 @@ NO_FACE = "Click a planar face of a profile, a trimmed profile or a cutout."
 NO_VERTEX = "Click a vertex of the face."
 # Remembered state of the Update automatically check box of the Drill Hole panel.
 AUTO_PREVIEW_PARAM = "Drill Hole Auto Preview"
+# Diameter of the last drill hole confirmed by OK or Apply and continue, for the next new one (S1).
+DIAMETER_PARAM = "Drill Hole Diameter"
+
+
+def keep_remembered_diameter(test):
+    """Start ``test`` with no remembered diameter and put back the stored one after it."""
+    param = get_param_group(writable=True)
+    stored = DIAMETER_PARAM in param.GetFloats()
+    previous = param.GetFloat(DIAMETER_PARAM, 0.0)
+
+    def restore():
+        if stored:
+            param.SetFloat(DIAMETER_PARAM, previous)
+        else:
+            param.RemFloat(DIAMETER_PARAM)
+
+    test.addCleanup(restore)
+    param.RemFloat(DIAMETER_PARAM)
+
+
+def remembered_diameter():
+    """The remembered diameter of a new drill hole, or None when there is none."""
+    param = get_param_group()
+    return param.GetFloat(DIAMETER_PARAM, 0.0) if DIAMETER_PARAM in param.GetFloats() else None
 
 
 def hole_volume(diameter, depth):
@@ -68,6 +92,7 @@ class DrillHolePanelFixture(CutoutFixture, DrillHoleFixture):
     def setUp(self):
         super().setUp()
         keep_auto_preview(self, SimpleNamespace(auto_preview_param=AUTO_PREVIEW_PARAM))
+        keep_remembered_diameter(self)
         self.recorded = []
         base = create_drill_hole_tool.DrillHoleTaskPanel
         recorded = self.recorded
@@ -1426,6 +1451,64 @@ class TestDrillHoleCreation(DrillHolePanelFixture):
                 self.assertEqual(obj.ReferenceWarning, "")
                 self.assertAlmostEqual(obj.Shape.Volume, trim.Shape.Volume - ONE_HOLE, places=3)
                 self.assertEqual(self.doc.UndoCount, 1)
+
+
+class TestDrillHoleRememberedDiameter(DrillHolePanelFixture):
+    """S1: the diameter of the last confirmed drill hole, kept in FreeCAD preferences, opens the next new one."""
+
+    def test_the_first_new_hole_opens_with_the_default_diameter(self):
+        # S1: first use, nothing remembered yet.
+        self.tube()
+        panel = self.run_command()
+        self.assertEqual(panel.form.spin_diameter.value(), drill_hole.DEFAULT_DIAMETER)
+        self.assertIsNone(remembered_diameter())
+
+    def test_ok_remembers_the_diameter_and_the_next_new_hole_opens_and_is_drilled_with_it(self):
+        # S1: stored in the preferences on OK; a new drill hole opens with it.
+        other = self.tube()
+        body, panel, obj, before = self.previewed_panel(diameter=8.0)
+        self.assertIsNone(remembered_diameter())
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        self.assertEqual(remembered_diameter(), 8.0)
+        before = self.names()
+        panel = self.run_command((other, self.face_towards(other, UP)), (other, self.vertex_at(other, CORNER)))
+        self.assertEqual(panel.form.spin_diameter.value(), 8.0)
+        # Off the corner, for a whole hole; the diameter is left as the panel opened.
+        self.set_values(panel)
+        wait()
+        obj = self.preview(before)
+        self.assertAlmostEqual(obj.Diameter.Value, 8.0, places=6)
+        self.assertAlmostEqual(obj.Shape.Volume, other.Shape.Volume - hole_volume(8.0, WALL), places=3)
+
+    def test_cancel_does_not_remember_the_diameter(self):
+        # S1: never on Cancel; the next new hole opens with the last confirmed one.
+        body, panel, obj, before = self.previewed_panel(diameter=8.0)
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        panel = self.run_command()
+        panel.form.spin_diameter.setValue(6.0)
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+        self.assertEqual(remembered_diameter(), 8.0)
+        self.assertEqual(self.run_command().form.spin_diameter.value(), 8.0)
+
+    def test_editing_shows_the_holes_own_diameter_and_ok_remembers_it(self):
+        # S1: an existing hole shows its own diameter; OK confirms it, Cancel does not.
+        get_param_group(writable=True).SetFloat(DIAMETER_PARAM, 8.0)
+        body, obj = self.existing(Diameter=12.0)
+        panel = self.edit(obj)
+        self.assertEqual(panel.form.spin_diameter.value(), 12.0)
+        panel.form.spin_diameter.setValue(14.0)
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+        self.assertEqual(remembered_diameter(), 8.0)
+        panel = self.edit(obj)
+        self.assertEqual(panel.form.spin_diameter.value(), 12.0)
+        panel.form.spin_diameter.setValue(14.0)
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        self.assertEqual(remembered_diameter(), 14.0)
 
 
 class TestDrillHoleEdit(DrillHolePanelFixture):
