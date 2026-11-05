@@ -1134,6 +1134,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Cutout / Hole: the pattern makes {} cutouts, at most {}.</source><translation>Calado: el patrón hace {} calados, como máximo {}.</translation></message>
     <message><source>Cutout / Hole: the face is square to the profile axis, the pattern has no direction.</source><translation>Calado: la cara es perpendicular al eje del perfil, el patrón no tiene dirección.</translation></message>
     <message><source>Cutout / Hole: {} no longer has the face {}.</source><translation>Calado: {} ya no tiene la cara {}.</translation></message>
+    <message><source>Cutout / Hole: no face to cut.</source><translation>Calado: no hay ninguna cara para calar.</translation></message>
     <message><source>Cutouts the pattern adds before the sketch, toward the start of the profile path</source><translation>Calados que el patrón agrega antes del croquis, hacia el inicio del recorrido del perfil</translation></message>
     <message><source>Distance between the cutouts before the sketch</source><translation>Distancia entre los calados antes del croquis</translation></message>
     <message><source>Cutouts the pattern adds after the sketch, toward the end of the profile path</source><translation>Calados que el patrón agrega después del croquis, hacia el final del recorrido del perfil</translation></message>

@@ -135,7 +135,7 @@ def pattern_extents(fp):
         return None
     try:
         _, face = cut_face(fp)
-    except (FrameForgeException, ValueError):
+    except FrameForgeException:
         # A face name the body no longer has, after a change of its shape, or no face name at all.
         return None
     direction = profile_path_direction(fp, face.normalAt(0, 0))
@@ -145,9 +145,13 @@ def pattern_extents(fp):
 def cut_face(fp):
     """(body, face) the cutout ``fp`` is drawn on.
 
-    Raise FrameForgeException when the body no longer has the face, after a change of its shape.
+    Raise FrameForgeException when the link names no face, or the body no longer has the face, after a
+    change of its shape.
     """
-    base, (face_name, *_) = fp.baseObject
+    base, face_names = fp.baseObject
+    if not face_names:
+        raise FrameForgeException(translate("frameforge", "Cutout / Hole: no face to cut."))
+    face_name = face_names[0]
     try:
         return base, base.Shape.getElement(face_name)
     except (IndexError, ValueError, Part.OCCError) as error:

@@ -119,6 +119,14 @@ class TestDrillHoleGeometry(DrillHoleFixture):
         obj = self.hole(body, curved, "Vertex1", 30.0, 0.0)
         self.assertIn(f"Drill Hole: {curved} of {body.Label} is not planar.", obj.getStatusString())
 
+    def test_a_hole_with_no_face_name_fails_the_recompute_with_a_message(self):
+        body = self.tube()
+        top = self.face_towards(body, UP)
+        obj = self.hole(body, top, self.vertex_at(body, (-50, -25, 25)), 30.0, 25.0)
+        obj.baseObject = (body, [])
+        self.doc.recompute()
+        self.assertIn("Drill Hole: no face to drill.", obj.getStatusString())
+
     def test_a_hole_is_a_cutout_of_its_profile_for_the_cut_list(self):
         body = self.tube()
         body.PID = "P7"

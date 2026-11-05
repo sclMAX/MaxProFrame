@@ -456,7 +456,7 @@ class DrillHole(ExtrudedCutout):
 
     def execute(self, fp):
         """Drill the holes when the object is recomputed."""
-        if fp.baseObject is None:
+        if fp.baseObject is None or not fp.baseObject[1]:
             raise FrameForgeException(translate("frameforge", "Drill Hole: no face to drill."))
         for child in get_childrens_from_extrudedcutout(fp.baseObject[0]):
             if getattr(child, "ViewObject", None) is not None:
