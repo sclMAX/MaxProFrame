@@ -184,7 +184,7 @@ class PopulateIDsCommand:
         return {
             "Pixmap": os.path.join(ICONPATH, "populate-ids.svg"),
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_PopulateIDs", "Populate IDs"),
-            "Accel": "M, I",
+            "Accel": "M, U",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_PopulateIDs",
                 "<b>Populate IDs of selected MaxProFrame objects</b><br><br>Select profiles, links, groups or parts.",

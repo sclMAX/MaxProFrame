@@ -96,7 +96,7 @@ Every shortcut is **M** followed by one letter: press M, release it, then press 
 | Cutout / Hole | `M, H` | Recompute all profiles | `M, R` |
 | | | Export all TechDraw Pages as PDF | `M, T` |
 
-Change them in **Tools → Customize → Keyboard**, category MaxProFrame.
+None of them is used by a command of another workbench shipped with FreeCAD. Change them in **Tools → Customize → Keyboard**, category MaxProFrame.
 
 ## Profile libraries
 

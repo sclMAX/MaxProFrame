@@ -22,6 +22,10 @@ def get_param_group(writable=False):
     return FreeCAD.ParamGet("User parameter:BaseApp/Preferences/MaxProFrame")
 
 
+# Every command registered by add_command, by name: what each declares, before any user customization.
+COMMANDS = {}
+
+
 def add_command(name, cmd_obj):
     """Register a command under the given name."""
     try:
@@ -30,6 +34,7 @@ def add_command(name, cmd_obj):
         return
 
     Gui.addCommand(name, cmd_obj)
+    COMMANDS[name] = cmd_obj
 
 
 def move_profile_to_parent_if_supported(obj, parent):
