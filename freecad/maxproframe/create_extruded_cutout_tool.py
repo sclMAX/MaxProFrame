@@ -447,17 +447,21 @@ class CreateExtrudedCutoutTaskPanel:
         return translate("frameforge", "Pattern: {}").format(text.format(total))
 
     def _pattern_warnings(self, form):
-        """Lines on the pattern while checked: a cutout past the end of the face.
+        """Lines on the pattern while checked: a cutout past the end of the face, copies on an end face.
 
         No overlap warning: a sketch may be meant to overlap its copies, and the preview shows them.
         """
         if not form.groupBox_pattern.isChecked():
             return []
-        extents = pattern_extents(self.obj)
+        backward, forward = self._pattern_wanted(form)
+        try:
+            extents = pattern_extents(self.obj)
+        except FrameForgeException as error:
+            # A face square to the profile axis: only copies need a direction.
+            return [str(error)] if backward[0] or forward[0] else []
         if extents is None:
             return []
         (sketch_min, sketch_max), (face_min, face_max) = extents
-        backward, forward = self._pattern_wanted(form)
         lines = []
         offsets = axis_positions(backward, forward, True)
         if (
@@ -507,10 +511,13 @@ class CreateExtrudedCutoutTaskPanel:
                     break
         finally:
             self._recomputing = False
-        self._show_pattern(self.form)
-        deferred, self._deferred = self._deferred, None
-        if deferred is not None and deferred() and Gui.Control.activeDialog():
-            Gui.Control.closeDialog()
+        try:
+            self._show_pattern(self.form)
+        finally:
+            # OK or Cancel pressed meanwhile runs even when the warnings fail.
+            deferred, self._deferred = self._deferred, None
+            if deferred is not None and deferred() and Gui.Control.activeDialog():
+                Gui.Control.closeDialog()
 
     def _defer(self, button):
         """OK or Cancel pressed during a recompute of the panel: run it once that recompute ends."""

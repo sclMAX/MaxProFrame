@@ -125,19 +125,21 @@ def along_extent(shape, direction):
 def pattern_extents(fp):
     """((min, max) of the cut regions of the sketch, (min, max) of the face) of the cutout ``fp``, along the path.
 
-    None when there is nothing to measure: no closed region, or a face square to the profile axis.
+    None when there is nothing to measure: no closed region, a face or a profile no longer found.
+    Raise FrameForgeException on a face square to the profile axis: the pattern has no direction.
     """
     if fp.Sketch is None or not fp.baseObject:
         return None
     wires = [wire for wire in fp.Sketch.Shape.Wires if wire.isClosed()]
-    if not wires:
+    if not wires or get_profile_from_extrudedcutout(fp) is None:
         return None
-    base, (face_name, *_) = fp.baseObject
-    face = base.Shape.getElement(face_name)
     try:
-        direction = profile_path_direction(fp, face.normalAt(0, 0))
-    except FrameForgeException:
+        base, (face_name, *_) = fp.baseObject
+        face = base.Shape.getElement(face_name)
+    except (IndexError, ValueError, Part.OCCError):
+        # A face name the body no longer has, after a change of its shape.
         return None
+    direction = profile_path_direction(fp, face.normalAt(0, 0))
     return along_extent(Part.Compound(wires), direction), along_extent(face, direction)
 
 
@@ -384,6 +386,11 @@ class ExtrudedCutout:
         """Perform the cut when the object is recomputed."""
         # Out of the try below: too many cutouts fail the recompute, as a drill hole does.
         offsets = pattern_offsets(pattern_sides(fp))
+        # Out of the try too: a pattern on a face square to the profile axis, an end face, has no direction.
+        direction = None
+        if len(offsets) > 1 and fp.baseObject:
+            base, (face_name, *_) = fp.baseObject
+            direction = profile_path_direction(fp, base.Shape.getElement(face_name).normalAt(0, 0))
         try:
             # Ensure the Sketch and baseObject properties are valid.
             if fp.Sketch is None or fp.baseObject is None:
@@ -410,8 +417,7 @@ class ExtrudedCutout:
                 return
 
             center = cutSketch.Shape.BoundBox.Center
-            if len(offsets) > 1:
-                direction = profile_path_direction(fp, normal_vector)
+            if direction is not None:
                 myFacesList = [face.translated(direction * offset) for offset in offsets for face in myFacesList]
                 center = Part.Compound(myFacesList).BoundBox.Center
 
