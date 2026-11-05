@@ -3,6 +3,7 @@
 * Unreleased
 
   **Fixes**
+  - Switching to MaxProFrame first after starting FreeCAD no longer prints **Unknown command** for **Sketcher_NewSketch**, **Part_Fuse**, **Part_Cut** and **PartDesign_Body**, and their toolbar buttons show: the workbench loads Part, Sketcher and PartDesign.
   - After **Apply and continue**, the **Drill Hole** fields show no **Fx** icon and `=` opens no expression editor until the next hole is previewed: an expression set then went on the hole just created, in an Undo step of its own, and not on the next one.
   - A **Cutout / Hole** or **Drill Hole** whose link to its profile names no face now fails the recompute with a message, **Cutout / Hole: no face to cut.** (Spanish *Calado: no hay ninguna cara para calar.*) or **Drill Hole: no face to drill.**, instead of a raw error.
 
