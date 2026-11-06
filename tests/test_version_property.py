@@ -16,7 +16,7 @@ from freecad.maxproframe.version import __version__
 
 ROOT = os.path.join(os.path.dirname(__file__), os.pardir)
 # The released version: the one literal a release bumps here.
-VERSION = "1.9.0"
+VERSION = "1.9.1"
 
 
 class TestVersionProperty(TrimFixture):
