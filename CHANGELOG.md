@@ -1,6 +1,6 @@
 ## Changelog
 
-* Unreleased
+* v1.9.1 (2026-11-06)
 
   **Fixes**
   - Creating profiles on a **Parametric Line** with **Create a Part** no longer moves into the new Part every profile the line's vertices depend on, out of the Parts that held them: the line links its two vertices globally. Its ends sit on the vertices wherever the line and the profiles are, also when their Parts are placed elsewhere; after moving a Part, a recompute of the line follows it. Lines saved before keep their vertices. If an old line was drawn off them because its vertices or the line itself are in a placed Part, its next recompute moves it onto them, along with the profiles on it.
