@@ -16,8 +16,8 @@ along a global axis or a custom vector, with an expression-capable length (table
 
 ## Tasks
 - T1 S1 S2 S5 S6 object: Direction / CustomDirection / Length, execute, restore — inline — commit: 75fde58 (done, 15 tests pass)
-- T2 S3 S4 S5 panel, command routing, double-click edit — inline — commit: pending (13 panel tests pass)
-- T3 S2 tooltip, translations, tutorial — inline — commit: pending (translation/shortcut/command tests pass)
+- T2 S3 S4 S5 panel, command routing, double-click edit — inline — commit: 5534cad (done, 13 panel tests pass)
+- T3 S2 tooltip, translations, tutorial — inline — commit: 5534cad (done, translation/shortcut/command tests pass)
 
 ## Log
 - L1 (user): "Y si hemos un comando que permita hacer bocetos 3D, seleccionar u punto y a partir de el hacer una linea parametrica en un plano 3d que opinas? pros contras ?"
@@ -25,3 +25,4 @@ along a global axis or a custom vector, with an expression-capable length (table
 - L3 (user): "1. Ejes globales mas vector, 2. Refactor de PArametricline"
 - L4 (user): command flow "Dos verticies directo (siempre que los vertices no sean del mismo sketch"; edit "Abre el panel para editar".
 - L5 (evidence): T1 RED observed (ImportError make_line_from_vertex), then 15/15. Panel tests written with the code; only the Spanish test was observed RED before the translations.
+- L6 (evidence): full native suite (FreeCAD .git/ci-policy-runtime) 1253 tests, exit 0. Two commits, ~716 authored lines; second commit holds T2+T3 (code, tests, translations, docs of one behavior). Waiting for the user's manual test before PR.
