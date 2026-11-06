@@ -1156,11 +1156,18 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Drill a hole at the point the offsets give</source><translation>Perforar un agujero en el punto que dan los desplazamientos</translation></message>
     <message><source>Apply and continue</source><translation>Aplicar y seguir</translation></message>
     <message><source>Create this drill hole in its own Undo step and keep the panel open: click a face for the next hole, on another profile or on this one, with the same values.</source><translation>Crea este agujero, que se deshace por separado, y deja el panel abierto: hacé clic en una cara para el próximo agujero, en otro perfil o en este, con los mismos valores.</translation></message>
+    <message><source>Parametric Line</source><translation>Línea paramétrica</translation></message>
+    <message><source>From the vertex</source><translation>Desde el vértice</translation></message>
+    <message><source>Custom vector</source><translation>Vector personalizado</translation></message>
+    <message><source>Global axis the lines run along, or Custom vector to give X, Y and Z.</source><translation>Eje global que siguen las líneas, o Vector personalizado para indicar X, Y y Z.</translation></message>
+    <message><source>Direction</source><translation>Dirección</translation></message>
+    <message><source>Length of each line. Fx takes an expression.</source><translation>Longitud de cada línea. Fx acepta una expresión.</translation></message>
+    <message><source>The custom vector is zero: give X, Y or Z.</source><translation>El vector personalizado es cero: indicá X, Y o Z.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ParametricLine</name>
     <message><source>Create a Parametric Line</source><translation>Crear línea paramétrica</translation></message>
-    <message><source>Create a parametric line between two vertices.&lt;br&gt;&lt;br&gt;Select two vertices, then run this command.</source><translation>Crea una línea paramétrica entre dos vértices.&lt;br&gt;&lt;br&gt;Seleccioná dos vértices y ejecutá este comando.</translation></message>
+    <message><source>Create a parametric line between two vertices, or from vertices along a direction.&lt;br&gt;&lt;br&gt;Select two vertices to join them. Select one vertex, three or more, or two of the same sketch to draw one line from each along a global axis or a custom vector, with a length.</source><translation>Crea una línea paramétrica entre dos vértices, o desde vértices en una dirección.&lt;br&gt;&lt;br&gt;Seleccioná dos vértices para unirlos. Seleccioná un vértice, tres o más, o dos del mismo croquis para dibujar una línea desde cada uno a lo largo de un eje global o de un vector personalizado, con una longitud.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_CreateProfiles</name>

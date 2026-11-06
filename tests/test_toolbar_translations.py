@@ -28,7 +28,7 @@ EXPECTED = {
     "MaxProFrame_ParametricLine": (
         "Create a Parametric Line",
         "Crear línea paramétrica",
-        "Seleccioná dos vértices y ejecutá este comando.",
+        "Seleccioná dos vértices para unirlos. Seleccioná un vértice, tres o más,",
     ),
     "MaxProFrame_CreateProfiles": (
         "Create Profile",

@@ -111,6 +111,17 @@ You can therefore use Create profile again to create the four vertical beams !
 
 ![Cube Done](images/26-cube-done.png)
 
+#### Lines from a vertex along a direction
+
+A parametric line can also start at a vertex and run along a global axis (+X, -X, +Y, -Y, +Z, -Z) or a custom vector, with a length. This draws the legs of a table from the corners of its frame sketch:
+
+1. Select the four corners of the frame sketch (or one vertex, three or more vertices, or two vertices of the same sketch).
+2. Run Create a Parametric Line (`M, L`): the panel previews one line from each vertex.
+3. Choose the Direction (`-Z` by default, or Custom vector to give X, Y and Z) and the Length. The Length field takes an expression (Fx), given to every line.
+4. Click OK: the lines are created in one Undo step. Create Profile then turns them into legs.
+
+Each line starts at its vertex and follows it when the sketch changes. Double-click a line drawn from a vertex to change its direction or length. Two vertices of different objects, or of one object that is not a sketch, are still joined at once.
+
 
 
 ### More Sketches / Part2 !

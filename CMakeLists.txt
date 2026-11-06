@@ -70,6 +70,7 @@ set(Namespace_SRCS
         freecad/maxproframe/profile.py
         freecad/maxproframe/_utils.py
         freecad/maxproframe/parametric_line.py
+        freecad/maxproframe/parametric_line_panel.py
         freecad/maxproframe/create_end_miter_tool.py
         freecad/maxproframe/create_extend_cut_tool.py
         freecad/maxproframe/create_notch_tool.py

@@ -165,6 +165,39 @@ class ParametricLineViewProvider:
         self.Object = App.ActiveDocument.getObject(state["name"])
         return None
 
+    def setEdit(self, vobj, mode):
+        """Double-click on a line drawn from a vertex: its panel. A line joining two vertices has none."""
+        if mode != 0 or getattr(self.Object, "Direction", "Vertex2") == "Vertex2":
+            return None
+        from freecad.maxproframe import parametric_line_panel
+
+        parametric_line_panel.show_panel(parametric_line_panel.ParametricLineTaskPanel(edited=self.Object))
+        return True
+
+    def unsetEdit(self, vobj, mode):
+        if mode != 0 or getattr(self.Object, "Direction", "Vertex2") == "Vertex2":
+            return None
+        if Gui.Control.activeDialog():
+            Gui.Control.closeDialog()
+        return True
+
+
+def _selected_vertices():
+    """(object, "VertexN") of each vertex selected in the 3D view."""
+    verts = []
+    for selobj in Gui.Selection.getSelectionEx():
+        if selobj.HasSubObjects:
+            for shape, name in zip(selobj.SubObjects, selobj.SubElementNames):
+                if isinstance(shape, Part.Vertex):
+                    verts.append((selobj.Object, name))
+    return verts
+
+
+def _same_sketch(verts):
+    """Whether every vertex is of one sketch: corners of a frame sketch get lines along a direction."""
+    first = verts[0][0]
+    return first.isDerivedFrom("Sketcher::SketchObject") and all(obj is first for obj, _ in verts)
+
 
 class CreateParametricLineCommand:
     """Creates a parametric line between two vertexes"""
@@ -180,28 +213,16 @@ class CreateParametricLineCommand:
         App.ActiveDocument.recompute()
 
     def Activated(self):
-        verts = []
-        sel = Gui.Selection.getSelectionEx()
-        for selobj in sel:
-            if selobj.HasSubObjects:
-                for i in range(len(selobj.SubObjects)):
-                    if isinstance(selobj.SubObjects[i], Part.Vertex):
-                        verts.append((selobj.Object, selobj.SubElementNames[i]))
-        if len(verts) == 2:
+        verts = _selected_vertices()
+        if len(verts) == 2 and not _same_sketch(verts):
             self.make_parametric_line(verts)
+        elif verts:
+            from freecad.maxproframe import parametric_line_panel
+
+            parametric_line_panel.show_panel(parametric_line_panel.ParametricLineTaskPanel(verts))
 
     def IsActive(self):
-        if App.ActiveDocument:
-            verts = []
-            sel = Gui.Selection.getSelectionEx()
-            for selobj in sel:
-                if selobj.HasSubObjects:
-                    for i in range(len(selobj.SubObjects)):
-                        if isinstance(selobj.SubObjects[i], Part.Vertex):
-                            verts.append((selobj.Object, selobj.SubElementNames[i]))
-            return len(verts) == 2
-        else:
-            return False
+        return App.ActiveDocument is not None and bool(_selected_vertices())
 
     def GetResources(self):
         return {
@@ -210,7 +231,9 @@ class CreateParametricLineCommand:
             "Accel": "M, L",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_ParametricLine",
-                "Create a parametric line between two vertices.<br><br>Select two vertices, then run this command.",
+                "Create a parametric line between two vertices, or from vertices along a direction.<br><br>"
+                "Select two vertices to join them. Select one vertex, three or more, or two of the same sketch "
+                "to draw one line from each along a global axis or a custom vector, with a length.",
             ),
         }
 

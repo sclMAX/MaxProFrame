@@ -15,12 +15,13 @@ along a global axis or a custom vector, with an expression-capable length (table
 - S6 Compatibility: lines joining two vertices, new or saved by earlier versions, keep their behavior.
 
 ## Tasks
-- T1 S1 S2 S5 S6 object: Direction / CustomDirection / Length, execute, restore — inline — commit: pending
-- T2 S3 S4 S5 panel, command routing, double-click edit — inline — commit: pending
-- T3 S2 tooltip, translations, tutorial — inline — commit: pending
+- T1 S1 S2 S5 S6 object: Direction / CustomDirection / Length, execute, restore — inline — commit: 75fde58 (done, 15 tests pass)
+- T2 S3 S4 S5 panel, command routing, double-click edit — inline — commit: pending (13 panel tests pass)
+- T3 S2 tooltip, translations, tutorial — inline — commit: pending (translation/shortcut/command tests pass)
 
 ## Log
 - L1 (user): "Y si hemos un comando que permita hacer bocetos 3D, seleccionar u punto y a partir de el hacer una linea parametrica en un plano 3d que opinas? pros contras ?"
 - L2 (agent proposal, accepted): mode "vértice + dirección + largo" with multi-vertex selection instead of a full 3D sketcher.
 - L3 (user): "1. Ejes globales mas vector, 2. Refactor de PArametricline"
 - L4 (user): command flow "Dos verticies directo (siempre que los vertices no sean del mismo sketch"; edit "Abre el panel para editar".
+- L5 (evidence): T1 RED observed (ImportError make_line_from_vertex), then 15/15. Panel tests written with the code; only the Spanish test was observed RED before the translations.
