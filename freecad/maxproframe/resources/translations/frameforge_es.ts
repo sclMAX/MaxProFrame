@@ -1163,11 +1163,14 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Direction</source><translation>Dirección</translation></message>
     <message><source>Length of each line. Fx takes an expression.</source><translation>Longitud de cada línea. Fx acepta una expresión.</translation></message>
     <message><source>The custom vector is zero: give X, Y or Z.</source><translation>El vector personalizado es cero: indicá X, Y o Z.</translation></message>
+    <message><source>Click a vertex to add a line from it. Click it again to remove its line.</source><translation>Hacé clic en un vértice para agregar una línea desde él. Hacé clic de nuevo para quitar su línea.</translation></message>
+    <message><source>Click a vertex: only a vertex starts a line.</source><translation>Hacé clic en un vértice: solo un vértice inicia una línea.</translation></message>
+    <message><source>Close the open task panel before creating or editing a parametric line.</source><translation>Cerrá el panel de tareas abierto antes de crear o editar una línea paramétrica.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ParametricLine</name>
     <message><source>Create a Parametric Line</source><translation>Crear línea paramétrica</translation></message>
-    <message><source>Create a parametric line between two vertices, or from vertices along a direction.&lt;br&gt;&lt;br&gt;Select two vertices to join them. Select one vertex, three or more, or two of the same sketch to draw one line from each along a global axis or a custom vector, with a length.</source><translation>Crea una línea paramétrica entre dos vértices, o desde vértices en una dirección.&lt;br&gt;&lt;br&gt;Seleccioná dos vértices para unirlos. Seleccioná un vértice, tres o más, o dos del mismo croquis para dibujar una línea desde cada uno a lo largo de un eje global o de un vector personalizado, con una longitud.</translation></message>
+    <message><source>Create a parametric line between two vertices, or from vertices along a direction.&lt;br&gt;&lt;br&gt;Select two vertices to join them at once. Otherwise the panel opens with a line from each selected vertex (two of the same sketch included): click a vertex to add a line from it along a global axis or a custom vector, with a length, and click it again to remove the line.</source><translation>Crea una línea paramétrica entre dos vértices, o desde vértices en una dirección.&lt;br&gt;&lt;br&gt;Seleccioná dos vértices para unirlos de una vez. Si no, se abre el panel con una línea desde cada vértice seleccionado (también dos del mismo croquis): hacé clic en un vértice para agregar una línea desde él a lo largo de un eje global o de un vector personalizado, con una longitud, y hacé clic de nuevo para quitarla.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_CreateProfiles</name>

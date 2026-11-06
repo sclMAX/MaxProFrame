@@ -2,7 +2,7 @@
 # Initial author : Christophe Grellier (Chris_G)
 # LGPL 2.
 # Parametric line between two vertexes, or from a vertex along a direction with a length.
-# Select 2 vertexes in the 3D View and activate the tool.
+# Select 2 vertexes in the 3D View and activate the tool, or activate it and click vertexes in its panel.
 
 import os
 
@@ -12,7 +12,7 @@ import Part
 if App.GuiUp:
     import FreeCADGui as Gui
 
-from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command
+from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, translate
 
 TOOL_ICON = os.path.join(ICONPATH, "line.svg")
 
@@ -29,7 +29,7 @@ AXES = {
     "-Z": App.Vector(0, 0, -1),
 }
 DIRECTIONS = ["Vertex2", *AXES, "Custom"]
-DEFAULT_LENGTH = 1000.0
+DEFAULT_LENGTH = 100.0
 
 
 def _add_vertex_properties(obj):
@@ -116,11 +116,14 @@ class ParametricLine:
             p2 = _global_vertex(obj.Vertex2)
         else:
             direction = _direction(obj)
+            # An invalid line draws nothing rather than the line it was before.
             if direction is None:
                 App.Console.PrintError("{}: the custom direction is a zero vector.\n".format(obj.Label))
+                obj.Shape = Part.Shape()
                 return
             if obj.Length.Value <= 0:
                 App.Console.PrintError("{}: the length must be greater than zero.\n".format(obj.Label))
+                obj.Shape = Part.Shape()
                 return
             p2 = p1 + direction * obj.Length.Value if p1 is not None else None
         if p1 is not None and p2 is not None:
@@ -167,15 +170,17 @@ class ParametricLineViewProvider:
 
     def setEdit(self, vobj, mode):
         """Double-click on a line drawn from a vertex: its panel. A line joining two vertices has none."""
-        if mode != 0 or getattr(self.Object, "Direction", "Vertex2") == "Vertex2":
+        if mode != 0 or getattr(vobj.Object, "Direction", "Vertex2") == "Vertex2":
             return None
+        if _task_dialog_open():
+            return False
         from freecad.maxproframe import parametric_line_panel
 
-        parametric_line_panel.show_panel(parametric_line_panel.ParametricLineTaskPanel(edited=self.Object))
+        parametric_line_panel.show_panel(parametric_line_panel.ParametricLineTaskPanel(edited=vobj.Object))
         return True
 
     def unsetEdit(self, vobj, mode):
-        if mode != 0 or getattr(self.Object, "Direction", "Vertex2") == "Vertex2":
+        if mode != 0 or getattr(vobj.Object, "Direction", "Vertex2") == "Vertex2":
             return None
         if Gui.Control.activeDialog():
             Gui.Control.closeDialog()
@@ -191,6 +196,16 @@ def _selected_vertices():
                 if isinstance(shape, Part.Vertex):
                     verts.append((selobj.Object, name))
     return verts
+
+
+def _task_dialog_open():
+    """Whether another task dialog is open: no line is made and no transaction opened then."""
+    if not Gui.Control.activeDialog():
+        return False
+    App.Console.PrintWarning(
+        translate("frameforge", "Close the open task panel before creating or editing a parametric line.") + "\n"
+    )
+    return True
 
 
 def _same_sketch(verts):
@@ -213,16 +228,19 @@ class CreateParametricLineCommand:
         App.ActiveDocument.recompute()
 
     def Activated(self):
+        if _task_dialog_open():
+            return
         verts = _selected_vertices()
         if len(verts) == 2 and not _same_sketch(verts):
             self.make_parametric_line(verts)
-        elif verts:
+        else:
+            # Any other vertices, or none: the panel, where clicks add and remove lines.
             from freecad.maxproframe import parametric_line_panel
 
             parametric_line_panel.show_panel(parametric_line_panel.ParametricLineTaskPanel(verts))
 
     def IsActive(self):
-        return App.ActiveDocument is not None and bool(_selected_vertices())
+        return App.ActiveDocument is not None
 
     def GetResources(self):
         return {
@@ -232,8 +250,9 @@ class CreateParametricLineCommand:
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_ParametricLine",
                 "Create a parametric line between two vertices, or from vertices along a direction.<br><br>"
-                "Select two vertices to join them. Select one vertex, three or more, or two of the same sketch "
-                "to draw one line from each along a global axis or a custom vector, with a length.",
+                "Select two vertices to join them at once. Otherwise the panel opens with a line from each "
+                "selected vertex (two of the same sketch included): click a vertex to add a line from it along "
+                "a global axis or a custom vector, with a length, and click it again to remove the line.",
             ),
         }
 

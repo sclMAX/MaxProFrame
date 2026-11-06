@@ -217,6 +217,27 @@ class TestParametricLine(unittest.TestCase):
                 line = make_line_from_vertex((box, "Vertex8"), direction, length, custom)
                 self.assertTrue(line.Shape.isNull())
 
+    def test_a_line_made_invalid_keeps_no_stale_shape(self):
+        box = self.doc.addObject("Part::Box", "Box")
+        self.doc.recompute()
+        for prop, value in (("Length", 0), ("CustomDirection", App.Vector(0, 0, 0))):
+            with self.subTest(prop=prop):
+                line = make_line_from_vertex((box, "Vertex8"), "Custom", 10, App.Vector(0, 0, -1))
+                self.assertEqual(self.ends(line), [(10, 10, 0), (10, 10, -10)])
+                setattr(line, prop, value)
+                self.doc.recompute()
+                self.assertTrue(line.Shape.isNull())
+
+    def test_a_new_line_from_a_vertex_defaults_to_100_mm(self):
+        box = self.doc.addObject("Part::Box", "Box")
+        line = self.doc.addObject("Part::FeaturePython", "ParametricLine")
+        ParametricLine(line)
+        line.Vertex1 = (box, "Vertex8")
+        line.Direction = "-Z"
+        self.doc.recompute()
+        self.assertEqual(line.Length.Value, 100)
+        self.assertEqual(self.ends(line), [(10, 10, 0), (10, 10, -100)])
+
     def test_line_from_a_vertex_survives_save_and_reopen(self):
         box = self.doc.addObject("Part::Box", "Box")
         self.doc.recompute()
