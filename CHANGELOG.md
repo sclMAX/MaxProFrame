@@ -1,5 +1,10 @@
 ## Changelog
 
+* Unreleased
+
+  **Fixes**
+  - Creating profiles on a **Parametric Line** with **Create a Part** no longer moves into the new Part every profile the line's vertices depend on, out of the Parts that held them: the line links its two vertices globally. Its ends sit on the vertices wherever the line and the profiles are, also when their Parts are placed elsewhere; after moving a Part, a recompute of the line follows it. Lines saved before keep their vertices. If an old line was drawn off them because its vertices or the line itself are in a placed Part, its next recompute moves it onto them, along with the profiles on it.
+
 * v1.9.0 (2026-11-05)
 
   - Every MaxProFrame shortcut is now **M** and one letter, none shared, and the README lists them (see [Keyboard shortcuts](README.md#keyboard-shortcuts)): **M, P** Create Profiles (was Shift+S), **M, M** End Miter and **M, N** Notch (both were M, C, so neither ran), **M, H** Cutout / Hole (was E, C), **M, O** Create Balloons and **M, U** Populate IDs (were M, B with Create BOM, which keeps it), and new **M, E** Extend / Cut, **M, D** Drill Hole, **M, L** Create a Parametric Line and **M, K** Attached Link. Manage Profile Libraries, Reset IDs and Refresh Balloons have none, and no command of another workbench shipped with FreeCAD uses one of them. Shortcuts changed in Tools → Customize → Keyboard are kept.
