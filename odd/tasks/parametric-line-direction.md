@@ -28,7 +28,7 @@ along a global axis or a custom vector, with an expression-capable length (table
 - T2 S3 S4 S5 panel, command routing, double-click edit — inline — commit: 5534cad (done, 13 panel tests pass)
 - T3 S2 tooltip, translations, tutorial — inline — commit: 5534cad (done, translation/shortcut/command tests pass)
 
-- T4 S7 S8 S9 S10 tool-first picking, remembered values, review fixes, tooltip/translations/tutorial — worker — commit: pending
+- T4 S7 S8 S9 S10 tool-first picking, remembered values, review fixes, tooltip/translations/tutorial — worker — commit: 5e2c9a2 (done, 17 object + 24 panel tests pass)
 
 ## Log
 - L1 (user): "Y si hemos un comando que permita hacer bocetos 3D, seleccionar u punto y a partir de el hacer una linea parametrica en un plano 3d que opinas? pros contras ?"
@@ -40,3 +40,4 @@ along a global axis or a custom vector, with an expression-capable length (table
 - L7 (review e54ae289, approved, advisory): R4 orphan lines when showDialog fails; R3 stale shape on invalid direction; suggestion: setEdit uses cached object.
 - L8 (user): "Bien, pero me guistaria que el boton parametric line esta activado, poder elegirlo y luego seleccionar un vertice arrastrar con el mouse y que se cree la linea luego ajustaria los parametros en el panel (nota largo 1000mm por defecto es mucho) que opinas, pros contras?"
 - L9 (agent proposal): part 1 = always-enabled button + pick vertices in the panel + remembered values (100 mm first) + review fixes; part 2 (drag click-move-click with axis snap) deferred to a separate PR. User: "SI" to part 1.
+- L10 (evidence, T4): RED observed for S7-S10 (14 failures + 1 error in panel tests, incl. `RuntimeError: Active task dialog found` for R4; stale shape and 1000 mm default in object tests; old Spanish tooltip), then test_parametric_line 17/17, test_parametric_line_panel 24/24, test_toolbar_translations 4/4, test_library_translations 3/3, test_shortcuts 5/5, test_workbench_commands 2/2. Full suite not run by the worker.
