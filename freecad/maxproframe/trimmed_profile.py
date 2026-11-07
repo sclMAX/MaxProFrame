@@ -39,6 +39,9 @@ KEEP_ENDS = [AUTO, START, END]
 NOTCH_OFFSET_TOLERANCES = (1e-6, 1e-3)
 # Share of the section area a grown section may miss and still count as holding it.
 NOTCH_SECTION_TOLERANCE = 1e-6
+# (document name, trim name) -> the moves between the containers of its body and of its targets its last
+# recompute used. Kept out of the proxy, which is saved with the document.
+_TRIM_MOVES = {}
 
 
 def _container_placement(obj):
@@ -55,6 +58,27 @@ def in_frame_of(body, obj, shape):
     shape = shape.copy()
     shape.transformShape(move.toMatrix())
     return shape
+
+
+def _target_moves(trim):
+    """The moves ``in_frame_of`` applies to each target of ``trim``."""
+    body = trim.TrimmedBody
+    return [
+        _container_placement(body).inverse().multiply(_container_placement(target))
+        for target, _ in trim.TrimmingBoundary
+    ]
+
+
+def _moved_since_recompute(trim):
+    """Whether a target of ``trim`` moved against its body since its last recompute (always, without one)."""
+    used = _TRIM_MOVES.get((trim.Document.Name, trim.Name))
+    moves = _target_moves(trim)
+    return used is None or len(used) != len(moves) or any(not a.isSame(b, TOLERANCE) for a, b in zip(used, moves))
+
+
+def face_normal(face):
+    """Normal of the flat ``face``, read on the face itself: (0, 0) may lie off it, where a NURBS can look the other way."""
+    return face.normalAt(*face.Surface.parameter(face.CenterOfMass))
 
 
 def _containers(obj):
@@ -83,7 +107,8 @@ class TrimPlacementObserver:
     """Touches the trims a moved Part concerns: a trim links its body and target, not the Parts holding them.
 
     A link to those Parts would make a cycle (the trim lives in the Part of its body), so the next recompute
-    of the document is what moves the cut.
+    of the document is what moves the cut. A placement set again to where the trim already saw it (an
+    expression recomputing its Part after the trim) leaves the trim alone.
     """
 
     def slotChangedObject(self, obj, prop):
@@ -93,7 +118,15 @@ class TrimPlacementObserver:
         if not obj.hasExtension("App::GeoFeatureGroupExtension"):
             return
         for trim in trims_moved_by(obj):
-            trim.touch()
+            if _moved_since_recompute(trim):
+                trim.touch()
+
+    def slotDeletedObject(self, obj):
+        _TRIM_MOVES.pop((obj.Document.Name, obj.Name), None)
+
+    def slotDeletedDocument(self, doc):
+        for key in [key for key in _TRIM_MOVES if key[0] == doc.Name]:
+            del _TRIM_MOVES[key]
 
 
 if "_TRIM_PLACEMENT_OBSERVER" not in globals():
@@ -238,6 +271,7 @@ class TrimmedProfile:
             return
         if len(fp.TrimmingBoundary) == 0:
             return
+        _TRIM_MOVES[(fp.Document.Name, fp.Name)] = _target_moves(fp)
 
         # One method per joint type: a new joint adds a method instead of growing a chain of cases.
         joint = getattr(self, JOINTS[fp.TrimmedProfileType])
@@ -413,10 +447,10 @@ class TrimmedProfile:
                         subs[0], target.Label
                     )
                 )
-            point, face_normal = face.CenterOfMass, face.normalAt(0, 0)
+            point, plane_normal = face.CenterOfMass, face_normal(face)
 
             def plane_seen_from(far_start):
-                return point, face_normal
+                return point, plane_normal
 
         else:
             target_shape = in_frame_of(body, target, target.Shape)
@@ -483,7 +517,7 @@ class TrimmedProfile:
         for face in shape.Faces:
             if not is_flat_face(face):
                 continue
-            point, normal = face.CenterOfMass, face.normalAt(0, 0)
+            point, normal = face.CenterOfMass, face_normal(face)
             along = normal.dot(axis)
             # Only faces looking at the far end, crossed by the axis line, count.
             if abs(along) < TOLERANCE or normal.dot(far - point) <= 0:

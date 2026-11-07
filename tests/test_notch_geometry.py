@@ -171,6 +171,14 @@ class TestNotchInPlacedParts(TrimFixture):
         self.assertAlmostEqual(self.global_box(obj).XMin, trimmed.Shape.BoundBox.XMin, places=5)
         self.assertAlmostEqual(self.global_box(obj).XMax, 150.0 - HALF, places=5)
 
+    def test_a_target_in_a_rotated_part_is_cut_where_it_really_is(self):
+        trimmed, boundary = self.t_joint()
+        part = self.in_placed_part(boundary, App.Vector(100, 0, 0))
+        part.Placement.Rotation = App.Rotation(App.Vector(0, 0, 1), 180)
+        self.doc.recompute()
+        obj = self.notch(trimmed, boundary)
+        self.assertAlmostEqual(self.global_box(obj).XMin, 100.0 + HALF, places=5)
+
 
 class TestTrimsFollowMovedParts(TrimFixture):
     """A trim has no link to the Parts holding its profile and target: moving one of them still recomputes it."""
@@ -214,6 +222,35 @@ class TestTrimsFollowMovedParts(TrimFixture):
         obj = self.notch(trimmed, boundary)
         part.Placement.Base = App.Vector(100, 0, 0)
         self.assertNotIn("Touched", obj.State)
+
+    def test_an_expression_placing_the_part_of_the_profile_settles(self):
+        trimmed, boundary = self.t_joint()
+        sheet = self.doc.addObject("Spreadsheet::Sheet", "Sheet")
+        sheet.set("A1", "100")
+        sheet.setAlias("A1", "x")
+        part = self.in_placed_part(trimmed, App.Vector())
+        part.setExpression(".Placement.Base.x", "Sheet.x")
+        self.doc.recompute()
+        obj = self.notch(trimmed, boundary)
+        self.doc.recompute()
+        self.assertEqual(self.doc.recompute(), 0)
+        self.assertNotIn("Touched", obj.State)
+
+    def test_undo_and_redo_of_a_part_move_move_the_cut(self):
+        self.doc.UndoMode = 1
+        trimmed, boundary = self.t_joint()
+        part = self.in_placed_part(boundary, App.Vector(100, 0, 0))
+        obj = self.notch(trimmed, boundary)
+        self.doc.openTransaction("move")
+        part.Placement.Base = App.Vector(140, 0, 0)
+        self.doc.commitTransaction()
+        self.doc.recompute()
+        self.doc.undo()
+        self.doc.recompute()
+        self.assertAlmostEqual(self.global_box(obj).XMin, 100.0 + HALF, places=5)
+        self.doc.redo()
+        self.doc.recompute()
+        self.assertAlmostEqual(self.global_box(obj).XMin, 140.0 + HALF, places=5)
 
     def test_opening_a_document_leaves_its_trims_alone(self):
         import os

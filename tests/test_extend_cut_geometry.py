@@ -183,6 +183,16 @@ class TestExtendCutGeometry(ExtendCutFixture):
         obj = self.valid_extend_cut(self.profile(0, 300), plate, ("Face1",))
         self.assert_runs(obj, 0.0, NEAR)
 
+    def test_flat_nurbs_faces_whose_parameters_start_past_zero_face_the_right_way(self):
+        # Knots 1 to 2: (0, 0) lies off the face, where the extended surface folds over and looks the other way.
+        a, b, c, d = (App.Vector(NEAR, y, z) for y, z in ((-100, -100), (100, -100), (-100, 100), (500, 500)))
+        surface = Part.BSplineSurface()
+        surface.buildFromPolesMultsKnots([[a, c], [b, d]], [2, 2], [2, 2], [1, 2], [1, 2], False, False, 1, 1)
+        prism = self.doc.addObject("Part::Feature", "Prism")
+        prism.Shape = Part.Face(surface).extrude(App.Vector(FAR - NEAR, 0, 0))
+        obj = self.valid_extend_cut(self.profile(0, 300), prism)
+        self.assertAlmostEqual(obj.Shape.BoundBox.XMax, NEAR, places=5)
+
     def test_a_target_in_a_rotated_part_is_seen_where_it_really_is(self):
         # Turned half a turn about Z and moved back 800 mm, the target stays where it was, its faces swapped:
         # its local -X face looks along +X in the document, at x = FAR.
