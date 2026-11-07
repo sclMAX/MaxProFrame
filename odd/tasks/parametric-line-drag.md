@@ -28,9 +28,9 @@ a direction given as an angle in a global plane, and drawing the lines by draggi
 
 ## Tasks
 - T1 S1 S2 S6 object + panel: Direction "Angle", Plane, Angle, angle field with Fx, remembered plane/angle,
-  translations, tutorial — inline — commit: (this commit) (done, 19 object + 27 panel tests pass)
+  translations, tutorial — inline — commit: 1b007f1 (done, 20 object + 27 panel tests pass)
 - T2 S3 S4 S5 drag: pure plane math (ray/plane, edge-on, snapping, axis or angle), overlay and mouse/key callbacks,
-  panel plane buttons, tooltip/translations/tutorial — inline — commit: (this commit) (done, 9 math + 36 panel tests pass)
+  panel plane buttons, tooltip/translations/tutorial — inline — commit: c8d70c4, fix cd40aef (done, 9 math + 40 panel tests pass)
 
 ## Log
 - L1 (user): "hablemos de la parte 2, que opciones tenemos?" (part 2 = drag with the mouse, deferred from PR 95 L9)
@@ -57,3 +57,8 @@ a direction given as an angle in a global plane, and drawing the lines by draggi
   (size and edge-on follow the camera) before hit-testing; migration test moved into the class. RED observed for
   (1) and (2) with the fix stashed (2 failures + 1 error), then test_parametric_line 20/20, test_parametric_line_drag
   9/9, test_parametric_line_panel 40/40.
+- L12 (evidence): full native suite (FreeCAD 1.1.4, .git/ci-policy-runtime) 1294 tests, exit 0 (job-2 on cd40aef).
+  Native review review-dc71a9e0ebbb0328 (risk + reliability) approved and acknowledged; advisory only (non-blocking,
+  later work): R3-001 parametric_line_panel.py:109, R3-002 parametric_line_drag.py:258-293, R3-003
+  parametric_line_drag.py:181-190 (warnings); R3-004 parametric_line_panel.py:241-242, R3-005
+  parametric_line_drag.py:141-149 (suggestions). Waiting for the user's manual test in a real 3D view.
