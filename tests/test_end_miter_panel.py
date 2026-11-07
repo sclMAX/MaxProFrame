@@ -182,6 +182,27 @@ class TestEndMiterPanel(MiterFixture):
         selected = {s.ObjectName: s.SubElementNames for s in Gui.Selection.getSelectionEx()}
         self.assertEqual(selected, {p1.Name: (), p2.Name: ()})
 
+    def test_ok_and_cancel_leave_nothing_selected(self):
+        # The panel shows its profiles selected while it is open; once it closes the selection is empty.
+        for close in ("accept", "reject"):
+            with self.subTest(close=close):
+                _, members = self.profiles(RECTANGLE)
+                Gui.Selection.clearSelection()
+                for member in members:
+                    Gui.Selection.addSelection(self.doc.Name, member.Name)
+                panel = self.run_command()
+                QtWidgets.QApplication.processEvents()
+                self.assertEqual(panel.members, members)
+                self.assertTrue(getattr(panel, close)())
+                Gui.Control.closeDialog()
+                QtWidgets.QApplication.processEvents()
+                selected = Gui.Selection.getSelectionEx("*")
+                created = len(self.trims())
+                for obj in self.trims():
+                    self.doc.removeObject(obj.Name)
+                self.assertEqual(selected, [])
+                self.assertEqual(created, 4 if close == "accept" else 0)
+
     def test_rectangle_creates_one_trim_per_profile_with_perfect_joints(self):
         _, members = self.profiles(RECTANGLE)
         panel = self.open_panel(members)
