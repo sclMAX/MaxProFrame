@@ -569,6 +569,8 @@ class EndMiterTaskPanel:
             self._close_edit()
         else:
             self._discard_preview()
+            # The profiles were selected to show the panel's list: closed, nothing stays selected.
+            Gui.Selection.clearSelection()
         return True
 
     def accept_edit(self):
@@ -620,6 +622,8 @@ class EndMiterTaskPanel:
         self._transaction_open = False
         self._previews.clear()
         self.clean()
+        # The profiles were selected to show the panel's list: closed, nothing stays selected.
+        Gui.Selection.clearSelection()
         return True
 
 
