@@ -107,6 +107,84 @@ class TestExtendCutGeometry(ExtendCutFixture):
         obj = self.valid_extend_cut(self.profile(0, 300), target, (self.face_towards(target, App.Vector(1, 0, 0)),))
         self.assert_runs(obj, 0.0, FAR)
 
+    def in_placed_part(self, body, offset):
+        """Move ``body`` and its sketch into a Part placed at ``offset``."""
+        part = self.doc.addObject("App::Part", "Part")
+        part.addObjects([body.AttachmentSupport[0][0], body])
+        part.Placement.Base = offset
+        self.doc.recompute()
+        return part
+
+    def test_a_profile_in_a_placed_part_ends_on_the_face_where_it_really_is(self):
+        target = self.target()
+        body = self.profile(0, 300)
+        self.in_placed_part(body, App.Vector(100, 0, 0))
+        obj = self.valid_extend_cut(body, target, (self.face_towards(target, App.Vector(-1, 0, 0)),))
+        # The Part moves the profile 100 mm along X: it ends at x = NEAR in the document, NEAR - 100 in the Part.
+        self.assertAlmostEqual(obj.Shape.BoundBox.XMax, NEAR - 100.0, places=5)
+        other = self.profile(0, 300)
+        self.in_placed_part(other, App.Vector(100, 0, 0))
+        whole = self.valid_extend_cut(other, target)
+        self.assertAlmostEqual(whole.Shape.BoundBox.XMax, NEAR - 100.0, places=5)
+
+    def global_box(self, obj):
+        shape = obj.Shape.copy()
+        group = obj.getParentGeoFeatureGroup()
+        if group is not None:
+            shape.transformShape(group.getGlobalPlacement().toMatrix())
+        return shape.BoundBox
+
+    def test_a_target_in_a_placed_part_is_seen_where_it_really_is(self):
+        target = self.target()
+        self.in_placed_part(target, App.Vector(100, 0, 0))
+        face = self.valid_extend_cut(self.profile(0, 300), target, (self.face_towards(target, App.Vector(-1, 0, 0)),))
+        whole = self.valid_extend_cut(self.profile(0, 300), target)
+        self.assertAlmostEqual(face.Shape.BoundBox.XMax, NEAR + 100.0, places=5)
+        self.assertAlmostEqual(whole.Shape.BoundBox.XMax, NEAR + 100.0, places=5)
+
+    def test_nested_parts_add_their_placements(self):
+        target, body = self.target(), self.profile(0, 300)
+        outer = self.doc.addObject("App::Part", "Outer")
+        outer.Placement.Base = App.Vector(50, 0, 0)
+        outer.addObject(self.in_placed_part(body, App.Vector(50, 0, 0)))
+        self.doc.recompute()
+        obj = self.valid_extend_cut(body, target, (self.face_towards(target, App.Vector(-1, 0, 0)),))
+        self.assertAlmostEqual(self.global_box(obj).XMax, NEAR, places=5)
+
+    def test_a_rotated_part_keeps_a_square_end_on_the_face(self):
+        target = self.target()
+        body = self.make_profile(self.make_sketch(((0, 0, 0), (0, -300, 0))), "Edge1", extension=0.0, **CENTER)
+        part = self.in_placed_part(body, App.Vector())
+        part.Placement.Rotation = App.Rotation(App.Vector(0, 0, 1), 90)
+        self.doc.recompute()
+        obj = self.valid_extend_cut(body, target, (self.face_towards(target, App.Vector(-1, 0, 0)),), gap=5.0)
+        self.assertAlmostEqual(self.global_box(obj).XMax, NEAR - 5.0, places=5)
+        self.assertEqual((obj.CuttingAngleA, obj.CuttingAngleB), ("0.0", "@ 0.0"))
+        self.assertAlmostEqual(obj.Length.Value, 370.0, places=5)
+
+    def test_keep_end_is_choosable_only_where_the_target_really_crosses(self):
+        target = self.target()
+        far = self.profile(0, 1000)
+        self.in_placed_part(far, App.Vector(1000, 0, 0))
+        obj = self.valid_extend_cut(far, target)
+        self.assertFalse(obj.Proxy.kept_end(obj)[1])
+        self.assertAlmostEqual(self.global_box(obj).XMin, FAR, places=5)
+
+    def test_a_flat_face_of_any_surface_type_is_a_target(self):
+        # Converted to NURBS, the faces of a box are flat but their surface is not a Part.Plane.
+        plate = self.doc.addObject("Part::Feature", "Plate")
+        plate.Shape = Part.makeBox(10, 400, 100, App.Vector(NEAR, -200, -50)).toNurbs()
+        near = next(
+            f"Face{index}"
+            for index, face in enumerate(plate.Shape.Faces, start=1)
+            if face.normalAt(0, 0).getAngle(App.Vector(-1, 0, 0)) < 1e-6
+        )
+        self.assertNotIsInstance(plate.Shape.getElement(near).Surface, Part.Plane)
+        obj = self.valid_extend_cut(self.profile(0, 300), plate, (near,))
+        self.assertAlmostEqual(obj.Shape.BoundBox.XMax, NEAR, places=5)
+        whole = self.valid_extend_cut(self.profile(0, 300), plate)
+        self.assertAlmostEqual(whole.Shape.BoundBox.XMax, NEAR, places=5)
+
     def test_bom_angle_and_length_of_a_square_and_a_slanted_end(self):
         target = self.target()
         square = self.valid_extend_cut(self.profile(0, 300), target, (self.face_towards(target, App.Vector(-1, 0, 0)),))

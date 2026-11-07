@@ -16,6 +16,7 @@ from freecad.maxproframe.create_extend_cut_tool import ExtendCutCommand, make_ex
 from freecad.maxproframe.create_notch_tool import make_notch_profile
 
 CTRL = QtCore.Qt.KeyboardModifier.ControlModifier
+SQUARE_YZ = ((-100, -100), (100, -100), (100, 100), (-100, 100), (-100, -100))
 
 
 class PanelFixture(ExtendCutFixture):
@@ -213,6 +214,83 @@ class TestExtendCutPanel(PanelFixture):
         self.assertEqual(panel.profiles, [body])
         self.assertTrue(panel.form.change_target_button.isChecked())
         self.assertEqual(self.message(panel), f"{sketch.Label}: a sketch cannot be the target")
+
+    def test_a_flat_face_of_a_non_sketch_2d_object_is_a_target(self):
+        # Only sketches are refused: a flat face of another 2D object is a valid plane.
+        flat = self.doc.addObject("Part::Part2DObjectPython", "Flat")
+        flat.Shape = Part.Face(Part.makePolygon([App.Vector(NEAR, y, z) for y, z in SQUARE_YZ]))
+        panel = self.run_command()
+        self.click(flat, "Face1")
+        self.assertEqual(panel.target, (flat, ("Face1",)))
+        self.assertEqual(self.message(panel), "")
+
+    def test_a_flat_nurbs_face_is_a_target(self):
+        plate = self.doc.addObject("Part::Feature", "Plate")
+        plate.Shape = Part.makeBox(10, 400, 100, App.Vector(NEAR, -200, -50)).toNurbs()
+        near = next(
+            f"Face{index}"
+            for index, face in enumerate(plate.Shape.Faces, start=1)
+            if face.normalAt(0, 0).getAngle(App.Vector(-1, 0, 0)) < 1e-6
+        )
+        panel = self.run_command()
+        self.click(plate, near)
+        self.assertEqual(panel.target, (plate, (near,)))
+        self.assertEqual(self.message(panel), "")
+
+    def test_the_parallel_check_sees_profiles_where_they_really_are(self):
+        # Turned 90 degrees in a Part, a profile drawn along X runs along Y: parallel to a face looking along X.
+        target = self.target()
+        face = self.near_face(target)
+        body = self.profile(0, 300)
+        part = self.doc.addObject("App::Part", "Part")
+        part.addObjects([body.AttachmentSupport[0][0], body])
+        part.Placement.Rotation = App.Rotation(App.Vector(0, 0, 1), 90)
+        self.doc.recompute()
+        panel = self.run_command((target, face))
+        self.click(body, "")
+        self.assertEqual(panel.profiles, [])
+        self.assertEqual(self.message(panel), f"{body.Label} runs parallel to the target: it cannot reach it")
+
+    def test_the_parallel_check_sees_a_target_in_a_rotated_part(self):
+        target = self.target()
+        face = self.near_face(target)
+        part = self.doc.addObject("App::Part", "Part")
+        part.addObjects([target.AttachmentSupport[0][0], target])
+        part.Placement.Rotation = App.Rotation(App.Vector(0, 0, 1), 90)
+        self.doc.recompute()
+        body = self.profile(0, 300)
+        panel = self.run_command((target, face))
+        self.click(body, "")
+        self.assertEqual(panel.profiles, [])
+        self.assertEqual(self.message(panel), f"{body.Label} runs parallel to the target: it cannot reach it")
+
+    def test_the_parallel_check_follows_the_profile_not_its_sketch(self):
+        # The sketch stays out of the turned Part: attachment does not follow containers, so the profile
+        # keeps the path in its own coordinates and runs along Y in the document, as the recompute sees it.
+        target = self.target()
+        face = self.near_face(target)
+        body = self.profile(0, 300)
+        part = self.doc.addObject("App::Part", "Part")
+        part.addObject(body)
+        part.Placement.Rotation = App.Rotation(App.Vector(0, 0, 1), 90)
+        self.doc.recompute()
+        panel = self.run_command((target, face))
+        self.click(body, "")
+        self.assertEqual(panel.profiles, [])
+        self.assertEqual(self.message(panel), f"{body.Label} runs parallel to the target: it cannot reach it")
+
+    def test_a_curved_profile_is_never_refused_as_parallel(self):
+        # A bent profile has no single axis: the recompute judges its target.
+        target = self.target()
+        top = self.face_towards(target, App.Vector(0, 0, 1))
+        sketch = self.doc.addObject("Sketcher::SketchObject", "Arc")
+        sketch.addGeometry(Part.ArcOfCircle(Part.Circle(App.Vector(0, 0, 0), App.Vector(0, 0, 1), 200), 0.0, 1.5))
+        self.doc.recompute()
+        bent = self.make_profile(sketch, "Edge1", **CENTER)
+        panel = self.run_command((target, top))
+        self.click(bent, "")
+        self.assertEqual(panel.profiles, [bent])
+        self.assertEqual(self.message(panel), "")
 
     def test_a_click_on_a_curved_face_is_refused(self):
         tube, lateral = self.tube()

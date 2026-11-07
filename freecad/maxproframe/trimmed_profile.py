@@ -41,6 +41,27 @@ NOTCH_OFFSET_TOLERANCES = (1e-6, 1e-3)
 NOTCH_SECTION_TOLERANCE = 1e-6
 
 
+def _container_placement(obj):
+    """Global placement of the container (Part, Body) of ``obj``, identity outside any."""
+    group = obj.getParentGeoFeatureGroup()
+    return group.getGlobalPlacement() if group is not None else App.Placement()
+
+
+def in_frame_of(body, obj, shape):
+    """``shape``, local to the container of ``obj``, in the coordinates of the container of ``body``."""
+    move = _container_placement(body).inverse().multiply(_container_placement(obj))
+    if shape is None or move.isIdentity():
+        return shape
+    shape = shape.copy()
+    shape.transformShape(move.toMatrix())
+    return shape
+
+
+def is_flat_face(face):
+    """Whether ``face`` is a flat face, whatever its surface type (a plane, or a flat NURBS)."""
+    return isinstance(face, Part.Face) and face.findPlane() is not None
+
+
 def _between(ends, origin, normal):
     """Whether the plane through ``origin`` with ``normal`` lies strictly between the two ``ends``."""
     start, end = ((point - origin).dot(normal) for point in ends)
@@ -285,7 +306,9 @@ class TrimmedProfile:
     def extend_cut_plane(self, fp):
         """Plane the moving end of an Extend Cut ends on, moved by the gap, its normal towards the kept end."""
         member = self._miter_member(fp.TrimmedBody)
-        far_start, origin, normal, _ = self._extend_cut_side(member, fp.TrimmingBoundary[0], self._chosen_far_start(fp))
+        far_start, origin, normal, _ = self._extend_cut_side(
+            fp.TrimmedBody, member, fp.TrimmingBoundary[0], self._chosen_far_start(fp)
+        )
         far = member.end(far_start)[2]
         if normal.dot(far - origin) < 0:
             normal = -normal
@@ -305,7 +328,7 @@ class TrimmedProfile:
         boundary = fp.TrimmingBoundary[0] if boundary is None else boundary
         chosen = self._chosen_far_start(fp) if keep_end is None else {START: True, END: False}.get(keep_end)
         if fp.TrimmedProfileType == "Extend Cut":
-            far_start, _, _, choosable = self._extend_cut_side(member, boundary, chosen)
+            far_start, _, _, choosable = self._extend_cut_side(fp.TrimmedBody, member, boundary, chosen)
             return far_start, choosable
         target = boundary[0]
         far_start = self._far_end_is_start(member, target)
@@ -323,16 +346,17 @@ class TrimmedProfile:
         """Whether KeepEnd keeps the start (True) or the end (False); None for Auto or a trim saved without it."""
         return {START: True, END: False}.get(getattr(fp, "KeepEnd", AUTO))
 
-    def _extend_cut_side(self, member, boundary, chosen):
-        """(far end is start, plane point, plane normal, whether KeepEnd can choose) of an Extend Cut.
+    def _extend_cut_side(self, body, member, boundary, chosen):
+        """(far end is start, plane point, plane normal, whether KeepEnd can choose) of an Extend Cut of ``body``.
 
-        ``chosen`` is the end KeepEnd keeps (True for the start), or None for Auto.
+        ``chosen`` is the end KeepEnd keeps (True for the start), or None for Auto. The target is seen
+        where it really is: moved into the coordinates of the container of ``body``.
         """
         # A whole target is linked with an empty sub-element name.
         target, subs = boundary
         if subs and subs[0]:
-            face = target.getSubObject(subs[0])
-            if not isinstance(face, Part.Face) or not isinstance(face.Surface, Part.Plane):
+            face = in_frame_of(body, target, target.getSubObject(subs[0]))
+            if not is_flat_face(face):
                 raise MiterError(
                     translate("frameforge", "Extend / Cut: the target face {} of {} is not planar.").format(
                         subs[0], target.Label
@@ -344,15 +368,16 @@ class TrimmedProfile:
                 return point, face_normal
 
         else:
+            target_shape = in_frame_of(body, target, target.Shape)
 
             def plane_seen_from(far_start):
-                return self._crossed_face(member, target, far_start)
+                return self._crossed_face(member, target, far_start, target_shape)
 
         ends = [member.end(at_start)[2] for at_start in (True, False)]
         axis = ends[1] - ends[0]
         axis.normalize()
         # A whole target gives the face seen from the end farthest from it.
-        origin, normal = plane_seen_from(subs and subs[0] or self._far_end_is_start(member, target))
+        origin, normal = plane_seen_from(subs and subs[0] or self._far_end_is_start(member, target, target_shape))
         if abs(normal.dot(axis)) < TOLERANCE:
             raise MiterError(translate("frameforge", "Extend / Cut: the target plane is parallel to the profile axis."))
         # The end nearest the plane moves; the other one, the far end, stays.
@@ -391,20 +416,21 @@ class TrimmedProfile:
         box = inside.transformed(to_axis.toMatrix()).optimalBoundingBox()
         return box.ZMin > CROSSING_TOLERANCE and box.ZMax < length - CROSSING_TOLERANCE
 
-    def _far_end_is_start(self, member, target):
-        """Whether the far end of ``member``, the axis end farthest from ``target``, is its start."""
-        start, end = (target.Shape.distToShape(Part.Vertex(member.end(at_start)[2]))[0] for at_start in (True, False))
+    def _far_end_is_start(self, member, target, shape=None):
+        """Whether the far end of ``member``, the axis end farthest from ``target`` (or its ``shape``), is its start."""
+        shape = target.Shape if shape is None else shape
+        start, end = (shape.distToShape(Part.Vertex(member.end(at_start)[2]))[0] for at_start in (True, False))
         return start >= end
 
-    def _crossed_face(self, member, target, far_start):
-        """(point, normal) of the planar face of ``target`` the axis crosses first, seen from the far end."""
+    def _crossed_face(self, member, target, far_start, shape):
+        """(point, normal) of the flat face of ``shape`` (of ``target``) the axis crosses first, seen from the far end."""
         ends = [member.end(at_start)[2] for at_start in (True, False)]
         far = ends[0] if far_start else ends[1]
         axis = ends[1] - ends[0]
         axis.normalize()
         crossed = []
-        for face in target.Shape.Faces:
-            if not isinstance(face.Surface, Part.Plane):
+        for face in shape.Faces:
+            if not is_flat_face(face):
                 continue
             point, normal = face.CenterOfMass, face.normalAt(0, 0)
             along = normal.dot(axis)
