@@ -187,6 +187,32 @@ class TestParametricLine(unittest.TestCase):
         self.assertEqual(line.CustomDirection, App.Vector(30, 0, -40))
         self.assertEqual(self.ends(line), [(10, 10, 0), (16, 10, -8)])
 
+    def test_angle_in_a_global_plane_counterclockwise_from_its_first_axis(self):
+        box = self.doc.addObject("Part::Box", "Box")
+        self.doc.recompute()
+        for plane, angle, end in (
+            ("XY", 0, (20, 10, 0)),
+            ("XY", 90, (10, 20, 0)),
+            ("XZ", 90, (10, 10, 10)),
+            ("XZ", -90, (10, 10, -10)),
+            ("YZ", 0, (10, 20, 0)),
+            ("YZ", 180, (10, 0, 0)),
+            ("XY", 30, (18.660254, 15, 0)),
+        ):
+            with self.subTest(plane=plane, angle=angle):
+                line = make_line_from_vertex((box, "Vertex8"), "Angle", 10, plane=plane, angle=angle)
+                self.assertEqual((line.Direction, line.Plane, line.Angle.Value), ("Angle", plane, angle))
+                self.assertEqual(self.ends(line), [(10, 10, 0), end])
+
+    def test_the_angle_takes_expressions_and_keeps_the_custom_vector(self):
+        box = self.doc.addObject("Part::Box", "Box")
+        self.doc.recompute()
+        line = make_line_from_vertex((box, "Vertex8"), "Angle", 10, App.Vector(1, 2, 3), plane="XZ", angle=0)
+        line.setExpression("Angle", "Box.Height * 9")
+        self.doc.recompute()
+        self.assertEqual(self.ends(line), [(10, 10, 0), (10, 10, 10)])
+        self.assertEqual(line.CustomDirection, App.Vector(1, 2, 3))
+
     def test_start_follows_the_vertex_and_length_takes_expressions(self):
         box = self.doc.addObject("Part::Box", "Box")
         self.doc.recompute()
@@ -280,3 +306,28 @@ class TestParametricLine(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_a_line_saved_before_the_angle_mode_gets_it_and_keeps_its_direction(self):
+        box = self.doc.addObject("Part::Box", "Box")
+        self.doc.recompute()
+        line = make_line_from_vertex((box, "Vertex8"), "Custom", 10, App.Vector(30, 0, -40))
+        # What an earlier version saved: no Angle direction, no Plane and no Angle.
+        line.Direction = ["Vertex2", "+X", "-X", "+Y", "-Y", "+Z", "-Z", "Custom"]
+        line.Direction = "Custom"
+        line.removeProperty("Plane")
+        line.removeProperty("Angle")
+        folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, folder, True)
+        path = os.path.join(folder, "before-angle.FCStd")
+        name = line.Name
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        self.doc = App.openDocument(path)
+        self.addCleanup(lambda n=self.doc.Name: App.closeDocument(n) if n in App.listDocuments() else None)
+        line = self.doc.getObject(name)
+        self.assertEqual(line.Direction, "Custom")
+        self.assertIn("Angle", line.getEnumerationsOfProperty("Direction"))
+        self.assertEqual((line.Plane, line.Angle.Value), ("XY", 0))
+        line.Direction = "Angle"
+        self.doc.recompute()
+        self.assertEqual(self.ends(line), [(10, 10, 0), (20, 10, 0)])

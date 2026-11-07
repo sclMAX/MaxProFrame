@@ -1159,7 +1159,12 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Parametric Line</source><translation>Línea paramétrica</translation></message>
     <message><source>From the vertex</source><translation>Desde el vértice</translation></message>
     <message><source>Custom vector</source><translation>Vector personalizado</translation></message>
-    <message><source>Global axis the lines run along, or Custom vector to give X, Y and Z.</source><translation>Eje global que siguen las líneas, o Vector personalizado para indicar X, Y y Z.</translation></message>
+    <message><source>Global axis the lines run along, Angle in a plane to give a global plane and an angle, or Custom vector to give X, Y and Z.</source><translation>Eje global que siguen las líneas, Ángulo en un plano para indicar un plano global y un ángulo, o Vector personalizado para indicar X, Y y Z.</translation></message>
+    <message><source>Angle in a plane</source><translation>Ángulo en un plano</translation></message>
+    <message><source>Global plane the angle is measured in.</source><translation>Plano global en el que se mide el ángulo.</translation></message>
+    <message><source>Plane</source><translation>Plano</translation></message>
+    <message><source>Angle in the plane, counterclockwise from its first axis. Fx takes an expression.</source><translation>Ángulo en el plano, en sentido antihorario desde su primer eje. Fx acepta una expresión.</translation></message>
+    <message><source>Angle</source><translation>Ángulo</translation></message>
     <message><source>Direction</source><translation>Dirección</translation></message>
     <message><source>Length of each line. Fx takes an expression.</source><translation>Longitud de cada línea. Fx acepta una expresión.</translation></message>
     <message><source>The custom vector is zero: give X, Y or Z.</source><translation>El vector personalizado es cero: indicá X, Y o Z.</translation></message>

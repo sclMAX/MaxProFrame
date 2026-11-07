@@ -19,9 +19,10 @@ from freecad.maxproframe.parametric_line import CreateParametricLineCommand, mak
 # Corners of the frame sketch: a 400 x 200 rectangle at z = 0.
 CORNERS = [(0, 0, 0), (400, 0, 0), (400, 200, 0), (0, 200, 0)]
 # Values a new-line panel remembers from its last OK: strings, then floats.
-STRING_PARAMS = ("Parametric Line Direction",)
+STRING_PARAMS = ("Parametric Line Direction", "Parametric Line Plane")
 FLOAT_PARAMS = (
     "Parametric Line Length",
+    "Parametric Line Angle",
     "Parametric Line Custom X",
     "Parametric Line Custom Y",
     "Parametric Line Custom Z",
@@ -351,7 +352,7 @@ class TestCreatePanel(ParametricLinePanelFixture):
         panel = self.run_command(*self.corners(CORNERS[1]))
         combo = panel.form.combo_direction
         self.assertEqual(
-            [combo.itemData(i) for i in range(combo.count())], ["+X", "-X", "+Y", "-Y", "+Z", "-Z", "Custom"]
+            [combo.itemData(i) for i in range(combo.count())], ["+X", "-X", "+Y", "-Y", "+Z", "-Z", "Angle", "Custom"]
         )
         panel.form.spin_length.setValue(10)
         combo.setCurrentIndex(combo.findData("+Y"))
@@ -368,6 +369,53 @@ class TestCreatePanel(ParametricLinePanelFixture):
         [line] = self.lines()
         self.assertEqual((line.Direction, line.CustomDirection), ("Custom", App.Vector(3, 0, -4)))
         self.assertEqual(self.ends(line), [(400, 0, 0), (406, 0, -8)])
+
+    def test_an_angle_in_a_global_plane(self):
+        panel = self.run_command(*self.corners(CORNERS[1]))
+        form = panel.form
+        self.assertEqual([form.combo_plane.itemData(i) for i in range(form.combo_plane.count())], ["XY", "XZ", "YZ"])
+        self.assertFalse(form.combo_plane.isEnabled())
+        self.assertFalse(form.spin_angle.isEnabled())
+        form.spin_length.setValue(10)
+        form.combo_direction.setCurrentIndex(form.combo_direction.findData("Angle"))
+        self.assertTrue(form.combo_plane.isEnabled())
+        self.assertTrue(form.spin_angle.isEnabled())
+        self.assertFalse(form.spin_x.isEnabled())
+        self.assertEqual(form.angle_hint.text(), "0° = +X, 90° = +Y")
+        self.assertEqual(self.ends(panel.lines[0]), [(400, 0, 0), (410, 0, 0)])
+        form.combo_plane.setCurrentIndex(form.combo_plane.findData("YZ"))
+        self.assertEqual(form.angle_hint.text(), "0° = +Y, 90° = +Z")
+        form.spin_angle.setValue(-90)
+        self.assertEqual(self.ends(panel.lines[0]), [(400, 0, 0), (400, 0, -10)])
+        self.assertTrue(panel.accept())
+        [line] = self.lines()
+        self.assertEqual((line.Direction, line.Plane, line.Angle.Value), ("Angle", "YZ", -90))
+        self.assertEqual(line.CustomDirection, App.Vector(0, 0, -1))
+
+    def test_a_new_panel_remembers_the_plane_and_the_angle(self):
+        panel = self.run_command(*self.corners(CORNERS[0]))
+        self.assertEqual((panel.form.combo_plane.currentData(), panel.form.spin_angle.value()), ("XY", 0))
+        panel.form.combo_direction.setCurrentIndex(panel.form.combo_direction.findData("Angle"))
+        panel.form.combo_plane.setCurrentIndex(panel.form.combo_plane.findData("XZ"))
+        panel.form.spin_angle.setValue(45)
+        self.assertTrue(panel.accept())
+        self.events()
+        panel = self.run_command()
+        self.assertEqual(panel.direction(), "Angle")
+        self.assertEqual((panel.form.combo_plane.currentData(), panel.form.spin_angle.value()), ("XZ", 45))
+        self.assertTrue(panel.reject())
+
+    def test_the_angle_expression_is_given_to_every_line(self):
+        panel = self.run_command(*self.corners(CORNERS[0], CORNERS[1]))
+        panel.form.combo_direction.setCurrentIndex(panel.form.combo_direction.findData("Angle"))
+        panel.form.spin_length.setValue(10)
+        # What the Fx editor of the Angle field does: it sets the expression on the line it is bound to.
+        panel.lines[0].setExpression("Angle", "Box.Height * 9")
+        panel.form.spin_angle.setValue(5)
+        self.assertTrue(panel.accept())
+        for line in self.lines():
+            self.assertEqual(expression_fields.expression_of(line, "Angle"), "Box.Height * 9")
+        self.assertEqual([self.ends(line)[1] for line in self.lines()], [(0, 10, 0), (400, 10, 0)])
 
     def test_cancel_leaves_no_line_and_no_undo_step(self):
         for undo_mode in (1, 0):
@@ -400,6 +448,9 @@ class TestCreatePanel(ParametricLinePanelFixture):
         combo = panel.form.combo_direction
         self.assertEqual(panel.form.windowTitle(), "Línea paramétrica")
         self.assertEqual(combo.itemText(combo.findData("Custom")), "Vector personalizado")
+        self.assertEqual(combo.itemText(combo.findData("Angle")), "Ángulo en un plano")
+        combo.setCurrentIndex(combo.findData("Angle"))
+        self.assertEqual(panel.form.angle_hint.text(), "0° = +X, 90° = +Y")
         self.click(self.box, "Edge1")
         self.assertEqual(panel.form.status_label.text(), "Hacé clic en un vértice: solo un vértice inicia una línea.")
         self.assertTrue(panel.reject())

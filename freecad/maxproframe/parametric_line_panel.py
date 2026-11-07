@@ -1,10 +1,10 @@
-"""Task panel of parametric lines drawn from vertices along a global axis or a custom vector.
+"""Task panel of parametric lines drawn from vertices along a global axis, a custom vector or an angle in a plane.
 
 Creating, the panel previews one line per selected vertex; a click on a vertex adds a line from it, a click
 on a vertex with a line removes that line, and OK keeps them in one Undo step. It starts with the direction,
-custom vector and length of the last OK. Editing (a double-click on such a line), it changes that line. The
-Length field takes expressions (the Fx button): bound to the first line, its expression is given to every line
-of the panel.
+custom vector, plane, angle and length of the last OK. Editing (a double-click on such a line), it changes that
+line. The Length and Angle fields take expressions (the Fx button): bound to the first line, their expressions
+are given to every line of the panel.
 """
 
 import FreeCAD as App
@@ -13,30 +13,55 @@ from PySide import QtCore, QtGui
 
 from freecad.maxproframe import expression_fields
 from freecad.maxproframe.ff_tools import get_param_group, translate
-from freecad.maxproframe.parametric_line import AXES, DEFAULT_LENGTH, _global_vertex, make_line_from_vertex
+from freecad.maxproframe.parametric_line import AXES, DEFAULT_LENGTH, PLANES, _global_vertex, make_line_from_vertex
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 
 # Direction of new lines until an OK remembers one: legs hang down from a frame.
 DEFAULT_DIRECTION = "-Z"
 DEFAULT_CUSTOM = App.Vector(0, 0, -1)
+DEFAULT_PLANE = "XY"
 # Values of the last OK on a new-line panel, the ones the next one starts with.
 DIRECTION_PARAM = "Parametric Line Direction"
 LENGTH_PARAM = "Parametric Line Length"
+PLANE_PARAM = "Parametric Line Plane"
+ANGLE_PARAM = "Parametric Line Angle"
 CUSTOM_PARAMS = {axis: f"Parametric Line Custom {axis.upper()}" for axis in ("x", "y", "z")}
 # Properties of a line the panel sets, restored when an edit is cancelled.
-EDITED_PROPERTIES = ("Direction", "CustomDirection", "Length")
+EDITED_PROPERTIES = ("Direction", "CustomDirection", "Plane", "Angle", "Length")
+# Properties whose expression, set with Fx on the first line, every line of the panel gets.
+EXPRESSION_PROPERTIES = ("Length", "Angle")
 VECTOR_LIMIT = 1e6
 
 
 def remembered_values():
-    """(direction, custom vector, length) a new-line panel starts with."""
+    """Values a new-line panel starts with: direction, custom vector, length, plane and angle."""
     param = get_param_group()
     direction = param.GetString(DIRECTION_PARAM, DEFAULT_DIRECTION)
-    if direction not in (*AXES, "Custom"):
+    if direction not in (*AXES, "Custom", "Angle"):
         direction = DEFAULT_DIRECTION
     custom = App.Vector(*(param.GetFloat(CUSTOM_PARAMS[axis], getattr(DEFAULT_CUSTOM, axis)) for axis in "xyz"))
     length = param.GetFloat(LENGTH_PARAM, DEFAULT_LENGTH)
-    return direction, custom, length if length > 0 else DEFAULT_LENGTH
+    plane = param.GetString(PLANE_PARAM, DEFAULT_PLANE)
+    if plane not in PLANES:
+        plane = DEFAULT_PLANE
+    return {
+        "direction": direction,
+        "custom": custom,
+        "length": length if length > 0 else DEFAULT_LENGTH,
+        "plane": plane,
+        "angle": _angle_in_range(param.GetFloat(ANGLE_PARAM, 0.0)),
+    }
+
+
+def _angle_in_range(angle):
+    """``angle`` in degrees brought into -180..180."""
+    return (angle + 180.0) % 360.0 - 180.0 if not -180.0 <= angle <= 180.0 else angle
+
+
+def _angle_hint(plane):
+    """Which way the angle runs in ``plane``: "0° = +X, 90° = +Y"."""
+    first, second = plane
+    return f"0° = +{first}, 90° = +{second}"
 
 
 def _clicked_vertex(doc, obj, sub):
@@ -64,21 +89,36 @@ class ParametricLineTaskPanel:
         self.doc = edited.Document if edited is not None else App.ActiveDocument
         self._closed = False
         # Expression of the Length of the last line removed, given to the next line added.
-        self._expression = None
+        self._expressions = {}
         self._message = ""
         if edited is not None:
             self.lines = [edited]
             self._saved = {prop: getattr(edited, prop) for prop in EDITED_PROPERTIES}
-            self._saved_expression = expression_fields.expression_of(edited, "Length")
-            direction, custom, length = edited.Direction, App.Vector(edited.CustomDirection), edited.Length.Value
+            self._saved_expressions = expression_fields.expressions_of(edited, EXPRESSION_PROPERTIES)
+            values = {
+                "direction": edited.Direction,
+                "custom": App.Vector(edited.CustomDirection),
+                "length": edited.Length.Value,
+                "plane": edited.Plane,
+                "angle": edited.Angle.Value,
+            }
             self.doc.openTransaction("Edit Parametric Line")
         else:
-            direction, custom, length = remembered_values()
+            values = remembered_values()
             self.doc.openTransaction("Create Parametric Line")
             self.lines = [
-                make_line_from_vertex(vertex, direction, length, custom, recompute=False) for vertex in vertices
+                make_line_from_vertex(
+                    vertex,
+                    values["direction"],
+                    values["length"],
+                    values["custom"],
+                    recompute=False,
+                    plane=values["plane"],
+                    angle=values["angle"],
+                )
+                for vertex in vertices
             ]
-        self.form = keep_alive_until_destroyed(self._build_form(direction, custom, length))
+        self.form = keep_alive_until_destroyed(self._build_form(values))
         # FreeCAD may close the dialog without OK or Cancel: clicks then stop adding lines.
         self.form.destroyed.connect(self._stop_picking)
         self._connect()
@@ -89,7 +129,7 @@ class ParametricLineTaskPanel:
 
     # Form.
 
-    def _build_form(self, direction, custom, length):
+    def _build_form(self, values):
         form = QtGui.QWidget()
         form.setWindowTitle(translate("frameforge", "Parametric Line"))
         layout = QtGui.QVBoxLayout(form)
@@ -98,20 +138,38 @@ class ParametricLineTaskPanel:
         form.combo_direction = QtGui.QComboBox()
         for axis in AXES:
             form.combo_direction.addItem(axis, axis)
+        form.combo_direction.addItem(translate("frameforge", "Angle in a plane"), "Angle")
         form.combo_direction.addItem(translate("frameforge", "Custom vector"), "Custom")
-        form.combo_direction.setCurrentIndex(max(0, form.combo_direction.findData(direction)))
+        form.combo_direction.setCurrentIndex(max(0, form.combo_direction.findData(values["direction"])))
         form.combo_direction.setToolTip(
-            translate("frameforge", "Global axis the lines run along, or Custom vector to give X, Y and Z.")
+            translate(
+                "frameforge",
+                "Global axis the lines run along, Angle in a plane to give a global plane and an angle, or Custom "
+                "vector to give X, Y and Z.",
+            )
         )
         rows.addRow(QtGui.QLabel(translate("frameforge", "Direction")), form.combo_direction)
         for axis in ("x", "y", "z"):
             spin = QtGui.QDoubleSpinBox()
             spin.setRange(-VECTOR_LIMIT, VECTOR_LIMIT)
             spin.setDecimals(3)
-            spin.setValue(getattr(custom, axis))
+            spin.setValue(getattr(values["custom"], axis))
             setattr(form, f"spin_{axis}", spin)
             rows.addRow(QtGui.QLabel(f"{axis.upper()}"), spin)
-        form.spin_length = expression_fields.length_field(0.01, 1e7, length)
+        form.combo_plane = QtGui.QComboBox()
+        for plane in PLANES:
+            form.combo_plane.addItem(plane, plane)
+        form.combo_plane.setCurrentIndex(max(0, form.combo_plane.findData(values["plane"])))
+        form.combo_plane.setToolTip(translate("frameforge", "Global plane the angle is measured in."))
+        rows.addRow(QtGui.QLabel(translate("frameforge", "Plane")), form.combo_plane)
+        form.spin_angle = expression_fields.angle_field(-180, 180, values["angle"])
+        form.spin_angle.setToolTip(
+            translate("frameforge", "Angle in the plane, counterclockwise from its first axis. Fx takes an expression.")
+        )
+        rows.addRow(QtGui.QLabel(translate("frameforge", "Angle")), form.spin_angle)
+        form.angle_hint = QtGui.QLabel()
+        rows.addRow(QtGui.QLabel(), form.angle_hint)
+        form.spin_length = expression_fields.length_field(0.01, 1e7, values["length"])
         form.spin_length.setToolTip(translate("frameforge", "Length of each line. Fx takes an expression."))
         rows.addRow(QtGui.QLabel(translate("frameforge", "Length")), form.spin_length)
         layout.addWidget(group)
@@ -129,7 +187,8 @@ class ParametricLineTaskPanel:
     def _connect(self):
         form = self.form
         form.combo_direction.currentIndexChanged.connect(self._update)
-        for spin in (form.spin_x, form.spin_y, form.spin_z, form.spin_length):
+        form.combo_plane.currentIndexChanged.connect(self._update)
+        for spin in (form.spin_x, form.spin_y, form.spin_z, form.spin_angle, form.spin_length):
             spin.valueChanged.connect(self._update)
 
     def direction(self):
@@ -138,6 +197,9 @@ class ParametricLineTaskPanel:
     def custom_vector(self):
         form = self.form
         return App.Vector(form.spin_x.value(), form.spin_y.value(), form.spin_z.value())
+
+    def plane(self):
+        return self.form.combo_plane.currentData()
 
     # Preview.
 
@@ -149,31 +211,38 @@ class ParametricLineTaskPanel:
         custom = self.direction() == "Custom"
         for spin in (form.spin_x, form.spin_y, form.spin_z):
             spin.setEnabled(custom)
+        angle = self.direction() == "Angle"
+        form.combo_plane.setEnabled(angle)
+        form.spin_angle.setEnabled(angle)
+        form.angle_hint.setText(_angle_hint(self.plane()) if angle else "")
         zero = custom and self.custom_vector().Length < 1e-9
         messages = [translate("frameforge", "The custom vector is zero: give X, Y or Z.")] if zero else []
         form.status_label.setText("\n".join(messages + ([self._message] if self._message else [])))
         if not self.lines:
             return
-        expression = expression_fields.expression_of(self.lines[0], "Length")
+        expressions = expression_fields.expressions_of(self.lines[0], EXPRESSION_PROPERTIES)
+        fields = {"Length": form.spin_length, "Angle": form.spin_angle}
         for line in self.lines:
             line.Direction = self.direction()
             line.CustomDirection = self.custom_vector()
-            if line is not self.lines[0]:
-                if expression_fields.expression_of(line, "Length") != expression:
-                    line.setExpression("Length", expression)
-            if expression is None:
-                line.Length = form.spin_length.value()
+            line.Plane = self.plane()
+            for prop, expression in expressions.items():
+                if line is not self.lines[0] and expression_fields.expression_of(line, prop) != expression:
+                    line.setExpression(prop, expression)
+                if expression is None:
+                    setattr(line, prop, fields[prop].value())
         self.doc.recompute()
 
     def _bind_length(self):
-        """Bind the Length field to the first line, or take its Fx editor away when there is no line."""
+        """Bind the Length and Angle fields to the first line, or take their Fx editors away when there is no line."""
         first = self.lines[0] if self.lines else None
         if first is self._bound:
             return
-        if first is None:
-            expression_fields.unbind(self.form.spin_length)
-        else:
-            expression_fields.bind(self.form.spin_length, first, "Length")
+        for field, prop in ((self.form.spin_length, "Length"), (self.form.spin_angle, "Angle")):
+            if first is None:
+                expression_fields.unbind(field)
+            else:
+                expression_fields.bind(field, first, prop)
         self._bound = first
 
     # Picking vertices.
@@ -221,19 +290,28 @@ class ParametricLineTaskPanel:
 
     def _add(self, vertex):
         line = make_line_from_vertex(
-            vertex, self.direction(), self.form.spin_length.value(), self.custom_vector(), recompute=False
+            vertex,
+            self.direction(),
+            self.form.spin_length.value(),
+            self.custom_vector(),
+            recompute=False,
+            plane=self.plane(),
+            angle=self.form.spin_angle.value(),
         )
-        if not self.lines and self._expression is not None:
-            line.setExpression("Length", self._expression)
+        if not self.lines:
+            for prop, expression in self._expressions.items():
+                if expression is not None:
+                    line.setExpression(prop, expression)
         self.lines.append(line)
 
     def _remove(self, line):
         if len(self.lines) == 1:
-            self._expression = expression_fields.expression_of(line, "Length")
+            self._expressions = expression_fields.expressions_of(line, EXPRESSION_PROPERTIES)
         self.lines.remove(line)
         if line is self._bound:
-            # Its Fx editor must not reach a removed line, even before the field is bound again.
+            # Their Fx editors must not reach a removed line, even before the fields are bound again.
             expression_fields.unbind(self.form.spin_length)
+            expression_fields.unbind(self.form.spin_angle)
             self._bound = None
         self.doc.removeObject(line.Name)
 
@@ -269,6 +347,8 @@ class ParametricLineTaskPanel:
         for axis, name in CUSTOM_PARAMS.items():
             param.SetFloat(name, getattr(custom, axis))
         param.SetFloat(LENGTH_PARAM, self.form.spin_length.value())
+        param.SetString(PLANE_PARAM, self.plane())
+        param.SetFloat(ANGLE_PARAM, self.form.spin_angle.value())
 
     def reject(self):
         self._stop_picking()
@@ -278,7 +358,7 @@ class ParametricLineTaskPanel:
             if _alive(self.edited):
                 for prop, value in self._saved.items():
                     setattr(self.edited, prop, value)
-                self.edited.setExpression("Length", self._saved_expression)
+                expression_fields.restore_expressions(self.edited, self._saved_expressions)
         else:
             for line in self.lines:
                 if _alive(line):
