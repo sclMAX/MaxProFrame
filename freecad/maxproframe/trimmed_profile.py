@@ -57,6 +57,50 @@ def in_frame_of(body, obj, shape):
     return shape
 
 
+def _containers(obj):
+    """The containers (Part, Body) holding ``obj``, innermost first."""
+    chain = []
+    group = obj.getParentGeoFeatureGroup() if obj is not None else None
+    while group is not None and group not in chain:
+        chain.append(group)
+        group = group.getParentGeoFeatureGroup()
+    return chain
+
+
+def trims_moved_by(group):
+    """The trims a new placement of ``group`` moves against their target: it holds the body or the target, not both."""
+    trims = []
+    for obj in group.Document.Objects:
+        if not isinstance(getattr(obj, "Proxy", None), TrimmedProfile) or obj.TrimmedBody is None:
+            continue
+        in_body = group in _containers(obj.TrimmedBody)
+        if any(in_body != (group in _containers(target)) for target, _ in obj.TrimmingBoundary):
+            trims.append(obj)
+    return trims
+
+
+class TrimPlacementObserver:
+    """Touches the trims a moved Part concerns: a trim links its body and target, not the Parts holding them.
+
+    A link to those Parts would make a cycle (the trim lives in the Part of its body), so the next recompute
+    of the document is what moves the cut.
+    """
+
+    def slotChangedObject(self, obj, prop):
+        # Opening a document sets every placement: the trims saved with it are already where they belong.
+        if prop != "Placement" or getattr(obj.Document, "Restoring", False):
+            return
+        if not obj.hasExtension("App::GeoFeatureGroupExtension"):
+            return
+        for trim in trims_moved_by(obj):
+            trim.touch()
+
+
+if "_TRIM_PLACEMENT_OBSERVER" not in globals():
+    _TRIM_PLACEMENT_OBSERVER = TrimPlacementObserver()
+    App.addDocumentObserver(_TRIM_PLACEMENT_OBSERVER)
+
+
 def is_flat_face(face):
     """Whether ``face`` is a flat face, whatever its surface type (a plane, or a flat NURBS)."""
     return isinstance(face, Part.Face) and face.findPlane() is not None

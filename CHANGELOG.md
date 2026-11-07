@@ -4,6 +4,7 @@
 
   **Fixes**
   - **Notch** sees the target and the profile where they really are in the document: a profile or a target inside a placed **Part** is no longer cut where the target would be without its Part placement. The gap, Keep end and Flip side follow the real target too.
+  - **Extend / Cut** and **Notch** follow a moved **Part**: changing the placement of a Part that holds the trimmed profile or its target (but not both) now recomputes the trim at the next recompute, without editing it.
 
 * v1.10.2 (2026-11-07)
 

@@ -172,6 +172,63 @@ class TestNotchInPlacedParts(TrimFixture):
         self.assertAlmostEqual(self.global_box(obj).XMax, 150.0 - HALF, places=5)
 
 
+class TestTrimsFollowMovedParts(TrimFixture):
+    """A trim has no link to the Parts holding its profile and target: moving one of them still recomputes it."""
+
+    def test_moving_the_part_of_the_target_moves_the_cut(self):
+        trimmed, boundary = self.t_joint()
+        part = self.in_placed_part(boundary, App.Vector(100, 0, 0))
+        obj = self.notch(trimmed, boundary)
+        part.Placement.Base = App.Vector(120, 0, 0)
+        self.doc.recompute()
+        self.assertEqual(obj.getStatusString(), "Valid")
+        self.assertAlmostEqual(self.global_box(obj).XMin, 120.0 + HALF, places=5)
+
+    def test_moving_an_outer_part_of_the_profile_moves_the_cut(self):
+        trimmed, boundary = self.t_joint()
+        outer = self.doc.addObject("App::Part", "Outer")
+        outer.addObject(self.in_placed_part(trimmed, App.Vector()))
+        self.doc.recompute()
+        obj = self.notch(trimmed, boundary)
+        outer.Placement.Base = App.Vector(-100, 0, 0)
+        self.doc.recompute()
+        self.assertAlmostEqual(self.global_box(obj).XMin, HALF, places=5)
+
+    def test_an_extend_cut_follows_its_moved_target(self):
+        from freecad.maxproframe.create_extend_cut_tool import make_extend_cut_profile
+
+        trimmed, boundary = self.t_joint()
+        part = self.in_placed_part(boundary, App.Vector(400, 0, 0))
+        obj = make_extend_cut_profile(trimmed, (boundary, (self.face_towards(boundary, App.Vector(-1, 0, 0)),)))
+        self.doc.recompute()
+        self.assertAlmostEqual(obj.Shape.BoundBox.XMax, 400.0 - HALF, places=5)
+        part.Placement.Base = App.Vector(450, 0, 0)
+        self.doc.recompute()
+        self.assertAlmostEqual(obj.Shape.BoundBox.XMax, 450.0 - HALF, places=5)
+
+    def test_moving_a_part_holding_profile_and_target_leaves_the_trim_alone(self):
+        trimmed, boundary = self.t_joint()
+        part = self.doc.addObject("App::Part", "Part")
+        part.addObjects([trimmed.AttachmentSupport[0][0], trimmed, boundary.AttachmentSupport[0][0], boundary])
+        self.doc.recompute()
+        obj = self.notch(trimmed, boundary)
+        part.Placement.Base = App.Vector(100, 0, 0)
+        self.assertNotIn("Touched", obj.State)
+
+    def test_opening_a_document_leaves_its_trims_alone(self):
+        import os
+        import tempfile
+
+        trimmed, boundary = self.t_joint()
+        self.in_placed_part(boundary, App.Vector(100, 0, 0))
+        self.notch(trimmed, boundary)
+        path = os.path.join(tempfile.mkdtemp(), "trims.FCStd")
+        self.doc.saveCopy(path)
+        opened = App.openDocument(path)
+        self.addCleanup(App.closeDocument, opened.Name)
+        self.assertEqual([obj.Name for obj in opened.Objects if "Touched" in obj.State], [])
+
+
 class TestNotchGap(TrimFixture):
     def clearance(self, target, point):
         return target.Shape.distToShape(Part.Vertex(point))[0]
