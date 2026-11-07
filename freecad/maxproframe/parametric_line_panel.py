@@ -4,7 +4,8 @@ Creating, the panel previews one line per selected vertex; a click on a vertex a
 on a vertex with a line removes that line, and OK keeps them in one Undo step. It starts with the direction,
 custom vector, plane, angle and length of the last OK. Editing (a double-click on such a line), it changes that
 line. The Length and Angle fields take expressions (the Fx button): bound to the first line, their expressions
-are given to every line of the panel. Creating, the lines can also be drawn by dragging the mouse in a global
+are given to every line of the panel. Creating, Apply and continue creates the lines in their own Undo step and
+keeps the panel open, with the same values, for the next ones. Creating, the lines can also be drawn by dragging the mouse in a global
 plane (parametric_line_drag): the drag gives every line its direction and length.
 """
 
@@ -16,7 +17,7 @@ from freecad.maxproframe import expression_fields
 from freecad.maxproframe.ff_tools import get_param_group, translate
 from freecad.maxproframe.parametric_line import AXES, DEFAULT_LENGTH, PLANES, _global_vertex, make_line_from_vertex
 from freecad.maxproframe.parametric_line_drag import snapped_direction
-from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
+from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
 
 # Direction of new lines until an OK remembers one: legs hang down from a frame.
 DEFAULT_DIRECTION = "-Z"
@@ -97,6 +98,8 @@ class ParametricLineTaskPanel:
         self.drag_plane = None
         self._drag_saved = None
         self.view_drag = None
+        # Apply and continue of the dialog's button row, once FreeCAD gives it.
+        self._apply_button = None
         if edited is not None:
             self.lines = [edited]
             self._saved = {prop: getattr(edited, prop) for prop in EDITED_PROPERTIES}
@@ -314,6 +317,7 @@ class ParametricLineTaskPanel:
         for plane, button in buttons.items():
             button.setEnabled(self._can_drag())
             button.setChecked(plane == self.drag_plane)
+        self._enable_apply()
         if self.view_drag is not None:
             self.view_drag.redraw()
 
@@ -451,7 +455,65 @@ class ParametricLineTaskPanel:
     # Dialog.
 
     def getStandardButtons(self):
-        return QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel
+        buttons = QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel
+        if self.edited is None:
+            buttons |= QtGui.QDialogButtonBox.Apply
+        return buttons
+
+    def modifyStandardButtons(self, box):
+        """Turn the Apply button of the dialog's button row into Apply and continue."""
+        # The task view deletes the row when the dialog closes: no wrapper may outlive it.
+        invalidate_wrapper_on_destroy(box)
+        button = box.button(QtGui.QDialogButtonBox.Apply)
+        if button is None:
+            return
+        invalidate_wrapper_on_destroy(button)
+        button.setText(translate("frameforge", "Apply and continue"))
+        button.setToolTip(
+            translate(
+                "frameforge",
+                "Create these lines in their own Undo step and keep the panel open: click vertices for the next "
+                "lines, with the same values.",
+            )
+        )
+        button.destroyed.connect(self._apply_button_gone)
+        self._apply_button = button
+        self._enable_apply()
+
+    def clicked(self, button):
+        """A button of the dialog's row: Apply creates the lines and continues, OK and Cancel run on their own."""
+        if _button_id(button) == _button_id(QtGui.QDialogButtonBox.Apply):
+            self.apply_and_continue()
+
+    def _apply_button_gone(self, *args):
+        self._apply_button = None
+
+    def _enable_apply(self):
+        if self._apply_button is not None:
+            self._apply_button.setEnabled(self._can_drag())
+
+    def apply_and_continue(self, *args):
+        """Create the lines as OK does, in their own Undo step, and keep the panel open with the same values.
+
+        Only while creating, with a line. Returns whether lines were created.
+        """
+        if self.edited is not None or self._closed or not self.lines:
+            return False
+        if self.drag_plane is not None:
+            self.finish_drag()
+        self._update()
+        self._remember()
+        # The next line gets the expressions of these ones, as after removing the last line.
+        self._expressions = expression_fields.expressions_of(self.lines[0], EXPRESSION_PROPERTIES)
+        self.doc.commitTransaction()
+        for field in (self.form.spin_length, self.form.spin_angle):
+            expression_fields.unbind(field)
+        self._bound = None
+        self.lines = []
+        self._message = ""
+        self.doc.openTransaction("Create Parametric Line")
+        self._update()
+        return True
 
     def accept(self):
         self._update()
@@ -499,6 +561,11 @@ class ParametricLineTaskPanel:
         gui_doc = Gui.getDocument(self.doc.Name)
         if gui_doc is not None and gui_doc.getInEdit() is not None:
             gui_doc.resetEdit()
+
+
+def _button_id(button):
+    """The int of a standard button, given as an int (FreeCAD) or as a PySide enum."""
+    return int(getattr(button, "value", button))
 
 
 def _alive(obj):

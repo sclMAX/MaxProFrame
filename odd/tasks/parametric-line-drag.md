@@ -25,12 +25,18 @@ a direction given as an angle in a global plane, and drawing the lines by draggi
   XY / XZ / YZ buttons in the panel. The tooltip and the tutorial list the keys.
 - S6 Compatibility: lines and documents of earlier versions (axes, custom vector, two vertices) keep their behavior;
   clicks on vertices still add and remove lines (PR 95 S7).
+- S7 Apply and continue: "deberiamos tener un boton "aplicar y seguir" si quiero hacer una para y luego otra linea con
+  medidas distintas para no tener que actibar el comando de nuevo" -> while creating (not editing), the task dialog's
+  button row has Apply and continue, enabled while the panel has a line. It creates the lines in their own Undo step,
+  remembers the values like OK, and keeps the panel open with no line and the same values (expressions included) for
+  the next clicks. OK then creates only the newer lines (none: no Undo step); Cancel removes only the newer lines.
 
 ## Tasks
 - T1 S1 S2 S6 object + panel: Direction "Angle", Plane, Angle, angle field with Fx, remembered plane/angle,
   translations, tutorial — inline — commit: 1b007f1 (done, 20 object + 27 panel tests pass)
 - T2 S3 S4 S5 drag: pure plane math (ray/plane, edge-on, snapping, axis or angle), overlay and mouse/key callbacks,
   panel plane buttons, tooltip/translations/tutorial — inline — commit: c8d70c4, fix cd40aef (done, 9 math + 40 panel tests pass)
+- T3 S7 Apply and continue, translations, tutorial — inline — commit: (this commit) (done, 46 panel tests pass)
 
 ## Log
 - L1 (user): "hablemos de la parte 2, que opciones tenemos?" (part 2 = drag with the mouse, deferred from PR 95 L9)
@@ -62,3 +68,7 @@ a direction given as an angle in a global plane, and drawing the lines by draggi
   later work): R3-001 parametric_line_panel.py:109, R3-002 parametric_line_drag.py:258-293, R3-003
   parametric_line_drag.py:181-190 (warnings); R3-004 parametric_line_panel.py:241-242, R3-005
   parametric_line_drag.py:141-149 (suggestions). Waiting for the user's manual test in a real 3D view.
+- L13 (user, manual test of PR 96): "Funciona bien, pero deberiamos tener un boton "aplicar y seguir" si quiero hacer una
+  para y luego otra linea con medidas distintas para no tener que actibar el comando de nuevo"
+- L14 (evidence, T3): RED observed (7 errors: no Apply button in the dialog row), then test_parametric_line_panel 46/46
+  (the Spanish test lets the language change reach the widgets before opening the panel).

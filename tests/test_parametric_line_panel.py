@@ -735,6 +735,126 @@ class TestDragInTheView(ParametricLinePanelFixture):
         self.assertTrue(self.panel.reject())
 
 
+class TestApplyAndContinue(ParametricLinePanelFixture):
+    """S7: Apply and continue creates the lines in their own Undo step and keeps the panel open for the next ones."""
+
+    def dialog_box(self):
+        """The button row of the task dialog: the one button box holding its OK and Cancel."""
+        boxes = [
+            box
+            for box in Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox)
+            if box.button(QtWidgets.QDialogButtonBox.Ok) is not None
+            and box.button(QtWidgets.QDialogButtonBox.Cancel) is not None
+        ]
+        self.assertEqual(len(boxes), 1)
+        return boxes[0]
+
+    def apply_button(self):
+        return self.dialog_box().button(QtWidgets.QDialogButtonBox.Apply)
+
+    def apply(self):
+        """Click Apply and continue, as the user does."""
+        button = self.apply_button()
+        self.assertTrue(button.isEnabled())
+        button.click()
+        self.events()
+
+    def test_the_button_shows_only_while_creating_and_is_enabled_while_the_panel_has_a_line(self):
+        panel = self.run_command()
+        button = self.apply_button()
+        self.assertEqual(button.text(), "Apply and continue")
+        self.assertFalse(button.isEnabled())
+        self.click(self.sketch, self.corner(CORNERS[0]))
+        self.assertTrue(button.isEnabled())
+        self.click(self.sketch, self.corner(CORNERS[0]))
+        self.assertFalse(button.isEnabled())
+        self.assertTrue(panel.reject())
+        self.events()
+        leg = make_line_from_vertex((self.sketch, self.corner(CORNERS[3])), "+Y", 70)
+        self.doc.clearUndos()
+        Gui.getDocument(self.doc.Name).setEdit(leg, 0)
+        self.events()
+        self.assertIsNone(self.apply_button())
+        self.assertTrue(self.recorded[-1].reject())
+
+    def test_each_apply_is_its_own_undo_step_and_ok_creates_the_newer_lines(self):
+        panel = self.run_command(*self.corners(CORNERS[0]))
+        panel.form.spin_length.setValue(720)
+        self.apply()
+        self.assertTrue(Gui.Control.activeDialog())
+        self.assertEqual(panel.lines, [])
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.assertEqual((panel.direction(), panel.form.spin_length.value()), ("-Z", 720))
+        [first] = self.lines()
+        self.assertEqual(self.ends(first), [(0, 0, 0), (0, 0, -720)])
+        # The vertex of the applied line starts a new line: the applied one is no line of the panel any more.
+        self.click(self.sketch, self.corner(CORNERS[0]))
+        self.assertEqual(len(panel.lines), 1)
+        self.click(self.sketch, self.corner(CORNERS[0]))
+        self.click(self.sketch, self.corner(CORNERS[1]))
+        panel.form.combo_direction.setCurrentIndex(panel.form.combo_direction.findData("+X"))
+        panel.form.spin_length.setValue(300)
+        self.assertEqual(self.ends(first), [(0, 0, 0), (0, 0, -720)])
+        self.assertTrue(panel.accept())
+        self.events()
+        self.assertFalse(Gui.Control.activeDialog())
+        self.assertEqual(self.doc.UndoCount, 2)
+        self.assertEqual(
+            [self.ends(line) for line in self.lines()], [[(0, 0, 0), (0, 0, -720)], [(400, 0, 0), (700, 0, 0)]]
+        )
+        self.doc.undo()
+        self.assertEqual(self.lines(), [first])
+
+    def test_ok_after_apply_with_no_new_line_adds_no_undo_step(self):
+        panel = self.run_command(*self.corners(CORNERS[0]))
+        self.apply()
+        self.assertTrue(panel.accept())
+        self.events()
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.assertEqual(len(self.lines()), 1)
+
+    def test_cancel_after_apply_removes_only_the_newer_lines(self):
+        for undo_mode in (1, 0):
+            with self.subTest(undo_mode=undo_mode):
+                for line in self.lines():
+                    self.doc.removeObject(line.Name)
+                self.doc.clearUndos()
+                self.doc.UndoMode = undo_mode
+                self.addCleanup(setattr, self.doc, "UndoMode", 1)
+                panel = self.run_command(*self.corners(CORNERS[0]))
+                self.apply()
+                self.click(self.sketch, self.corner(CORNERS[1]))
+                self.assertEqual(len(self.lines()), 2)
+                self.assertTrue(panel.reject())
+                self.events()
+                [line] = self.lines()
+                self.assertEqual(self.ends(line), [(0, 0, 0), (0, 0, -100)])
+                self.assertEqual(self.doc.UndoCount, undo_mode)
+
+    def test_apply_remembers_the_values_and_keeps_the_length_expression_for_the_next_line(self):
+        panel = self.run_command(*self.corners(CORNERS[0]))
+        panel.lines[0].setExpression("Length", "Box.Height * 72")
+        panel.form.combo_direction.setCurrentIndex(panel.form.combo_direction.findData("+Y"))
+        self.apply()
+        self.click(self.sketch, self.corner(CORNERS[1]))
+        self.assertEqual(expression_fields.expression_of(panel.lines[0], "Length"), "Box.Height * 72")
+        self.assertEqual(self.ends(panel.lines[0]), [(400, 0, 0), (400, 720, 0)])
+        self.assertTrue(panel.reject())
+        self.events()
+        panel = self.run_command()
+        self.assertEqual(panel.direction(), "+Y")
+        self.assertTrue(panel.reject())
+
+    def test_the_button_is_spanish(self):
+        use_language(self, "Spanish", "es_ES")
+        # The language change reaches the widgets first: it would put back the standard text of Apply.
+        self.events()
+        panel = self.run_command(*self.corners(CORNERS[0]))
+        self.assertEqual(self.apply_button().text(), "Aplicar y seguir")
+        self.assertTrue(self.apply_button().toolTip().startswith("Crear estas líneas en su propio paso de deshacer"))
+        self.assertTrue(panel.reject())
+
+
 class TestEditPanel(ParametricLinePanelFixture):
     def leg(self):
         line = make_line_from_vertex((self.sketch, self.corner(CORNERS[2])), "-Z", 700)
