@@ -107,8 +107,10 @@ class ViewDrag:
         self._node = None
         # A click the drag took: the selection FreeCAD makes under it is no vertex pick.
         self.click_taken = False
-        # Side of the squares as last drawn, in mm.
+        # Side of the squares as last drawn, in mm, and what they were drawn for: a redraw with the same
+        # anchor, size, plane and usable planes leaves them in the scene.
         self.size = 50.0
+        self._drawn = None
 
     # Listening.
 
@@ -128,6 +130,8 @@ class ViewDrag:
         self.redraw()
 
     def stop(self):
+        # The release of a taken click may never come (released outside the view): nothing waits for it now.
+        self.click_taken = False
         callbacks, self._callbacks = self._callbacks, []
         for event_type, callback in callbacks:
             try:
@@ -139,13 +143,16 @@ class ViewDrag:
     # The view.
 
     def _ray(self, position):
-        """(origin, direction) of the ray under the screen ``position``."""
-        point = App.Vector(self.view.getPoint(int(position[0]), int(position[1])))
-        camera = self.view.getCameraNode()
-        if camera.getTypeId().getName() == "PerspectiveCamera":
-            origin = App.Vector(*camera.position.getValue().getValue())
-            return origin, point - origin
-        direction = App.Vector(self.view.getViewDirection())
+        """(origin, direction) of the ray under the screen ``position``, or None when the view gives none."""
+        try:
+            point = App.Vector(self.view.getPoint(int(position[0]), int(position[1])))
+            camera = self.view.getCameraNode()
+            if camera.getTypeId().getName() == "PerspectiveCamera":
+                origin = App.Vector(*camera.position.getValue().getValue())
+                return origin, point - origin
+            direction = App.Vector(self.view.getViewDirection())
+        except Exception:
+            return None
         return point - direction * 1e6, direction
 
     def _view_direction(self):
@@ -201,8 +208,10 @@ class ViewDrag:
             return
         # The squares are drawn again first: their size and the planes seen edge-on follow the camera.
         self.redraw()
-        origin, direction = self._ray(event.getPosition().getValue())
-        plane = plane_at(anchor, self.size, origin, direction, self.usable_planes())
+        ray = self._ray(event.getPosition().getValue())
+        if ray is None:
+            return
+        plane = plane_at(anchor, self.size, *ray, self.usable_planes())
         if plane is not None:
             self.panel.start_drag(plane)
             self._take(event_callback)
@@ -224,8 +233,10 @@ class ViewDrag:
         anchor = self.panel.drag_anchor()
         if anchor is None:
             return
-        origin, direction = self._ray(event.getPosition().getValue())
-        point = plane_point(anchor, self.panel.drag_plane, origin, direction)
+        ray = self._ray(event.getPosition().getValue())
+        if ray is None:
+            return
+        point = plane_point(anchor, self.panel.drag_plane, *ray)
         if point is not None:
             self.panel.drag_to(point, fine=event.wasShiftDown())
 
@@ -250,25 +261,34 @@ class ViewDrag:
             return
         scene, node = self._node
         self._node = None
+        self._drawn = None
         try:
             scene.removeChild(node)
         except Exception:
             pass
 
     def redraw(self):
-        """Draw the squares at the start of the newest line: the active plane strong, edge-on planes faint."""
-        self._remove_node()
+        """Draw the squares at the start of the newest line: the active plane strong, edge-on planes faint.
+
+        Squares already drawn the same way stay: a move of the drag redraws nothing.
+        """
         anchor = self.panel.drag_anchor()
         if anchor is None:
+            self._remove_node()
             return
+        size = self._square_size(anchor)
+        usable = self.usable_planes()
+        drawn = (tuple(round(c, 6) for c in anchor), round(size, 6), self.panel.drag_plane, usable)
+        if self._node is not None and drawn == self._drawn:
+            return
+        self._remove_node()
         try:
             scene = self.view.getSceneGraph()
         except Exception:
             return
         from pivy import coin
 
-        size = self.size = self._square_size(anchor)
-        usable = self.usable_planes()
+        self.size = size
         node = coin.SoAnnotation()
         for plane, (first, second) in PLANES.items():
             if self.panel.drag_plane == plane:
@@ -291,3 +311,4 @@ class ViewDrag:
             node.addChild(group)
         scene.addChild(node)
         self._node = (scene, node)
+        self._drawn = drawn

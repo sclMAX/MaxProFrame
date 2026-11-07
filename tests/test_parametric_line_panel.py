@@ -536,6 +536,18 @@ class TestDragInAPlane(ParametricLinePanelFixture):
         self.assertTrue(panel.form.plane_buttons["XY"].isEnabled())
         self.assertTrue(panel.reject())
 
+    def test_the_drag_measures_from_the_newest_line_whose_vertex_is_still_there(self):
+        # R3-004: a newest line that lost its vertex does not stop the drag of the others.
+        panel = self.run_command(*self.corners(CORNERS[0], CORNERS[1]))
+        panel.lines[-1].Vertex1 = None
+        self.assertEqual(panel.drag_anchor(), App.Vector(0, 0, 0))
+        panel.start_drag("XY")
+        self.assertEqual(panel.drag_plane, "XY")
+        panel.drag_to(App.Vector(0, 236, 0))
+        self.assertEqual((panel.direction(), panel.form.spin_length.value()), ("+Y", 240))
+        self.assertEqual(self.ends(panel.lines[0]), [(0, 0, 0), (0, 240, 0)])
+        self.assertTrue(panel.reject())
+
     def test_a_line_being_edited_is_not_dragged(self):
         leg = make_line_from_vertex((self.sketch, self.corner(CORNERS[3])), "+Y", 70)
         Gui.getDocument(self.doc.Name).setEdit(leg, 0)
@@ -641,6 +653,42 @@ class TestDragInTheView(ParametricLinePanelFixture):
     def mouse(self, position, button=None, down=True, shift=False):
         button = self.coin.SoMouseButtonEvent.BUTTON1 if button is None else button
         return self.send("SoMouseButtonEvent", position=position, button=button, down=down, shift=shift)
+
+    def test_the_squares_stay_while_the_drag_moves_and_change_with_the_plane(self):
+        # R3-002: a move that changes nothing visible leaves the squares in the scene as they are.
+        self.assertTrue(self.mouse((420, 20)))
+        # Coin node wrappers do not compare by identity: the drawn squares are told by a name.
+        self.view.scene.getChild(0).setName("drawn")
+        for y in (60, 120, 236):
+            self.send("SoLocation2Event", position=(400, y))
+        self.assertEqual(self.panel.form.spin_length.value(), 240)
+        self.assertEqual(self.view.scene.getNumChildren(), 1)
+        self.assertEqual(self.view.scene.getChild(0).getName().getString(), "drawn")
+        self.panel.form.plane_buttons["XZ"].click()
+        self.assertEqual(self.panel.drag_plane, "XZ")
+        self.assertEqual(self.view.scene.getNumChildren(), 1)
+        self.assertEqual(self.view.scene.getChild(0).getName().getString(), "")
+        self.assertTrue(self.panel.reject())
+
+    def test_closing_the_panel_lets_go_of_a_click_whose_release_never_came(self):
+        # R3-003: the release of a taken click may happen outside the view.
+        self.assertTrue(self.mouse((420, 20)))
+        self.assertTrue(self.panel.view_drag.click_taken)
+        view_drag = self.panel.view_drag
+        self.assertTrue(self.panel.reject())
+        self.assertFalse(view_drag.click_taken)
+
+    def test_a_view_that_gives_no_ray_takes_no_click_and_raises_nothing(self):
+        # R3-005: a view without camera (closing, another view type) is no reason for an error in the callback.
+        def no_camera():
+            raise RuntimeError("no camera")
+
+        self.view.getCameraNode = no_camera
+        self.assertFalse(self.mouse((420, 20)))
+        self.panel.start_drag("XY")
+        self.send("SoLocation2Event", position=(400, 236))
+        self.assertEqual(self.panel.form.spin_length.value(), 100)
+        self.assertTrue(self.panel.reject())
 
     def test_click_a_square_move_and_click_again(self):
         # The squares are drawn at the start of the line, 60 px (here 60 mm) long.
@@ -870,6 +918,20 @@ class TestEditPanel(ParametricLinePanelFixture):
         self.assertEqual(len(self.recorded), count + 1)
         self.assertTrue(Gui.Control.activeDialog())
         return self.recorded[-1]
+
+    def test_a_line_without_plane_and_angle_opens_its_panel(self):
+        # R3-001: a line made by an earlier version in this session has no Plane and no Angle yet.
+        leg = make_line_from_vertex((self.sketch, self.corner(CORNERS[3])), "+Y", 70)
+        leg.removeProperty("Plane")
+        leg.removeProperty("Angle")
+        self.doc.clearUndos()
+        Gui.getDocument(self.doc.Name).setEdit(leg, 0)
+        self.events()
+        panel = self.recorded[-1]
+        self.assertIs(panel.edited, leg)
+        self.assertEqual((panel.direction(), panel.plane(), panel.form.spin_angle.value()), ("+Y", "XY", 0))
+        self.assertTrue(panel.reject())
+        self.assertEqual(self.ends(leg), [(0, 200, 0), (0, 270, 0)])
 
     def test_double_click_shows_the_values_and_ok_keeps_the_change_in_one_undo_step(self):
         line = self.leg()
