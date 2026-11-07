@@ -36,7 +36,7 @@ a direction given as an angle in a global plane, and drawing the lines by draggi
   translations, tutorial — inline — commit: 1b007f1 (done, 20 object + 27 panel tests pass)
 - T2 S3 S4 S5 drag: pure plane math (ray/plane, edge-on, snapping, axis or angle), overlay and mouse/key callbacks,
   panel plane buttons, tooltip/translations/tutorial — inline — commit: c8d70c4, fix cd40aef (done, 9 math + 40 panel tests pass)
-- T3 S7 Apply and continue, translations, tutorial — inline — commit: (this commit) (done, 46 panel tests pass)
+- T3 S7 Apply and continue, translations, tutorial — inline — commit: b522744 (done, 46 panel tests pass)
 
 ## Log
 - L1 (user): "hablemos de la parte 2, que opciones tenemos?" (part 2 = drag with the mouse, deferred from PR 95 L9)
@@ -72,3 +72,5 @@ a direction given as an angle in a global plane, and drawing the lines by draggi
   para y luego otra linea con medidas distintas para no tener que actibar el comando de nuevo"
 - L14 (evidence, T3): RED observed (7 errors: no Apply button in the dialog row), then test_parametric_line_panel 46/46
   (the Spanish test lets the language change reach the widgets before opening the panel).
+- L15 (evidence): full native suite 1300 tests, exit 0 (job-3 on b522744). Assess of the T3 increment: medium,
+  reviewDue false (under budget), no independent verifier. Waiting for the user's manual test of Apply and continue.
