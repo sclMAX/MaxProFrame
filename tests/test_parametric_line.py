@@ -1,4 +1,7 @@
-"""A parametric line links its vertices globally: moving it never drags the profiles it measures."""
+"""A parametric line links its vertices globally: moving it never drags the profiles it measures.
+
+A line joins two vertices, or runs from one vertex along a global axis or a custom vector, with a length.
+"""
 
 import os
 import shutil
@@ -8,7 +11,7 @@ import unittest
 import FreeCAD as App
 import Part
 
-from freecad.maxproframe.parametric_line import CreateParametricLineCommand, ParametricLine
+from freecad.maxproframe.parametric_line import CreateParametricLineCommand, ParametricLine, make_line_from_vertex
 
 GLOBAL = "App::PropertyLinkSubGlobal"
 
@@ -34,10 +37,15 @@ class TestParametricLine(unittest.TestCase):
     def ends(self, line):
         return [tuple(round(c, 6) for c in v.Point) for v in line.Shape.Vertexes]
 
+    def global_ends(self, line):
+        placement = line.getGlobalPlacement() if line.getParentGeoFeatureGroup() else App.Placement()
+        return [tuple(round(c, 6) for c in placement.multVec(v.Point)) for v in line.Shape.Vertexes]
+
     def test_new_line_links_vertices_globally(self):
         _, a = self.part("Left", (0, 0, 0))
         _, b = self.part("Right", (100, 0, 0))
         line = self.line((a, "Vertex1"), (b, "Vertex1"))
+        self.assertEqual(line.Direction, "Vertex2")
         self.assertEqual(line.getTypeIdOfProperty("Vertex1"), GLOBAL)
         self.assertEqual(line.getTypeIdOfProperty("Vertex2"), GLOBAL)
         self.assertEqual(line.Vertex1, (a, ["Vertex1"]))
@@ -132,6 +140,123 @@ class TestParametricLine(unittest.TestCase):
         line.Vertex1 = (box, "Vertex1")
         ParametricLine.onDocumentRestored(None, line)
         self.assertEqual(line.Vertex1, (box, ["Vertex1"]))
+
+    def test_restored_line_of_an_earlier_version_still_joins_its_two_vertices(self):
+        line = self.doc.addObject("Part::FeaturePython", "ParametricLine")
+        line.addProperty(GLOBAL, "Vertex1", "ParametricLine", "First Vertex")
+        line.addProperty(GLOBAL, "Vertex2", "ParametricLine", "Second Vertex")
+        a = self.doc.addObject("Part::Box", "A")
+        b = self.doc.addObject("Part::Box", "B")
+        b.Placement.Base = App.Vector(0, 0, 40)
+        line.Vertex1 = (a, "Vertex2")
+        line.Vertex2 = (b, "Vertex8")
+        ParametricLine.onDocumentRestored(None, line)
+        line.Proxy = ParametricLine.__new__(ParametricLine)
+        self.assertEqual(line.Direction, "Vertex2")
+        self.assertEqual(line.CustomDirection, App.Vector(0, 0, -1))
+        self.assertEqual(line.getGroupOfProperty("Length"), "ParametricLine")
+        self.doc.recompute()
+        self.assertEqual(self.ends(line), [(0, 0, 0), (10, 10, 40)])
+
+    # From a vertex along a direction.
+
+    def test_line_from_a_vertex_runs_along_each_global_axis(self):
+        box = self.doc.addObject("Part::Box", "Box")
+        self.doc.recompute()
+        expected = {
+            "+X": (730, 10, 0),
+            "-X": (-710, 10, 0),
+            "+Y": (10, 730, 0),
+            "-Y": (10, -710, 0),
+            "+Z": (10, 10, 720),
+            "-Z": (10, 10, -720),
+        }
+        for direction, end in expected.items():
+            with self.subTest(direction=direction):
+                line = make_line_from_vertex((box, "Vertex8"), direction, 720)
+                self.assertEqual(line.Direction, direction)
+                self.assertEqual(line.Vertex1, (box, ["Vertex8"]))
+                self.assertIsNone(line.Vertex2)
+                self.assertEqual(line.getTypeIdOfProperty("Vertex1"), GLOBAL)
+                self.assertEqual(self.ends(line), [(10, 10, 0), end])
+
+    def test_custom_vector_gives_only_the_direction(self):
+        box = self.doc.addObject("Part::Box", "Box")
+        self.doc.recompute()
+        line = make_line_from_vertex((box, "Vertex8"), "Custom", 10, App.Vector(30, 0, -40))
+        self.assertEqual(line.CustomDirection, App.Vector(30, 0, -40))
+        self.assertEqual(self.ends(line), [(10, 10, 0), (16, 10, -8)])
+
+    def test_start_follows_the_vertex_and_length_takes_expressions(self):
+        box = self.doc.addObject("Part::Box", "Box")
+        self.doc.recompute()
+        line = make_line_from_vertex((box, "Vertex8"), "-Z", 100)
+        line.setExpression("Length", "Box.Height * 72")
+        box.Length = 50
+        self.doc.recompute()
+        self.assertEqual(self.ends(line), [(50, 10, 0), (50, 10, -720)])
+
+    def test_axes_stay_global_for_a_vertex_and_a_line_in_rotated_parts(self):
+        source, box = self.part("Source", (100, 0, 0))
+        source.Placement.Rotation = App.Rotation(App.Vector(0, 0, 1), 90)
+        self.doc.recompute()
+        start = tuple(round(c, 6) for c in source.Placement.multVec(box.Shape.Vertexes[7].Point))
+        line = make_line_from_vertex((box, "Vertex8"), "+X", 50)
+        holder = self.doc.addObject("App::Part", "Holder")
+        holder.Placement = App.Placement(App.Vector(0, 50, 0), App.Rotation(App.Vector(1, 0, 0), 90))
+        holder.addObject(line)
+        line.touch()
+        self.doc.recompute()
+        self.assertEqual(self.global_ends(line), [start, (start[0] + 50, start[1], start[2])])
+
+    def test_zero_vector_or_zero_length_draws_no_line(self):
+        box = self.doc.addObject("Part::Box", "Box")
+        self.doc.recompute()
+        for direction, length, custom in (("Custom", 10, App.Vector(0, 0, 0)), ("-Z", 0, None)):
+            with self.subTest(direction=direction, length=length):
+                line = make_line_from_vertex((box, "Vertex8"), direction, length, custom)
+                self.assertTrue(line.Shape.isNull())
+
+    def test_a_line_made_invalid_keeps_no_stale_shape(self):
+        box = self.doc.addObject("Part::Box", "Box")
+        self.doc.recompute()
+        for prop, value in (("Length", 0), ("CustomDirection", App.Vector(0, 0, 0))):
+            with self.subTest(prop=prop):
+                line = make_line_from_vertex((box, "Vertex8"), "Custom", 10, App.Vector(0, 0, -1))
+                self.assertEqual(self.ends(line), [(10, 10, 0), (10, 10, -10)])
+                setattr(line, prop, value)
+                self.doc.recompute()
+                self.assertTrue(line.Shape.isNull())
+
+    def test_a_new_line_from_a_vertex_defaults_to_100_mm(self):
+        box = self.doc.addObject("Part::Box", "Box")
+        line = self.doc.addObject("Part::FeaturePython", "ParametricLine")
+        ParametricLine(line)
+        line.Vertex1 = (box, "Vertex8")
+        line.Direction = "-Z"
+        self.doc.recompute()
+        self.assertEqual(line.Length.Value, 100)
+        self.assertEqual(self.ends(line), [(10, 10, 0), (10, 10, -100)])
+
+    def test_line_from_a_vertex_survives_save_and_reopen(self):
+        box = self.doc.addObject("Part::Box", "Box")
+        self.doc.recompute()
+        line = make_line_from_vertex((box, "Vertex8"), "Custom", 10, App.Vector(30, 0, -40))
+        line.setExpression("Length", "Box.Height * 2")
+        self.doc.recompute()
+        folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, folder, True)
+        path = os.path.join(folder, "direction.FCStd")
+        name = line.Name
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        self.doc = App.openDocument(path)
+        self.addCleanup(lambda n=self.doc.Name: App.closeDocument(n) if n in App.listDocuments() else None)
+        line = self.doc.getObject(name)
+        self.assertEqual((line.Direction, line.CustomDirection), ("Custom", App.Vector(30, 0, -40)))
+        self.doc.getObject("Box").Height = 15
+        self.doc.recompute()
+        self.assertEqual(self.ends(line), [(10, 10, 0), (28, 10, -24)])
 
     def test_body_feature_in_nested_parts_uses_global_points(self):
         outer = self.doc.addObject("App::Part", "Outer")

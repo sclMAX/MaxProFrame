@@ -1,8 +1,8 @@
 # Parametric line
 # Initial author : Christophe Grellier (Chris_G)
 # LGPL 2.
-# Parametric line between two vertexes.
-# Select 2 vertexes in the 3D View and activate the tool.
+# Parametric line between two vertexes, or from a vertex along a direction with a length.
+# Select 2 vertexes in the 3D View and activate the tool, or activate it and click vertexes in its panel.
 
 import os
 
@@ -12,18 +12,47 @@ import Part
 if App.GuiUp:
     import FreeCADGui as Gui
 
-from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command
+from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, translate
 
 TOOL_ICON = os.path.join(ICONPATH, "line.svg")
 
 # Global links: a Part receiving the line must not drag the profiles it measures (local links are pulled along).
 LINK_TYPE = "App::PropertyLinkSubGlobal"
 VERTEX_PROPERTIES = (("Vertex1", "First Vertex"), ("Vertex2", "Second Vertex"))
+# Direction "Vertex2" joins the two vertices; the others run from Vertex1 along a global axis or CustomDirection.
+AXES = {
+    "+X": App.Vector(1, 0, 0),
+    "-X": App.Vector(-1, 0, 0),
+    "+Y": App.Vector(0, 1, 0),
+    "-Y": App.Vector(0, -1, 0),
+    "+Z": App.Vector(0, 0, 1),
+    "-Z": App.Vector(0, 0, -1),
+}
+DIRECTIONS = ["Vertex2", *AXES, "Custom"]
+DEFAULT_LENGTH = 100.0
 
 
 def _add_vertex_properties(obj):
     for name, doc in VERTEX_PROPERTIES:
         obj.addProperty(LINK_TYPE, name, "ParametricLine", doc)
+
+
+def _add_direction_properties(obj):
+    """Direction, CustomDirection and Length; a line without them (earlier versions) joins its two vertices."""
+    if "Direction" not in obj.PropertiesList:
+        obj.addProperty(
+            "App::PropertyEnumeration",
+            "Direction",
+            "ParametricLine",
+            "Vertex2 joins the two vertices; an axis or Custom runs from the first vertex, Length long",
+        )
+        obj.Direction = DIRECTIONS
+    if "CustomDirection" not in obj.PropertiesList:
+        obj.addProperty("App::PropertyVector", "CustomDirection", "ParametricLine", "Global direction when Custom")
+        obj.CustomDirection = App.Vector(0, 0, -1)
+    if "Length" not in obj.PropertiesList:
+        obj.addProperty("App::PropertyLength", "Length", "ParametricLine", "Length of a line along a direction")
+        obj.Length = DEFAULT_LENGTH
 
 
 def _migrate_local_links(obj):
@@ -43,6 +72,14 @@ def _group_placement(obj):
     """Global placement of the coordinate system obj's shape is expressed in."""
     parent = obj.getParentGeoFeatureGroup() if hasattr(obj, "getParentGeoFeatureGroup") else None
     return parent.getGlobalPlacement() if parent is not None else App.Placement()
+
+
+def _direction(obj):
+    """Global unit vector of a line along a direction, or None when it has none (zero custom vector)."""
+    vector = App.Vector(obj.CustomDirection) if obj.Direction == "Custom" else App.Vector(AXES[obj.Direction])
+    if vector.Length < 1e-9:
+        return None
+    return vector.normalize()
 
 
 def _global_vertex(link):
@@ -66,14 +103,29 @@ class ParametricLine:
     def __init__(self, obj):
         """Add the properties"""
         _add_vertex_properties(obj)
+        _add_direction_properties(obj)
         obj.Proxy = self
 
     def onDocumentRestored(self, obj):
         _migrate_local_links(obj)
+        _add_direction_properties(obj)
 
     def execute(self, obj):
         p1 = _global_vertex(obj.Vertex1)
-        p2 = _global_vertex(obj.Vertex2)
+        if obj.Direction == "Vertex2":
+            p2 = _global_vertex(obj.Vertex2)
+        else:
+            direction = _direction(obj)
+            # An invalid line draws nothing rather than the line it was before.
+            if direction is None:
+                App.Console.PrintError("{}: the custom direction is a zero vector.\n".format(obj.Label))
+                obj.Shape = Part.Shape()
+                return
+            if obj.Length.Value <= 0:
+                App.Console.PrintError("{}: the length must be greater than zero.\n".format(obj.Label))
+                obj.Shape = Part.Shape()
+                return
+            p2 = p1 + direction * obj.Length.Value if p1 is not None else None
         if p1 is not None and p2 is not None:
             # Drawn in the coordinates of the group holding the line.
             to_local = _group_placement(obj).inverse()
@@ -81,6 +133,22 @@ class ParametricLine:
             obj.Shape = ls.toShape()
         else:
             App.Console.PrintError("{} broken !\n".format(obj.Label))
+
+
+def make_line_from_vertex(vertex, direction, length, custom=None, recompute=True):
+    """A parametric line from ``vertex`` ((object, "VertexN")) along ``direction`` (an axis of AXES or "Custom")."""
+    obj = App.ActiveDocument.addObject("Part::FeaturePython", "ParametricLine")
+    ParametricLine(obj)
+    if App.GuiUp:
+        ParametricLineViewProvider(obj.ViewObject)
+    obj.Vertex1 = vertex
+    obj.Direction = direction
+    if custom is not None:
+        obj.CustomDirection = custom
+    obj.Length = length
+    if recompute:
+        App.ActiveDocument.recompute()
+    return obj
 
 
 class ParametricLineViewProvider:
@@ -100,6 +168,51 @@ class ParametricLineViewProvider:
         self.Object = App.ActiveDocument.getObject(state["name"])
         return None
 
+    def setEdit(self, vobj, mode):
+        """Double-click on a line drawn from a vertex: its panel. A line joining two vertices has none."""
+        if mode != 0 or getattr(vobj.Object, "Direction", "Vertex2") == "Vertex2":
+            return None
+        if _task_dialog_open():
+            return False
+        from freecad.maxproframe import parametric_line_panel
+
+        parametric_line_panel.show_panel(parametric_line_panel.ParametricLineTaskPanel(edited=vobj.Object))
+        return True
+
+    def unsetEdit(self, vobj, mode):
+        if mode != 0 or getattr(vobj.Object, "Direction", "Vertex2") == "Vertex2":
+            return None
+        if Gui.Control.activeDialog():
+            Gui.Control.closeDialog()
+        return True
+
+
+def _selected_vertices():
+    """(object, "VertexN") of each vertex selected in the 3D view."""
+    verts = []
+    for selobj in Gui.Selection.getSelectionEx():
+        if selobj.HasSubObjects:
+            for shape, name in zip(selobj.SubObjects, selobj.SubElementNames):
+                if isinstance(shape, Part.Vertex):
+                    verts.append((selobj.Object, name))
+    return verts
+
+
+def _task_dialog_open():
+    """Whether another task dialog is open: no line is made and no transaction opened then."""
+    if not Gui.Control.activeDialog():
+        return False
+    App.Console.PrintWarning(
+        translate("frameforge", "Close the open task panel before creating or editing a parametric line.") + "\n"
+    )
+    return True
+
+
+def _same_sketch(verts):
+    """Whether every vertex is of one sketch: corners of a frame sketch get lines along a direction."""
+    first = verts[0][0]
+    return first.isDerivedFrom("Sketcher::SketchObject") and all(obj is first for obj, _ in verts)
+
 
 class CreateParametricLineCommand:
     """Creates a parametric line between two vertexes"""
@@ -115,28 +228,19 @@ class CreateParametricLineCommand:
         App.ActiveDocument.recompute()
 
     def Activated(self):
-        verts = []
-        sel = Gui.Selection.getSelectionEx()
-        for selobj in sel:
-            if selobj.HasSubObjects:
-                for i in range(len(selobj.SubObjects)):
-                    if isinstance(selobj.SubObjects[i], Part.Vertex):
-                        verts.append((selobj.Object, selobj.SubElementNames[i]))
-        if len(verts) == 2:
+        if _task_dialog_open():
+            return
+        verts = _selected_vertices()
+        if len(verts) == 2 and not _same_sketch(verts):
             self.make_parametric_line(verts)
+        else:
+            # Any other vertices, or none: the panel, where clicks add and remove lines.
+            from freecad.maxproframe import parametric_line_panel
+
+            parametric_line_panel.show_panel(parametric_line_panel.ParametricLineTaskPanel(verts))
 
     def IsActive(self):
-        if App.ActiveDocument:
-            verts = []
-            sel = Gui.Selection.getSelectionEx()
-            for selobj in sel:
-                if selobj.HasSubObjects:
-                    for i in range(len(selobj.SubObjects)):
-                        if isinstance(selobj.SubObjects[i], Part.Vertex):
-                            verts.append((selobj.Object, selobj.SubElementNames[i]))
-            return len(verts) == 2
-        else:
-            return False
+        return App.ActiveDocument is not None
 
     def GetResources(self):
         return {
@@ -145,7 +249,10 @@ class CreateParametricLineCommand:
             "Accel": "M, L",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_ParametricLine",
-                "Create a parametric line between two vertices.<br><br>Select two vertices, then run this command.",
+                "Create a parametric line between two vertices, or from vertices along a direction.<br><br>"
+                "Select two vertices to join them at once. Otherwise the panel opens with a line from each "
+                "selected vertex (two of the same sketch included): click a vertex to add a line from it along "
+                "a global axis or a custom vector, with a length, and click it again to remove the line.",
             ),
         }
 

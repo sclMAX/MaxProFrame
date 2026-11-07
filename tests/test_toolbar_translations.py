@@ -28,7 +28,7 @@ EXPECTED = {
     "MaxProFrame_ParametricLine": (
         "Create a Parametric Line",
         "Crear línea paramétrica",
-        "Seleccioná dos vértices y ejecutá este comando.",
+        "Si no, se abre el panel con una línea desde cada vértice seleccionado (también dos del mismo croquis): hacé clic",
     ),
     "MaxProFrame_CreateProfiles": (
         "Create Profile",
