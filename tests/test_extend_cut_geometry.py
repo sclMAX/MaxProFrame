@@ -170,6 +170,31 @@ class TestExtendCutGeometry(ExtendCutFixture):
         whole = self.valid_extend_cut(self.profile(0, 300), plate)
         self.assertAlmostEqual(whole.Shape.BoundBox.XMax, NEAR, places=5)
 
+    def test_a_flat_face_degenerate_at_its_first_parameters_is_a_target(self):
+        # A flat triangle as a NURBS: its first row of poles collapses to one point, so the surface
+        # parameters (0, 0), where the trims read the face normal, fall on a degenerate corner.
+        tip, left, right = (App.Vector(NEAR, y, z) for y, z in ((0, 500), (-400, -300), (400, -300)))
+        surface = Part.BSplineSurface()
+        surface.buildFromPolesMultsKnots(
+            [[tip, tip], [left, right]], [2, 2], [2, 2], [0, 1], [0, 1], False, False, 1, 1
+        )
+        plate = self.doc.addObject("Part::Feature", "Triangle")
+        plate.Shape = Part.Face(surface)
+        obj = self.valid_extend_cut(self.profile(0, 300), plate, ("Face1",))
+        self.assert_runs(obj, 0.0, NEAR)
+
+    def test_a_target_in_a_rotated_part_is_seen_where_it_really_is(self):
+        # Turned half a turn about Z and moved back 800 mm, the target stays where it was, its faces swapped:
+        # its local -X face looks along +X in the document, at x = FAR.
+        target = self.target()
+        part = self.in_placed_part(target, App.Vector(800, 0, 0))
+        part.Placement.Rotation = App.Rotation(App.Vector(0, 0, 1), 180)
+        self.doc.recompute()
+        face = self.valid_extend_cut(self.profile(0, 300), target, (self.face_towards(target, App.Vector(-1, 0, 0)),))
+        self.assert_runs(face, 0.0, FAR)
+        whole = self.valid_extend_cut(self.profile(0, 300), target)
+        self.assert_runs(whole, 0.0, NEAR)
+
     def test_bom_angle_and_length_of_a_square_and_a_slanted_end(self):
         target = self.target()
         square = self.valid_extend_cut(self.profile(0, 300), target, (self.face_towards(target, App.Vector(-1, 0, 0)),))
