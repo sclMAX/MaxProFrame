@@ -1,5 +1,11 @@
 ## Changelog
 
+* v1.10.2 (2026-11-07)
+
+  **Fixes**
+  - **Extend / Cut** sees the target and the profiles where they really are in the document: a profile or a target inside a placed **Part** no longer ends offset from the target face (or fails in a rotated Part). Nested Parts add up. An existing Extend / Cut across Parts placed differently moves, at its next recompute, to end on its target.
+  - **Extend / Cut** takes any flat face as target, also a flat face of a NURBS solid; only a click inside a sketch is refused, not a flat face of another 2D object. The panel tells a profile parallel to the target where it really is, as the recompute does.
+
 * v1.10.1 (2026-11-07)
 
   **Fixes**
