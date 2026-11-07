@@ -374,6 +374,52 @@ class TestExtendCutApplyAndContinue(PanelFixture):
         self.assertEqual(self.message(panel), f"{p2.Label} is already cut against this target")
         self.assertTrue(panel.reject())
 
+    def test_a_failing_second_apply_keeps_the_first_cuts_and_the_panel_open(self):
+        # R3-001: an apply that fails leaves the earlier one as it is, with no other Undo step.
+        right, left, p1, _ = self.between()
+        self.doc.clearUndos()
+        panel = self.run_command((right, self.near_face(right)), (p1, ""))
+        self.apply()
+        [first] = self.extend_cuts()
+        self.click(left, self.face_towards(left, App.Vector(1, 0, 0)))
+        with patch.object(create_extend_cut_tool, "_failures", return_value="boom"):
+            self.assertFalse(panel.apply_and_continue())
+        self.assertTrue(Gui.Control.activeDialog())
+        self.assertIn("boom", self.message(panel))
+        self.assertEqual(self.extend_cuts(), [first])
+        self.assertEqual(panel.profiles, [first])
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.assertTrue(panel.reject())
+
+    def test_a_profile_without_its_preview_stays_uncut_after_apply(self):
+        # R3-005: a profile whose preview is gone is kept as it is instead of failing the apply.
+        right, _, p1, p2 = self.between()
+        panel = self.run_command((right, self.near_face(right)), (p1, ""), (p2, ""))
+        panel._update_preview(force=True)
+        with patch.object(panel, "_update_preview"):
+            panel._drop_preview(p2.Name)
+            self.assertTrue(panel.apply_and_continue())
+        [cut] = self.extend_cuts()
+        self.assertEqual(cut.TrimmedBody, p1)
+        self.assertEqual(panel.profiles, [cut, p2])
+        self.assertTrue(panel.reject())
+
+    def test_a_whole_target_and_a_face_of_it_are_the_same_target(self):
+        # R3-003: a profile cut against a face is not cut again against the whole profile, nor the other way.
+        right, _, p1, p2 = self.between()
+        face_cut = self.extend_cut(p1, right, (self.near_face(right),))
+        whole_cut = self.extend_cut(p2, right, ())
+        panel = self.run_command((right, ""))
+        self.click(face_cut, "")
+        self.assertEqual(self.message(panel), f"{p1.Label} is already cut against this target")
+        self.assertTrue(panel.reject())
+        self.close_panels()
+        panel = self.run_command((right, self.near_face(right)))
+        self.click(whole_cut, "")
+        self.assertEqual(panel.profiles, [])
+        self.assertEqual(self.message(panel), f"{p2.Label} is already cut against this target")
+        self.assertTrue(panel.reject())
+
     def test_notch_has_apply_and_continue_too(self):
         right, _, p1, _ = self.between()
         created = []
@@ -397,6 +443,11 @@ class TestExtendCutApplyAndContinue(PanelFixture):
         self.assertIsNone(panel.target)
         self.assertEqual(panel.profiles, notches)
         self.assertTrue(panel.reject())
+        # R3-002: Cancel after an apply keeps the applied notch.
+        QtWidgets.QApplication.processEvents()
+        self.assertEqual(
+            [obj for obj in self.doc.Objects if getattr(obj, "TrimmedProfileType", None) == "Notch"], notches
+        )
 
     def test_the_button_is_spanish(self):
         use_language(self, "Spanish", "es_ES")

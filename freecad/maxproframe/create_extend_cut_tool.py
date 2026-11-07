@@ -122,13 +122,17 @@ def make_extend_cut_profile(body, target, gap=0.0):
 
 
 def _already_cut(body, target, joint):
-    """Whether the trim chain of ``body`` already has a ``joint`` trim against ``target`` (object, face names)."""
-    obj, faces = target
+    """Whether the trim chain of ``body`` already has a ``joint`` trim against ``target`` (object, face names).
+
+    A target is the same whatever face of it was picked, whole or as a trim built on it: the profile end
+    it cuts is the same.
+    """
+    obj = target[0]
     for link in _trim_chain(body):
         if not is_trimmedbody(link) or getattr(link, "TrimmedProfileType", None) != joint:
             continue
-        for boundary, subs in link.TrimmingBoundary:
-            if boundary == obj and {sub for sub in subs if sub} == set(faces):
+        for boundary, _subs in getattr(link, "TrimmingBoundary", None) or ():
+            if boundary is not None and _related(boundary, obj):
                 return True
     return False
 
@@ -969,7 +973,10 @@ class ExtendCutTaskPanel:
             self._show_status()
             self._draw_highlights()
             return False
-        trims = [self._previews[profile.Name].obj for profile in self.profiles]
+        # A profile without a preview was not cut: it stays as it is.
+        trims = [
+            self._previews[profile.Name].obj if profile.Name in self._previews else profile for profile in self.profiles
+        ]
         self.doc.commitTransaction()
         self._transaction_open = False
         self._applied = True
