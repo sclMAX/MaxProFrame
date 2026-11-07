@@ -453,7 +453,7 @@ class TestEditRobustness(KeepEndFixture):
         panel = self.capture_panel(obj.ViewObject.Proxy.edit)
         panel.form.cb_auto_update.setChecked(False)
         parallel = self.parallel_face(target)
-        self.click(target, parallel)
+        self.force_target(panel, target, parallel)
         self.assertFalse(panel.accept())
         self.assertNotEqual(self.message(panel), "")
         self.assertEqual(obj.TrimmingBoundary, [(target, (face,))])
@@ -469,7 +469,7 @@ class TestEditRobustness(KeepEndFixture):
     def test_after_a_failed_live_ok_the_preview_applies_the_panel_again(self):
         target, face, body, obj = self.existing()
         panel = self.capture_panel(obj.ViewObject.Proxy.edit)
-        self.click(target, self.parallel_face(target))
+        self.force_target(panel, target, self.parallel_face(target))
         wait()
         self.assertFalse(panel.accept())
         self.assertEqual(obj.TrimmingBoundary, [(target, (face,))])

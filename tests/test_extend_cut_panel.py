@@ -86,6 +86,25 @@ class PanelFixture(ExtendCutFixture):
     def message(self, panel):
         return panel.form.message_label.text()
 
+    def tube(self):
+        """A round tube crossing the X axis at 400, and its curved face."""
+        tube = self.doc.addObject("Part::Feature", "Tube")
+        tube.Shape = Part.makeCylinder(10, 100, App.Vector(400, 0, -50))
+        lateral = next(
+            f"Face{index}"
+            for index, face in enumerate(tube.Shape.Faces, start=1)
+            if isinstance(face.Surface, Part.Cylinder)
+        )
+        return tube, lateral
+
+    @staticmethod
+    def force_target(panel, obj, sub):
+        """A target the clicks refuse, to make OK fail: the recompute errors stay the last line of defense."""
+        panel.target = (obj, (sub,))
+        panel._show([])
+        panel._changed()
+        panel._update_preview()
+
 
 class TestExtendCutCommand(PanelFixture):
     def test_the_command_is_active_with_a_document_whatever_is_selected(self):
@@ -164,6 +183,61 @@ class TestExtendCutPanel(PanelFixture):
                 self.assertEqual(panel.profiles, [])
                 self.assertIn(f"{obj.Label} cannot trim itself", self.message(panel))
 
+    def sketch_area(self):
+        """A closed sketch showing its inner face, like the guide sketch of a frame."""
+        square = ((0, -100, 0), (300, -100, 0), (300, 100, 0), (0, 100, 0))
+        sketch = self.make_sketch(*zip(square, square[1:] + square[:1]))
+        sketch.MakeInternals = True
+        self.doc.recompute()
+        return sketch
+
+    def test_a_sketch_internal_face_is_highlighted(self):
+        # A click inside a closed sketch picks InternalFace1, which Shape.getElement does not know.
+        lines = create_extend_cut_tool._edge_lines(self.sketch_area(), "InternalFace1")
+        self.assertEqual(len(lines), 4)
+
+    def test_a_click_inside_a_sketch_is_refused_and_keeps_the_target(self):
+        sketch = self.sketch_area()
+        target = self.target()
+        face = self.near_face(target)
+        body = self.profile(0, 300)
+        panel = self.run_command()
+        self.click(sketch, "InternalFace1")
+        self.assertIsNone(panel.target)
+        self.assertEqual(self.message(panel), f"{sketch.Label}: a sketch cannot be the target")
+        self.click(target, face)
+        self.click(body, "")
+        panel.form.change_target_button.setChecked(True)
+        self.click(sketch, "InternalFace1")
+        self.assertEqual(panel.target, (target, (face,)))
+        self.assertEqual(panel.profiles, [body])
+        self.assertTrue(panel.form.change_target_button.isChecked())
+        self.assertEqual(self.message(panel), f"{sketch.Label}: a sketch cannot be the target")
+
+    def test_a_click_on_a_curved_face_is_refused(self):
+        tube, lateral = self.tube()
+        panel = self.run_command()
+        self.click(tube, lateral)
+        self.assertIsNone(panel.target)
+        self.assertEqual(self.message(panel), f"{tube.Label}: {lateral} is not a planar face")
+
+    def test_a_face_parallel_to_a_profile_is_refused_as_target_and_as_profile(self):
+        target = self.target()
+        face = self.near_face(target)
+        top = self.face_towards(target, App.Vector(0, 0, 1))
+        body = self.profile(0, 300)
+        message = f"{body.Label} runs parallel to the target: it cannot reach it"
+        panel = self.run_command((target, face), (body, ""))
+        panel.form.change_target_button.setChecked(True)
+        self.click(target, top)
+        self.assertEqual(panel.target, (target, (face,)))
+        self.assertEqual(self.message(panel), message)
+        self.close_panels()
+        panel = self.run_command((target, top))
+        self.click(body, "")
+        self.assertEqual(panel.profiles, [])
+        self.assertEqual(self.message(panel), message)
+
     def test_an_invalid_target_is_explained(self):
         target = self.target()
         sketch = target.AttachmentSupport[0][0]
@@ -218,18 +292,14 @@ class TestExtendCutPanel(PanelFixture):
         self.assertEqual(self.extend_cuts(), [])
 
     def test_a_failing_ok_creates_nothing_and_keeps_the_panel_open(self):
-        tube = self.doc.addObject("Part::Feature", "Tube")
-        tube.Shape = Part.makeCylinder(10, 100, App.Vector(400, 0, -50))
-        lateral = next(
-            f"Face{index}"
-            for index, face in enumerate(tube.Shape.Faces, start=1)
-            if isinstance(face.Surface, Part.Cylinder)
-        )
+        tube, lateral = self.tube()
         body = self.profile(0, 300)
         self.doc.recompute()
         self.doc.clearUndos()
         before = len(self.doc.Objects)
-        panel = self.run_command((tube, lateral), (body, ""))
+        panel = self.run_command()
+        panel.profiles = [body]
+        self.force_target(panel, tube, lateral)
         self.assertFalse(panel.accept())
         self.assertTrue(Gui.Control.activeDialog())
         self.assertIn(f"the target face {lateral} of {tube.Label} is not planar", self.message(panel))
@@ -614,16 +684,10 @@ class TestExtendCutGapExpressions(EditFixture):
 
     def test_an_expression_set_after_a_failing_ok_is_in_the_undo_step(self):
         target, _, obj = self.existing()
-        tube = self.doc.addObject("Part::Feature", "Tube")
-        tube.Shape = Part.makeCylinder(10, 100, App.Vector(400, 0, -50))
-        lateral = next(
-            f"Face{index}"
-            for index, face in enumerate(tube.Shape.Faces, start=1)
-            if isinstance(face.Surface, Part.Cylinder)
-        )
+        tube, lateral = self.tube()
         varset = self.varset(2.0)
         panel = self.edit(obj)
-        self.click(tube, lateral)
+        self.force_target(panel, tube, lateral)
         self.assertFalse(panel.accept())
         # The panel stays open: the Fx editor still changes the trim inside the edit transaction.
         self.click(target, self.near_face(target))

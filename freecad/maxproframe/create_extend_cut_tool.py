@@ -27,6 +27,7 @@ from freecad.maxproframe.ff_tools import (
     get_param_group,
     translate,
 )
+from freecad.maxproframe.miter_geometry import TOLERANCE
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
 from freecad.maxproframe.trimmed_profile import AUTO, END, START, TrimmedProfile, ViewProviderTrimmedProfile
 
@@ -142,10 +143,40 @@ def _related(a, b):
     return a in _trim_chain(b) or b in _trim_chain(a)
 
 
+def _profile_axis(obj):
+    """The direction of the straight path of the profile under ``obj``, or None (a curved path or no profile)."""
+    profile = _base_profile(obj)
+    if profile is None:
+        return None
+    try:
+        edge = profile.Target[0].getSubObject(profile.Target[1][0])
+    except Exception:
+        return None
+    if not isinstance(edge, Part.Edge) or not isinstance(edge.Curve, (Part.Line, Part.LineSegment)):
+        return None
+    axis = edge.Vertexes[-1].Point - edge.Vertexes[0].Point
+    return axis.normalize() if axis.Length > TOLERANCE else None
+
+
+def parallel_problem(body, target):
+    """Why the face target ``target`` cannot reach ``body`` (its plane runs along the profile), or None."""
+    obj, faces = target
+    if not faces:
+        return None
+    axis = _profile_axis(body)
+    face = obj.getSubObject(faces[0])
+    if axis is None or not isinstance(face, Part.Face):
+        return None
+    if abs(face.normalAt(0, 0).dot(axis)) < TOLERANCE:
+        return translate("frameforge", "{} runs parallel to the target: it cannot reach it").format(body.Label)
+    return None
+
+
 def _edge_lines(obj, sub, shape=None):
     """Points along every edge of ``obj``, of its face ``sub`` or of ``shape`` (local to ``obj``), in document coordinates."""
     if shape is None:
-        shape = obj.Shape.getElement(sub) if sub else obj.Shape
+        # getSubObject also knows faces Shape.getElement does not, e.g. a sketch's InternalFace1.
+        shape = obj.getSubObject(sub) if sub else obj.Shape
     # Shapes are local to their container.
     group = obj.getParentGeoFeatureGroup()
     if group is not None:
@@ -314,8 +345,14 @@ class ExtendCutTaskPanel:
         """(faces of ``obj`` the target keeps, problem): its first face, or none for a whole profile."""
         faces = [sub for sub in subs if sub]
         if faces:
-            if not isinstance(obj.getSubObject(faces[0]), Part.Face):
+            # A click inside a closed sketch picks its inner face: the guide sketch is never a target.
+            if obj.isDerivedFrom("Part::Part2DObject"):
+                return (), translate("frameforge", "{}: a sketch cannot be the target").format(obj.Label)
+            face = obj.getSubObject(faces[0])
+            if not isinstance(face, Part.Face):
                 return (), translate("frameforge", "{}: {} is not a face").format(obj.Label, faces[0])
+            if not isinstance(face.Surface, Part.Plane):
+                return (), translate("frameforge", "{}: {} is not a planar face").format(obj.Label, faces[0])
             return tuple(faces[:1]), None
         return (), trimmed_body_problem(None, obj)
 
@@ -329,6 +366,9 @@ class ExtendCutTaskPanel:
         for profile in self.profiles:
             if self.edited is None and _already_cut(profile, (obj, faces), self.joint):
                 return [self._already_cut_message(profile)]
+            problem = parallel_problem(profile, (obj, faces))
+            if problem is not None:
+                return [problem]
         if self.target is not None and self.target != (obj, faces):
             # A side flipped for the old target means nothing for the new one: the profiles go back to Auto.
             self.keep_ends = {}
@@ -347,6 +387,9 @@ class ExtendCutTaskPanel:
             return [translate("frameforge", "{} cannot trim itself").format(obj.Label)]
         if self.target is not None and _already_cut(obj, self.target, self.joint):
             return [self._already_cut_message(obj)]
+        problem = parallel_problem(obj, self.target) if self.target is not None else None
+        if problem is not None:
+            return [problem]
         if obj not in self.profiles:
             self.profiles.append(obj)
         return []

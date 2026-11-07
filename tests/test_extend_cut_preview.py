@@ -289,18 +289,14 @@ class TestExtendCutPreview(PreviewFixture):
         self.assertEqual(panel.highlights(), [])
 
     def test_a_failing_preview_creates_nothing_and_ok_keeps_the_panel_open(self):
-        tube = self.doc.addObject("Part::Feature", "Tube")
-        tube.Shape = Part.makeCylinder(10, 100, App.Vector(400, 0, -50))
-        lateral = next(
-            f"Face{index}"
-            for index, face in enumerate(tube.Shape.Faces, start=1)
-            if isinstance(face.Surface, Part.Cylinder)
-        )
+        tube, lateral = self.tube()
         body = self.profile(0, 300)
         self.doc.recompute()
         self.doc.clearUndos()
         names = self.names()
-        panel = self.run_command((tube, lateral), (body, ""))
+        panel = self.run_command()
+        panel.profiles = [body]
+        self.force_target(panel, tube, lateral)
         error = f"the target face {lateral} of {tube.Label} is not planar"
         self.assertEqual(self.names(), names)
         self.assertIn(error, self.message(panel))
