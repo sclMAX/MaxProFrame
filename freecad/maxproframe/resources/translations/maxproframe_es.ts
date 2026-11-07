@@ -1043,6 +1043,9 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Select the profiles to extend or cut.</source><translation>Seleccioná los perfiles a extender o cortar.</translation></message>
     <message><source>{} is not a profile</source><translation>{} no es un perfil</translation></message>
     <message><source>{}: {} is not a face</source><translation>{}: {} no es una cara</translation></message>
+    <message><source>{}: {} is not a planar face</source><translation>{}: {} no es una cara plana</translation></message>
+    <message><source>{}: a sketch cannot be the target</source><translation>{}: un croquis no puede ser el destino</translation></message>
+    <message><source>{} runs parallel to the target: it cannot reach it</source><translation>{} es paralelo al destino: no puede alcanzarlo</translation></message>
     <message><source>{} cannot trim itself</source><translation>{} no puede recortarse a sí mismo</translation></message>
     <message><source>Extend / Cut: the target face {} of {} is not planar.</source><translation>Extender / cortar: la cara destino {} de {} no es plana.</translation></message>
     <message><source>Extend / Cut: the target plane is parallel to the profile axis.</source><translation>Extender / cortar: el plano destino es paralelo al eje del perfil.</translation></message>
