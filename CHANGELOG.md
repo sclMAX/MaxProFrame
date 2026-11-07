@@ -1,5 +1,14 @@
 ## Changelog
 
+* v1.10.0 (2026-11-07)
+
+  - **Create a Parametric Line** (**M, L**) also draws lines from vertices along a direction, with a length that takes expressions (Fx): one line from each vertex, for example the legs of a table from the corners of its frame sketch. The direction is a global axis (+X, -X, +Y, -Y, +Z, -Z), an **angle in a global plane** (XY, XZ or YZ, counterclockwise from the first axis of the plane, with Fx), or a custom vector. The command is always enabled: with no vertex selected the panel opens and each click on a vertex adds a previewed line (a second click removes it). Two selected vertices of different objects are still joined at once. A new panel starts at 100 mm along -Z, then with the values of the last OK. Double-click a line drawn from a vertex to edit it.
+  - In that panel the lines can be **drawn by dragging** in a global plane: the 3D view shows the XY, XZ and YZ planes as squares at the start of the last line. Click a square (or press **P**, or use the **Drag in** buttons), move the mouse and click: every line of the panel gets the direction and the length, the angle snapping every 15° and the length to 10 mm (1 mm with Shift). **Esc** or a right click cancels the drag.
+  - **Apply and continue** in the Parametric Line, **Extend / Cut** and **Notch** panels: the result is created in its own Undo step and the panel stays open. In Parametric Line the next clicks keep the same values. In Extend / Cut and Notch the same profiles stay, now cut, and the next target cuts their other end: profiles between two others are cut at both ends in one run. A profile already cut against a target is not cut against it again.
+
+  **Fixes**
+  - Create Miter Ends no longer leaves its profiles selected after OK or Cancel.
+
 * v1.9.1 (2026-11-06)
 
   **Fixes**
