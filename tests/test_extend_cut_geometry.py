@@ -107,14 +107,6 @@ class TestExtendCutGeometry(ExtendCutFixture):
         obj = self.valid_extend_cut(self.profile(0, 300), target, (self.face_towards(target, App.Vector(1, 0, 0)),))
         self.assert_runs(obj, 0.0, FAR)
 
-    def in_placed_part(self, body, offset):
-        """Move ``body`` and its sketch into a Part placed at ``offset``."""
-        part = self.doc.addObject("App::Part", "Part")
-        part.addObjects([body.AttachmentSupport[0][0], body])
-        part.Placement.Base = offset
-        self.doc.recompute()
-        return part
-
     def test_a_profile_in_a_placed_part_ends_on_the_face_where_it_really_is(self):
         target = self.target()
         body = self.profile(0, 300)
@@ -126,13 +118,6 @@ class TestExtendCutGeometry(ExtendCutFixture):
         self.in_placed_part(other, App.Vector(100, 0, 0))
         whole = self.valid_extend_cut(other, target)
         self.assertAlmostEqual(whole.Shape.BoundBox.XMax, NEAR - 100.0, places=5)
-
-    def global_box(self, obj):
-        shape = obj.Shape.copy()
-        group = obj.getParentGeoFeatureGroup()
-        if group is not None:
-            shape.transformShape(group.getGlobalPlacement().toMatrix())
-        return shape.BoundBox
 
     def test_a_target_in_a_placed_part_is_seen_where_it_really_is(self):
         target = self.target()

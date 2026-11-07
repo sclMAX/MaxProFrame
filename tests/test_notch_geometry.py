@@ -30,6 +30,22 @@ class TrimFixture(MiterFixture):
         ]
         return max(candidates)[1]
 
+    def in_placed_part(self, body, offset):
+        """Move ``body`` and its sketch into a Part placed at ``offset``."""
+        part = self.doc.addObject("App::Part", "Part")
+        part.addObjects([body.AttachmentSupport[0][0], body])
+        part.Placement.Base = offset
+        self.doc.recompute()
+        return part
+
+    def global_box(self, obj):
+        """Bounding box of ``obj`` in document coordinates, its container placement applied."""
+        shape = obj.Shape.copy()
+        group = obj.getParentGeoFeatureGroup()
+        if group is not None:
+            shape.transformShape(group.getGlobalPlacement().toMatrix())
+        return shape.BoundBox
+
     def notch(self, body, target, gap=0.0):
         obj = make_notch_profile(body, target)
         obj.TrimGap = gap
@@ -119,6 +135,41 @@ BEAMS = {
 }
 # Cross-section area of the 50x50x2 test tube.
 SECTION_AREA = SIZE**2 - (SIZE - 4.0) ** 2
+
+
+class TestNotchInPlacedParts(TrimFixture):
+    def test_a_target_in_a_placed_part_is_cut_where_it_really_is(self):
+        trimmed, boundary = self.t_joint()
+        self.in_placed_part(boundary, App.Vector(100, 0, 0))
+        obj = self.notch(trimmed, boundary)
+        self.assertAlmostEqual(self.global_box(obj).XMin, 100.0 + HALF, places=5)
+        self.assertAlmostEqual(self.global_box(obj).XMax, trimmed.Shape.BoundBox.XMax, places=5)
+
+    def test_a_profile_in_a_placed_part_is_cut_where_the_target_really_is(self):
+        trimmed, boundary = self.t_joint()
+        self.in_placed_part(trimmed, App.Vector(-100, 0, 0))
+        obj = self.notch(trimmed, boundary)
+        # The Part moves the profile 100 mm back along X: the cut is at x = HALF in the document.
+        self.assertAlmostEqual(self.global_box(obj).XMin, HALF, places=5)
+        self.assertAlmostEqual(obj.Shape.BoundBox.XMin, 100.0 + HALF, places=5)
+
+    def test_a_gap_is_left_from_a_target_in_a_placed_part(self):
+        trimmed, boundary = self.t_joint()
+        self.in_placed_part(boundary, App.Vector(100, 0, 0))
+        obj = self.notch(trimmed, boundary, gap=5.0)
+        self.assertAlmostEqual(self.global_box(obj).XMin, 100.0 + HALF + 5.0, places=4)
+
+    def test_keep_end_is_choosable_only_where_the_target_really_crosses(self):
+        trimmed, boundary = self.t_joint()
+        # In its own Part the target holds the start of the profile; the Part moves it to the middle.
+        self.in_placed_part(boundary, App.Vector(150, 0, 0))
+        obj = self.notch(trimmed, boundary)
+        self.assertTrue(obj.Proxy.kept_end(obj)[1])
+        obj.KeepEnd = "Start"
+        self.doc.recompute()
+        self.assertEqual(obj.getStatusString(), "Valid")
+        self.assertAlmostEqual(self.global_box(obj).XMin, trimmed.Shape.BoundBox.XMin, places=5)
+        self.assertAlmostEqual(self.global_box(obj).XMax, 150.0 - HALF, places=5)
 
 
 class TestNotchGap(TrimFixture):

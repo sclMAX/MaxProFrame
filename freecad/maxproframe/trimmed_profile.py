@@ -212,18 +212,21 @@ class TrimmedProfile:
         """(body, cut shapes) of a Notch: the target splits the body, the piece reaching the far end stays.
 
         With a gap the target is grown by it in every direction first, so the kept piece stays that far from it.
+        The target is seen where it really is: moved into the coordinates of the container of the body.
         """
-        target = fp.TrimmingBoundary[0][0]
-        member = self._miter_member(fp.TrimmedBody)
+        body, target = fp.TrimmedBody, fp.TrimmingBoundary[0][0]
+        member = self._miter_member(body)
+        target_shape = in_frame_of(body, target, target.Shape)
         # The far end section may lie in a piece an earlier trim removed: the nearest piece stays.
         # Which end is far, and whether the target crosses, come from the real target: the gap only moves the cut.
-        far_section = member.section_at(self._notch_kept_start(fp, member, target))
-        pieces = BOPTools.SplitAPI.slice(body_shape, [self._notch_cutter(fp, target)], mode="Split").Solids
+        far_section = member.section_at(self._notch_kept_start(fp, member, target_shape))
+        cutter = in_frame_of(body, target, self._notch_cutter(fp, target))
+        pieces = BOPTools.SplitAPI.slice(body_shape, [cutter], mode="Split").Solids
         kept = min(range(len(pieces)), key=lambda index: pieces[index].distToShape(far_section)[0], default=None)
         return body_shape, [Part.Shape(piece) for index, piece in enumerate(pieces) if index != kept]
 
     def _notch_cutter(self, fp, target):
-        """The shape a Notch cuts with: ``target`` itself, or grown by the gap all around it."""
+        """The shape a Notch cuts with, in the container of ``target``: itself, or grown by the gap all around it."""
         gap = fp.TrimGap.Value if hasattr(fp, "TrimGap") else 0.0
         if gap <= 0:
             return target.Shape
@@ -331,16 +334,20 @@ class TrimmedProfile:
             far_start, _, _, choosable = self._extend_cut_side(fp.TrimmedBody, member, boundary, chosen)
             return far_start, choosable
         target = boundary[0]
-        far_start = self._far_end_is_start(member, target)
-        choosable = self._target_crosses(member, target)
+        target_shape = in_frame_of(fp.TrimmedBody, target, target.Shape)
+        far_start = self._far_end_is_start(member, target, target_shape)
+        choosable = self._target_crosses(member, target_shape)
         return (chosen if choosable and chosen is not None else far_start), choosable
 
-    def _notch_kept_start(self, fp, member, target):
-        """Whether the piece a Notch keeps reaches the axis start; only a chosen end needs the crossing test."""
+    def _notch_kept_start(self, fp, member, target_shape):
+        """Whether the piece a Notch keeps reaches the axis start; only a chosen end needs the crossing test.
+
+        ``target_shape`` is the target in the coordinates of the container of the body.
+        """
         chosen = self._chosen_far_start(fp)
-        if chosen is not None and self._target_crosses(member, target):
+        if chosen is not None and self._target_crosses(member, target_shape):
             return chosen
-        return self._far_end_is_start(member, target)
+        return self._far_end_is_start(member, None, target_shape)
 
     def _chosen_far_start(self, fp):
         """Whether KeepEnd keeps the start (True) or the end (False); None for Auto or a trim saved without it."""
@@ -393,8 +400,8 @@ class TrimmedProfile:
             far_start, origin, normal = not far_start, other_origin, other_normal
         return far_start, origin, normal, choosable
 
-    def _target_crosses(self, member, target):
-        """Whether the part of ``target`` in the path of the profile section lies strictly between its ends.
+    def _target_crosses(self, member, target_shape):
+        """Whether the part of ``target_shape`` in the path of the profile section lies strictly between its ends.
 
         The section is filled: an end in the hollow of a tube target is inside the target.
         """
@@ -407,7 +414,7 @@ class TrimmedProfile:
             return False
         # A prism one millimetre past each end tells a target reaching past an end.
         outline = Part.Face(section.Faces[0].OuterWire).translated(axis * -1.0)
-        inside = target.Shape.common(outline.extrude(axis * (length + 2.0)))
+        inside = target_shape.common(outline.extrude(axis * (length + 2.0)))
         if inside.isNull() or inside.Volume < CROSSING_TOLERANCE:
             return False
         # Along the axis: the start at Z = 0, the end at Z = length.
