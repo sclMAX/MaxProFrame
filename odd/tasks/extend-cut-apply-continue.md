@@ -34,3 +34,8 @@ pick the other target and cut the other end of the same profiles. Notch, which s
   (apply error path), R3-002 test_extend_cut_panel.py:399, R3-003 create_extend_cut_tool.py:124-133 (guard compares
   face names; a whole-profile target and a face of it are different targets), R3-004 :128, R3-005 :979-980 (preview
   looked up by profile name without a guard).
+- L6 (user): "vamos con 2." -> fix the five advisories of PR 99 (reconstructed from their locations).
+- L7 (evidence): RED for R3-003 (a whole target and a face of it were different targets) and R3-005 (KeyError when
+  a profile had no preview at apply); R3-001 (failing second apply) and R3-002 (Cancel keeps the applied notch)
+  already held and are now pinned by tests. Then test_extend_cut_panel 35/35, test_notch_panel 30/30,
+  test_keep_end_panel 22/22.
