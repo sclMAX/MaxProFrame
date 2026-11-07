@@ -113,14 +113,16 @@ You can therefore use Create profile again to create the four vertical beams !
 
 #### Lines from a vertex along a direction
 
-A parametric line can also start at a vertex and run along a global axis (+X, -X, +Y, -Y, +Z, -Z) or a custom vector, with a length. This draws the legs of a table from the corners of its frame sketch:
+A parametric line can also start at a vertex and run along a global axis (+X, -X, +Y, -Y, +Z, -Z), an angle in a global plane, or a custom vector, with a length. This draws the legs of a table from the corners of its frame sketch:
 
 1. Run Create a Parametric Line (`M, L`) with nothing selected: the panel opens. (Vertices selected before, one, three or more, or two of the same sketch, open it with a line from each.)
 2. Click the four corners of the frame sketch: each click previews a line from that corner. Click a corner again to remove its line; a click on anything that is not a vertex adds nothing.
-3. Choose the Direction (Custom vector to give X, Y and Z) and the Length. The Length field takes an expression (Fx), given to every line.
-4. Click OK: the lines are created in one Undo step (OK with no line creates nothing). Create Profile then turns them into legs.
+3. Choose the Direction and the Length. Angle in a plane takes a global plane (XY, XZ or YZ) and an angle, counterclockwise from the first axis of the plane: in XY 0° is +X and 90° is +Y, in XZ 0° is +X and 90° is +Z, in YZ 0° is +Y and 90° is +Z. Custom vector takes X, Y and Z. The Length and Angle fields take an expression (Fx), given to every line.
+4. Or draw them by dragging: the 3D view shows the XY, XZ and YZ planes as squares at the start of the last line. Click a square (or press `P` to cycle the planes, or use the Drag in XY / XZ / YZ buttons), move the mouse and click: every line gets the direction and the length. The angle snaps every 15° and the length to 10 mm (1 mm with Shift); on an axis of the plane the line runs along that global axis, otherwise along an angle in the plane. A plane seen almost edge-on cannot be clicked. `Esc` or a right click cancels the drag and puts back the values, with the panel still open.
+5. To go on with other lines and other values without running the command again, click Apply and continue: the lines are created in their own Undo step and the panel stays open, empty, with the same values for the next clicks. OK then creates only the newer lines, and Cancel removes only those.
+6. Click OK: the lines are created in one Undo step (OK with no line creates nothing). Create Profile then turns them into legs.
 
-The first panel starts at 100 mm along `-Z`; the next ones start with the Direction, custom vector and Length of the last OK. Each line starts at its vertex and follows it when the sketch changes. Double-click a line drawn from a vertex to change its direction or length. Two selected vertices of different objects, or of one object that is not a sketch, are still joined at once. Close any other open task panel first: while one is open the command creates nothing.
+The first panel starts at 100 mm along `-Z`; the next ones start with the Direction, custom vector, plane, angle and Length of the last OK. Each line starts at its vertex and follows it when the sketch changes. Double-click a line drawn from a vertex to change its direction or length. Two selected vertices of different objects, or of one object that is not a sketch, are still joined at once. Close any other open task panel first: while one is open the command creates nothing.
 
 
 

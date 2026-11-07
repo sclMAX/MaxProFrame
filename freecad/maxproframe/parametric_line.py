@@ -4,6 +4,7 @@
 # Parametric line between two vertexes, or from a vertex along a direction with a length.
 # Select 2 vertexes in the 3D View and activate the tool, or activate it and click vertexes in its panel.
 
+import math
 import os
 
 import FreeCAD as App
@@ -19,7 +20,8 @@ TOOL_ICON = os.path.join(ICONPATH, "line.svg")
 # Global links: a Part receiving the line must not drag the profiles it measures (local links are pulled along).
 LINK_TYPE = "App::PropertyLinkSubGlobal"
 VERTEX_PROPERTIES = (("Vertex1", "First Vertex"), ("Vertex2", "Second Vertex"))
-# Direction "Vertex2" joins the two vertices; the others run from Vertex1 along a global axis or CustomDirection.
+# Direction "Vertex2" joins the two vertices; the others run from Vertex1 along a global axis, CustomDirection,
+# or Angle in Plane.
 AXES = {
     "+X": App.Vector(1, 0, 0),
     "-X": App.Vector(-1, 0, 0),
@@ -28,7 +30,14 @@ AXES = {
     "+Z": App.Vector(0, 0, 1),
     "-Z": App.Vector(0, 0, -1),
 }
-DIRECTIONS = ["Vertex2", *AXES, "Custom"]
+# Angle runs in a global plane, counterclockwise from its first axis toward its second.
+PLANES = {
+    "XY": (App.Vector(1, 0, 0), App.Vector(0, 1, 0)),
+    "XZ": (App.Vector(1, 0, 0), App.Vector(0, 0, 1)),
+    "YZ": (App.Vector(0, 1, 0), App.Vector(0, 0, 1)),
+}
+# New directions go last: a saved line keeps the index of its direction.
+DIRECTIONS = ["Vertex2", *AXES, "Custom", "Angle"]
 DEFAULT_LENGTH = 100.0
 
 
@@ -38,18 +47,33 @@ def _add_vertex_properties(obj):
 
 
 def _add_direction_properties(obj):
-    """Direction, CustomDirection and Length; a line without them (earlier versions) joins its two vertices."""
+    """Direction, CustomDirection, Plane, Angle and Length; a line without them (earlier versions) joins its vertices."""
     if "Direction" not in obj.PropertiesList:
         obj.addProperty(
             "App::PropertyEnumeration",
             "Direction",
             "ParametricLine",
-            "Vertex2 joins the two vertices; an axis or Custom runs from the first vertex, Length long",
+            "Vertex2 joins the two vertices; an axis, Custom or Angle runs from the first vertex, Length long",
         )
         obj.Direction = DIRECTIONS
+    elif obj.getEnumerationsOfProperty("Direction") != DIRECTIONS:
+        # A line of an earlier version gets the new directions and keeps its own.
+        direction = obj.Direction
+        obj.Direction = DIRECTIONS
+        obj.Direction = direction
     if "CustomDirection" not in obj.PropertiesList:
         obj.addProperty("App::PropertyVector", "CustomDirection", "ParametricLine", "Global direction when Custom")
         obj.CustomDirection = App.Vector(0, 0, -1)
+    if "Plane" not in obj.PropertiesList:
+        obj.addProperty("App::PropertyEnumeration", "Plane", "ParametricLine", "Global plane of the Angle")
+        obj.Plane = list(PLANES)
+    if "Angle" not in obj.PropertiesList:
+        obj.addProperty(
+            "App::PropertyAngle",
+            "Angle",
+            "ParametricLine",
+            "Angle in Plane, counterclockwise from its first axis (XY: from X, XZ: from X, YZ: from Y)",
+        )
     if "Length" not in obj.PropertiesList:
         obj.addProperty("App::PropertyLength", "Length", "ParametricLine", "Length of a line along a direction")
         obj.Length = DEFAULT_LENGTH
@@ -76,10 +100,19 @@ def _group_placement(obj):
 
 def _direction(obj):
     """Global unit vector of a line along a direction, or None when it has none (zero custom vector)."""
+    if obj.Direction == "Angle":
+        return angle_direction(obj.Plane, obj.Angle.Value)
     vector = App.Vector(obj.CustomDirection) if obj.Direction == "Custom" else App.Vector(AXES[obj.Direction])
     if vector.Length < 1e-9:
         return None
     return vector.normalize()
+
+
+def angle_direction(plane, angle):
+    """Global unit vector at ``angle`` degrees in the global ``plane``, counterclockwise from its first axis."""
+    first, second = PLANES[plane]
+    radians = math.radians(angle)
+    return first * math.cos(radians) + second * math.sin(radians)
 
 
 def _global_vertex(link):
@@ -135,8 +168,9 @@ class ParametricLine:
             App.Console.PrintError("{} broken !\n".format(obj.Label))
 
 
-def make_line_from_vertex(vertex, direction, length, custom=None, recompute=True):
-    """A parametric line from ``vertex`` ((object, "VertexN")) along ``direction`` (an axis of AXES or "Custom")."""
+def make_line_from_vertex(vertex, direction, length, custom=None, recompute=True, plane=None, angle=None):
+    """A parametric line from ``vertex`` ((object, "VertexN")) along ``direction`` (an axis of AXES, "Custom" with
+    the ``custom`` vector, or "Angle" with ``angle`` degrees in the global ``plane``)."""
     obj = App.ActiveDocument.addObject("Part::FeaturePython", "ParametricLine")
     ParametricLine(obj)
     if App.GuiUp:
@@ -145,6 +179,10 @@ def make_line_from_vertex(vertex, direction, length, custom=None, recompute=True
     obj.Direction = direction
     if custom is not None:
         obj.CustomDirection = custom
+    if plane is not None:
+        obj.Plane = plane
+    if angle is not None:
+        obj.Angle = angle
     obj.Length = length
     if recompute:
         App.ActiveDocument.recompute()
@@ -252,7 +290,10 @@ class CreateParametricLineCommand:
                 "Create a parametric line between two vertices, or from vertices along a direction.<br><br>"
                 "Select two vertices to join them at once. Otherwise the panel opens with a line from each "
                 "selected vertex (two of the same sketch included): click a vertex to add a line from it along "
-                "a global axis or a custom vector, with a length, and click it again to remove the line.",
+                "a global axis, an angle in a global plane or a custom vector, with a length, and click it again "
+                "to remove the line.<br><br>To draw by dragging, click the XY, XZ or YZ square at the start of the "
+                "last line (or press P to cycle the planes), move the mouse and click. Shift snaps the length to "
+                "1 mm; Esc or a right click cancels the drag.",
             ),
         }
 

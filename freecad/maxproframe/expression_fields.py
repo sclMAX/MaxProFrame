@@ -24,6 +24,16 @@ def length_field(minimum, maximum, value, decimals=2):
     return spin
 
 
+def angle_field(minimum, maximum, value, decimals=2):
+    """An angle field in degrees, from ``minimum`` to ``maximum``, showing ``value``."""
+    spin = _widget("Gui::DoubleSpinBox", QtGui.QDoubleSpinBox)
+    spin.setRange(minimum, maximum)
+    spin.setDecimals(decimals)
+    spin.setSuffix(" °")
+    spin.setValue(value)
+    return spin
+
+
 def count_field(minimum, maximum, value):
     """A whole number field from ``minimum`` to ``maximum``, showing ``value``."""
     spin = _widget("Gui::IntSpinBox", QtGui.QSpinBox)
