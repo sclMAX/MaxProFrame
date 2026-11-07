@@ -1,5 +1,10 @@
 ## Changelog
 
+* v1.10.1 (2026-11-07)
+
+  **Fixes**
+  - **Extend / Cut** refuses a click that cannot work and says why in the panel, without a dialog, keeping the current target and profiles: a click inside a sketch (for example the frame's guide sketch, between the profiles), a curved face, or a target face parallel to a listed profile (and a profile parallel to the target face). A click inside a sketch made the outline fail with **Invalid shape name InternalFace…** and the trims fail with *the target plane is parallel to the profile axis*.
+
 * v1.10.0 (2026-11-07)
 
   - **Create a Parametric Line** (**M, L**) also draws lines from vertices along a direction, with a length that takes expressions (Fx): one line from each vertex, for example the legs of a table from the corners of its frame sketch. The direction is a global axis (+X, -X, +Y, -Y, +Z, -Z), an **angle in a global plane** (XY, XZ or YZ, counterclockwise from the first axis of the plane, with Fx), or a custom vector. The command is always enabled: with no vertex selected the panel opens and each click on a vertex adds a previewed line (a second click removes it). Two selected vertices of different objects are still joined at once. A new panel starts at 100 mm along -Z, then with the values of the last OK. Double-click a line drawn from a vertex to edit it.
