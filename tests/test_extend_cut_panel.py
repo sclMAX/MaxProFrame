@@ -11,7 +11,7 @@ from PySide import QtCore, QtWidgets
 from test_end_miter_geometry import CENTER
 from test_extend_cut_geometry import FAR, NEAR, ExtendCutFixture
 
-from freecad.maxproframe import create_extend_cut_tool
+from freecad.maxproframe import create_extend_cut_tool, create_notch_tool
 from freecad.maxproframe.create_extend_cut_tool import ExtendCutCommand, make_extend_cut_profile
 from freecad.maxproframe.create_notch_tool import make_notch_profile
 
@@ -248,6 +248,162 @@ class TestExtendCutPanel(PanelFixture):
         self.assertEqual(panel.profiles, [])
         self.assertEqual(len(self.doc.Objects), before)
         self.assertEqual(self.doc.UndoCount, 0)
+
+
+class TestExtendCutApplyAndContinue(PanelFixture):
+    """S1-S5: Apply and continue cuts one end, keeps the profiles and waits for the target of the other end."""
+
+    def dialog_box(self):
+        """The button row of the task dialog: the one button box holding its OK and Cancel."""
+        boxes = [
+            box
+            for box in Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox)
+            if box.button(QtWidgets.QDialogButtonBox.Ok) is not None
+            and box.button(QtWidgets.QDialogButtonBox.Cancel) is not None
+        ]
+        self.assertEqual(len(boxes), 1)
+        return boxes[0]
+
+    def apply_button(self):
+        return self.dialog_box().button(QtWidgets.QDialogButtonBox.Apply)
+
+    def apply(self):
+        """Click Apply and continue, as the user does."""
+        button = self.apply_button()
+        self.assertTrue(button.isEnabled())
+        button.click()
+        QtWidgets.QApplication.processEvents()
+
+    def between(self):
+        """A right target at X = 400 (faces 375, 425), a left one at X = -200 (faces -225, -175), and two
+        profiles from 0 to 300 between them."""
+        right = self.target()
+        left = self.make_profile(self.make_sketch(((-200, -200, 0), (-200, 200, 0))), "Edge1", **CENTER)
+        p1 = self.profile(0, 300)
+        p2 = self.make_profile(self.make_sketch(((0, 100, 0), (300, 100, 0))), "Edge1", extension=0.0, **CENTER)
+        return right, left, p1, p2
+
+    def test_the_button_shows_only_while_creating_and_needs_a_target_and_a_profile(self):
+        right, _, p1, _ = self.between()
+        panel = self.run_command()
+        button = self.apply_button()
+        self.assertEqual(button.text(), "Apply and continue")
+        self.assertFalse(button.isEnabled())
+        self.click(right, self.near_face(right))
+        self.assertFalse(button.isEnabled())
+        self.click(p1, "")
+        self.assertTrue(button.isEnabled())
+        self.assertTrue(panel.reject())
+        self.close_panels()
+        existing = self.extend_cut(p1, right, (self.near_face(right),))
+        self.doc.clearUndos()
+        Gui.getDocument(self.doc.Name).setEdit(existing, 0)
+        QtWidgets.QApplication.processEvents()
+        self.assertIsNone(self.apply_button())
+
+    def test_both_ends_between_two_targets_each_in_its_own_undo_step(self):
+        right, left, p1, p2 = self.between()
+        self.doc.clearUndos()
+        panel = self.run_command((right, self.near_face(right)), (p1, ""), (p2, ""))
+        panel.form.sb_gap.setValue(2.0)
+        self.apply()
+        self.assertTrue(Gui.Control.activeDialog())
+        self.assertEqual(self.doc.UndoCount, 1)
+        first = {obj.TrimmedBody: obj for obj in self.extend_cuts()}
+        self.assertEqual(set(first), {p1, p2})
+        # The profiles stay, each now its trim; the target goes, and the next click sets it.
+        self.assertIsNone(panel.target)
+        self.assertEqual(panel.profiles, [first[p1], first[p2]])
+        self.assertEqual(panel.form.sb_gap.value(), 2.0)
+        self.assertFalse(self.apply_button().isEnabled())
+        self.click(left, self.face_towards(left, App.Vector(1, 0, 0)))
+        self.assertEqual(panel.target[0], left)
+        self.assertTrue(panel.accept())
+        QtWidgets.QApplication.processEvents()
+        self.assertEqual(self.doc.UndoCount, 2)
+        for body in (p1, p2):
+            [last] = [obj for obj in self.extend_cuts() if obj.TrimmedBody == first[body]]
+            self.assertEqual(last.getStatusString(), "Valid")
+            self.assertAlmostEqual(last.Shape.BoundBox.XMin, -175.0 + 2.0, places=5)
+            self.assertAlmostEqual(last.Shape.BoundBox.XMax, NEAR - 2.0, places=5)
+        self.doc.undo()
+        self.assertEqual(sorted(obj.Name for obj in self.extend_cuts()), sorted(o.Name for o in first.values()))
+
+    def test_ok_after_apply_with_no_new_target_adds_no_undo_step(self):
+        right, _, p1, _ = self.between()
+        self.doc.clearUndos()
+        panel = self.run_command((right, self.near_face(right)), (p1, ""))
+        self.apply()
+        self.assertTrue(panel.accept())
+        QtWidgets.QApplication.processEvents()
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.assertEqual(len(self.extend_cuts()), 1)
+
+    def test_cancel_after_apply_removes_only_the_newer_trims(self):
+        right, left, p1, _ = self.between()
+        self.doc.clearUndos()
+        panel = self.run_command((right, self.near_face(right)), (p1, ""))
+        self.apply()
+        [kept] = self.extend_cuts()
+        self.click(left, self.face_towards(left, App.Vector(1, 0, 0)))
+        panel._update_preview(force=True)
+        self.assertEqual(len(self.extend_cuts()), 2)
+        self.assertTrue(panel.reject())
+        QtWidgets.QApplication.processEvents()
+        self.assertEqual(self.extend_cuts(), [kept])
+        self.assertEqual(self.doc.UndoCount, 1)
+
+    def test_a_profile_already_cut_against_the_target_is_not_cut_again(self):
+        right, _, p1, p2 = self.between()
+        face = self.near_face(right)
+        done = self.extend_cut(p1, right, (face,))
+        # A profile clicked while that target is set is not added.
+        panel = self.run_command((right, face))
+        self.click(done, "")
+        self.assertEqual(panel.profiles, [])
+        self.assertEqual(self.message(panel), f"{p1.Label} is already cut against this target")
+        self.click(p2, "")
+        self.assertEqual(panel.profiles, [p2])
+        self.assertTrue(panel.reject())
+        self.close_panels()
+        # After Apply and continue, the same target clicked again is not taken.
+        panel = self.run_command((right, face), (p2, ""))
+        self.apply()
+        self.click(right, face)
+        self.assertIsNone(panel.target)
+        self.assertEqual(self.message(panel), f"{p2.Label} is already cut against this target")
+        self.assertTrue(panel.reject())
+
+    def test_notch_has_apply_and_continue_too(self):
+        right, _, p1, _ = self.between()
+        created = []
+        base = create_notch_tool.NotchTaskPanel
+
+        class Recording(base):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                created.append(self)
+
+        self.select((right, ""), (p1, ""))
+        with patch.object(create_notch_tool, "NotchTaskPanel", Recording):
+            create_notch_tool.NotchCommand().Activated()
+        self.panels.extend(created)
+        [panel] = created
+        self.assertEqual(self.apply_button().text(), "Apply and continue")
+        panel._update_preview(force=True)
+        self.apply()
+        notches = [obj for obj in self.doc.Objects if getattr(obj, "TrimmedProfileType", None) == "Notch"]
+        self.assertEqual(len(notches), 1)
+        self.assertIsNone(panel.target)
+        self.assertEqual(panel.profiles, notches)
+        self.assertTrue(panel.reject())
+
+    def test_the_button_is_spanish(self):
+        use_language(self, "Spanish", "es_ES")
+        QtWidgets.QApplication.processEvents()
+        self.run_command()
+        self.assertEqual(self.apply_button().text(), "Aplicar y seguir")
+        self.assertTrue(self.apply_button().toolTip().startswith("Crear estos cortes en su propio paso de deshacer"))
 
 
 class EditFixture(PanelFixture):

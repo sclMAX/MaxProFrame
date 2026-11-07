@@ -27,7 +27,7 @@ from freecad.maxproframe.ff_tools import (
     get_param_group,
     translate,
 )
-from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
+from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
 from freecad.maxproframe.trimmed_profile import AUTO, END, START, TrimmedProfile, ViewProviderTrimmedProfile
 
 # Highlight kinds while the panel is open: the target, the profiles to cut (or their previews),
@@ -121,6 +121,18 @@ def make_extend_cut_profile(body, target, gap=0.0):
     return obj
 
 
+def _already_cut(body, target, joint):
+    """Whether the trim chain of ``body`` already has a ``joint`` trim against ``target`` (object, face names)."""
+    obj, faces = target
+    for link in _trim_chain(body):
+        if not is_trimmedbody(link) or getattr(link, "TrimmedProfileType", None) != joint:
+            continue
+        for boundary, subs in link.TrimmingBoundary:
+            if boundary == obj and {sub for sub in subs if sub} == set(faces):
+                return True
+    return False
+
+
 def _related(a, b):
     """Whether ``a`` and ``b`` are the same body or one is built on the other."""
     return a in _trim_chain(b) or b in _trim_chain(a)
@@ -136,6 +148,11 @@ def _edge_lines(obj, sub, shape=None):
         shape = shape.copy()
         shape.transformShape(group.getGlobalPlacement().toMatrix())
     return [edge.discretize(Deflection=HIGHLIGHT_DEFLECTION) for edge in shape.Edges]
+
+
+def _button_id(button):
+    """The int of a standard button, given as an int (FreeCAD) or as a PySide enum."""
+    return int(getattr(button, "value", button))
 
 
 def show_panel(panel):
@@ -203,6 +220,9 @@ class ExtendCutTaskPanel:
             self.form.sb_gap.hide()
 
         self.edited = edited
+        # Apply and continue of the dialog's button row, once FreeCAD gives it, and whether it made trims.
+        self._apply_button = None
+        self._applied = False
         self.target = None
         self.profiles = []
         # Profile name -> START or END; a profile not in it keeps the Auto piece.
@@ -302,6 +322,9 @@ class ExtendCutTaskPanel:
             return [problem]
         if any(_related(obj, profile) for profile in self.profiles):
             return [translate("frameforge", "{} cannot trim itself").format(obj.Label)]
+        for profile in self.profiles:
+            if self.edited is None and _already_cut(profile, (obj, faces), self.joint):
+                return [self._already_cut_message(profile)]
         if self.target is not None and self.target != (obj, faces):
             # A side flipped for the old target means nothing for the new one: the profiles go back to Auto.
             self.keep_ends = {}
@@ -318,9 +341,16 @@ class ExtendCutTaskPanel:
             return [translate("frameforge", "{} is not a profile").format(obj.Label)]
         if self.target is not None and _related(obj, self.target[0]):
             return [translate("frameforge", "{} cannot trim itself").format(obj.Label)]
+        if self.target is not None and _already_cut(obj, self.target, self.joint):
+            return [self._already_cut_message(obj)]
         if obj not in self.profiles:
             self.profiles.append(obj)
         return []
+
+    @staticmethod
+    def _already_cut_message(body):
+        profile = _base_profile(body) or body
+        return translate("frameforge", "{} is already cut against this target").format(profile.Label)
 
     def remove_selected(self):
         rows = {self.form.profiles_list.row(item) for item in self.form.profiles_list.selectedItems()}
@@ -448,6 +478,7 @@ class ExtendCutTaskPanel:
         else:
             text = translate("frameforge", "No preview")
         self.form.status_label.setText(text)
+        self._enable_apply()
 
     def _wanted(self):
         """What the preview must show for the current target, profiles and Gap; () for nothing."""
@@ -847,6 +878,11 @@ class ExtendCutTaskPanel:
 
     def accept(self):
         error = self._missing()
+        if error and self._applied and self.target is None:
+            # After Apply and continue, OK without a new target closes: nothing more to cut, no Undo step.
+            self._discard_preview()
+            self.clean()
+            return True
         if error:
             self._show([error])
             return False
@@ -871,6 +907,82 @@ class ExtendCutTaskPanel:
         self._transaction_open = False
         self._previews.clear()
         self.clean()
+        return True
+
+    def getStandardButtons(self):
+        buttons = QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel
+        if self.edited is None:
+            buttons |= QtGui.QDialogButtonBox.Apply
+        return buttons
+
+    def modifyStandardButtons(self, box):
+        """Turn the Apply button of the dialog's button row into Apply and continue."""
+        # The task view deletes the row when the dialog closes: no wrapper may outlive it.
+        invalidate_wrapper_on_destroy(box)
+        button = box.button(QtGui.QDialogButtonBox.Apply)
+        if button is None:
+            return
+        invalidate_wrapper_on_destroy(button)
+        button.setText(translate("frameforge", "Apply and continue"))
+        button.setToolTip(
+            translate(
+                "frameforge",
+                "Create these cuts in their own Undo step and keep the panel open with the same profiles: click "
+                "the target of their other end.",
+            )
+        )
+        button.destroyed.connect(self._apply_button_gone)
+        self._apply_button = button
+        self._enable_apply()
+
+    def clicked(self, button):
+        """A button of the dialog's row: Apply cuts and continues, OK and Cancel run on their own."""
+        if _button_id(button) == _button_id(QtGui.QDialogButtonBox.Apply):
+            self.apply_and_continue()
+
+    def _apply_button_gone(self, *args):
+        self._apply_button = None
+
+    def _enable_apply(self):
+        if self._apply_button is not None:
+            self._apply_button.setEnabled(self.edited is None and not self._closed and not self._missing())
+
+    def apply_and_continue(self, *args):
+        """Create the trims as OK does, in their own Undo step, and keep the panel open for the other end.
+
+        The profiles stay, each one now the trim just made, so the next cut is built on it; the target goes,
+        and the next click sets it. Only while creating. Returns whether the trims were created.
+        """
+        if self.edited is not None or not self._active():
+            return False
+        error = self._missing()
+        if error:
+            self._show([error])
+            return False
+        self._preview_timer.stop()
+        self._update_preview(force=True)
+        if not self._error:
+            self._error = _failures(preview.obj for preview in self._previews.values())
+        if self._error:
+            self._discard_preview()
+            self._show_messages()
+            self._show_status()
+            self._draw_highlights()
+            return False
+        trims = [self._previews[profile.Name].obj for profile in self.profiles]
+        self.doc.commitTransaction()
+        self._transaction_open = False
+        self._applied = True
+        self._previews.clear()
+        self._previewed = ()
+        self._discarded = {}
+        # A side flipped for this target means nothing for the next one.
+        self.keep_ends = {}
+        self.profiles = trims
+        self.target = None
+        self._set_picking(False)
+        self._show([])
+        self._changed()
         return True
 
     def _accept_edit(self, gap):
