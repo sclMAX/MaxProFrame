@@ -74,3 +74,7 @@ a direction given as an angle in a global plane, and drawing the lines by draggi
   (the Spanish test lets the language change reach the widgets before opening the panel).
 - L15 (evidence): full native suite 1300 tests, exit 0 (job-3 on b522744). Assess of the T3 increment: medium,
   reviewDue false (under budget), no independent verifier. Waiting for the user's manual test of Apply and continue.
+- L16 (user): "si" to fixing the five review advisories R3-001..R3-005 (reconstructed from their locations: the
+  reviewer text was not stored) on branch fix/parametric-line-review-followups.
+- L17 (evidence): RED observed for each (4 failures/errors + R3-002 failing with the fix stashed), then
+  test_parametric_line_panel 51/51, test_parametric_line 20/20, test_parametric_line_drag 9/9.

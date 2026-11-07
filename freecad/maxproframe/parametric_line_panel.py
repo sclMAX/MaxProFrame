@@ -15,7 +15,14 @@ from PySide import QtCore, QtGui
 
 from freecad.maxproframe import expression_fields
 from freecad.maxproframe.ff_tools import get_param_group, translate
-from freecad.maxproframe.parametric_line import AXES, DEFAULT_LENGTH, PLANES, _global_vertex, make_line_from_vertex
+from freecad.maxproframe.parametric_line import (
+    AXES,
+    DEFAULT_LENGTH,
+    PLANES,
+    _add_direction_properties,
+    _global_vertex,
+    make_line_from_vertex,
+)
 from freecad.maxproframe.parametric_line_drag import snapped_direction
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
 
@@ -101,6 +108,8 @@ class ParametricLineTaskPanel:
         # Apply and continue of the dialog's button row, once FreeCAD gives it.
         self._apply_button = None
         if edited is not None:
+            # A line made by an earlier version in this session has no Plane and no Angle yet.
+            _add_direction_properties(edited)
             self.lines = [edited]
             self._saved = {prop: getattr(edited, prop) for prop in EDITED_PROPERTIES}
             self._saved_expressions = expression_fields.expressions_of(edited, EXPRESSION_PROPERTIES)
@@ -236,10 +245,14 @@ class ParametricLineTaskPanel:
     # Dragging in a plane.
 
     def drag_anchor(self):
-        """Global start of the newest line, where the drag measures from, or None."""
-        if self._closed or not self.lines:
+        """Global start of the newest line whose vertex is still there, where the drag measures from, or None."""
+        if self._closed:
             return None
-        return _global_vertex(self.lines[-1].Vertex1)
+        for line in reversed(self.lines):
+            anchor = _global_vertex(line.Vertex1)
+            if anchor is not None:
+                return anchor
+        return None
 
     def _can_drag(self):
         return self.edited is None and not self._closed and bool(self.lines)
