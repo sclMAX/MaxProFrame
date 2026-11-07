@@ -11,10 +11,11 @@ Branch: fix/trim-container-followups. Engram mirror: odd/trim-container-followup
 
 - T1 (S1) inline — Notch moves the target into the body frame (`in_frame_of`) in cutter, crossing and kept-end checks; tests in tests/test_notch_geometry.py. Commit: 8da9266
 - T2 (S3) inline — rotated-target and degenerate NURBS face tests; normalAt(0, 0) proved right on flat faces (OCC resolves the degenerate corner), no code change. Commit: 460cb41
-- T3 (S2) inline — document observer touches trims when a GeoFeatureGroup placement changes; tests; CHANGELOG. Commit: (this commit)
+- T3 (S2) inline — document observer touches trims when a GeoFeatureGroup placement changes; tests; CHANGELOG. Commit: 3b7b77e
 
 ## Log
 
 - L1: "vamos con los 3" (after the proposal: 1. Notch ignores App::Part placements; 2. trims don't recompute automatically when a Part placement changes; 3. minor: NURBS normal at (0,0) and rotated-target recompute test).
 - L2: Exploration: trim lives in the body's container, so a plain link to that container would form a cycle; chosen approach for S2 is a document observer.
 - L3: T2 evidence: on a flat NURBS triangle degenerate at (0, 0), normalAt(0, 0) returns the plane normal; the rotated-target test passed already. Only tests added.
+- L4: Full suite 1343 OK (stable 1.1.4). Native review approved and acknowledged (lineage review-503ad3dd65ac590b); advisory: observer touch while a Placement changes during recompute (expressions), full document scan per Part placement change.
