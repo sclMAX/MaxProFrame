@@ -29,7 +29,15 @@ from freecad.maxproframe.ff_tools import (
 )
 from freecad.maxproframe.miter_geometry import TOLERANCE
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
-from freecad.maxproframe.trimmed_profile import AUTO, END, START, TrimmedProfile, ViewProviderTrimmedProfile
+from freecad.maxproframe.trimmed_profile import (
+    AUTO,
+    END,
+    START,
+    TrimmedProfile,
+    ViewProviderTrimmedProfile,
+    in_frame_of,
+    is_flat_face,
+)
 
 # Highlight kinds while the panel is open: the target, the profiles to cut (or their previews),
 # and the pieces the previews cut off.
@@ -144,11 +152,16 @@ def _related(a, b):
 
 
 def _profile_axis(obj):
-    """The direction of the straight path of the profile under ``obj``, or None (a curved path or no profile)."""
+    """The direction of the straight path of the profile under ``obj``, in the coordinates of its container.
+
+    None for a curved path or no profile: the recompute then judges the target.
+    """
     profile = _base_profile(obj)
     if profile is None:
         return None
     try:
+        # Attachment does not follow containers: the profile keeps its path edge in its own coordinates,
+        # as the recompute of the trim reads it, wherever the sketch is.
         edge = profile.Target[0].getSubObject(profile.Target[1][0])
     except Exception:
         return None
@@ -159,12 +172,15 @@ def _profile_axis(obj):
 
 
 def parallel_problem(body, target):
-    """Why the face target ``target`` cannot reach ``body`` (its plane runs along the profile), or None."""
+    """Why the face target ``target`` cannot reach ``body`` (its plane runs along the profile), or None.
+
+    The same test as the recompute of the trim, with its tolerance, both seen in the container of ``body``.
+    """
     obj, faces = target
     if not faces:
         return None
     axis = _profile_axis(body)
-    face = obj.getSubObject(faces[0])
+    face = in_frame_of(body, obj, obj.getSubObject(faces[0]))
     if axis is None or not isinstance(face, Part.Face):
         return None
     if abs(face.normalAt(0, 0).dot(axis)) < TOLERANCE:
@@ -346,12 +362,12 @@ class ExtendCutTaskPanel:
         faces = [sub for sub in subs if sub]
         if faces:
             # A click inside a closed sketch picks its inner face: the guide sketch is never a target.
-            if obj.isDerivedFrom("Part::Part2DObject"):
+            if obj.isDerivedFrom("Sketcher::SketchObject"):
                 return (), translate("frameforge", "{}: a sketch cannot be the target").format(obj.Label)
             face = obj.getSubObject(faces[0])
             if not isinstance(face, Part.Face):
                 return (), translate("frameforge", "{}: {} is not a face").format(obj.Label, faces[0])
-            if not isinstance(face.Surface, Part.Plane):
+            if not is_flat_face(face):
                 return (), translate("frameforge", "{}: {} is not a planar face").format(obj.Label, faces[0])
             return tuple(faces[:1]), None
         return (), trimmed_body_problem(None, obj)
