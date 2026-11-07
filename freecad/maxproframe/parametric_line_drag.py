@@ -107,6 +107,8 @@ class ViewDrag:
         self._node = None
         # A click the drag took: the selection FreeCAD makes under it is no vertex pick.
         self.click_taken = False
+        # Side of the squares as last drawn, in mm.
+        self.size = 50.0
 
     # Listening.
 
@@ -174,38 +176,41 @@ class ViewDrag:
 
         event = event_callback.getEvent()
         button, down = event.getButton(), event.getState() == coin.SoMouseButtonEvent.DOWN
+        if button not in (coin.SoMouseButtonEvent.BUTTON1, coin.SoMouseButtonEvent.BUTTON2):
+            return
+        if not down:
+            if self.click_taken:
+                # FreeCAD selects under a click on its release, before this callback: the pick stays
+                # ignored until the release is processed.
+                from PySide import QtCore
+
+                event_callback.setHandled()
+                QtCore.QTimer.singleShot(0, self._release_click)
+            return
+        self.click_taken = False
         if self.panel.drag_plane is not None:
-            if button == coin.SoMouseButtonEvent.BUTTON1 and down:
+            if button == coin.SoMouseButtonEvent.BUTTON1:
                 self._drag(event)
                 self.panel.finish_drag()
-            elif button == coin.SoMouseButtonEvent.BUTTON2 and down:
-                self.panel.cancel_drag()
-            elif not down and button in (coin.SoMouseButtonEvent.BUTTON1, coin.SoMouseButtonEvent.BUTTON2):
-                pass
             else:
-                return
+                self.panel.cancel_drag()
             self._take(event_callback)
             return
-        if button != coin.SoMouseButtonEvent.BUTTON1:
-            return
         anchor = self.panel.drag_anchor()
-        if not down or anchor is None:
-            if not down and self.click_taken:
-                self._take(event_callback)
+        if button != coin.SoMouseButtonEvent.BUTTON1 or anchor is None:
             return
+        # The squares are drawn again first: their size and the planes seen edge-on follow the camera.
+        self.redraw()
         origin, direction = self._ray(event.getPosition().getValue())
-        plane = plane_at(anchor, self._square_size(anchor), origin, direction, self.usable_planes())
+        plane = plane_at(anchor, self.size, origin, direction, self.usable_planes())
         if plane is not None:
             self.panel.start_drag(plane)
             self._take(event_callback)
 
     def _take(self, event_callback):
-        from PySide import QtCore
-
+        """A press the drag took: its release is no vertex pick either."""
         event_callback.setHandled()
         self.click_taken = True
-        # FreeCAD may still select under the click until the release is processed.
-        QtCore.QTimer.singleShot(0, self._release_click)
 
     def _release_click(self):
         self.click_taken = False
@@ -262,7 +267,7 @@ class ViewDrag:
             return
         from pivy import coin
 
-        size = self._square_size(anchor)
+        size = self.size = self._square_size(anchor)
         usable = self.usable_planes()
         node = coin.SoAnnotation()
         for plane, (first, second) in PLANES.items():

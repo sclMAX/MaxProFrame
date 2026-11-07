@@ -48,3 +48,12 @@ a direction given as an angle in a global plane, and drawing the lines by draggi
   a fake top view), test_parametric_line 19/19, toolbar/library translations, shortcuts, workbench commands exit 0.
   The real 3D view (squares, ray, Esc focus) needs the user's manual test.
 - L9 (delivery): this branch is a PR stacked on PR 95 (feat/parametric-line-direction); its slice is T1 + T2 only.
+- L10 (verify, independent): S1 S2 S4 S6 met; S3 not met: (1) HIGH the release of a click that starts or fixes a
+  drag still picked the vertex under it (FreeCAD selects on release; the guard cleared on the press's next event loop);
+  (2) MEDIUM after a zoom the clickable squares no longer matched the drawn ones; (3) LOW the migration test sat under
+  `if __name__ == "__main__":` and never ran. Advisory: right-click cancel may also open the context menu; perspective
+  square size measured on the focal plane. S5 keys in a real GL view unverifiable offscreen.
+- L11 (fix): the guard holds from the taken press until its release is processed; a press redraws the squares
+  (size and edge-on follow the camera) before hit-testing; migration test moved into the class. RED observed for
+  (1) and (2) with the fix stashed (2 failures + 1 error), then test_parametric_line 20/20, test_parametric_line_drag
+  9/9, test_parametric_line_panel 40/40.

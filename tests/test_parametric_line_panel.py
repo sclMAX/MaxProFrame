@@ -677,12 +677,61 @@ class TestDragInTheView(ParametricLinePanelFixture):
         self.assertIsNone(self.panel.drag_plane)
         self.assertTrue(self.panel.reject())
 
-    def test_a_click_the_drag_takes_picks_no_vertex(self):
-        self.assertTrue(self.mouse((420, 20)))
+    def pick_on_release(self, position):
+        """The release of a click: FreeCAD selects the vertex under it first, then the callbacks run."""
         self.panel.addSelection(self.doc.Name, self.sketch.Name, self.corner(CORNERS[2]), (400, 200, 0))
         self.events()
+        handled = self.mouse(position, down=False)
+        self.events()
+        return handled
+
+    def test_the_release_of_a_click_on_a_square_picks_no_vertex(self):
+        self.assertTrue(self.mouse((420, 20)))
+        self.events()
+        self.assertTrue(self.pick_on_release((420, 20)))
         self.assertEqual(len(self.panel.lines), 1)
         self.assertFalse(self.panel.view_drag.click_taken)
+        self.assertTrue(self.panel.reject())
+
+    def test_the_release_of_the_click_fixing_the_line_picks_no_vertex(self):
+        self.assertTrue(self.mouse((420, 20)))
+        self.events()
+        self.mouse((420, 20), down=False)
+        self.events()
+        self.send("SoLocation2Event", position=(400, 200))
+        self.assertTrue(self.mouse((400, 200)))
+        self.events()
+        self.assertTrue(self.pick_on_release((400, 200)))
+        self.assertEqual(len(self.panel.lines), 1)
+        self.assertEqual((self.panel.direction(), self.panel.form.spin_length.value()), ("+Y", 200))
+        self.assertTrue(self.panel.reject())
+
+    def test_a_click_off_the_squares_still_picks_a_vertex(self):
+        self.assertFalse(self.mouse((0, 200)))
+        self.assertFalse(self.pick_on_release((0, 200)))
+        self.assertEqual(len(self.panel.lines), 2)
+        self.assertTrue(self.panel.reject())
+
+    def test_after_a_zoom_the_squares_are_clicked_where_they_are_drawn_again(self):
+        # Zoomed in twice: 0.5 mm per pixel, so the squares are 30 mm long.
+        self.view.getPoint = lambda x, y: App.Vector(x * 0.5, y * 0.5, 0)
+        self.view.getPointOnViewport = lambda p: (p.x * 2, p.y * 2)
+        self.assertFalse(self.mouse((880, 40)))
+        self.assertTrue(self.mouse((840, 40)))
+        self.assertEqual((self.panel.drag_plane, self.panel.view_drag.size), ("XY", 30))
+        self.assertTrue(self.panel.reject())
+
+    def test_cancel_puts_back_the_angle_mode_and_its_expression(self):
+        form = self.panel.form
+        form.combo_direction.setCurrentIndex(form.combo_direction.findData("Angle"))
+        form.combo_plane.setCurrentIndex(form.combo_plane.findData("YZ"))
+        self.panel.lines[0].setExpression("Angle", "Box.Height * 3")
+        self.doc.recompute()
+        self.panel.start_drag("XY")
+        self.panel.drag_to(App.Vector(630, 3, 0))
+        self.panel.cancel_drag()
+        self.assertEqual((self.panel.direction(), self.panel.plane()), ("Angle", "YZ"))
+        self.assertEqual(expression_fields.expression_of(self.panel.lines[0], "Angle"), "Box.Height * 3")
         self.assertTrue(self.panel.reject())
 
 

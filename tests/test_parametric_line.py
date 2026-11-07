@@ -303,10 +303,6 @@ class TestParametricLine(unittest.TestCase):
         self.assertEqual(self.ends(line), [tuple(round(c, 6) for c in oracle), (0, 0, 0)])
         self.assertEqual(inner.Group, [body])
 
-
-if __name__ == "__main__":
-    unittest.main()
-
     def test_a_line_saved_before_the_angle_mode_gets_it_and_keeps_its_direction(self):
         box = self.doc.addObject("Part::Box", "Box")
         self.doc.recompute()
@@ -331,3 +327,7 @@ if __name__ == "__main__":
         line.Direction = "Angle"
         self.doc.recompute()
         self.assertEqual(self.ends(line), [(10, 10, 0), (20, 10, 0)])
+
+
+if __name__ == "__main__":
+    unittest.main()
