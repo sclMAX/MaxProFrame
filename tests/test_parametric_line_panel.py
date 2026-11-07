@@ -12,7 +12,7 @@ import Part
 from miter_helpers import use_language
 from PySide import QtGui, QtWidgets
 
-from freecad.maxproframe import expression_fields, parametric_line_panel
+from freecad.maxproframe import expression_fields, parametric_line_drag, parametric_line_panel
 from freecad.maxproframe.ff_tools import get_param_group
 from freecad.maxproframe.parametric_line import CreateParametricLineCommand, make_line_from_vertex
 
@@ -451,9 +451,239 @@ class TestCreatePanel(ParametricLinePanelFixture):
         self.assertEqual(combo.itemText(combo.findData("Angle")), "Ángulo en un plano")
         combo.setCurrentIndex(combo.findData("Angle"))
         self.assertEqual(panel.form.angle_hint.text(), "0° = +X, 90° = +Y")
+        self.assertTrue(panel.form.hint_label.text().startswith("Hacé clic en un vértice para agregar una línea"))
+        self.assertIn("presioná P", panel.form.hint_label.text())
         self.click(self.box, "Edge1")
         self.assertEqual(panel.form.status_label.text(), "Hacé clic en un vértice: solo un vértice inicia una línea.")
         self.assertTrue(panel.reject())
+
+
+class TestDragInAPlane(ParametricLinePanelFixture):
+    """The cursor point in the plane comes from the 3D view; here drag_to gets it directly."""
+
+    def fields(self, panel):
+        form = panel.form
+        return panel.direction(), form.combo_plane.currentData(), form.spin_angle.value(), form.spin_length.value()
+
+    def test_a_click_on_a_plane_drags_every_line_and_a_second_click_fixes_them(self):
+        panel = self.run_command(*self.corners(CORNERS[0], CORNERS[1]))
+        panel.start_drag("XZ")
+        self.assertEqual(panel.drag_plane, "XZ")
+        self.assertTrue(panel.form.plane_buttons["XZ"].isChecked())
+        self.assertFalse(panel.form.plane_buttons["XY"].isChecked())
+        # Measured from the start of the newest line.
+        panel.drag_to(App.Vector(400, 0, -704))
+        self.assertEqual(panel.direction(), "-Z")
+        self.assertEqual(panel.form.spin_length.value(), 700)
+        self.assertEqual([self.ends(line) for line in panel.lines], [[c, (c[0], c[1], -700)] for c in CORNERS[:2]])
+        panel.finish_drag()
+        self.assertIsNone(panel.drag_plane)
+        self.assertFalse(panel.form.plane_buttons["XZ"].isChecked())
+        panel.drag_to(App.Vector(400, 0, -50))
+        self.assertEqual(panel.form.spin_length.value(), 700)
+        self.assertTrue(panel.accept())
+        self.assertEqual([(line.Direction, line.Length.Value) for line in self.lines()], [("-Z", 700)] * 2)
+
+    def test_a_way_off_the_axes_is_an_angle_in_the_plane_and_shift_snaps_to_1_mm(self):
+        panel = self.run_command(*self.corners(CORNERS[1]))
+        panel.start_drag("XZ")
+        panel.drag_to(App.Vector(483.9, 0, 54.5))
+        self.assertEqual(self.fields(panel), ("Angle", "XZ", 30, 100))
+        self.assertEqual(self.ends(panel.lines[0]), [(400, 0, 0), (486.60254, 0, 50)])
+        panel.drag_to(App.Vector(400 + 234.6, 0, 0), fine=True)
+        self.assertEqual(self.fields(panel)[::3], ("+X", 235))
+        panel.finish_drag()
+        self.assertTrue(panel.accept())
+
+    def test_cancel_puts_back_the_values_and_expressions_and_keeps_the_panel_open(self):
+        panel = self.run_command(*self.corners(CORNERS[1]))
+        panel.lines[0].setExpression("Length", "Box.Height * 10")
+        self.doc.recompute()
+        panel.start_drag("XY")
+        panel.drag_to(App.Vector(630, 3, 0))
+        self.assertEqual((panel.direction(), panel.form.spin_length.value()), ("+X", 230))
+        self.assertIsNone(expression_fields.expression_of(panel.lines[0], "Length"))
+        self.assertEqual(self.ends(panel.lines[0]), [(400, 0, 0), (630, 0, 0)])
+        panel.cancel_drag()
+        self.assertIsNone(panel.drag_plane)
+        self.assertEqual(panel.direction(), "-Z")
+        self.assertEqual(expression_fields.expression_of(panel.lines[0], "Length"), "Box.Height * 10")
+        self.assertEqual(self.ends(panel.lines[0]), [(400, 0, 0), (400, 0, -100)])
+        self.assertTrue(Gui.Control.activeDialog())
+        self.assertTrue(panel.reject())
+
+    def test_p_and_the_plane_buttons_choose_the_plane(self):
+        panel = self.run_command(*self.corners(CORNERS[1]))
+        planes = []
+        for _ in range(4):
+            panel.cycle_plane()
+            planes.append(panel.drag_plane)
+        self.assertEqual(planes, ["XY", "XZ", "YZ", "XY"])
+        panel.form.plane_buttons["YZ"].click()
+        self.assertEqual(panel.drag_plane, "YZ")
+        panel.cancel_drag()
+        panel.form.plane_buttons["XZ"].click()
+        self.assertEqual(panel.drag_plane, "XZ")
+        self.assertTrue(panel.reject())
+
+    def test_with_no_line_there_is_nothing_to_drag(self):
+        panel = self.run_command()
+        panel.cycle_plane()
+        panel.start_drag("XY")
+        self.assertIsNone(panel.drag_plane)
+        self.assertFalse(panel.form.plane_buttons["XY"].isEnabled())
+        self.click(self.sketch, self.corner(CORNERS[0]))
+        self.assertTrue(panel.form.plane_buttons["XY"].isEnabled())
+        self.assertTrue(panel.reject())
+
+    def test_a_line_being_edited_is_not_dragged(self):
+        leg = make_line_from_vertex((self.sketch, self.corner(CORNERS[3])), "+Y", 70)
+        Gui.getDocument(self.doc.Name).setEdit(leg, 0)
+        self.events()
+        panel = self.recorded[-1]
+        self.assertFalse(hasattr(panel.form, "plane_buttons"))
+        panel.start_drag("XY")
+        self.assertIsNone(panel.drag_plane)
+        self.assertTrue(panel.reject())
+
+
+class FakeView:
+    """A top view, 1 mm per pixel, with its screen origin at the global origin."""
+
+    def __init__(self):
+        from pivy import coin
+
+        self.scene = coin.SoSeparator()
+        self.callbacks = {}
+
+    def getPoint(self, x, y):
+        return App.Vector(x, y, 0)
+
+    def getPointOnViewport(self, point):
+        return (point.x, point.y)
+
+    def getViewDirection(self):
+        return App.Vector(0, 0, -1)
+
+    def getCameraNode(self):
+        from pivy import coin
+
+        return coin.SoOrthographicCamera()
+
+    def getSceneGraph(self):
+        return self.scene
+
+    def addEventCallbackPivy(self, event_type, handler):
+        self.callbacks[str(event_type.getName().getString())] = handler
+        return handler
+
+    def removeEventCallbackPivy(self, event_type, callback):
+        self.callbacks.pop(str(event_type.getName().getString()), None)
+
+
+class FakeEvent:
+    def __init__(self, position=(0, 0), button=None, down=True, key=None, shift=False):
+        from pivy import coin
+
+        self.position, self.button, self.key, self.shift = position, button, key, shift
+        self.state = coin.SoButtonEvent.DOWN if down else coin.SoButtonEvent.UP
+
+    def getPosition(self):
+        position = self.position
+
+        class Position:
+            def getValue(self):
+                return position
+
+        return Position()
+
+    def getButton(self):
+        return self.button
+
+    def getState(self):
+        return self.state
+
+    def getKey(self):
+        return self.key
+
+    def wasShiftDown(self):
+        return self.shift
+
+
+class FakeCallback:
+    def __init__(self, event):
+        self.event = event
+        self.handled = False
+
+    def getEvent(self):
+        return self.event
+
+    def setHandled(self):
+        self.handled = True
+
+
+class TestDragInTheView(ParametricLinePanelFixture):
+    def setUp(self):
+        super().setUp()
+        from pivy import coin
+
+        self.coin = coin
+        self.panel = self.run_command(*self.corners(CORNERS[1]))
+        self.view = FakeView()
+        self.panel.view_drag = parametric_line_drag.ViewDrag(self.panel, self.view)
+        self.panel.view_drag.listen()
+
+    def send(self, kind, **event):
+        callback = FakeCallback(FakeEvent(**event))
+        self.view.callbacks[kind](callback)
+        return callback.handled
+
+    def mouse(self, position, button=None, down=True, shift=False):
+        button = self.coin.SoMouseButtonEvent.BUTTON1 if button is None else button
+        return self.send("SoMouseButtonEvent", position=position, button=button, down=down, shift=shift)
+
+    def test_click_a_square_move_and_click_again(self):
+        # The squares are drawn at the start of the line, 60 px (here 60 mm) long.
+        self.assertEqual(self.view.scene.getNumChildren(), 1)
+        self.assertFalse(self.mouse((520, 20)))
+        # Seen from the top, XZ and YZ are edge-on: only XY is clicked.
+        self.assertTrue(self.mouse((420, 20)))
+        self.assertEqual(self.panel.drag_plane, "XY")
+        self.assertTrue(self.panel.view_drag.click_taken)
+        self.send("SoLocation2Event", position=(400, 236), shift=True)
+        self.assertEqual((self.panel.direction(), self.panel.form.spin_length.value()), ("+Y", 236))
+        self.assertTrue(self.mouse((400, 236), down=False))
+        self.assertTrue(self.mouse((480, 80)))
+        self.assertIsNone(self.panel.drag_plane)
+        self.assertEqual(self.panel.form.combo_plane.currentData(), "XY")
+        self.assertEqual((self.panel.direction(), self.panel.form.spin_angle.value()), ("Angle", 45))
+        self.assertEqual(self.panel.form.spin_length.value(), 110)
+        self.assertTrue(self.panel.reject())
+        self.assertEqual(self.view.callbacks, {})
+        self.assertEqual(self.view.scene.getNumChildren(), 0)
+
+    def test_p_cycles_only_the_planes_not_seen_edge_on_and_esc_or_right_click_cancel(self):
+        P, ESC = self.coin.SoKeyboardEvent.P, self.coin.SoKeyboardEvent.ESCAPE
+        self.assertTrue(self.send("SoKeyboardEvent", key=P))
+        self.assertTrue(self.send("SoKeyboardEvent", key=P))
+        self.assertEqual(self.panel.drag_plane, "XY")
+        self.send("SoLocation2Event", position=(600, 0))
+        self.assertTrue(self.send("SoKeyboardEvent", key=ESC))
+        self.assertIsNone(self.panel.drag_plane)
+        self.assertEqual((self.panel.direction(), self.panel.form.spin_length.value()), ("-Z", 100))
+        self.assertFalse(self.send("SoKeyboardEvent", key=ESC))
+        self.panel.start_drag("XY")
+        self.assertTrue(self.mouse((0, 0), button=self.coin.SoMouseButtonEvent.BUTTON2))
+        self.assertIsNone(self.panel.drag_plane)
+        self.assertTrue(self.panel.reject())
+
+    def test_a_click_the_drag_takes_picks_no_vertex(self):
+        self.assertTrue(self.mouse((420, 20)))
+        self.panel.addSelection(self.doc.Name, self.sketch.Name, self.corner(CORNERS[2]), (400, 200, 0))
+        self.events()
+        self.assertEqual(len(self.panel.lines), 1)
+        self.assertFalse(self.panel.view_drag.click_taken)
+        self.assertTrue(self.panel.reject())
 
 
 class TestEditPanel(ParametricLinePanelFixture):

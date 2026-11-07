@@ -4,7 +4,8 @@ Creating, the panel previews one line per selected vertex; a click on a vertex a
 on a vertex with a line removes that line, and OK keeps them in one Undo step. It starts with the direction,
 custom vector, plane, angle and length of the last OK. Editing (a double-click on such a line), it changes that
 line. The Length and Angle fields take expressions (the Fx button): bound to the first line, their expressions
-are given to every line of the panel.
+are given to every line of the panel. Creating, the lines can also be drawn by dragging the mouse in a global
+plane (parametric_line_drag): the drag gives every line its direction and length.
 """
 
 import FreeCAD as App
@@ -14,6 +15,7 @@ from PySide import QtCore, QtGui
 from freecad.maxproframe import expression_fields
 from freecad.maxproframe.ff_tools import get_param_group, translate
 from freecad.maxproframe.parametric_line import AXES, DEFAULT_LENGTH, PLANES, _global_vertex, make_line_from_vertex
+from freecad.maxproframe.parametric_line_drag import snapped_direction
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 
 # Direction of new lines until an OK remembers one: legs hang down from a frame.
@@ -91,6 +93,10 @@ class ParametricLineTaskPanel:
         # Expression of the Length of the last line removed, given to the next line added.
         self._expressions = {}
         self._message = ""
+        # Plane of the drag in progress, the values it started from, and the 3D view it listens to.
+        self.drag_plane = None
+        self._drag_saved = None
+        self.view_drag = None
         if edited is not None:
             self.lines = [edited]
             self._saved = {prop: getattr(edited, prop) for prop in EDITED_PROPERTIES}
@@ -174,8 +180,31 @@ class ParametricLineTaskPanel:
         rows.addRow(QtGui.QLabel(translate("frameforge", "Length")), form.spin_length)
         layout.addWidget(group)
         if self.edited is None:
+            buttons = QtGui.QHBoxLayout()
+            buttons.addWidget(QtGui.QLabel(translate("frameforge", "Drag in")))
+            form.plane_buttons = {}
+            for plane in PLANES:
+                button = QtGui.QPushButton(plane)
+                button.setCheckable(True)
+                button.setToolTip(
+                    translate(
+                        "frameforge",
+                        "Drag the lines in this global plane: move the mouse and click to give their direction "
+                        "and length.",
+                    )
+                )
+                button.clicked.connect(lambda checked=False, plane=plane: self.start_drag(plane))
+                form.plane_buttons[plane] = button
+                buttons.addWidget(button)
+            layout.addLayout(buttons)
             form.hint_label = QtGui.QLabel(
-                translate("frameforge", "Click a vertex to add a line from it. Click it again to remove its line.")
+                translate(
+                    "frameforge",
+                    "Click a vertex to add a line from it. Click it again to remove its line. To draw by dragging, "
+                    "click a plane at the start of the last line, or press P to cycle the planes, then move the "
+                    "mouse and click: the angle snaps every 15° and the length to 10 mm (1 mm with Shift). Esc or "
+                    "a right click cancels the drag.",
+                )
             )
             form.hint_label.setWordWrap(True)
             layout.addWidget(form.hint_label)
@@ -201,6 +230,93 @@ class ParametricLineTaskPanel:
     def plane(self):
         return self.form.combo_plane.currentData()
 
+    # Dragging in a plane.
+
+    def drag_anchor(self):
+        """Global start of the newest line, where the drag measures from, or None."""
+        if self._closed or not self.lines:
+            return None
+        return _global_vertex(self.lines[-1].Vertex1)
+
+    def _can_drag(self):
+        return self.edited is None and not self._closed and bool(self.lines)
+
+    def start_drag(self, plane):
+        """Drag every line in the global ``plane``; a drag in progress changes plane and keeps its start values."""
+        if not self._can_drag():
+            self._sync_drag()
+            return
+        if self.drag_plane is None:
+            form = self.form
+            self._drag_saved = {
+                "direction": self.direction(),
+                "plane": self.plane(),
+                "angle": form.spin_angle.value(),
+                "length": form.spin_length.value(),
+                "expressions": expression_fields.expressions_of(self.lines[0], EXPRESSION_PROPERTIES),
+            }
+        self.drag_plane = plane
+        self._sync_drag()
+
+    def drag_to(self, point, fine=False):
+        """Direction and length of every line from the start of the newest line to ``point`` in the plane."""
+        anchor = self.drag_anchor()
+        if self.drag_plane is None or anchor is None:
+            return
+        direction, angle, length = snapped_direction(self.drag_plane, anchor, point, fine)
+        # The drag gives the values: the expressions of the first line, given to every line, go.
+        for prop in EXPRESSION_PROPERTIES:
+            if expression_fields.expression_of(self.lines[0], prop) is not None:
+                self.lines[0].setExpression(prop, None)
+        self._set_fields(direction, self.drag_plane, angle, length)
+
+    def finish_drag(self):
+        self.drag_plane = None
+        self._drag_saved = None
+        self._sync_drag()
+
+    def cancel_drag(self):
+        """Put back the values the drag started from; the panel stays open."""
+        saved = self._drag_saved
+        self.drag_plane = None
+        self._drag_saved = None
+        if saved is not None and self.lines:
+            expression_fields.restore_expressions(self.lines[0], saved["expressions"])
+            self._set_fields(saved["direction"], saved["plane"], saved["angle"], saved["length"])
+        self._sync_drag()
+
+    def cycle_plane(self, planes=tuple(PLANES)):
+        """P: drag in the next plane of ``planes`` (XY, XZ, YZ), the first one when no drag is in progress."""
+        if not self._can_drag() or not planes:
+            return
+        order = list(planes)
+        index = order.index(self.drag_plane) + 1 if self.drag_plane in order else 0
+        self.start_drag(order[index % len(order)])
+
+    def _set_fields(self, direction, plane, angle, length):
+        form = self.form
+        widgets = (form.combo_direction, form.combo_plane, form.spin_angle, form.spin_length)
+        for widget in widgets:
+            widget.blockSignals(True)
+        try:
+            form.combo_direction.setCurrentIndex(form.combo_direction.findData(direction))
+            form.combo_plane.setCurrentIndex(form.combo_plane.findData(plane))
+            form.spin_angle.setValue(angle)
+            form.spin_length.setValue(length)
+        finally:
+            for widget in widgets:
+                widget.blockSignals(False)
+        self._update()
+
+    def _sync_drag(self):
+        """Plane buttons and squares in the 3D view as the drag and the lines are."""
+        buttons = getattr(self.form, "plane_buttons", {})
+        for plane, button in buttons.items():
+            button.setEnabled(self._can_drag())
+            button.setChecked(plane == self.drag_plane)
+        if self.view_drag is not None:
+            self.view_drag.redraw()
+
     # Preview.
 
     def _update(self, *args):
@@ -219,6 +335,9 @@ class ParametricLineTaskPanel:
         messages = [translate("frameforge", "The custom vector is zero: give X, Y or Z.")] if zero else []
         form.status_label.setText("\n".join(messages + ([self._message] if self._message else [])))
         if not self.lines:
+            self.drag_plane = None
+            self._drag_saved = None
+            self._sync_drag()
             return
         expressions = expression_fields.expressions_of(self.lines[0], EXPRESSION_PROPERTIES)
         fields = {"Length": form.spin_length, "Angle": form.spin_angle}
@@ -232,6 +351,7 @@ class ParametricLineTaskPanel:
                 if expression is None:
                     setattr(line, prop, fields[prop].value())
         self.doc.recompute()
+        self._sync_drag()
 
     def _bind_length(self):
         """Bind the Length and Angle fields to the first line, or take their Fx editors away when there is no line."""
@@ -249,6 +369,9 @@ class ParametricLineTaskPanel:
 
     def addSelection(self, doc, obj, sub, other):
         # Never change the document or the selection during FreeCAD's selection observer dispatch.
+        # A click the drag took (on a plane, or fixing the line) is no vertex pick.
+        if self.view_drag is not None and self.view_drag.click_taken:
+            return
         if not self._closed:
             QtCore.QTimer.singleShot(0, lambda: self._pick(doc, obj, sub))
 
@@ -317,6 +440,9 @@ class ParametricLineTaskPanel:
 
     def _stop_picking(self, *args):
         self._closed = True
+        view_drag, self.view_drag = self.view_drag, None
+        if view_drag is not None:
+            view_drag.stop()
         try:
             Gui.Selection.removeObserver(self)
         except Exception:
@@ -388,3 +514,18 @@ def show_panel(panel):
         # Clicks start from an empty selection: a click on a selected vertex is then a click too.
         Gui.Selection.clearSelection()
         Gui.Selection.addObserver(panel)
+        _listen_to_the_view(panel)
+
+
+def _listen_to_the_view(panel):
+    """Plane squares, mouse and keys of the 3D view for dragging; none without a 3D view (offscreen)."""
+    try:
+        view = Gui.getDocument(panel.doc.Name).ActiveView
+    except Exception:
+        return
+    if view is None or not hasattr(view, "addEventCallbackPivy"):
+        return
+    from freecad.maxproframe.parametric_line_drag import ViewDrag
+
+    panel.view_drag = ViewDrag(panel, view)
+    panel.view_drag.listen()

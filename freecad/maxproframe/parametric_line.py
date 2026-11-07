@@ -290,7 +290,10 @@ class CreateParametricLineCommand:
                 "Create a parametric line between two vertices, or from vertices along a direction.<br><br>"
                 "Select two vertices to join them at once. Otherwise the panel opens with a line from each "
                 "selected vertex (two of the same sketch included): click a vertex to add a line from it along "
-                "a global axis or a custom vector, with a length, and click it again to remove the line.",
+                "a global axis, an angle in a global plane or a custom vector, with a length, and click it again "
+                "to remove the line.<br><br>To draw by dragging, click the XY, XZ or YZ square at the start of the "
+                "last line (or press P to cycle the planes), move the mouse and click. Shift snaps the length to "
+                "1 mm; Esc or a right click cancels the drag.",
             ),
         }
 

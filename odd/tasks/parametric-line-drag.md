@@ -30,7 +30,7 @@ a direction given as an angle in a global plane, and drawing the lines by draggi
 - T1 S1 S2 S6 object + panel: Direction "Angle", Plane, Angle, angle field with Fx, remembered plane/angle,
   translations, tutorial — inline — commit: (this commit) (done, 19 object + 27 panel tests pass)
 - T2 S3 S4 S5 drag: pure plane math (ray/plane, edge-on, snapping, axis or angle), overlay and mouse/key callbacks,
-  panel plane buttons, tooltip/translations/tutorial — inline — commit: pending
+  panel plane buttons, tooltip/translations/tutorial — inline — commit: (this commit) (done, 9 math + 36 panel tests pass)
 
 ## Log
 - L1 (user): "hablemos de la parte 2, que opciones tenemos?" (part 2 = drag with the mouse, deferred from PR 95 L9)
@@ -43,3 +43,8 @@ a direction given as an angle in a global plane, and drawing the lines by draggi
 - L7 (evidence, T1): RED observed (9 errors + 2 failures: no Plane/Angle, no plane= argument, combo without Angle,
   no Spanish), then test_parametric_line 19/19, test_parametric_line_panel 27/27, test_expression_fields,
   test_toolbar_translations, test_library_translations, test_compile_translations exit 0.
+- L8 (evidence, T2): RED observed (ModuleNotFoundError parametric_line_drag; 6 errors + Spanish hint failure in the
+  panel), then test_parametric_line_drag 9/9, test_parametric_line_panel 36/36 (including Coin event routing through
+  a fake top view), test_parametric_line 19/19, toolbar/library translations, shortcuts, workbench commands exit 0.
+  The real 3D view (squares, ray, Esc focus) needs the user's manual test.
+- L9 (delivery): this branch is a PR stacked on PR 95 (feat/parametric-line-direction); its slice is T1 + T2 only.
