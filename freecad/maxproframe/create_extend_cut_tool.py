@@ -35,6 +35,7 @@ from freecad.maxproframe.trimmed_profile import (
     START,
     TrimmedProfile,
     ViewProviderTrimmedProfile,
+    face_normal,
     in_frame_of,
     is_flat_face,
 )
@@ -183,7 +184,7 @@ def parallel_problem(body, target):
     face = in_frame_of(body, obj, obj.getSubObject(faces[0]))
     if axis is None or not isinstance(face, Part.Face):
         return None
-    if abs(face.normalAt(0, 0).dot(axis)) < TOLERANCE:
+    if abs(face_normal(face).dot(axis)) < TOLERANCE:
         return translate("frameforge", "{} runs parallel to the target: it cannot reach it").format(body.Label)
     return None
 

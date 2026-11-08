@@ -107,14 +107,6 @@ class TestExtendCutGeometry(ExtendCutFixture):
         obj = self.valid_extend_cut(self.profile(0, 300), target, (self.face_towards(target, App.Vector(1, 0, 0)),))
         self.assert_runs(obj, 0.0, FAR)
 
-    def in_placed_part(self, body, offset):
-        """Move ``body`` and its sketch into a Part placed at ``offset``."""
-        part = self.doc.addObject("App::Part", "Part")
-        part.addObjects([body.AttachmentSupport[0][0], body])
-        part.Placement.Base = offset
-        self.doc.recompute()
-        return part
-
     def test_a_profile_in_a_placed_part_ends_on_the_face_where_it_really_is(self):
         target = self.target()
         body = self.profile(0, 300)
@@ -126,13 +118,6 @@ class TestExtendCutGeometry(ExtendCutFixture):
         self.in_placed_part(other, App.Vector(100, 0, 0))
         whole = self.valid_extend_cut(other, target)
         self.assertAlmostEqual(whole.Shape.BoundBox.XMax, NEAR - 100.0, places=5)
-
-    def global_box(self, obj):
-        shape = obj.Shape.copy()
-        group = obj.getParentGeoFeatureGroup()
-        if group is not None:
-            shape.transformShape(group.getGlobalPlacement().toMatrix())
-        return shape.BoundBox
 
     def test_a_target_in_a_placed_part_is_seen_where_it_really_is(self):
         target = self.target()
@@ -184,6 +169,41 @@ class TestExtendCutGeometry(ExtendCutFixture):
         self.assertAlmostEqual(obj.Shape.BoundBox.XMax, NEAR, places=5)
         whole = self.valid_extend_cut(self.profile(0, 300), plate)
         self.assertAlmostEqual(whole.Shape.BoundBox.XMax, NEAR, places=5)
+
+    def test_a_flat_face_degenerate_at_its_first_parameters_is_a_target(self):
+        # A flat triangle as a NURBS: its first row of poles collapses to one point, so the surface
+        # parameters (0, 0), where the trims read the face normal, fall on a degenerate corner.
+        tip, left, right = (App.Vector(NEAR, y, z) for y, z in ((0, 500), (-400, -300), (400, -300)))
+        surface = Part.BSplineSurface()
+        surface.buildFromPolesMultsKnots(
+            [[tip, tip], [left, right]], [2, 2], [2, 2], [0, 1], [0, 1], False, False, 1, 1
+        )
+        plate = self.doc.addObject("Part::Feature", "Triangle")
+        plate.Shape = Part.Face(surface)
+        obj = self.valid_extend_cut(self.profile(0, 300), plate, ("Face1",))
+        self.assert_runs(obj, 0.0, NEAR)
+
+    def test_flat_nurbs_faces_whose_parameters_start_past_zero_face_the_right_way(self):
+        # Knots 1 to 2: (0, 0) lies off the face, where the extended surface folds over and looks the other way.
+        a, b, c, d = (App.Vector(NEAR, y, z) for y, z in ((-100, -100), (100, -100), (-100, 100), (500, 500)))
+        surface = Part.BSplineSurface()
+        surface.buildFromPolesMultsKnots([[a, c], [b, d]], [2, 2], [2, 2], [1, 2], [1, 2], False, False, 1, 1)
+        prism = self.doc.addObject("Part::Feature", "Prism")
+        prism.Shape = Part.Face(surface).extrude(App.Vector(FAR - NEAR, 0, 0))
+        obj = self.valid_extend_cut(self.profile(0, 300), prism)
+        self.assertAlmostEqual(obj.Shape.BoundBox.XMax, NEAR, places=5)
+
+    def test_a_target_in_a_rotated_part_is_seen_where_it_really_is(self):
+        # Turned half a turn about Z and moved back 800 mm, the target stays where it was, its faces swapped:
+        # its local -X face looks along +X in the document, at x = FAR.
+        target = self.target()
+        part = self.in_placed_part(target, App.Vector(800, 0, 0))
+        part.Placement.Rotation = App.Rotation(App.Vector(0, 0, 1), 180)
+        self.doc.recompute()
+        face = self.valid_extend_cut(self.profile(0, 300), target, (self.face_towards(target, App.Vector(-1, 0, 0)),))
+        self.assert_runs(face, 0.0, FAR)
+        whole = self.valid_extend_cut(self.profile(0, 300), target)
+        self.assert_runs(whole, 0.0, NEAR)
 
     def test_bom_angle_and_length_of_a_square_and_a_slanted_end(self):
         target = self.target()
