@@ -477,7 +477,7 @@ Workflow:
 - The Populate ID Task opens, configure it the way you want:
     - Allow Duplicating IDs : Don't check for existing IDs inside the document
 
-    - Reset Numbering IDs : reset IDs of selected Profiles/Links before renumbering it
+    - Keep existing IDs : pieces that already have an ID keep it; only the pieces without one are numbered (their IDs are reserved)
 
     - IDs numbering type : "All Numbers" / "All Letters" / "Number for profiles, letters for Links", "Letters for profiles, Number for links"
 

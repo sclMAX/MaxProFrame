@@ -999,7 +999,8 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Group profiles ID if identical</source><translation>Mismo ID para piezas idénticas</translation></message>
     <message><source>All identical profiles will share the same ID</source><translation>Los perfiles idénticos y los enlaces idénticos comparten un ID</translation></message>
     <message><source>Include Part count in PID</source><translation>Agregar la cantidad de piezas al ID</translation></message>
-    <message><source>Reset existing selection numbering</source><translation>Borrar los IDs actuales de la selección</translation></message>
+    <message><source>Keep existing IDs</source><translation>Conservar los IDs existentes</translation></message>
+    <message><source>Pieces that already have an ID keep it: only the others are numbered</source><translation>Las piezas que ya tienen un ID lo conservan: solo se numeran las demás</translation></message>
     <message><source>Numbering Scheme</source><translation>Esquema de numeración</translation></message>
     <message><source>First indexes</source><translation>Valores iniciales</translation></message>
     <message><source>Start at specific number</source><translation>Número inicial</translation></message>

@@ -70,9 +70,12 @@
     </widget>
    </item>
    <item>
-    <widget class="QCheckBox" name="cb_reset_numbering">
+    <widget class="QCheckBox" name="cb_keep_existing">
+     <property name="toolTip">
+      <string>Pieces that already have an ID keep it: only the others are numbered</string>
+     </property>
      <property name="text">
-      <string>Reset existing selection numbering</string>
+      <string>Keep existing IDs</string>
      </property>
     </widget>
    </item>

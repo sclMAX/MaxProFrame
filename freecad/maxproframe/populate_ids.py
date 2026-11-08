@@ -140,34 +140,36 @@ def populate_ids(
     allow_duplicated,
     group_ids_for_identical,
     include_part_count_in_pid,
-    reset_existing,
+    keep_existing,
     numbering_scheme,
     start_number="1",
     start_letter="A",
 ):
 
-    if reset_existing:
-        for sp in sel_profiles:
-            sp.PID = ""
-        for sl in sel_links:
-            sl.PID = ""
+    if keep_existing:
+        # Pieces that already have an ID keep it: only the others are numbered.
+        kept_profiles = {getattr(o, "PID", "") for o in sel_profiles if getattr(o, "PID", "")}
+        kept_links = {getattr(o, "PID", "") for o in sel_links if getattr(o, "PID", "")}
+        sel_profiles = [o for o in sel_profiles if not getattr(o, "PID", "")]
+        sel_links = [o for o in sel_links if not getattr(o, "PID", "")]
 
     if allow_duplicated:
-        profiles_used = {}
-        links_used = {}
+        profiles_used = set()
+        links_used = set()
 
     else:
         if numbering_scheme == "fill_selection":
-            # The selection is numbered again from the start: its own IDs are free, the rest of the document is ignored.
-            profiles_used = set()
-            links_used = set()
+            # The selection is numbered again from the start: the rest of the document is ignored,
+            # only the IDs kept in the selection are reserved.
+            profiles_used = kept_profiles if keep_existing else set()
+            links_used = kept_links if keep_existing else set()
         else:
-            profiles_used = {getattr(o, "PID", "") for o in doc_profiles if getattr(o, "PID", "")} - {
-                getattr(o, "PID", "") for o in sel_profiles if getattr(o, "PID", "")
-            }
-            links_used = {getattr(o, "PID", "") for o in doc_links if getattr(o, "PID", "")} - {
-                getattr(o, "PID", "") for o in sel_links if getattr(o, "PID", "")
-            }
+            profiles_used = {getattr(o, "PID", "") for o in doc_profiles if getattr(o, "PID", "")}
+            links_used = {getattr(o, "PID", "") for o in doc_links if getattr(o, "PID", "")}
+            if not keep_existing:
+                # The selection is numbered again: its own IDs are free.
+                profiles_used -= {getattr(o, "PID", "") for o in sel_profiles if getattr(o, "PID", "")}
+                links_used -= {getattr(o, "PID", "") for o in sel_links if getattr(o, "PID", "")}
 
     if numbering_scheme in ["fill_selection", "fill_document"]:
         strategy = "fill_gaps"

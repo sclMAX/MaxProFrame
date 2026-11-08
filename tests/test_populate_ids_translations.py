@@ -37,7 +37,10 @@ class TestPopulateIDsTranslations(unittest.TestCase):
             form.cb_group_ids_for_identical.toolTip(), "Los perfiles idénticos y los enlaces idénticos comparten un ID"
         )
         self.assertEqual(form.cb_include_part_count_in_pid.text(), "Agregar la cantidad de piezas al ID")
-        self.assertEqual(form.cb_reset_numbering.text(), "Borrar los IDs actuales de la selección")
+        self.assertEqual(form.cb_keep_existing.text(), "Conservar los IDs existentes")
+        self.assertEqual(
+            form.cb_keep_existing.toolTip(), "Las piezas que ya tienen un ID lo conservan: solo se numeran las demás"
+        )
         self.assertEqual(form.label_2.text(), "Esquema de numeración")
         self.assertEqual(
             combo_items(form.cb_numbering_scheme),
@@ -62,6 +65,7 @@ class TestPopulateIDsTranslations(unittest.TestCase):
         self.assertEqual(combo_items(form.cb_numbering_type)[3], "Numbers for Links, Letters for Profiles")
         self.assertEqual(form.label_2.text(), "Numbering Scheme")
         self.assertEqual(form.cb_allow_duplicated.text(), "Allow duplicated")
+        self.assertEqual(form.cb_keep_existing.text(), "Keep existing IDs")
 
 
 if __name__ == "__main__":

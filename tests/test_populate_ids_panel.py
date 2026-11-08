@@ -20,22 +20,68 @@ def profile(pid=""):
 
 
 class TestFillSelection(unittest.TestCase):
-    def fill(self, selected, document=(), reset=False):
+    def fill(self, selected, document=(), keep=False):
         populate_ids(
-            selected, [], [*document, *selected], [], "all_numbers", False, False, False, reset, "fill_selection"
+            selected, [], [*document, *selected], [], "all_numbers", False, False, False, keep, "fill_selection"
         )
         return [o.PID for o in selected]
 
     def test_numbered_selection_keeps_its_numbers(self):
         self.assertEqual(self.fill([profile("1"), profile("2"), profile("3")]), ["1", "2", "3"])
 
-    def test_reset_selection_numbers_from_one(self):
-        self.assertEqual(self.fill([profile("5"), profile("9")], reset=True), ["1", "2"])
+    def test_selection_is_numbered_again_from_one(self):
+        self.assertEqual(self.fill([profile("5"), profile("9")]), ["1", "2"])
 
     def test_ids_outside_the_selection_are_not_reserved(self):
         outside = profile("1")
         self.assertEqual(self.fill([profile(), profile()], document=[outside]), ["1", "2"])
         self.assertEqual(outside.PID, "1")
+
+
+def identical(pid=""):
+    return SimpleNamespace(
+        PID=pid, TypeId="Part::FeaturePython", CustomProfile=None, Family="Square Hollow",
+        Length=SimpleNamespace(Value=100.0), Material="Metal", SizeName="20x20",
+        CuttingAngleA="0", CuttingAngleB="0", Cutout=False,
+    )  # fmt: skip
+
+
+class TestKeepExistingIDs(unittest.TestCase):
+    def populate(self, selected, scheme, document=(), links=(), grouped=False, allow_duplicated=False):
+        populate_ids(
+            selected, list(links), [*document, *selected], list(links), "all_numbers",
+            allow_duplicated, grouped, grouped, True, scheme, start_number="1",
+        )  # fmt: skip
+        return [o.PID for o in selected]
+
+    def test_only_unnumbered_pieces_are_numbered_inside_the_selection(self):
+        self.assertEqual(
+            self.populate([profile("1"), profile(), profile("3"), profile()], "fill_selection"), ["1", "2", "3", "4"]
+        )
+
+    def test_kept_ids_and_the_document_are_reserved(self):
+        for scheme, expected in (
+            ("fill_document", ["5", "1", "3"]),
+            ("continue_document", ["5", "6", "7"]),
+            ("start_at", ["5", "1", "3"]),
+        ):
+            with self.subTest(scheme=scheme):
+                outside = profile("2")
+                self.assertEqual(self.populate([profile("5"), profile(), profile()], scheme, [outside]), expected)
+                self.assertEqual(outside.PID, "2")
+
+    def test_links_are_kept_too(self):
+        kept, empty = profile("1"), profile()
+        self.populate([], "fill_selection", links=[kept, empty])
+        self.assertEqual([kept.PID, empty.PID], ["1", "2"])
+
+    def test_grouped_unnumbered_pieces_share_the_next_free_id(self):
+        numbered = identical("1 x1")
+        twins = [identical(), identical()]
+        self.assertEqual(self.populate([numbered, *twins], "fill_selection", grouped=True), ["1 x1", "2 x2", "2 x2"])
+
+    def test_kept_ids_stay_when_duplicates_are_allowed(self):
+        self.assertEqual(self.populate([profile("1"), profile()], "fill_selection", allow_duplicated=True), ["1", "1"])
 
 
 class TestPopulateIDsPanel(unittest.TestCase):
@@ -48,6 +94,7 @@ class TestPopulateIDsPanel(unittest.TestCase):
         saved = {
             "ints": {k: param.GetInt(k) for k in ("First Number ID", "IDs numbering type", "IDs numbering scheme")},
             "letter": param.GetString("First Letter ID", "A"),
+            "keep": param.GetBool("Keep Existing IDs", False),
         }
         stored = set(param.GetInts())
 
@@ -58,6 +105,7 @@ class TestPopulateIDsPanel(unittest.TestCase):
                 else:
                     param.RemInt(key)
             param.SetString("First Letter ID", saved["letter"])
+            param.SetBool("Keep Existing IDs", saved["keep"])
 
         self.addCleanup(restore)
         self.doc = App.newDocument("PopulateIDsPanel")
@@ -77,7 +125,7 @@ class TestPopulateIDsPanel(unittest.TestCase):
         panel.form.cb_numbering_scheme.setCurrentIndex(START_AT)
         panel.form.cb_allow_duplicated.setChecked(False)
         panel.form.cb_group_ids_for_identical.setChecked(False)
-        panel.form.cb_reset_numbering.setChecked(False)
+        panel.form.cb_keep_existing.setChecked(False)
         panel.form.le_first_letter.setText(letter)
         panel.open()
         self.addCleanup(lambda: self.doc.HasPendingTransaction and self.doc.abortTransaction())
@@ -116,6 +164,15 @@ class TestPopulateIDsPanel(unittest.TestCase):
         panel = self.panel("all_letters", "c")
         self.assertTrue(panel.accept())
         self.assertEqual(self.link.PID, "C")
+
+    def test_keep_existing_ids_from_the_panel(self):
+        self.link.addProperty("App::PropertyString", "PID", "MaxProFrame", "Profile ID").PID = "7"
+        panel = self.panel("all_numbers")
+        panel.form.cb_keep_existing.setChecked(True)
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.link.PID, "7")
+        self.assertTrue(get_param_group().GetBool("Keep Existing IDs", False))
+        self.assertTrue(PopulateIDsTaskPanel().form.cb_keep_existing.isChecked())
 
     def test_number_is_used_when_letters_are_not(self):
         panel = self.panel("all_numbers", "")

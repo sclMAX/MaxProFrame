@@ -73,7 +73,7 @@ class PopulateIDsTaskPanel:
             self.form.cb_allow_duplicated.setChecked(param.GetBool("Allow Duplicating IDs", False))
             self.form.cb_group_ids_for_identical.setChecked(param.GetBool("Group IDs", False))
             self.form.cb_include_part_count_in_pid.setChecked(param.GetBool("Include Count", False))
-            self.form.cb_reset_numbering.setChecked(param.GetBool("Reset Numbering IDs", False))
+            self.form.cb_keep_existing.setChecked(param.GetBool("Keep Existing IDs", False))
             self.form.cb_numbering_type.setCurrentIndex(param.GetInt("IDs numbering type", 0))
             self.form.cb_numbering_scheme.setCurrentIndex(param.GetInt("IDs numbering scheme", 0))
             self.form.sp_first_number.setValue(param.GetInt("First Number ID", 1))
@@ -92,7 +92,11 @@ class PopulateIDsTaskPanel:
                 translate("frameforge", "All identical profiles will share the same ID"),
             ),
             (form.cb_include_part_count_in_pid.setText, translate("frameforge", "Include Part count in PID")),
-            (form.cb_reset_numbering.setText, translate("frameforge", "Reset existing selection numbering")),
+            (form.cb_keep_existing.setText, translate("frameforge", "Keep existing IDs")),
+            (
+                form.cb_keep_existing.setToolTip,
+                translate("frameforge", "Pieces that already have an ID keep it: only the others are numbered"),
+            ),
             (form.label_2.setText, translate("frameforge", "Numbering Scheme")),
             (form.groupBox.setTitle, translate("frameforge", "First indexes")),
             (form.label_3.setText, translate("frameforge", "Start at specific number")),
@@ -166,7 +170,7 @@ class PopulateIDsTaskPanel:
             param.SetBool("Allow Duplicating IDs", self.form.cb_allow_duplicated.isChecked())
             param.SetBool("Group IDs", self.form.cb_group_ids_for_identical.isChecked())
             param.SetBool("Include Count", self.form.cb_include_part_count_in_pid.isChecked())
-            param.SetBool("Reset Numbering IDs", self.form.cb_reset_numbering.isChecked())
+            param.SetBool("Keep Existing IDs", self.form.cb_keep_existing.isChecked())
             param.SetInt("IDs numbering type", self.form.cb_numbering_type.currentIndex())
             param.SetInt("IDs numbering scheme", self.form.cb_numbering_scheme.currentIndex())
 
@@ -206,7 +210,7 @@ class PopulateIDsTaskPanel:
             allow_duplicated = self.form.cb_allow_duplicated.isChecked()
             group_ids_for_identical = self.form.cb_group_ids_for_identical.isChecked()
             include_part_count_in_pid = self.form.cb_include_part_count_in_pid.isChecked()
-            reset_existing = self.form.cb_reset_numbering.isChecked()
+            keep_existing = self.form.cb_keep_existing.isChecked()
             numbering_scheme = ["fill_selection", "fill_document", "continue_document", "start_at"][
                 self.form.cb_numbering_scheme.currentIndex()
             ]
@@ -220,7 +224,7 @@ class PopulateIDsTaskPanel:
                 allow_duplicated,
                 group_ids_for_identical,
                 include_part_count_in_pid,
-                reset_existing,
+                keep_existing,
                 numbering_scheme,
                 start_number=str(self.form.sp_first_number.value()),
                 start_letter=start_letter,

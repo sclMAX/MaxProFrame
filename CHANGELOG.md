@@ -8,6 +8,7 @@
   - **Populate IDs**: **Fill when available (inside selection)** numbers an already numbered selection from 1 again (1, 2, 3 stay 1, 2, 3). It moved them past their own IDs (4, 5, 6).
   - **Populate IDs**: the first number starts at 1 and cannot be 0, which made OK fail. An empty first letter is refused with a message in the panel instead of an error, and the field takes letters only.
   - **Populate IDs** panel is translated: title, options and lists follow the FreeCAD language.
+  - **Populate IDs**: **Keep existing IDs** replaces **Reset existing selection numbering**: pieces that already have an ID keep it and only the others are numbered. Before, every selected piece was numbered again, checked or not.
 
 * v1.10.3 (2026-11-07)
 
