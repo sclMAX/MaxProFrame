@@ -1,15 +1,16 @@
 """Cutout depth panel: the checkable Pattern group, its title, its expressions and its warnings."""
 
+import time
 import unittest
 from unittest.mock import patch
 
 import FreeCAD as App
 import FreeCADGui as Gui
 from miter_helpers import use_language
+from PySide import QtWidgets
 from test_cutout_depth_panel import DepthPanelFixture
 from test_cutout_flow import WALL
 from test_drill_hole_panel import RecomputeCounter
-from test_extend_cut_preview import wait
 
 from freecad.maxproframe import extruded_cutout
 
@@ -45,6 +46,22 @@ class PatternPanelFixture(DepthPanelFixture):
     def warning(self, panel):
         label = panel.form.warning_label
         return label.text() if not label.isHidden() else ""
+
+    def wait_until(self, condition, seconds=5.0):
+        """Process events until ``condition()`` holds; fail the test if it never does."""
+        deadline = time.monotonic() + seconds
+        while not condition():
+            if time.monotonic() > deadline:
+                self.fail(f"Condition not met within {seconds} s.")
+            QtWidgets.QApplication.processEvents()
+            time.sleep(0.01)
+
+    def slots(self, value):
+        """A VarSet with an integer ``Slots`` property set to ``value``."""
+        varset = self.doc.addObject("App::VarSet", "VarSet")
+        varset.addProperty("App::PropertyInteger", "Slots")
+        varset.Slots = value
+        return varset
 
 
 class TestCutoutPatternPanel(PatternPanelFixture):
@@ -155,6 +172,25 @@ class TestCutoutPatternPanel(PatternPanelFixture):
         self.assertEqual(dict(cutout.ExpressionEngine).get("AlongForwardCount"), f"{varset.Name}.Slots")
         self.assertEqual(self.cut(body, cutout), 4)
 
+    def test_a_count_expression_at_zero_opens_checked_and_survives_ok(self):
+        """An expression on a count is a pattern the user set up, even while it evaluates to 0."""
+        body, cutout, panel = self.new_panel()
+        varset = self.slots(0)
+        self.set_pattern(panel)
+        cutout.setExpression("AlongForwardCount", f"{varset.Name}.Slots")
+        self.doc.recompute()
+        self.assertTrue(panel.accept())
+        panel = self.edit_cutout(cutout)
+        self.assertTrue(panel.form.groupBox_pattern.isChecked())
+        self.assertFalse(panel.form.pattern_fields.isHidden())
+        panel.form.spin_depth.setValue(panel.form.spin_depth.value() + 1.0)
+        self.events()
+        self.assertTrue(panel.accept())
+        self.assertEqual(dict(cutout.ExpressionEngine).get("AlongForwardCount"), f"{varset.Name}.Slots")
+        varset.Slots = 2
+        self.doc.recompute()
+        self.assertEqual(self.cut(body, cutout), 3)
+
     def test_overlapping_cutouts_give_no_warning(self):
         """L7: a sketch may be meant to overlap its copies, and the panel shows them: no overlap warning."""
         body, cutout, panel = self.new_panel()
@@ -172,6 +208,18 @@ class TestCutoutPatternPanel(PatternPanelFixture):
         self.events()
         self.assertEqual(self.warning(panel), PAST_THE_FACE)
         panel.form.groupBox_pattern.setChecked(False)
+        self.events()
+        self.assertEqual(self.warning(panel), "")
+
+    def test_a_cutout_past_the_start_of_the_face_warns(self):
+        """S5 backward: 4 x 60 mm back from x = 150 reaches x = -90, past the face start at x = -50."""
+        body, cutout, panel = self.new_panel()
+        self.set_pattern(panel, backward=(3, 60.0))
+        self.assertEqual(self.warning(panel), "")
+        panel.form.spin_backward_count.setValue(4)
+        self.events()
+        self.assertEqual(self.warning(panel), PAST_THE_FACE)
+        panel.form.spin_backward_count.setValue(3)
         self.events()
         self.assertEqual(self.warning(panel), "")
 
@@ -210,7 +258,6 @@ class TestCutoutPatternPreview(PatternPanelFixture):
         hooks = self.hook_execute()
         body, cutout, panel = self.new_panel()
         self.set_pattern(panel, forward=(2, 30.0))
-        wait(0.6)
         counter = RecomputeCounter(panel.doc)
         panel.doc = counter
         return hooks, body, cutout, panel, counter
@@ -224,7 +271,7 @@ class TestCutoutPatternPreview(PatternPanelFixture):
 
         hooks.append(type_pitch)
         panel.form.spin_forward_pitch.setValue(35.0)
-        wait(2.0)
+        self.wait_until(lambda: not panel._recomputing and not hooks)
         self.assertEqual(counter.nested, 0)
         self.assertAlmostEqual(cutout.AlongForwardPitch.Value, 40.0, places=6)
         self.assertEqual(self.cut(body, cutout), 3)
@@ -244,7 +291,7 @@ class TestCutoutPatternPreview(PatternPanelFixture):
 
         hooks.append(press)
         panel.form.spin_forward_pitch.setValue(35.0)
-        wait(2.0)
+        self.wait_until(lambda: not Gui.Control.activeDialog())
         self.assertEqual(returned, [False])
         self.assertEqual(counter.nested, 0)
         self.assertFalse(Gui.Control.activeDialog())
@@ -263,12 +310,28 @@ class TestCutoutPatternPreview(PatternPanelFixture):
         with patch.object(panel, "_pattern_warnings", side_effect=RuntimeError("lookup failed")):
             try:
                 panel.form.spin_forward_pitch.setValue(35.0)
-                wait(2.0)
             except RuntimeError:
                 pass
+            self.wait_until(lambda: not Gui.Control.activeDialog())
         self.assertEqual(returned, [False])
         self.assertFalse(Gui.Control.activeDialog())
         self.assertAlmostEqual(cutout.AlongForwardPitch.Value, 35.0, places=6)
+
+    def test_a_pitch_typed_during_the_ok_recompute_is_kept_without_a_nested_recompute(self):
+        hooks, body, cutout, panel, counter = self.counted_panel()
+
+        def type_pitch(fp):
+            panel.form.spin_forward_pitch.setValue(40.0)
+            self.events()
+
+        hooks.append(type_pitch)
+        # Something else changed meanwhile: the OK recompute runs the cutout again.
+        cutout.touch()
+        self.assertTrue(panel.accept())
+        self.assertEqual(hooks, [])
+        self.assertEqual(counter.nested, 0)
+        self.assertAlmostEqual(cutout.AlongForwardPitch.Value, 40.0, places=6)
+        self.assertEqual(self.cut(body, cutout), 3)
 
 
 class TestCutoutPatternPanelSpanish(PatternPanelFixture):
