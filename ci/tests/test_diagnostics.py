@@ -18,11 +18,11 @@ class TestDiagnostics(unittest.TestCase):
         widget.isModal.return_value = True
         app = mock.Mock()
         app.activeModalWidget.return_value = widget
-        app.topLevelWidgets.return_value = [widget] * 100
         snapshot = diagnostics.modal_snapshot(app)
-        self.assertEqual(snapshot["active_modal"], "QMessageBox")
-        self.assertEqual(len(snapshot["windows"]), 32)
-        self.assertEqual(snapshot["windows"][0], {"class": "QMessageBox", "visible": True, "modal": True})
+        self.assertEqual(snapshot, {"active_modal": "QMessageBox"})
+        # Wrapping every top-level widget at a timer tick crashed PySide on a widget Qt was destroying.
+        app.topLevelWidgets.assert_not_called()
+        app.allWidgets.assert_not_called()
         for forbidden in ("accept", "reject", "close", "done", "text", "windowTitle", "objectName"):
             getattr(widget, forbidden).assert_not_called()
         app.processEvents.assert_not_called()
