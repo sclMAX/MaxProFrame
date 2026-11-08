@@ -477,18 +477,18 @@ Workflow:
 - The Populate ID Task opens, configure it the way you want:
     - Allow Duplicating IDs : Don't check for existing IDs inside the document
 
-    - Reset Numbering IDs : reset IDs of selected Profiles/Links before renumbering it
+    - Keep existing IDs : pieces that already have an ID keep it; only the pieces without one are numbered (their IDs are reserved)
 
     - IDs numbering type : "All Numbers" / "All Letters" / "Number for profiles, letters for Links", "Letters for profiles, Number for links"
 
     - IDs numbering scheme : 
-        - Fill when available (inside selection)
+        - Fill when available (inside selection): number the selection again from 1 (or A), ignoring the IDs of the rest of the document
         - Fill when available (whole document)
         - Start at current document numbering
         - Start at specific number/letter
 
-    - First Number ID
-    - First Letter ID
+    - First Number ID: 1 or more
+    - First Letter ID: letters A to Z only. OK refuses an empty letter when the scheme starts at a specific letter.
 
 
 Validate, and voila !
