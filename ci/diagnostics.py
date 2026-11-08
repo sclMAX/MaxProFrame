@@ -9,22 +9,14 @@ from collections import deque
 
 
 def modal_snapshot(app):
-    """Only structural state; deliberately exclude titles, text and object names."""
+    """Only the class of the active modal widget; deliberately exclude titles, text and object names.
+
+    The other top-level widgets are left alone: wrapping each of them at a timer tick crashed PySide
+    (SIGSEGV in getWrapperForQObject) on a widget Qt was destroying, in the middle of a test.
+    """
     try:
         active = app.activeModalWidget()
-        windows = []
-        for widget in app.topLevelWidgets()[:32]:
-            windows.append(
-                {
-                    "class": str(widget.metaObject().className())[:80],
-                    "visible": bool(widget.isVisible()),
-                    "modal": bool(widget.isModal()),
-                }
-            )
-        return {
-            "active_modal": str(active.metaObject().className())[:80] if active else None,
-            "windows": windows,
-        }
+        return {"active_modal": str(active.metaObject().className())[:80] if active else None}
     except Exception:
         return {"unavailable": True}
 
