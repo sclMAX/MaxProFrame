@@ -1,6 +1,6 @@
 ## Changelog
 
-* Unreleased
+* v1.10.3 (2026-11-07)
 
   **Fixes**
   - **Notch** sees the target and the profile where they really are in the document: a profile or a target inside a placed **Part** is no longer cut where the target would be without its Part placement. The gap, Keep end and Flip side follow the real target too.
