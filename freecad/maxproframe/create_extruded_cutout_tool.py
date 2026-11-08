@@ -417,7 +417,10 @@ class CreateExtrudedCutoutTaskPanel:
             setattr(form, f"spin_{row}_pitch", pitch)
             for column, widget in enumerate((getattr(form, f"label_{row}"), count, pitch)):
                 grid.addWidget(widget, line, column)
-        checked = any(count > 0 for count, _ in self._pattern_of(self.obj))
+        # An expression on a count is a pattern too, even while it gives 0: unchecked would remove it.
+        checked = any(count > 0 for count, _ in self._pattern_of(self.obj)) or any(
+            expression_of(self.obj, f"{prop}Count") is not None for _, prop in PATTERN_ROWS
+        )
         form.groupBox_pattern.setChecked(checked)
         form.pattern_fields.setHidden(not checked)
 
@@ -574,10 +577,20 @@ class CreateExtrudedCutoutTaskPanel:
     def accept(self):
         if self._defer(self.accept):
             return False
-        # The last values, also when OK waited for a recompute that a change arrived during.
-        self._write()
+        # The last values, also when OK waited for a recompute that a change arrived during. A change during
+        # this recompute only asks for one more, as in the preview, and lands in the same Undo step.
+        self._recomputing = True
+        try:
+            while True:
+                self._pending = False
+                self._write()
+                self.doc.recompute()
+                if not self._pending:
+                    break
+        finally:
+            self._recomputing = False
+            self._deferred = None
         self.doc.commitTransaction()
-        self.doc.recompute()
         if self.obj.Sketch is not None and getattr(self.obj.Sketch, "ViewObject", None) is not None:
             self.obj.Sketch.ViewObject.hide()
         self._leave_edit()
