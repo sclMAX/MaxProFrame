@@ -482,13 +482,13 @@ Workflow:
     - IDs numbering type : "All Numbers" / "All Letters" / "Number for profiles, letters for Links", "Letters for profiles, Number for links"
 
     - IDs numbering scheme : 
-        - Fill when available (inside selection)
+        - Fill when available (inside selection): number the selection again from 1 (or A), ignoring the IDs of the rest of the document
         - Fill when available (whole document)
         - Start at current document numbering
         - Start at specific number/letter
 
-    - First Number ID
-    - First Letter ID
+    - First Number ID: 1 or more
+    - First Letter ID: letters A to Z only. OK refuses an empty letter when the scheme starts at a specific letter.
 
 
 Validate, and voila !

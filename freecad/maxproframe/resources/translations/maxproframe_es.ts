@@ -993,6 +993,34 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
         <source>Discard the current profile edit? Earlier library changes will be kept.</source>
         <translation>¿Descartar la edición actual del perfil? Se conservarán los cambios anteriores de la biblioteca.</translation>
     </message>
+    <message><source>Populate IDs</source><translation>Asignar IDs</translation></message>
+    <message><source>Numbering Type</source><translation>Tipo de numeración</translation></message>
+    <message><source>Allow duplicated</source><translation>Permitir IDs duplicados</translation></message>
+    <message><source>Group profiles ID if identical</source><translation>Mismo ID para piezas idénticas</translation></message>
+    <message><source>All identical profiles will share the same ID</source><translation>Los perfiles idénticos y los enlaces idénticos comparten un ID</translation></message>
+    <message><source>Include Part count in PID</source><translation>Agregar la cantidad de piezas al ID</translation></message>
+    <message><source>Reset existing selection numbering</source><translation>Borrar los IDs actuales de la selección</translation></message>
+    <message><source>Numbering Scheme</source><translation>Esquema de numeración</translation></message>
+    <message><source>First indexes</source><translation>Valores iniciales</translation></message>
+    <message><source>Start at specific number</source><translation>Número inicial</translation></message>
+    <message><source>Start at specific letter</source><translation>Letra inicial</translation></message>
+    <message><source>Profiles Prefix</source><translation>Prefijo de perfiles</translation></message>
+    <message><source>Links Prefix</source><translation>Prefijo de enlaces</translation></message>
+    <message><source>All Numbers</source><translation>Todo números</translation></message>
+    <message><source>All Letters</source><translation>Todo letras</translation></message>
+    <message><source>Numbers for Profiles, Letters for Links</source><translation>Números para perfiles, letras para enlaces</translation></message>
+    <message><source>Numbers for Links, Letters for Profiles</source><translation>Números para enlaces, letras para perfiles</translation></message>
+    <message><source>Fill when available (inside selection)</source><translation>Completar huecos (dentro de la selección)</translation></message>
+    <message><source>Fill when available (whole document)</source><translation>Completar huecos (todo el documento)</translation></message>
+    <message><source>Start at current document numbering</source><translation>Continuar después del último ID del documento</translation></message>
+    <message><source>Start at specific number/letter</source><translation>Empezar en un número o letra</translation></message>
+    <message><source>Opening Populate IDs
+</source><translation>Abriendo Asignar IDs
+</translation></message>
+    <message><source>Rejecting Populate IDs
+</source><translation>Asignar IDs cancelado
+</translation></message>
+    <message><source>Enter a first letter: A to Z only.</source><translation>Ingresá una letra inicial: solo de la A a la Z.</translation></message>
     <message><source>Miter Ends</source><translation>Ingletes</translation></message>
     <message><source>Edit Miter</source><translation>Editar inglete</translation></message>
     <message><source>Profiles</source><translation>Perfiles</translation></message>

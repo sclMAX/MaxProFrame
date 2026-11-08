@@ -40,7 +40,7 @@
      </item>
      <item>
       <property name="text">
-       <string>Number for Links, Letters for Profiles</string>
+       <string>Numbers for Links, Letters for Profiles</string>
       </property>
      </item>
     </widget>
@@ -79,7 +79,7 @@
    <item>
     <widget class="QLabel" name="label_2">
      <property name="text">
-      <string>Numbering  Scheme</string>
+      <string>Numbering Scheme</string>
      </property>
     </widget>
    </item>
@@ -122,6 +122,9 @@
       </item>
       <item>
        <widget class="QSpinBox" name="sp_first_number">
+        <property name="minimum">
+         <number>1</number>
+        </property>
         <property name="maximum">
          <number>999999</number>
         </property>
@@ -145,6 +148,16 @@
        </widget>
       </item>
      </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="message_label">
+     <property name="visible">
+      <bool>false</bool>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
     </widget>
    </item>
    <item>

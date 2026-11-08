@@ -158,8 +158,9 @@ def populate_ids(
 
     else:
         if numbering_scheme == "fill_selection":
-            profiles_used = {o.PID for o in sel_profiles if o.PID}
-            links_used = {o.PID for o in sel_links if o.PID}
+            # The selection is numbered again from the start: its own IDs are free, the rest of the document is ignored.
+            profiles_used = set()
+            links_used = set()
         else:
             profiles_used = {getattr(o, "PID", "") for o in doc_profiles if getattr(o, "PID", "")} - {
                 getattr(o, "PID", "") for o in sel_profiles if getattr(o, "PID", "")

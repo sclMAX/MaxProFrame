@@ -5,6 +5,9 @@
   **Fixes**
   - **Cutout / Hole**: a count of the **Pattern** driven by an expression that gives 0 (for example a VarSet set to 0 for now) opens the panel with the Pattern checked. It opened unchecked, and the next change or OK removed the expression.
   - **Cutout / Hole**: a value changed while OK recomputes the cutout is kept, in the same Undo step, without a recompute inside another.
+  - **Populate IDs**: **Fill when available (inside selection)** numbers an already numbered selection from 1 again (1, 2, 3 stay 1, 2, 3). It moved them past their own IDs (4, 5, 6).
+  - **Populate IDs**: the first number starts at 1 and cannot be 0, which made OK fail. An empty first letter is refused with a message in the panel instead of an error, and the field takes letters only.
+  - **Populate IDs** panel is translated: title, options and lists follow the FreeCAD language.
 
 * v1.10.3 (2026-11-07)
 

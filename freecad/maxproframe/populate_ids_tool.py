@@ -27,10 +27,12 @@
 
 
 import os
+import re
 from collections import defaultdict
 
 import FreeCAD as App
 import FreeCADGui as Gui
+from PySide import QtCore, QtGui
 
 from freecad.maxproframe._utils import (
     get_profiles_and_links_from_document,
@@ -61,6 +63,10 @@ from freecad.maxproframe.version import __version__ as ff_version
 class PopulateIDsTaskPanel:
     def __init__(self):
         self.form = keep_alive_until_destroyed(Gui.PySideUic.loadUi(os.path.join(UIPATH, "populate_ids.ui")))
+        self._translate_form()
+        self.form.le_first_letter.setValidator(
+            QtGui.QRegularExpressionValidator(QtCore.QRegularExpression("[A-Za-z]*"), self.form.le_first_letter)
+        )
 
         param = get_param_group()
         if not param.IsEmpty():
@@ -70,8 +76,53 @@ class PopulateIDsTaskPanel:
             self.form.cb_reset_numbering.setChecked(param.GetBool("Reset Numbering IDs", False))
             self.form.cb_numbering_type.setCurrentIndex(param.GetInt("IDs numbering type", 0))
             self.form.cb_numbering_scheme.setCurrentIndex(param.GetInt("IDs numbering scheme", 0))
-            self.form.sp_first_number.setValue(param.GetInt("First Number ID", 0))
+            self.form.sp_first_number.setValue(param.GetInt("First Number ID", 1))
             self.form.le_first_letter.setText(param.GetString("First Letter ID", "A"))
+
+    def _translate_form(self):
+        """Designer strings are not in the catalog: set their translations here."""
+        form = self.form
+        for setter, text in (
+            (form.setWindowTitle, translate("frameforge", "Populate IDs")),
+            (form.label.setText, translate("frameforge", "Numbering Type")),
+            (form.cb_allow_duplicated.setText, translate("frameforge", "Allow duplicated")),
+            (form.cb_group_ids_for_identical.setText, translate("frameforge", "Group profiles ID if identical")),
+            (
+                form.cb_group_ids_for_identical.setToolTip,
+                translate("frameforge", "All identical profiles will share the same ID"),
+            ),
+            (form.cb_include_part_count_in_pid.setText, translate("frameforge", "Include Part count in PID")),
+            (form.cb_reset_numbering.setText, translate("frameforge", "Reset existing selection numbering")),
+            (form.label_2.setText, translate("frameforge", "Numbering Scheme")),
+            (form.groupBox.setTitle, translate("frameforge", "First indexes")),
+            (form.label_3.setText, translate("frameforge", "Start at specific number")),
+            (form.label_4.setText, translate("frameforge", "Start at specific letter")),
+            (form.label_5.setText, translate("frameforge", "Profiles Prefix")),
+            (form.label_6.setText, translate("frameforge", "Links Prefix")),
+        ):
+            setter(text)
+        for combo, texts in (
+            (
+                form.cb_numbering_type,
+                (
+                    translate("frameforge", "All Numbers"),
+                    translate("frameforge", "All Letters"),
+                    translate("frameforge", "Numbers for Profiles, Letters for Links"),
+                    translate("frameforge", "Numbers for Links, Letters for Profiles"),
+                ),
+            ),
+            (
+                form.cb_numbering_scheme,
+                (
+                    translate("frameforge", "Fill when available (inside selection)"),
+                    translate("frameforge", "Fill when available (whole document)"),
+                    translate("frameforge", "Start at current document numbering"),
+                    translate("frameforge", "Start at specific number/letter"),
+                ),
+            ),
+        ):
+            for index, text in enumerate(texts):
+                combo.setItemText(index, text)
 
     def open(self):
         App.Console.PrintMessage(translate("frameforge", "Opening Populate IDs\n"))
@@ -102,6 +153,15 @@ class PopulateIDsTaskPanel:
                 for sel in Gui.Selection.getSelection()
             ]
         ):
+            # Only "Start at specific number/letter" reads the first letter, and only when letters are used.
+            start_letter = self.form.le_first_letter.text().strip()
+            uses_letters = self.form.cb_numbering_type.currentIndex() != 0
+            starts_at = self.form.cb_numbering_scheme.currentIndex() == 3
+            if starts_at and uses_letters and not re.fullmatch("[A-Za-z]+", start_letter):
+                self._show_message(translate("frameforge", "Enter a first letter: A to Z only."))
+                return False
+            self._show_message("")
+
             param = get_param_group(writable=True)
             param.SetBool("Allow Duplicating IDs", self.form.cb_allow_duplicated.isChecked())
             param.SetBool("Group IDs", self.form.cb_group_ids_for_identical.isChecked())
@@ -163,7 +223,7 @@ class PopulateIDsTaskPanel:
                 reset_existing,
                 numbering_scheme,
                 start_number=str(self.form.sp_first_number.value()),
-                start_letter=self.form.le_first_letter.text(),
+                start_letter=start_letter,
             )
 
             App.ActiveDocument.commitTransaction()
@@ -174,6 +234,10 @@ class PopulateIDsTaskPanel:
         else:
             App.ActiveDocument.abortTransaction()
             return False
+
+    def _show_message(self, text):
+        self.form.message_label.setText(text)
+        self.form.message_label.setVisible(bool(text))
 
     def clean(self):
         pass
