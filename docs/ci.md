@@ -343,8 +343,9 @@ Diagnostics do not dismiss dialogs, synthesize input, skip tests or repair the G
 `.github/workflows/nightly.yml` ("Nightly native flakiness") looks for tests that fail only sometimes. It runs on a daily schedule (04:17 UTC) and on manual dispatch, with read-only permissions, on `ubuntu-24.04`, against the pinned stable target (FreeCAD 1.1.4, same URL, SHA-256, cache key and action SHAs as `ci.yml`; the checksum is verified on cache hits too).
 
 - **What it runs:** the full native suite `repetitions` times (default 3) in the original order, plus one run in a random order from `--shuffle-seed`. The default seed is the workflow run id and is printed at the start of the shuffled run.
+- **Shards:** every run is split into the stable shards of `ci/targets.json` (`--shard 1/2`, then `--shard 2/2`), each stopped at the per-shard `timeout` (420 s), as in `ci.yml`. The whole suite in one process no longer fits that timeout. The shuffled run shuffles the tests inside each shard. The job budget (300 minutes) covers every shard of 20 repetitions plus the shuffled run timing out.
 - **Failures are never hidden:** every run executes even after a failure, there are no automatic retries, and the job fails if any run failed, even once.
-- **Reports:** each run writes to its own directory. The job summary has a table with the run number, order or seed, result, test count and the crashing test (if any). The reports of all failing runs are uploaded as one `nightly-failure-reports` artifact kept for 7 days.
+- **Reports:** each shard of each run writes to its own directory (`run-<run>-<shard>`). The job summary has one row per shard with the run and shard number, order or seed, result, test count and the crashing test (if any). The reports of all failing runs are uploaded as one `nightly-failure-reports` artifact kept for 7 days.
 
 ### Replay a failure locally
 
@@ -356,8 +357,11 @@ python3 ci/run_tests.py \
   --reports /path/to/reports \
   --timeout 420 \
   --target stable \
+  --shard 1/2 \
   --shuffle-seed 123456789
 ```
+
+Use the shard of the failed row: the same seed and shard give the same order.
 
 `--shuffle-seed <int>` shuffles the selected tests across modules and classes (it combines with `--test`), prints `run_tests: shuffle seed <int>` at start and repeats `run_tests: replay with --shuffle-seed <int>` when the run fails. Without the option the order is unchanged.
 

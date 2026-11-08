@@ -279,6 +279,26 @@ class TestNightlyWorkflowPolicy(unittest.TestCase):
         self.assertRegex(self.content, r"inputs\.seed \|\| github\.run_id")
         self.assertIn("seq 1", self.content)
 
+    def test_each_run_is_split_into_the_stable_shards(self):
+        """A run is the suite split as ci.yml splits it: each shard has the per-shard timeout of ci/targets.json."""
+        read = self.content.split("- name: Read pinned stable target", 1)[1].split("- name:", 1)[0]
+        self.assertIn('"timeout=', read)
+        self.assertIn('"shards=', read)
+        loop = self.content.split("- name: Run native test repetitions", 1)[1].split("- name:", 1)[0]
+        self.assertIn("TIMEOUT: ${{ steps.target.outputs.timeout }}", loop)
+        self.assertIn("SHARDS: ${{ steps.target.outputs.shards }}", loop)
+        self.assertIn('seq 1 "$SHARDS"', loop)
+        self.assertIn('--shard "$shard/$SHARDS"', loop)
+        self.assertIn('--timeout "$TIMEOUT"', loop)
+        self.assertNotRegex(self.content, r"--timeout \d")
+
+    def test_job_budget_covers_every_shard_of_the_maximum_runs(self):
+        stable = test_policy.load_targets()["stable"]
+        worst_minutes = (20 + 1) * stable["shards"] * stable["timeout"] / 60
+        budget = int(re.search(r"timeout-minutes: (\d+)", self.content).group(1))
+        self.assertGreaterEqual(budget, worst_minutes)
+        self.assertLessEqual(budget, 360, "GitHub-hosted jobs stop at 360 minutes")
+
     def test_all_runs_execute_and_job_fails_if_any_failed(self):
         self.assertNotIn("continue-on-error", self.content)
         self.assertNotIn("|| true", self.content)
@@ -315,7 +335,9 @@ class TestNightlyDocs(unittest.TestCase):
         text = (test_policy.REPO_ROOT / "docs" / "ci.md").read_text(encoding="utf-8")
         self.assertIn("## Nightly flakiness run", text)
         section = text.split("## Nightly flakiness run", 1)[1].split("\n## ", 1)[0]
-        for needle in ("--shuffle-seed", "Run workflow", "repetitions", "seed", "nightly-failure-reports", "7 days"):
+        for needle in (
+            "--shuffle-seed", "--shard", "Run workflow", "repetitions", "seed", "nightly-failure-reports", "7 days",
+        ):  # fmt: skip
             self.assertIn(needle, section)
 
 
