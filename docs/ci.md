@@ -132,10 +132,11 @@ failure artifacts), without changing the runner deadline, verdicts or dialogs:
   the same bounds, then chains to FreeCAD's own handler, so the exit code and the
   crash diagnosis do not change. This is the only Python trace of a crash that
   does not reproduce in the gdb rerun.
-- `modal-state.jsonl`: at most 12 snapshots, every 30 seconds on the GUI thread,
-  each limited to 32 top-level widgets. Only bounded class names, visibility,
-  modality, active modal class and elapsed time are recorded. No window titles,
-  widget text, object names, environment or credentials are collected.
+- `modal-state.jsonl`: at most 12 snapshots, every 30 seconds on the GUI thread.
+  Only the active modal class (80 characters) and elapsed time are recorded. The
+  other top-level widgets are not listed: wrapping each of them from the timer
+  crashed PySide on a widget Qt was destroying. No window titles, widget text,
+  object names, environment or credentials are collected.
 
 ### Structural Qt observer evidence
 
