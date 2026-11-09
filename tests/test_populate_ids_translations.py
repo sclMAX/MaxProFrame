@@ -34,7 +34,9 @@ class TestPopulateIDsTranslations(unittest.TestCase):
         self.assertEqual(form.cb_allow_duplicated.text(), "Permitir IDs duplicados")
         self.assertEqual(form.cb_group_ids_for_identical.text(), "Mismo ID para piezas idénticas")
         self.assertEqual(
-            form.cb_group_ids_for_identical.toolTip(), "Los perfiles idénticos y los enlaces idénticos comparten un ID"
+            form.cb_group_ids_for_identical.toolTip(),
+            "Los perfiles de igual material, medida y forma terminada comparten un ID, estén donde estén; "
+            "también los enlaces idénticos",
         )
         self.assertEqual(form.cb_include_part_count_in_pid.text(), "Agregar la cantidad de piezas al ID")
         self.assertEqual(form.cb_keep_existing.text(), "Conservar los IDs existentes")
@@ -66,6 +68,11 @@ class TestPopulateIDsTranslations(unittest.TestCase):
         self.assertEqual(form.label_2.text(), "Numbering Scheme")
         self.assertEqual(form.cb_allow_duplicated.text(), "Allow duplicated")
         self.assertEqual(form.cb_keep_existing.text(), "Keep existing IDs")
+        self.assertEqual(
+            form.cb_group_ids_for_identical.toolTip(),
+            "Profiles of the same material, size and finished shape share one ID, wherever they are; "
+            "identical links too",
+        )
 
 
 if __name__ == "__main__":

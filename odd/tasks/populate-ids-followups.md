@@ -16,7 +16,7 @@ Delivery: work-unit commits on the feature branch; push, PR and merge are the us
 
 - **T1 [S1, S4] delegated, done.** Panel stores the selection at open; OK always numbers it and commits one undo step; PID/version properties only on selected links. RED observed for each rule. Commit: see `fix(populate-ids): selection at open, reset of trims`.
 - **T2 [S2] delegated, done.** Bug confirmed (ID back after recompute: `'42' != ''`); Reset IDs clears it through `set_profile_pid` on the source profile. Commit: same as T1.
-- **T3 [S5, S3] pending.** Shape-based grouping and document-wide count. Risk: item 3 (changes which pieces share an ID in existing documents — requested). Commit: —
+- **T3 [S5, S3] delegated, done.** Grouping by material, family, size and placement-invariant measures of the finished solid (faces, volume, area, sorted principal moments; rel_tol 1e-6); objects without a solid keep the old key. Count = document pieces left with the ID. RED observed for (a), (b) and S3; (c), (d) guard regressions. Risk: item 3 (changes which pieces share an ID in existing documents — requested). Commit: see `feat(populate-ids): identical pieces by finished shape`.
 - **T4 [S6] pending.** Prefixes. Commit: —
 - **T5 [S7] inline, done.** Nightly budget 300 → 330 minutes (worst case 294 + setup); the read step refuses a stable timeout or shards that is not a positive integer. RED observed (6 failures), ci/tests green. Risk: item 5 (CI workflow). Commit: see git log (ci(nightly): budget margin).
 
@@ -30,3 +30,6 @@ vamos con los pendientes
 
 ### L3 — Decisions (user answers, verbatim)
 1. "Misma forma final (recomendado)". 2. "Implementarlos". 3. "Todas las del documento (recomendado)".
+
+### L4 — S3 interpretation accepted by the parent
+Worker: an ID the selection gave up keeps its pieces' count current ("1 x2" left alone becomes "1 x1"), only on pieces that already show a count. Accepted: it follows "Cuenta todas las piezas iguales que quedan con ese ID". Known limits documented: mirror-image pieces have the same measures; counts are per kind (profiles vs links).

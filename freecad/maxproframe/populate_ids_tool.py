@@ -94,7 +94,11 @@ class PopulateIDsTaskPanel:
             (form.cb_group_ids_for_identical.setText, translate("frameforge", "Group profiles ID if identical")),
             (
                 form.cb_group_ids_for_identical.setToolTip,
-                translate("frameforge", "All identical profiles will share the same ID"),
+                translate(
+                    "frameforge",
+                    "Profiles of the same material, size and finished shape share one ID, wherever they are; "
+                    "identical links too",
+                ),
             ),
             (form.cb_include_part_count_in_pid.setText, translate("frameforge", "Include Part count in PID")),
             (form.cb_keep_existing.setText, translate("frameforge", "Keep existing IDs")),

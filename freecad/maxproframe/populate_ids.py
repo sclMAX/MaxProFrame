@@ -1,6 +1,7 @@
+import math
 import os
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -12,6 +13,12 @@ from freecad.maxproframe._utils import (
     is_trimmedbody,
 )
 from freecad.maxproframe.ff_tools import ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, translate
+
+# The optional count populate_ids appends to an ID: "12 x3".
+COUNT_SUFFIX = re.compile(r" x[1-9][0-9]*\Z")
+# Relative tolerance on the measures of two finished solids that are the same piece. Float noise between copies
+# of one piece, moved or turned, is about 1e-14; a hole moved 0.05 mm along a 400 mm tube changes them by 1e-6.
+SHAPE_TOLERANCE = 1e-6
 
 
 def letters_to_int(s: str) -> int:
@@ -81,7 +88,7 @@ class IdGenerator:
         for s in used_ids:
             try:
                 # Reserve the ID, not the optional count appended by populate_ids.
-                self.used.add(self.to_int(re.sub(r" x[1-9][0-9]*\Z", "", s)))
+                self.used.add(self.to_int(COUNT_SUFFIX.sub("", s)))
             except Exception:
                 pass  # ignore invalid IDs if needed
 
@@ -119,16 +126,107 @@ class IdGenerator:
         return self.from_int(n)
 
 
-def set_profile_pid(profile, pid):
-    source = profile
+def profile_source(profile):
+    """The profile a trim or cutout is made from, which holds its ID; a profile is its own source."""
     if is_trimmedbody(profile):
-        source = get_profile_from_trimmedbody(profile)
-    elif is_extrudedcutout(profile):
-        source = get_profile_from_extrudedcutout(profile)
+        return get_profile_from_trimmedbody(profile)
+    if is_extrudedcutout(profile):
+        return get_profile_from_extrudedcutout(profile)
+    return profile
+
+
+def set_profile_pid(profile, pid):
+    source = profile_source(profile)
     source.PID = pid
     # Keep the selected object's BOM data current without waiting for recompute.
     if source is not profile:
         profile.PID = pid
+
+
+def set_piece_pid(source, pid):
+    """Write ``pid`` on a profile and on the trims and cutouts made from it, as their recompute copies it."""
+    for obj in (source, *getattr(source, "InListRecursive", ())):
+        if obj is not source and not (is_trimmedbody(obj) or is_extrudedcutout(obj)):
+            continue
+        if getattr(obj, "PID", pid) != pid and profile_source(obj) is source:
+            obj.PID = pid
+
+
+def profile_family(obj):
+    """The custom profile label, or the family."""
+    custom = getattr(obj, "CustomProfile", None)
+    if custom:
+        return getattr(getattr(custom, "LinkedObject", custom), "Label", "CustomProfile")
+    return getattr(obj, "Family", "N/A")
+
+
+def shape_measures(obj):
+    """Measures of the finished solid that its placement does not change, or None when it has no solid.
+
+    Faces, volume, area and principal moments of inertia of each solid: the same piece moved, rotated or turned
+    end for end has the same measures. A piece and its mirror image have the same measures too.
+    """
+    shape = getattr(obj, "Shape", None)
+    if shape is None or shape.isNull() or not shape.Solids:
+        return None
+    return sorted(
+        (len(solid.Faces), solid.Volume, solid.Area, *sorted(solid.PrincipalProperties["Moments"]))
+        for solid in shape.Solids
+    )
+
+
+def same_measures(a, b):
+    return len(a) == len(b) and all(
+        x[0] == y[0] and all(math.isclose(u, v, rel_tol=SHAPE_TOLERANCE) for u, v in zip(x[1:], y[1:]))
+        for x, y in zip(a, b)
+    )
+
+
+def group_identical_profiles(profiles):
+    """Profiles of the same material, family and size whose finished solids are the same shape, wherever placed.
+
+    Objects without a solid are grouped by their length, cutting angles and cutout flag, as before.
+    """
+    groups = []
+    for obj in profiles:
+        measures = shape_measures(obj)
+        if measures is None:
+            key = (
+                profile_family(obj), round(float(obj.Length.Value), 1), obj.Material, obj.SizeName,
+                obj.CuttingAngleA, obj.CuttingAngleB, obj.Cutout,
+            )  # fmt: skip
+        else:
+            key = (profile_family(obj), obj.Material, obj.SizeName)
+        for group_key, group_measures, members in groups:
+            if measures and group_measures:
+                same_shape = same_measures(measures, group_measures)
+            else:
+                same_shape = measures is group_measures
+            if group_key == key and same_shape:
+                members.append(obj)
+                break
+        else:
+            groups.append((key, measures, [obj]))
+    return [members for _, _, members in groups]
+
+
+def update_counts(pieces, assigned, vacated, write):
+    """Give every piece left with an ID numbered here the count of the document pieces that carry it.
+
+    ``vacated``: IDs the selection carried before; only the pieces that show a count get it updated.
+    """
+    unique = list({id(p): p for p in pieces}.values())
+    counts = Counter(COUNT_SUFFIX.sub("", getattr(p, "PID", "")) for p in unique)
+    for piece in unique:
+        pid = getattr(piece, "PID", "")
+        base = COUNT_SUFFIX.sub("", pid)
+        if base and (base in assigned or base in vacated and pid != base):
+            write(piece, f"{base} x{counts[base]}")
+
+
+def set_link_pid(link, pid):
+    if link.PID != pid:
+        link.PID = pid
 
 
 def populate_ids(
@@ -204,37 +302,21 @@ def populate_ids(
 
     # group profiles / links if needed
     if group_ids_for_identical:
-        group_profiles_key_func = lambda obj: (
-            # obj.Parent, # ???
-            (
-                getattr(getattr(obj.CustomProfile, "LinkedObject", obj.CustomProfile), "Label", "CustomProfile")
-                if obj.CustomProfile
-                else getattr(obj, "Family", "N/A")
-            ),
-            round(float(obj.Length.Value), 1),
-            obj.Material,
-            obj.SizeName,
-            # round(float(x["price"]), 1), # TODO: Workaround for Lenght problem
-            obj.CuttingAngleA,
-            obj.CuttingAngleB,
-            obj.Cutout,
-        )
         group_links_key_func = lambda obj: (
             # obj.Parent, # ???
             obj.LinkedObject.Label,
             getattr(obj.LinkedObject, "Price", "N/A"),
         )
 
-        profiles_grouped = defaultdict(list)
         links_grouped = defaultdict(list)
+        # IDs the selection leaves: the pieces still carrying them get their count updated.
+        vacated_profiles = {COUNT_SUFFIX.sub("", getattr(o, "PID", "")) for o in sel_profiles}
+        vacated_links = {COUNT_SUFFIX.sub("", getattr(o, "PID", "")) for o in sel_links}
+        assigned_profiles, assigned_links = set(), set()
 
-        for sp in sel_profiles:
-            profiles_grouped[group_profiles_key_func(sp)].append(sp)
-
-        for _, group in profiles_grouped.items():
+        for group in group_identical_profiles(sel_profiles):
             pid = gen_profiles.next()
-            if include_part_count_in_pid:
-                pid += f" x{len(group)}"
+            assigned_profiles.add(pid)
             for p in group:
                 set_profile_pid(p, pid)
 
@@ -243,10 +325,15 @@ def populate_ids(
 
         for _, group in links_grouped.items():
             pid = gen_links.next()
-            if include_part_count_in_pid:
-                pid += f" x{len(group)}"
+            assigned_links.add(pid)
             for l in group:
                 l.PID = pid
+
+        if include_part_count_in_pid:
+            # The count covers every piece of the document left with the ID, selected or not.
+            sources = [s for s in map(profile_source, sel_profiles) if s is not None]
+            update_counts([*sources, *doc_profiles], assigned_profiles, vacated_profiles, set_piece_pid)
+            update_counts([*sel_links, *doc_links], assigned_links, vacated_links, set_link_pid)
 
     else:
         for sp in sel_profiles:

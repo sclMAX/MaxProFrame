@@ -55,7 +55,7 @@
    <item>
     <widget class="QCheckBox" name="cb_group_ids_for_identical">
      <property name="toolTip">
-      <string>All identical profiles will share the same ID</string>
+      <string>Profiles of the same material, size and finished shape share one ID, wherever they are; identical links too</string>
      </property>
      <property name="text">
       <string>Group profiles ID if identical</string>

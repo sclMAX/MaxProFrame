@@ -479,6 +479,10 @@ Workflow:
 
     - Keep existing IDs : pieces that already have an ID keep it; only the pieces without one are numbered (their IDs are reserved)
 
+    - Group profiles ID if identical : identical pieces share one ID. Two profiles are identical when they have the same material, family (or custom profile) and size, and their finished solids, with every cut, miter, hole and cutout, are the same shape wherever they are in the assembly: a bar moved, rotated or turned end for end is the same piece; the same bar with a hole somewhere else is another piece. A piece and its mirror image (the left-hand and the right-hand version of one piece) count as identical: give them different IDs by hand if you need to tell them apart. Links are identical when they link the same object at the same price.
+
+    - Include Part count in PID : with Group profiles ID if identical, adds the number of pieces to the ID, for example "3 x4". It counts every piece of the document left with that ID, selected or not: a piece outside the selection that already has the ID gets the new count too (only its " x4" changes, never its ID).
+
     - IDs numbering type : "All Numbers" / "All Letters" / "Number for profiles, letters for Links", "Letters for profiles, Number for links"
 
     - IDs numbering scheme : 

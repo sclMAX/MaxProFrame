@@ -997,7 +997,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Numbering Type</source><translation>Tipo de numeración</translation></message>
     <message><source>Allow duplicated</source><translation>Permitir IDs duplicados</translation></message>
     <message><source>Group profiles ID if identical</source><translation>Mismo ID para piezas idénticas</translation></message>
-    <message><source>All identical profiles will share the same ID</source><translation>Los perfiles idénticos y los enlaces idénticos comparten un ID</translation></message>
+    <message><source>Profiles of the same material, size and finished shape share one ID, wherever they are; identical links too</source><translation>Los perfiles de igual material, medida y forma terminada comparten un ID, estén donde estén; también los enlaces idénticos</translation></message>
     <message><source>Include Part count in PID</source><translation>Agregar la cantidad de piezas al ID</translation></message>
     <message><source>Keep existing IDs</source><translation>Conservar los IDs existentes</translation></message>
     <message><source>Pieces that already have an ID keep it: only the others are numbered</source><translation>Las piezas que ya tienen un ID lo conservan: solo se numeran las demás</translation></message>
