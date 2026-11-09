@@ -541,13 +541,14 @@ It also can contains all the Links, ie the LaserCut Parts for instance.
 
 If selected, you can also create a CutList, **sorted to optimize your work** at the saw.
 - Add Kerf and Stock Length.
-- Identical pieces of one stock bar (same ID, length, angles and ends) take one row, with their Quantity, also when one is turned end for end. Pieces of different bars are never merged, and pieces without ID keep one row each.
+- Identical pieces of one stock bar (same ID, length, angles and ends) take one row, with their Quantity, also when one is turned end for end. Pieces of different bars are never added together, and pieces without ID keep one row each.
+- Stock bars of one material cut alike (the same rows, in any order) take one block: its title ends with the number of bars (`×2 bars`) and the Stock column lists their indexes (`0, 2`). Cut the block that many times. The Stock statistics still count every bar.
 
 About Angles (CutAngle1 / CutAngle2, in the BOM and the CutList):
 - Each angle is read on the finished piece (bevels, End Miter, Extend / Cut, cutouts, inside a Part too), so a Profile and a TrimmedProfile are written the same way.
 - `45.0 <80`: the 45° are seen on the 80 mm faces of the profile, the cut runs across the 80. On a 80x40 tube, `45.0 <40` is the other way round.
 - `0.0`: square end.
-- In the BOM, CutAngle1 is the start of the profile (the Bevel A side), CutAngle2 its end. In the CutList, the larger angle comes first, whatever end it is on.
+- In the BOM, CutAngle1 is the start of the profile (the Bevel A side), CutAngle2 its end. In the CutList, the larger angle comes first, whatever end it is on; an angle without number (`@ P`, `?`) comes last.
 - `45.0 <80 + 10.0 <40`: compound cut, the angle seen on each face.
 - Round Bar and Pipe have one angle, without face.
 - A piece with an end that is not one flat cut (a Notch, a cutout reaching the end), or a piece not made from a profile, keeps the old marks on both ends and no Ends symbol: angle prefixed with "@", "P" for a Perfect Cut (Notch), "*" for angles rotated 90°, "?" when the angle can't be computed.
@@ -560,6 +561,8 @@ The Ends column tells how both ends sit:
 
 Both sheets end with a Legend of these marks.
 
-The column titles, the section titles, the stock bar titles ("used", "left"), the "Yes" of Drill/Cutout and the Legend of both sheets follow the FreeCAD language (Spanish is available); the marks, IDs, lengths and angles are the same in every language.
+The column titles, the section titles, the stock bar titles ("used", "left", "×2 bars"), the "Yes" of Drill/Cutout and the Legend of both sheets follow the FreeCAD language (Spanish is available); the marks and IDs are the same in every language.
+
+The numbers written in a text, the stock bar titles and the angles, take the decimal separator of the FreeCAD language: `used = 1442.0` and `45.0 <80` in English, `usado = 1442,0` and `45,0 <80` in Spanish. Lengths, weights, prices and the Stock statistics stay numbers, shown the way the spreadsheet shows numbers.
 
 Check your BOM for error !

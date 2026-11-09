@@ -1,5 +1,16 @@
 ## Changelog
 
+* Unreleased
+
+  **Improvements**
+  - **Cut List**: stock bars of one material cut alike (the same rows, in any order) take one block. Its title ends with the number of bars (`×2 bars`, `×2 barras` in Spanish) and the Stock column lists their indexes (`0, 2`), so the list is shorter and the bars can be cut in one batch. The Stock statistics still count every bar.
+  - **BOM / Cut List**: the numbers written in a text, the stock bar titles (used, left) and the angles, take the decimal separator of the FreeCAD language: `usado = 1442,0` and `45,0 <80` with FreeCAD in Spanish, `used = 1442.0` and `45.0 <80` in English. Before, they always had a point, while the lengths showed a comma in Spanish. Lengths, weights, prices and the Stock statistics stay numbers.
+
+  **Fixes**
+  - **Reset IDs**: a selection with a link that Populate IDs never numbered stopped with an error halfway, inside an unfinished Undo step. The link is skipped and the other IDs are cleared and reported.
+  - **BOM**: with **Group Profiles / Links** unchecked and **Include Links** checked, a plain Part or PartDesign object in the selection stopped the BOM with an error. It is listed without ID.
+  - **BOM**: a grouped row lists its IDs in the order of the pieces, the same every time. The order changed from one BOM to the next.
+
 * v1.11.0 (2026-11-09)
 
   **Improvements**

@@ -1234,12 +1234,13 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Legend</source><translation>Leyenda</translation></message>
     <message><source>Stock</source><translation>Barra</translation></message>
     <message><source>CutPart ID</source><translation>ID de pieza</translation></message>
-    <message><source>{} / used = {:.1f}, left = {:.1f}</source><translation>{} / usado = {:.1f}, sobrante = {:.1f}</translation></message>
+    <message><source>{} / used = {}, left = {}</source><translation>{} / usado = {}, sobrante = {}</translation></message>
+    <message><source>×{} bars</source><translation>×{} barras</translation></message>
     <message><source>Stock statistics</source><translation>Estadísticas de barras</translation></message>
     <message><source>Length Used</source><translation>Longitud usada</translation></message>
     <message><source>Stock Used</source><translation>Longitud de barras</translation></message>
     <message><source>Stock Count</source><translation>Cantidad de barras</translation></message>
-    <message><source>45.0 &lt;80: the angle is seen on the 80 mm faces of the profile (the cut runs across the 80)</source><translation>45.0 &lt;80: el ángulo se ve en las caras de 80 mm del perfil (el corte va sobre los 80)</translation></message>
+    <message><source>45.0 &lt;80: the angle is seen on the 80 mm faces of the profile (the cut runs across the 80)</source><translation>45,0 &lt;80: el ángulo se ve en las caras de 80 mm del perfil (el corte va sobre los 80)</translation></message>
     <message><source>Compound cut: the angle seen on each face</source><translation>Corte compuesto: el ángulo que se ve en cada cara</translation></message>
     <message><source>Ends: both ends tilted on the same face in opposite directions (trapezoid)</source><translation>Extremos: los dos extremos inclinados sobre la misma cara en sentidos opuestos (trapecio)</translation></message>
     <message><source>Ends: both ends tilted on the same face the same way (parallelogram)</source><translation>Extremos: los dos extremos inclinados sobre la misma cara en el mismo sentido (paralelogramo)</translation></message>

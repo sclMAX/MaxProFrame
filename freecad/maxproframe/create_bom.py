@@ -7,6 +7,7 @@ import Assembly
 import FreeCAD
 import FreeCADGui as Gui
 import Part
+from PySide import QtCore
 
 from freecad.maxproframe._utils import (
     is_extrudedcutout,
@@ -53,6 +54,8 @@ LEGEND = (
     ),
     ("?", QT_TRANSLATE_NOOP("frameforge", "Can't compute the angle, do it yourself !")),
 )
+# Sort value of an angle without a number ("@ P", "?"): above every negated number, so it comes last.
+NO_NUMBER = math.inf
 
 
 def traverse_assembly(profiles_data, links_data, obj, parent="", full_parent_path=False):
@@ -162,7 +165,7 @@ def group_profiles(profiles_data):
         d = {}
 
         d["parent"] = g["parent"]
-        d["ID"] = ", ".join(set([g["ID"] for g in group]))
+        d["ID"] = ", ".join(dict.fromkeys(g["ID"] for g in group))
         d["label"] = ", ".join([g["label"] for g in group])
         d["family"] = g["family"]
         d["size_name"] = g["size_name"]
@@ -192,7 +195,7 @@ def group_links(links_data):
     for k, group in links_data_grouped.items():
         ol = {}
         ol["parent"] = k[0]
-        ol["ID"] = ", ".join(set([g.get("ID", "") for g in group]))
+        ol["ID"] = ", ".join(dict.fromkeys(g.get("ID", "") for g in group))
         ol["label"] = ", ".join([g["label"] for g in group])
         ol["part"] = k[1]
         ol["price"] = k[2]
@@ -234,8 +237,8 @@ def make_bom(profiles_data, links_data, bom_name="BOM", spreadsheet=None):
         spreadsheet.set("C" + str(row), prof["family"])
         spreadsheet.set("D" + str(row), prof["size_name"])
         spreadsheet.set("E" + str(row), prof["length"])
-        spreadsheet.set("F" + str(row), "'" + str(prof["cut_angle_1"]))
-        spreadsheet.set("G" + str(row), "'" + str(prof["cut_angle_2"]))
+        spreadsheet.set("F" + str(row), "'" + localized(prof["cut_angle_1"]))
+        spreadsheet.set("G" + str(row), "'" + localized(prof["cut_angle_2"]))
         spreadsheet.set("H" + str(row), "'" + prof["ends"])
         spreadsheet.set("I" + str(row), "'" + str(prof["cutout"]))
         spreadsheet.set("J" + str(row), str(prof["quantity"]))
@@ -260,7 +263,8 @@ def make_bom(profiles_data, links_data, bom_name="BOM", spreadsheet=None):
 
         for lnk in links_data:
             spreadsheet.set("A" + str(row), lnk["parent"])
-            spreadsheet.set("B" + str(row), lnk["ID"])
+            # A Part or PartDesign object has no ID.
+            spreadsheet.set("B" + str(row), lnk.get("ID", ""))
             spreadsheet.set("C" + str(row), lnk["part"])
             spreadsheet.set("D" + str(row), str(lnk["price"]))
             spreadsheet.set("E" + str(row), str(lnk["quantity"]))
@@ -271,12 +275,28 @@ def make_bom(profiles_data, links_data, bom_name="BOM", spreadsheet=None):
     write_legend(spreadsheet, row + 2)
 
 
+def decimal_text(value):
+    """``value`` with one decimal and the decimal separator of the FreeCAD language: 1442.0 or 1442,0."""
+    locale = QtCore.QLocale()
+    locale.setNumberOptions(QtCore.QLocale.OmitGroupSeparator)
+    return locale.toString(float(value), "f", 1)
+
+
+def localized(text):
+    """``text`` with the decimal separator of the FreeCAD language in each number: 45.0 <80 or 45,0 <80."""
+    point = QtCore.QLocale().decimalPoint()
+    return re.sub(r"(?<=\d)\.(?=\d)", lambda _: point, str(text))
+
+
 def larger_angle_first(prof):
-    """Both cut angles of ``prof``, the larger leading number first (none counts as -1; a tie keeps string order)."""
+    """Both cut angles of ``prof``, ordered by their leading number, larger first.
+
+    An angle without number ("@ P", "?") goes last; equal numbers keep string order.
+    """
 
     def key(angle):
         number = re.search(r"\d+(?:\.\d+)?", str(angle))
-        return (-float(number.group()) if number else 1.0, str(angle))
+        return (-float(number.group()) if number else NO_NUMBER, str(angle))
 
     return tuple(sorted((prof["cut_angle_1"], prof["cut_angle_2"]), key=key))
 
@@ -293,6 +313,19 @@ def group_stock_parts(stock):
         key = (prof["ID"] or index, prof["length"], *larger_angle_first(prof), prof["ends"])
         groups.setdefault(key, [prof, 0])[1] += 1
     return [tuple(group) for group in groups.values()]
+
+
+def identical_bars(stocks):
+    """(bar indexes, grouped pieces) of each cutting plan of ``stocks``, first seen first.
+
+    Bars whose grouped pieces (ID, length, angles, ends, quantity) are the same, in any order, share one plan.
+    """
+    plans = {}
+    for index, stock in enumerate(stocks):
+        parts = group_stock_parts(stock)
+        rows = [(prof["ID"], prof["length"], *larger_angle_first(prof), prof["ends"], qty) for prof, qty in parts]
+        plans.setdefault(tuple(sorted(rows)), ([], parts))[0].append(index)
+    return list(plans.values())
 
 
 def write_legend(spreadsheet, row):
@@ -320,32 +353,28 @@ def make_cut_list(sorted_stocks, cutlist_name="CutList", spreadsheet=None):
 
     row = 2
 
-    for stocks in sorted_stocks:
-        stock_idx = 0
-        for stock in sorted_stocks[stocks]:
-            cut_part_idx = 0
-            for prof, quantity in group_stock_parts(stock):
-                cut_angle_1, cut_angle_2 = larger_angle_first(prof)
-                if cut_part_idx == 0:
-                    spreadsheet.set(
-                        "A" + str(row),
-                        translate("frameforge", "{} / used = {:.1f}, left = {:.1f}").format(
-                            stocks, stock.used, stock.left
-                        ),
-                    )
+    for material, stocks in sorted_stocks.items():
+        # Bars cut alike take one block, its title with the number of bars, Stock with their indexes.
+        for bars, parts in identical_bars(stocks):
+            stock = stocks[bars[0]]
+            title = translate("frameforge", "{} / used = {}, left = {}").format(
+                material, decimal_text(stock.used), decimal_text(stock.left)
+            )
+            if len(bars) > 1:
+                title += " " + translate("frameforge", "×{} bars").format(len(bars))
+            spreadsheet.set("A" + str(row), title)
 
-                spreadsheet.set("B" + str(row), str(stock_idx))
+            for prof, quantity in parts:
+                cut_angle_1, cut_angle_2 = larger_angle_first(prof)
+                spreadsheet.set("B" + str(row), ", ".join(map(str, bars)))
                 spreadsheet.set("C" + str(row), prof["ID"])
                 spreadsheet.set("D" + str(row), str(prof["length"]))
-                spreadsheet.set("E" + str(row), "'" + str(cut_angle_1))
-                spreadsheet.set("F" + str(row), "'" + str(cut_angle_2))
+                spreadsheet.set("E" + str(row), "'" + localized(cut_angle_1))
+                spreadsheet.set("F" + str(row), "'" + localized(cut_angle_2))
                 spreadsheet.set("G" + str(row), "'" + prof["ends"])
                 spreadsheet.set("H" + str(row), str(quantity))
 
                 row += 1
-                cut_part_idx += 1
-
-            stock_idx += 1
 
         row += 1
 

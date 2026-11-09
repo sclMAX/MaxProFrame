@@ -94,6 +94,12 @@ class TestCutFace(CutEndsFixture):
     def test_square_ends_have_no_face(self):
         self.assertEqual(cut_ends(self.tube_along_x()), ("0.0", "0.0", ""))
 
+    def test_a_tube_with_rounded_corners_reads_like_a_sharp_one(self):
+        # The fixture tube has sharp corners (radii 0); catalog tubes have rounded ones.
+        obj = self.tube_along_x(MakeFillet=True, RadiusLarge=4.0, RadiusSmall=2.0, BevelACutY=45.0, BevelBCutY=45.0)
+        self.assertGreater(len(obj.Shape.Faces), 6)
+        self.assertEqual(cut_ends(obj), ("45.0 <80", "45.0 <80", "\\_/"))
+
     def test_a_round_profile_gives_one_angle_without_face(self):
         pipe = self.tube(self.make_sketch(ALONG_X), family="Pipe", width=40.0, height=40.0, BevelBCutY=30.0)
         self.assertEqual(cut_ends(pipe), ("0.0", "30.0", "|_/"))
