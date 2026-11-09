@@ -33,6 +33,11 @@ def ambiguous_prefix(prefix, mode):
     return bool(re.search(r"[A-Za-z]\Z" if mode == "letter" else r"[0-9]\Z", prefix))
 
 
+def count_like_prefix(prefix, mode):
+    """True when ``prefix`` + a number reads back as a count: "P x" + "3" is P with COUNT_SUFFIX " x3"."""
+    return mode == "number" and bool(COUNT_SUFFIX.search(prefix + "1"))
+
+
 def letters_to_int(s: str) -> int:
     """
     'A' -> 1

@@ -293,6 +293,37 @@ class TestPopulateIDsPanel(unittest.TestCase):
                 self.assertTrue(panel.form.message_label.isVisibleTo(panel.form))
                 self.doc.abortTransaction()
 
+    def test_number_prefix_ending_in_a_count_mark_is_refused(self):
+        # "P x" + "3" would read back as P with a count of 3: the 3 would not be reserved.
+        param = get_param_group(writable=True)
+        for numbering_type, profiles_prefix, links_prefix in (
+            ("all_numbers", "P x", ""),
+            ("all_numbers", "P-", " L x "),
+            ("number_for_profiles_letters_for_links", "P x", "L-"),
+        ):
+            with self.subTest(numbering_type=numbering_type, prefixes=(profiles_prefix, links_prefix)):
+                for key in PREFIXES:
+                    param.SetString(key, "")
+                panel = self.panel(numbering_type)
+                panel.form.le_profiles_prefix.setText(profiles_prefix)
+                panel.form.le_links_prefix.setText(links_prefix)
+                self.assertFalse(panel.accept())
+                self.assertFalse(hasattr(self.link, "PID"))
+                self.assertEqual([param.GetString(k, "") for k in PREFIXES], ["", ""])
+                self.assertEqual(
+                    panel.form.message_label.text(),
+                    'A prefix cannot end in " x" when its IDs use numbers: "P x" + "3" reads back as P with a count of 3.',
+                )
+                self.assertTrue(panel.form.message_label.isVisibleTo(panel.form))
+                self.doc.abortTransaction()
+
+    def test_number_prefix_ending_in_a_capital_x_is_accepted(self):
+        # The count is written " x3" in lowercase only: "L X3" cannot be read as a count.
+        panel = self.panel("all_numbers")
+        panel.form.le_links_prefix.setText("L X")
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.link.PID, "L X1")
+
     def test_ids_of_links_outside_the_selection_are_still_reserved(self):
         other = self.add_link("Other", pid="1")
         panel = self.panel("all_numbers")

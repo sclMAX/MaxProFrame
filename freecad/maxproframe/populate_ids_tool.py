@@ -55,7 +55,13 @@ from freecad.maxproframe.ff_tools import (
     get_param_group,
     translate,
 )
-from freecad.maxproframe.populate_ids import NUMBERING_MODES, ambiguous_prefix, populate_ids, set_profile_pid
+from freecad.maxproframe.populate_ids import (
+    NUMBERING_MODES,
+    ambiguous_prefix,
+    count_like_prefix,
+    populate_ids,
+    set_profile_pid,
+)
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 from freecad.maxproframe.version import __version__ as ff_version
 
@@ -169,6 +175,14 @@ class PopulateIDsTaskPanel:
                 translate(
                     "frameforge",
                     "A prefix cannot end in a letter when its IDs use letters, or in a digit when they use numbers.",
+                )
+            )
+            return False
+        if any(map(count_like_prefix, prefixes, NUMBERING_MODES[numbering_type])):
+            self._show_message(
+                translate(
+                    "frameforge",
+                    'A prefix cannot end in " x" when its IDs use numbers: "P x" + "3" reads back as P with a count of 3.',
                 )
             )
             return False
