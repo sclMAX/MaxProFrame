@@ -59,6 +59,8 @@ class TestCutListGrouping(CutListFixture):
         sheet = self.cut_list(profiles)
         row = [cell(sheet, f"{column}2") for column in "BCEFGH"]
         self.assertEqual(row, ["0", "1", "45.0 <80", "0.0", "|_/", "2"])
+        self.assertAlmostEqual(float(cell(sheet, "D2")), float(profiles[0]["length"]))
+        self.assertEqual(cell(sheet, "C3"), "")
 
     def test_pieces_without_id_keep_one_row_each(self):
         # Without an ID nothing tells that two pieces of the same length and angles are the same piece.
@@ -66,8 +68,6 @@ class TestCutListGrouping(CutListFixture):
         sheet = self.cut_list(profiles)
         rows = [[cell(sheet, f"{column}{row}") for column in "BCEFGH"] for row in (2, 3)]
         self.assertEqual(rows, [["0", "", "45.0 <80", "0.0", "|_/", "1"]] * 2)
-        self.assertAlmostEqual(float(cell(sheet, "D2")), float(profiles[0]["length"]))
-        self.assertEqual(cell(sheet, "C3"), "")
 
     def test_the_same_id_on_two_bars_keeps_one_row_per_bar(self):
         profiles = self.pieces(*(self.tube_with_id("1", BevelACutY=45.0) for _ in range(2)))
