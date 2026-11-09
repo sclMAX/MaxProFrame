@@ -42,7 +42,8 @@ def section_shift(obj):
     height = float(obj.ProfileHeight)
     # Round sections give their diameter as the height (see execute).
     width = height if obj.Family in ("Round Bar", "Pipe") else float(obj.ProfileWidth)
-    return App.Vector(*anchor_shift(obj.AnchorX, obj.AnchorY, width, height), 0)
+    anchor_x, anchor_y = getattr(obj, "AnchorX", None), getattr(obj, "AnchorY", None)
+    return App.Vector(*anchor_shift(anchor_x, anchor_y, width, height), 0)
 
 
 # Families whose section only exists in their catalog sizes, so width and height cannot be edited.

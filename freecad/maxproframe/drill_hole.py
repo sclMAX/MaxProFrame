@@ -393,6 +393,11 @@ class DrillHole(ExtrudedCutout):
         _add_center_properties(obj)
         _migrate_count_pitch(obj)
         _add_pattern_properties(obj)
+        # Saved before ReferenceAnchor: the snapshot was taken with the anchor the profile is saved with. Read
+        # it now, before an edit of the anchor recomputes the hole.
+        profile = get_profile_from_extrudedcutout(obj) if obj.baseObject else None
+        if profile is not None:
+            _add_reference_anchor(obj, section_shift(profile))
 
     def onBeforeChange(self, fp, prop):
         if prop == "baseObject" and fp.baseObject:
@@ -418,7 +423,7 @@ class DrillHole(ExtrudedCutout):
         the vertex now at its place; when none is, the hole keeps the snapshot and warns.
         """
         profile = get_profile_from_extrudedcutout(fp)
-        # A drill hole saved before ReferenceAnchor was placed with the anchor its profile has.
+        # A new drill hole, or one whose profile could not be read on opening: the anchor it has now.
         _add_reference_anchor(fp, section_shift(profile))
         selected_object, (face_name, *_) = fp.baseObject
         # A face FreeCAD lost track of after an edit of the base is named "?Face3": it is still the
