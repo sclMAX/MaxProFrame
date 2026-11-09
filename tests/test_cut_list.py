@@ -7,6 +7,7 @@ from test_cut_ends import CutEndsFixture
 
 from freecad.maxproframe.best_fit import CutPart, best_fit_decreasing
 from freecad.maxproframe.create_bom import make_bom, make_cut_list, traverse_assembly
+from freecad.maxproframe.create_bom_tool import CreateBOMTaskPanel
 
 KERF = 1.0
 # Every mark the angle and Ends columns can print, in legend order.
@@ -133,6 +134,37 @@ class TestSpanish(CutListFixture):
         tube = self.tube_with_id("1", BevelACutY=45.0)
         tube.Cutout = True
         self.profiles = self.pieces(tube)
+
+    def test_the_create_bom_panel_is_in_spanish(self):
+        form = CreateBOMTaskPanel().form
+        self.addCleanup(form.deleteLater)
+        texts = [
+            form.windowTitle(),
+            form.groupBox.title(),
+            form.label.text(),
+            form.full_parent_path.text(),
+            form.include_links_cb.text(),
+            form.group_profiles_cb.text(),
+            form.groupBox_2.title(),
+            form.cut_list_cb.text(),
+            form.label_2.text(),
+            form.label_3.text(),
+        ]
+        self.assertEqual(
+            texts,
+            [
+                "Crear lista de materiales",
+                "Lista de materiales",
+                "Nombre de la lista de materiales",
+                "Ruta completa del conjunto",
+                "Incluir enlaces",
+                "Agrupar perfiles / enlaces",
+                "Lista de cortes",
+                "Generar lista de cortes",
+                "Longitud de la barra",
+                "Ancho de corte (kerf)",
+            ],
+        )
 
     def test_the_bom_is_in_spanish(self):
         sheet = self.doc.addObject("Spreadsheet::Sheet", "BOM")

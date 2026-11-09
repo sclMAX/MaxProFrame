@@ -7,7 +7,7 @@
   - **BOM / Cut List**: a new **Ends** column shows how both ends sit: `\_/` (trapezoid), `/_/` (parallelogram) or `|_/` (one end square).
   - **Cut List**: identical pieces of one stock bar (same ID, length, angles and ends) take one row with their Quantity, instead of one row each (pieces without ID keep one row each).
   - **Cut List**: a piece turned end for end shares the row of the same piece: the Cut List prints the larger angle first, in CutAngle1. The BOM keeps CutAngle1 at the start of the profile.
-  - **BOM / Cut List**: the column titles, section titles and legends follow the FreeCAD language, with a Spanish translation. The marks and the values are not translated.
+  - **BOM / Cut List**: the column titles, section titles and legends follow the FreeCAD language, with a Spanish translation, and so does the **Create BOM** panel. The marks, IDs, lengths and angles are not translated.
 
   **Fixes**
   - **BOM / Cut List**: the legends list the marks that are printed. The Cut List legend explained "~" while the angles of a TrimmedProfile are printed with "@", and both legends listed "-", which was never printed.

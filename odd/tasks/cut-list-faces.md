@@ -13,6 +13,8 @@ Delivery: work-unit commits on the feature branch; push, PR and merge are the us
 - **S6 — Pieces turned end for end are one row.** User chose option 1: "Juntar las piezas invertidas y dejar las filas en blanco como están." Proposal accepted: "el agrupado considere iguales dos piezas con los extremos invertidos. Las imprimiría en un orden fijo (por ejemplo, el ángulo mayor primero), así ID 11 y ID 10 quedarían en una fila cada uno con cantidad 2." Seen in the user's Cut List: ID 11 `45.0 <40 | 4.0 <40 | \_/` and ID 11 `4.0 <40 | 45.0 <40 | \_/` on two rows of one bar. In the Cut List only, the two angles of a piece are printed larger first (the leading number of each angle string; equal numbers: string order); grouping uses that order. The BOM keeps CutAngle1 = start of the profile. The blank row between materials stays.
 - **S7 — Translated BOM and Cut List.** User: "Ademas deberiamos traducir las columnas y leyendas de BOM y CUT list." Every text the BOM and Cut List write (column headers, section titles such as "Profiles", "Parts", "Legend", "Stock statistics", the "used = …, left = …" stock title, legend texts, the "Yes" of Drill/Cutout) goes through `translate("frameforge", ...)` and follows the FreeCAD language; Spanish translation added to both `.ts` files and the `.qm` recompiled. Marks (`<`, `\_/`, `@`…) and data are not translated.
 
+- **S8 — Translated Create BOM panel.** User: "funciona bien, pero debemos traducir este panel" (screenshot: the Create BOM task panel in English, title "Diálogo"). The panel title, group titles, labels and check boxes follow the FreeCAD language; Spanish added.
+
 Out of scope (L2, for later): merging the same profile from different libraries into one stock, number formatting (comma vs point), "×2 barras" for identical bars, the stored `CuttingAngleA/B` properties of the objects.
 
 ## Design (parent, binding for T1-T2)
@@ -32,6 +34,8 @@ Out of scope (L2, for later): merging the same profile from different libraries 
 
 - **T4 [S6] delegated, done.** Commit: c1ab521. Cut List: angles of a piece printed larger first; grouping on that order. Test: the same ID turned end for end in one bar gives one row, Quantity 2, larger angle in CutAngle1; BOM unchanged. Evidence: `larger_angle_first` in `create_bom.py` (first number of the string, unsigned; none = -1; tie: ascending string); RED: two rows `4.0 <80 | 45.0 <80` and `45.0 <80 | 4.0 <80`, Quantity 1 each; GREEN: test_cut_list 13 tests OK; BOM start-angle test passes before and after.
 - **T5 [S7] delegated, done.** Commit: c1ab521. Translate every BOM / Cut List text; Spanish in `maxproframe_es.ts` and `frameforge_es.ts`; `python3 freecad/maxproframe/compile_translations.py`. Tests: headers and legend in Spanish with the language set to Spanish; English unchanged. Evidence: 32 `frameforge` messages added to both `.ts` (byte-identical), 16 `.qm` rebuilt; RED: `'Profiles' != 'Perfiles'`, Cut List header still English; GREEN: test_cut_list 13 OK, test_cut_ends 14, test_compile_translations 2, test_toolbar_translations 4, test_workbench_translation_loading 2, test_populate_ids_translations 3 OK.
+
+- **T6 [S8] inline, done.** `CreateBOMTaskPanel._translate_form`, 10 Spanish messages, `.qm` rebuilt. RED: panel texts `['Diálogo', 'BOM', 'BOM Name', …]`; GREEN: test_cut_list 14 OK, test_qt_wrapper_lifetime 3 OK. Commit: see git log (feat(bom): translate the Create BOM panel).
 
 Review slices: (1) f860601 cut_ends + tests, ~304 lines; (2) 78818c5 + the docs commit BOM/Cut List wiring, tests and docs, ~295 lines; (3) bc73cca + c1ab521 review fix, turned pieces and translations, ~275 lines.
 
@@ -56,3 +60,6 @@ Review of f860601..8721aae approved with advisories. Fixed: Cut List grouping me
 
 ### L6 — User, after testing the Cut List on the chair model (verbatim)
 "porque quedan lineas en blanco?" — answered: one blank row separates materials, as before. Then: "1., Ademas deberiamos traducir las columnas y leyendas de BOM y CUT list."
+
+### L7 — User after testing PR #119 (verbatim)
+funciona bien, pero debemos traducir este panel

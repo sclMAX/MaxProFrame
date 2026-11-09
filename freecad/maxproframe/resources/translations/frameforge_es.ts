@@ -1242,6 +1242,16 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Perfect Cut, you have to notch it !</source><translation>Corte perfecto: ¡hay que encastrarlo!</translation></message>
     <message><source>Angles 1 and 2 are rotated 90° along the edge (end that is not one flat cut)</source><translation>Los ángulos 1 y 2 están girados 90° a lo largo de la arista (extremo que no es un único corte plano)</translation></message>
     <message><source>Can't compute the angle, do it yourself !</source><translation>No se puede calcular el ángulo: ¡calculalo a mano!</translation></message>
+    <message><source>Create BOM</source><translation>Crear lista de materiales</translation></message>
+    <message><source>BOM</source><translation>Lista de materiales</translation></message>
+    <message><source>BOM Name</source><translation>Nombre de la lista de materiales</translation></message>
+    <message><source>Full Parent Path</source><translation>Ruta completa del conjunto</translation></message>
+    <message><source>Include Links</source><translation>Incluir enlaces</translation></message>
+    <message><source>Group Profiles / Links</source><translation>Agrupar perfiles / enlaces</translation></message>
+    <message><source>Cut List</source><translation>Lista de cortes</translation></message>
+    <message><source>Generate Cut List</source><translation>Generar lista de cortes</translation></message>
+    <message><source>Stock Material Length</source><translation>Longitud de la barra</translation></message>
+    <message><source>Kerf</source><translation>Ancho de corte (kerf)</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ParametricLine</name>
