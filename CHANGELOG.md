@@ -1,6 +1,6 @@
 ## Changelog
 
-* Unreleased
+* v1.11.0 (2026-11-09)
 
   **Improvements**
   - **Reset IDs** asks before clearing, with the number of IDs it will clear, and reports what it cleared: the count in the status bar and each piece with its old ID in the Report view. Undo (Ctrl+Z) restores them. A selection without IDs is left alone, with a message. Before, it cleared at once and showed nothing.
