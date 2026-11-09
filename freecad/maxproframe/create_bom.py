@@ -17,6 +17,20 @@ from freecad.maxproframe._utils import (
     is_profile,
     is_trimmedbody,
 )
+from freecad.maxproframe.cut_ends import ONE_SQUARE, PARALLELOGRAM, TRAPEZOID, cut_ends
+
+# The marks the angle and Ends columns print, with what they mean.
+LEGEND = (
+    ("<", "45.0 <80: the angle is seen on the 80 mm faces of the profile (the cut runs across the 80)"),
+    ("+", "Compound cut: the angle seen on each face"),
+    (TRAPEZOID, "Ends: both ends tilted on the same face in opposite directions (trapezoid)"),
+    (PARALLELOGRAM, "Ends: both ends tilted on the same face the same way (parallelogram)"),
+    (ONE_SQUARE, "Ends: one end square, the other tilted on one face"),
+    ("@", "Angle of a TrimmedProfile whose end is not one flat cut -> check length, angles and cut direction"),
+    ("P", "Perfect Cut, you have to notch it !"),
+    ("*", "Angles 1 and 2 are rotated 90° along the edge (end that is not one flat cut)"),
+    ("?", "Can't compute the angle, do it yourself !"),
+)
 
 
 def traverse_assembly(profiles_data, links_data, obj, parent="", full_parent_path=False):
@@ -60,7 +74,9 @@ def traverse_assembly(profiles_data, links_data, obj, parent="", full_parent_pat
         p["ID"] = obj.PID
         p["label"] = obj.Label
         if obj.CustomProfile:
-            family_name = getattr(getattr(obj.CustomProfile, "LinkedObject", obj.CustomProfile), "Label", "CustomProfile")
+            family_name = getattr(
+                getattr(obj.CustomProfile, "LinkedObject", obj.CustomProfile), "Label", "CustomProfile"
+            )
         else:
             cat_fam = getattr(obj, "CatalogFamily", None)
             family_name = cat_fam if cat_fam else getattr(obj, "Family", "N/A")
@@ -68,8 +84,8 @@ def traverse_assembly(profiles_data, links_data, obj, parent="", full_parent_pat
         p["size_name"] = obj.SizeName
         p["material"] = obj.Material
         p["length"] = f"{obj.Length.Value:.1f}"
-        p["cut_angle_1"] = obj.CuttingAngleA
-        p["cut_angle_2"] = obj.CuttingAngleB
+        p["obj"] = obj
+        p["cut_angle_1"], p["cut_angle_2"], p["ends"] = cut_ends(obj)
         p["cutout"] = "Yes" if obj.Cutout else ""
         p["approx_weight"] = str(obj.ApproxWeight)
         p["price"] = str(obj.Price)
@@ -111,6 +127,7 @@ def group_profiles(profiles_data):
         # round(float(x["price"]), 1), # TODO: Workaround for Lenght problem
         x["cut_angle_1"],
         x["cut_angle_2"],
+        x["ends"],
         x["cutout"],
     )
 
@@ -132,6 +149,7 @@ def group_profiles(profiles_data):
         d["length"] = g["length"]
         d["cut_angle_1"] = g["cut_angle_1"]
         d["cut_angle_2"] = g["cut_angle_2"]
+        d["ends"] = g["ends"]
         d["cutout"] = g["cutout"]
         d["approx_weight"] = g["approx_weight"]
         d["price"] = g["price"]
@@ -179,12 +197,13 @@ def make_bom(profiles_data, links_data, bom_name="BOM", spreadsheet=None):
     spreadsheet.set("E2", "Length")
     spreadsheet.set("F2", "CutAngle1")
     spreadsheet.set("G2", "CutAngle2")
-    spreadsheet.set("H2", "Drill/Cutout")
-    spreadsheet.set("I2", "Quantity")
-    spreadsheet.set("J2", "Material")
-    spreadsheet.set("K2", "ApproxWeight")
-    spreadsheet.set("L2", "Price/U")
-    spreadsheet.set("M2", "Name")
+    spreadsheet.set("H2", "Ends")
+    spreadsheet.set("I2", "Drill/Cutout")
+    spreadsheet.set("J2", "Quantity")
+    spreadsheet.set("K2", "Material")
+    spreadsheet.set("L2", "ApproxWeight")
+    spreadsheet.set("M2", "Price/U")
+    spreadsheet.set("N2", "Name")
 
     row = 3
 
@@ -196,12 +215,13 @@ def make_bom(profiles_data, links_data, bom_name="BOM", spreadsheet=None):
         spreadsheet.set("E" + str(row), prof["length"])
         spreadsheet.set("F" + str(row), "'" + str(prof["cut_angle_1"]))
         spreadsheet.set("G" + str(row), "'" + str(prof["cut_angle_2"]))
-        spreadsheet.set("H" + str(row), "'" + str(prof["cutout"]))
-        spreadsheet.set("I" + str(row), str(prof["quantity"]))
-        spreadsheet.set("J" + str(row), prof["material"])
-        spreadsheet.set("K" + str(row), prof["approx_weight"])
-        spreadsheet.set("L" + str(row), prof["price"])
-        spreadsheet.set("M" + str(row), prof["label"])
+        spreadsheet.set("H" + str(row), "'" + prof["ends"])
+        spreadsheet.set("I" + str(row), "'" + str(prof["cutout"]))
+        spreadsheet.set("J" + str(row), str(prof["quantity"]))
+        spreadsheet.set("K" + str(row), prof["material"])
+        spreadsheet.set("L" + str(row), prof["approx_weight"])
+        spreadsheet.set("M" + str(row), prof["price"])
+        spreadsheet.set("N" + str(row), prof["label"])
 
         row += 1
 
@@ -227,22 +247,25 @@ def make_bom(profiles_data, links_data, bom_name="BOM", spreadsheet=None):
 
             row += 1
 
-    row += 2
+    write_legend(spreadsheet, row + 2)
+
+
+def group_stock_parts(stock):
+    """(piece, quantity) of each set of identical pieces (ID, length, angles, ends) of ``stock``, first seen first."""
+    groups = {}
+    for cut_part in stock.parts:
+        prof = cut_part.obj
+        key = (prof["ID"], prof["length"], prof["cut_angle_1"], prof["cut_angle_2"], prof["ends"])
+        groups.setdefault(key, [prof, 0])[1] += 1
+    return [tuple(group) for group in groups.values()]
+
+
+def write_legend(spreadsheet, row):
+    """The Legend title at ``row``, then one row per mark."""
     spreadsheet.set("A" + str(row), "Legend")
-    spreadsheet.set("A" + str(row + 1), "*")
-    spreadsheet.set("B" + str(row + 1), "Angles 1 and 2 are rotated 90° along the edge")
-    spreadsheet.set("A" + str(row + 2), "-")
-    spreadsheet.set(
-        "B" + str(row + 2),
-        "Angles 1 and 2 are cut in the same direction (no need to rotate the stock 180° when cutting)",
-    )
-    spreadsheet.set("A" + str(row + 3), "@")
-    spreadsheet.set(
-        "B" + str(row + 3),
-        "Angle is calculated from a TrimmedProfile -> be careful to check length, angles and cut direction",
-    )
-    spreadsheet.set("A" + str(row + 4), "P")
-    spreadsheet.set("B" + str(row + 4), "Perfect Cut, you have to notch it !")
+    for offset, (mark, text) in enumerate(LEGEND, start=1):
+        spreadsheet.set("A" + str(row + offset), "'" + mark)
+        spreadsheet.set("B" + str(row + offset), text)
 
 
 def make_cut_list(sorted_stocks, cutlist_name="CutList", spreadsheet=None):
@@ -257,7 +280,8 @@ def make_cut_list(sorted_stocks, cutlist_name="CutList", spreadsheet=None):
     spreadsheet.set("D1", "Length")
     spreadsheet.set("E1", "CutAngle1")
     spreadsheet.set("F1", "CutAngle2")
-    spreadsheet.set("G1", "Quantity")
+    spreadsheet.set("G1", "Ends")
+    spreadsheet.set("H1", "Quantity")
 
     row = 2
 
@@ -265,8 +289,7 @@ def make_cut_list(sorted_stocks, cutlist_name="CutList", spreadsheet=None):
         stock_idx = 0
         for stock in sorted_stocks[stocks]:
             cut_part_idx = 0
-            for cut_part in stock.parts:
-                prof = cut_part.obj
+            for prof, quantity in group_stock_parts(stock):
                 if cut_part_idx == 0:
                     spreadsheet.set("A" + str(row), stocks + f" / used = {stock.used:.1f}, left = {stock.left:.1f}")
 
@@ -275,7 +298,8 @@ def make_cut_list(sorted_stocks, cutlist_name="CutList", spreadsheet=None):
                 spreadsheet.set("D" + str(row), str(prof["length"]))
                 spreadsheet.set("E" + str(row), "'" + str(prof["cut_angle_1"]))
                 spreadsheet.set("F" + str(row), "'" + str(prof["cut_angle_2"]))
-                spreadsheet.set("G" + str(row), str(prof["quantity"]))
+                spreadsheet.set("G" + str(row), "'" + prof["ends"])
+                spreadsheet.set("H" + str(row), str(quantity))
 
                 row += 1
                 cut_part_idx += 1
@@ -298,19 +322,4 @@ def make_cut_list(sorted_stocks, cutlist_name="CutList", spreadsheet=None):
 
         row += 1
 
-    row += 1
-    spreadsheet.set("A" + str(row), "Legend")
-    spreadsheet.set("A" + str(row + 1), "*")
-    spreadsheet.set("B" + str(row + 1), "Angles 1 and 2 are rotated 90° along the edge")
-    spreadsheet.set("A" + str(row + 2), "-")
-    spreadsheet.set(
-        "B" + str(row + 2),
-        "Angles 1 and 2 are cut in the same direction (no need to rotate the stock 180° when cutting)",
-    )
-    spreadsheet.set("A" + str(row + 3), "~")
-    spreadsheet.set(
-        "B" + str(row + 3),
-        "Angle is calculated from a TrimmedProfile -> be careful to check length, angles and cut direction",
-    )
-    spreadsheet.set("A" + str(row + 4), "?")
-    spreadsheet.set("B" + str(row + 4), "Can't compute the angle, do it yourself !")
+    write_legend(spreadsheet, row + 1)
