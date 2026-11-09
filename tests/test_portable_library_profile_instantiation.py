@@ -37,7 +37,7 @@ import Sketcher
 from freecad.maxproframe.create_bom import group_profiles, traverse_assembly
 from freecad.maxproframe.create_profiles_tool import CreateProfileTaskPanel
 from freecad.maxproframe.custom_section_geometry import build_custom_section_face
-from freecad.maxproframe.ff_tools import translate
+from freecad.maxproframe.ff_tools import get_param_group, translate
 from freecad.maxproframe.library_manager import LibraryManager
 from freecad.maxproframe.populate_ids import populate_ids
 from freecad.maxproframe.profile import Profile, ViewProviderCustomProfile, ViewProviderProfile
@@ -57,6 +57,23 @@ class TestPortableLibraryProfileInstantiation(unittest.TestCase):
         os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
     def setUp(self):
+        param = get_param_group(writable=True)
+        setters = {
+            "Boolean": param.SetBool,
+            "Integer": param.SetInt,
+            "Float": param.SetFloat,
+            "Unsigned": param.SetUnsigned,
+            "String": param.SetString,
+        }
+        saved = param.GetContents() or []
+
+        def restore_preferences():
+            param.Clear()
+            for kind, key, value in saved:
+                setters.get(kind, lambda *args: None)(key, value)
+
+        # OK stores the panel defaults, as the mirror and the anchor: later tests start from their own.
+        self.addCleanup(restore_preferences)
         self.workspace = tempfile.TemporaryDirectory(prefix="ff_test_inst_")
         self.test_root = self.workspace.name
         self.user_dir = os.path.join(self.test_root, "user")

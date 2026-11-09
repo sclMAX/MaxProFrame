@@ -9,7 +9,7 @@ from unittest.mock import patch
 import FreeCAD as App
 import FreeCADGui as Gui
 import Part
-from miter_helpers import use_language
+from miter_helpers import deliver_language_change, use_language
 from PySide import QtGui, QtWidgets
 
 from freecad.maxproframe import expression_fields, parametric_line_drag, parametric_line_panel
@@ -67,6 +67,8 @@ class OtherDialog:
 
 class ParametricLinePanelFixture(unittest.TestCase):
     def setUp(self):
+        # A language change an earlier test left pending would put back the standard text of Apply.
+        deliver_language_change()
         self.doc = App.newDocument("ParametricLinePanel")
         name = self.doc.Name
         App.setActiveDocument(name)
