@@ -13,6 +13,7 @@ from freecad.maxproframe.populate_ids_tool import PopulateIDsTaskPanel
 
 NUMBERING_TYPES = ["all_numbers", "all_letters"]
 START_AT = 3  # index of "Start at specific number/letter"
+FILL_DOCUMENT = 1  # index of "Fill when available (whole document)"
 
 
 def profile(pid=""):
@@ -179,6 +180,74 @@ class TestPopulateIDsPanel(unittest.TestCase):
         panel.form.sp_first_number.setValue(4)
         self.assertTrue(panel.accept())
         self.assertEqual(self.link.PID, "4")
+
+    def add_link(self, name, pid=None):
+        link = self.doc.addObject("App::Link", name)
+        link.LinkedObject = self.link.LinkedObject
+        if pid is not None:
+            link.addProperty("App::PropertyString", "PID", "MaxProFrame", "Profile ID").PID = pid
+        self.doc.recompute()
+        return link
+
+    def test_selection_changed_while_open_is_ignored(self):
+        other = self.add_link("Other")
+        panel = self.panel("all_numbers")
+        panel.form.sp_first_number.setValue(1)
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(other)
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.link.PID, "1")
+        self.assertFalse(hasattr(other, "PID"))
+        self.assertFalse(self.doc.HasPendingTransaction)
+
+    def test_ok_with_an_invalid_or_empty_selection_numbers_the_opening_selection(self):
+        self.doc.UndoMode = 1
+        self.link.addProperty("App::PropertyString", "PID", "MaxProFrame", "Profile ID").PID = "5"
+        for name, selected in (("invalid", self.link.LinkedObject), ("empty", None)):
+            with self.subTest(selection=name):
+                self.doc.clearUndos()
+                panel = self.panel("all_numbers")
+                panel.form.sp_first_number.setValue(1)
+                Gui.Selection.clearSelection()
+                if selected:
+                    Gui.Selection.addSelection(selected)
+                self.assertTrue(panel.accept())
+                self.assertEqual(self.link.PID, "1")
+                self.assertFalse(self.doc.HasPendingTransaction)
+                self.assertEqual(self.doc.UndoCount, 1)
+                self.doc.undo()
+                self.assertEqual(self.link.PID, "5")
+                Gui.Selection.addSelection(self.link)
+
+    def test_undo_restores_the_previous_ids_in_one_step(self):
+        self.doc.UndoMode = 1
+        self.link.addProperty("App::PropertyString", "PID", "MaxProFrame", "Profile ID").PID = "5"
+        self.doc.clearUndos()
+        panel = self.panel("all_numbers")
+        panel.form.sp_first_number.setValue(1)
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.link.PID, "1")
+        self.assertEqual(self.doc.UndoCount, 1)
+        self.doc.undo()
+        self.assertEqual(self.link.PID, "5")
+
+    def test_only_selected_links_get_a_pid_property(self):
+        other = self.add_link("Other")
+        panel = self.panel("all_numbers")
+        panel.form.sp_first_number.setValue(1)
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.link.PID, "1")
+        self.assertTrue(hasattr(self.link, "MaxProFrameVersion"))
+        self.assertFalse(hasattr(other, "PID"))
+        self.assertFalse(hasattr(other, "MaxProFrameVersion"))
+
+    def test_ids_of_links_outside_the_selection_are_still_reserved(self):
+        other = self.add_link("Other", pid="1")
+        panel = self.panel("all_numbers")
+        panel.form.cb_numbering_scheme.setCurrentIndex(FILL_DOCUMENT)
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.link.PID, "2")
+        self.assertEqual(other.PID, "1")
 
 
 def _key_text(text):

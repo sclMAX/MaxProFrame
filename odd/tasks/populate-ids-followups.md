@@ -14,8 +14,8 @@ Delivery: work-unit commits on the feature branch; push, PR and merge are the us
 
 ## Tasks
 
-- **T1 [S1, S4] delegated, in progress.** Panel captures the selection at open; only selected links get a PID property. Commit: —
-- **T2 [S2] delegated, in progress.** Verify Reset IDs on trims/cutouts; fix if confirmed. Commit: —
+- **T1 [S1, S4] delegated, done.** Panel stores the selection at open; OK always numbers it and commits one undo step; PID/version properties only on selected links. RED observed for each rule. Commit: see `fix(populate-ids): selection at open, reset of trims`.
+- **T2 [S2] delegated, done.** Bug confirmed (ID back after recompute: `'42' != ''`); Reset IDs clears it through `set_profile_pid` on the source profile. Commit: same as T1.
 - **T3 [S5, S3] pending.** Shape-based grouping and document-wide count. Risk: item 3 (changes which pieces share an ID in existing documents — requested). Commit: —
 - **T4 [S6] pending.** Prefixes. Commit: —
 - **T5 [S7] inline, done.** Nightly budget 300 → 330 minutes (worst case 294 + setup); the read step refuses a stable timeout or shards that is not a positive integer. RED observed (6 failures), ci/tests green. Risk: item 5 (CI workflow). Commit: see git log (ci(nightly): budget margin).
