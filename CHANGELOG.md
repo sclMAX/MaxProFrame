@@ -1,6 +1,6 @@
 ## Changelog
 
-* Unreleased
+* v1.11.1 (2026-11-09)
 
   **Improvements**
   - **Cut List**: stock bars of one material cut alike (the same rows, in any order) take one block. Its title ends with the number of bars (`×2 bars`, `×2 barras` in Spanish) and the Stock column lists their indexes (`0, 2`), so the list is shorter and the bars can be cut in one batch. The Stock statistics still count every bar.
