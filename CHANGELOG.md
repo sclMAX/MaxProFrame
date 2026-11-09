@@ -9,6 +9,9 @@
   - **Populate IDs**: the first number starts at 1 and cannot be 0, which made OK fail. An empty first letter is refused with a message in the panel instead of an error, and the field takes letters only.
   - **Populate IDs** panel is translated: title, options and lists follow the FreeCAD language.
   - **Populate IDs**: **Keep existing IDs** replaces **Reset existing selection numbering**: pieces that already have an ID keep it and only the others are numbered. Before, every selected piece was numbered again, checked or not.
+  - **Populate IDs**: **Group profiles ID if identical** compares the finished solid of each piece, wherever it is placed. Two bars of the same length with holes in different places got the same ID, and a bar turned end for end (its cutting angles swapped) got another ID. A piece and its mirror image still share an ID.
+  - **Populate IDs**: **Include Part count in PID** counts every piece of the document left with the ID, also the ones outside the selection, which get the new count. It counted the selected pieces only, so two pieces with one ID could show different counts.
+  - **Populate IDs**: the **Profiles Prefix** and **Links Prefix** fields work and are remembered ("P-" gives P-1, P-2): gaps and the next ID are looked for among the IDs with that prefix. They were disabled and did nothing.
 
 * v1.10.3 (2026-11-07)
 

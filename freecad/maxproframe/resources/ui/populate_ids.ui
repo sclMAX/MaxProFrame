@@ -55,7 +55,7 @@
    <item>
     <widget class="QCheckBox" name="cb_group_ids_for_identical">
      <property name="toolTip">
-      <string>All identical profiles will share the same ID</string>
+      <string>Profiles of the same material, size and finished shape share one ID, wherever they are; identical links too</string>
      </property>
      <property name="text">
       <string>Group profiles ID if identical</string>
@@ -171,11 +171,7 @@
     </widget>
    </item>
    <item>
-    <widget class="QLineEdit" name="le_profiles_prefix">
-     <property name="enabled">
-      <bool>false</bool>
-     </property>
-    </widget>
+    <widget class="QLineEdit" name="le_profiles_prefix"/>
    </item>
    <item>
     <widget class="QLabel" name="label_6">
@@ -185,11 +181,7 @@
     </widget>
    </item>
    <item>
-    <widget class="QLineEdit" name="le_links_prefix">
-     <property name="enabled">
-      <bool>false</bool>
-     </property>
-    </widget>
+    <widget class="QLineEdit" name="le_links_prefix"/>
    </item>
    <item>
     <spacer name="verticalSpacer">

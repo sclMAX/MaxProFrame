@@ -55,7 +55,7 @@ from freecad.maxproframe.ff_tools import (
     get_param_group,
     translate,
 )
-from freecad.maxproframe.populate_ids import populate_ids, set_profile_pid
+from freecad.maxproframe.populate_ids import NUMBERING_MODES, ambiguous_prefix, populate_ids, set_profile_pid
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 from freecad.maxproframe.version import __version__ as ff_version
 
@@ -78,6 +78,8 @@ class PopulateIDsTaskPanel:
             self.form.cb_numbering_scheme.setCurrentIndex(param.GetInt("IDs numbering scheme", 0))
             self.form.sp_first_number.setValue(param.GetInt("First Number ID", 1))
             self.form.le_first_letter.setText(param.GetString("First Letter ID", "A"))
+            self.form.le_profiles_prefix.setText(param.GetString("Profiles Prefix", ""))
+            self.form.le_links_prefix.setText(param.GetString("Links Prefix", ""))
 
         # OK numbers what was selected when the panel opened: clicks while it is open change nothing.
         self.sel_profiles, self.sel_links = [], []
@@ -94,7 +96,11 @@ class PopulateIDsTaskPanel:
             (form.cb_group_ids_for_identical.setText, translate("frameforge", "Group profiles ID if identical")),
             (
                 form.cb_group_ids_for_identical.setToolTip,
-                translate("frameforge", "All identical profiles will share the same ID"),
+                translate(
+                    "frameforge",
+                    "Profiles of the same material, size and finished shape share one ID, wherever they are; "
+                    "identical links too",
+                ),
             ),
             (form.cb_include_part_count_in_pid.setText, translate("frameforge", "Include Part count in PID")),
             (form.cb_keep_existing.setText, translate("frameforge", "Keep existing IDs")),
@@ -155,6 +161,17 @@ class PopulateIDsTaskPanel:
         if starts_at and uses_letters and not re.fullmatch("[A-Za-z]+", start_letter):
             self._show_message(translate("frameforge", "Enter a first letter: A to Z only."))
             return False
+        # "1" + "2" or "P" + "A" would read back as another ID when gaps and the last ID are looked for.
+        numbering_type = list(NUMBERING_MODES)[self.form.cb_numbering_type.currentIndex()]
+        prefixes = (self.form.le_profiles_prefix.text().strip(), self.form.le_links_prefix.text().strip())
+        if any(map(ambiguous_prefix, prefixes, NUMBERING_MODES[numbering_type])):
+            self._show_message(
+                translate(
+                    "frameforge",
+                    "A prefix cannot end in a letter when its IDs use letters, or in a digit when they use numbers.",
+                )
+            )
+            return False
         self._show_message("")
 
         param = get_param_group(writable=True)
@@ -167,6 +184,8 @@ class PopulateIDsTaskPanel:
 
         param.SetInt("First Number ID", self.form.sp_first_number.value())
         param.SetString("First Letter ID", self.form.le_first_letter.text())
+        param.SetString("Profiles Prefix", prefixes[0])
+        param.SetString("Links Prefix", prefixes[1])
 
         doc_profiles, doc_links = get_profiles_and_links_from_document()
 
@@ -188,12 +207,6 @@ class PopulateIDsTaskPanel:
                     "MaxProFrame version used to create the object",
                 ).MaxProFrameVersion = ff_version
 
-        numbering_type = [
-            "all_numbers",
-            "all_letters",
-            "number_for_profiles_letters_for_links",
-            "letters_for_profiles_number_for_links",
-        ][self.form.cb_numbering_type.currentIndex()]
         allow_duplicated = self.form.cb_allow_duplicated.isChecked()
         group_ids_for_identical = self.form.cb_group_ids_for_identical.isChecked()
         include_part_count_in_pid = self.form.cb_include_part_count_in_pid.isChecked()
@@ -215,6 +228,8 @@ class PopulateIDsTaskPanel:
             numbering_scheme,
             start_number=str(self.form.sp_first_number.value()),
             start_letter=start_letter,
+            profiles_prefix=prefixes[0],
+            links_prefix=prefixes[1],
         )
 
         App.ActiveDocument.commitTransaction()

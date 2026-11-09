@@ -34,7 +34,9 @@ class TestPopulateIDsTranslations(unittest.TestCase):
         self.assertEqual(form.cb_allow_duplicated.text(), "Permitir IDs duplicados")
         self.assertEqual(form.cb_group_ids_for_identical.text(), "Mismo ID para piezas idénticas")
         self.assertEqual(
-            form.cb_group_ids_for_identical.toolTip(), "Los perfiles idénticos y los enlaces idénticos comparten un ID"
+            form.cb_group_ids_for_identical.toolTip(),
+            "Los perfiles de igual material, medida y forma terminada comparten un ID, estén donde estén; "
+            "también los enlaces idénticos",
         )
         self.assertEqual(form.cb_include_part_count_in_pid.text(), "Agregar la cantidad de piezas al ID")
         self.assertEqual(form.cb_keep_existing.text(), "Conservar los IDs existentes")
@@ -57,6 +59,18 @@ class TestPopulateIDsTranslations(unittest.TestCase):
         self.assertEqual(form.label_5.text(), "Prefijo de perfiles")
         self.assertEqual(form.label_6.text(), "Prefijo de enlaces")
 
+    def test_refused_prefix_message_is_spanish(self):
+        use_language(self, "Spanish", "es_ES")
+        panel = PopulateIDsTaskPanel()
+        panel.form.cb_numbering_type.setCurrentIndex(1)  # All Letters
+        panel.form.cb_numbering_scheme.setCurrentIndex(0)
+        panel.form.le_links_prefix.setText("L")
+        self.assertFalse(panel.accept())
+        self.assertEqual(
+            panel.form.message_label.text(),
+            "Un prefijo no puede terminar en letra si sus IDs usan letras, ni en dígito si usan números.",
+        )
+
     def test_panel_text_stays_english_in_english(self):
         use_language(self, "English", "en_US")
         form = PopulateIDsTaskPanel().form
@@ -66,6 +80,11 @@ class TestPopulateIDsTranslations(unittest.TestCase):
         self.assertEqual(form.label_2.text(), "Numbering Scheme")
         self.assertEqual(form.cb_allow_duplicated.text(), "Allow duplicated")
         self.assertEqual(form.cb_keep_existing.text(), "Keep existing IDs")
+        self.assertEqual(
+            form.cb_group_ids_for_identical.toolTip(),
+            "Profiles of the same material, size and finished shape share one ID, wherever they are; "
+            "identical links too",
+        )
 
 
 if __name__ == "__main__":
