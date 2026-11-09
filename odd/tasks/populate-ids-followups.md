@@ -33,3 +33,6 @@ vamos con los pendientes
 
 ### L4 — S3 interpretation accepted by the parent
 Worker: an ID the selection gave up keeps its pieces' count current ("1 x2" left alone becomes "1 x1"), only on pieces that already show a count. Accepted: it follows "Cuenta todas las piezas iguales que quedan con ese ID". Known limits documented: mirror-image pieces have the same measures; counts are per kind (profiles vs links).
+
+### L5 — Review slices
+The branch passed ~400 authored lines at T3. Delivery in two PR slices: slice A = `f8ff173` (T5) + `5c26507` (T1, T2), about 394 lines; slice B = `66f78ab` (T3) + the T4 commit. Slice B builds on slice A.
