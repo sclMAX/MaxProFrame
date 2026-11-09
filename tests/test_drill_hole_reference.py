@@ -54,6 +54,35 @@ class TestDrillHoleReference(DrillHoleFixture):
         self.assert_hole_at(obj, body.Shape.Volume - ONE_HOLE, 180, 0, 24)
         self.assertEqual(obj.ReferenceWarning, "")
 
+    def stacked_hole(self):
+        """A hole drilled on the top face of another hole: its face is an element of the first hole."""
+        body = self.tube()
+        first = self.corner_hole(body, 130.0)
+        return body, first, self.corner_hole(first, 230.0)
+
+    def test_a_hole_on_a_hole_stays_when_its_face_reference_is_lost(self):
+        # Editing the profile can leave the face of the first hole unresolved: FreeCAD names it "?Face3".
+        # Shortening the start removes the corner the hole is measured from (warning); a bevel keeps it.
+        for name, value, warning in (("OffsetB", -100.0, WARNING), ("BevelACutY", 30.0, "")):
+            with self.subTest(change=name):
+                body, first, obj = self.stacked_hole()
+                setattr(body, name, value)
+                self.doc.recompute()
+                self.assertTrue(obj.baseObject[1][0].startswith("?"), obj.baseObject[1])
+                self.assert_hole_at(obj, first.Shape.Volume - ONE_HOLE, 180, 0, 24)
+                self.assertEqual(obj.ReferenceWarning, warning)
+                for each in (obj, first, body):
+                    self.doc.removeObject(each.Name)
+
+    def test_a_hole_on_a_hole_warns_when_its_face_is_gone(self):
+        body, first, obj = self.stacked_hole()
+        # The top face rises from z = 25 to z = 30: no face is left on the plane the hole was placed on.
+        body.ProfileHeight = 60.0
+        self.doc.recompute()
+        self.assertTrue(obj.baseObject[1][0].startswith("?"), obj.baseObject[1])
+        self.assertNotIn("Invalid shape name", obj.getStatusString())
+        self.assertEqual(obj.ReferenceWarning, WARNING)
+
     def test_picking_another_vertex_places_the_hole_from_it(self):
         body = self.tube()
         obj = self.corner_hole(body, 30.0)

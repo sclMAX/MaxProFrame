@@ -10,6 +10,7 @@
   - **Reset IDs**: a selection with a link that Populate IDs never numbered stopped with an error halfway, inside an unfinished Undo step. The link is skipped and the other IDs are cleared and reported.
   - **BOM**: with **Group Profiles / Links** unchecked and **Include Links** checked, a plain Part or PartDesign object in the selection stopped the BOM with an error. It is listed without ID.
   - **BOM**: a grouped row lists its IDs in the order of the pieces, the same every time. The order changed from one BOM to the next.
+  - **Drill Hole**: a hole drilled on another hole no longer fails with "Invalid shape name ?Face3" after an edit of the profile (shorter, beveled, another size). FreeCAD loses track of the face of the first hole and names it "?Face3"; the hole now finds its face again where it was placed, and warns as usual when the corner it is measured from is gone.
 
 * v1.11.0 (2026-11-09)
 
