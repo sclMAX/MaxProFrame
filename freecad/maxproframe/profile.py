@@ -29,6 +29,22 @@ from freecad.maxproframe.version import __version__ as ff_version
 ANCHOR_X = ("Left", "Center", "Right")
 ANCHOR_Y = ("Bottom", "Center", "Top")
 
+
+def anchor_shift(anchor_x, anchor_y, width, height):
+    """(x, y) the anchor moves the section by in the profile's own frame: the section is drawn from (0, 0)."""
+    ax = ANCHOR_X.index(anchor_x) if anchor_x in ANCHOR_X else 1
+    ay = ANCHOR_Y.index(anchor_y) if anchor_y in ANCHOR_Y else 1
+    return -width * ax / 2, -height * ay / 2
+
+
+def section_shift(obj):
+    """Where the anchor of the profile ``obj`` puts its section, as a vector local to the profile."""
+    height = float(obj.ProfileHeight)
+    # Round sections give their diameter as the height (see execute).
+    width = height if obj.Family in ("Round Bar", "Pipe") else float(obj.ProfileWidth)
+    return App.Vector(*anchor_shift(obj.AnchorX, obj.AnchorY, width, height), 0)
+
+
 # Families whose section only exists in their catalog sizes, so width and height cannot be edited.
 FIXED_SECTION_FAMILIES = (
     "V-Slot",
@@ -537,10 +553,7 @@ class Profile:
             B1X = 0
             B2X = 0
 
-        ax = ANCHOR_X.index(obj.AnchorX) if obj.AnchorX in ANCHOR_X else 1
-        ay = ANCHOR_Y.index(obj.AnchorY) if obj.AnchorY in ANCHOR_Y else 1
-        w = -W * ax / 2
-        h = -H * ay / 2
+        w, h = anchor_shift(obj.AnchorX, obj.AnchorY, W, H)
 
         if obj.Family == "Equal Leg Angles" or obj.Family == "Unequal Leg Angles":
             if obj.MakeFillet == False:

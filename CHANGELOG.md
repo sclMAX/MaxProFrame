@@ -7,6 +7,7 @@
   - **BOM / Cut List**: the numbers written in a text, the stock bar titles (used, left) and the angles, take the decimal separator of the FreeCAD language: `usado = 1442,0` and `45,0 <80` with FreeCAD in Spanish, `used = 1442.0` and `45.0 <80` in English. Before, they always had a point, while the lengths showed a comma in Spanish. Lengths, weights, prices and the Stock statistics stay numbers.
 
   **Fixes**
+  - **Drill Hole**: changing the anchor of the profile (Anchor X / Anchor Y in Edit Profile) moves its section, and the holes now move with it. They kept the old place of the section, so some or all of them fell off the piece, with "The reference vertex changed". Holes saved before keep their place.
   - **Reset IDs**: a selection with a link that Populate IDs never numbered stopped with an error halfway, inside an unfinished Undo step. The link is skipped and the other IDs are cleared and reported.
   - **BOM**: with **Group Profiles / Links** unchecked and **Include Links** checked, a plain Part or PartDesign object in the selection stopped the BOM with an error. It is listed without ID.
   - **BOM**: a grouped row lists its IDs in the order of the pieces, the same every time. The order changed from one BOM to the next.
