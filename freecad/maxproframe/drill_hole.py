@@ -39,6 +39,8 @@ PATTERN_SIDES = ("AlongBackward", "AlongForward", "AcrossBackward", "AcrossForwa
 TOLERANCE = 1e-9
 # Distance (mm) within which a vertex or a face plane is where the reference snapshot was taken.
 REFERENCE_TOLERANCE = 0.001
+# Prefix FreeCAD gives a linked element it cannot find any more after the linked shape changed.
+MISSING_ELEMENT_PREFIX = "?"
 
 
 def make_drill_hole(selected_face, vertex):
@@ -399,6 +401,9 @@ class DrillHole(ExtrudedCutout):
         the vertex now at its place; when none is, the hole keeps the snapshot and warns.
         """
         selected_object, (face_name, *_) = fp.baseObject
+        # A face FreeCAD lost track of after an edit of the base is named "?Face3": it is still the
+        # face of the snapshot, found again below from its plane.
+        face_name = face_name.removeprefix(MISSING_ELEMENT_PREFIX)
         shape = selected_object.Shape
         placement = get_profile_from_extrudedcutout(fp).Placement
         name = f"{face_name}/{fp.ReferenceVertex}"

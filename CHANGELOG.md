@@ -1,5 +1,10 @@
 ## Changelog
 
+* Unreleased
+
+  **Fixes**
+  - **Drill Hole**: a hole drilled on another hole no longer fails with "Invalid shape name ?Face3" after an edit of the profile (shorter, beveled, another size). FreeCAD loses track of the face of the first hole and names it "?Face3"; the hole now finds its face again where it was placed, and warns as usual when the corner it is measured from is gone.
+
 * v1.11.0 (2026-11-09)
 
   **Improvements**
