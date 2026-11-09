@@ -22,8 +22,9 @@ jobs:
     name: Native FreeCAD 1.1.4 repeated runs
     runs-on: ubuntu-24.04
     # A run is the suite in ci.yml's shards, each stopped at the per-shard timeout of the stable target (2 x 420 s).
-    # The budget covers every shard of the maximum 20 repetitions plus the shuffled run timing out (294 minutes).
-    timeout-minutes: 300
+    # The budget covers every shard of the maximum 20 repetitions plus the shuffled run timing out (294 minutes),
+    # plus setup and summary, within GitHub's 360-minute limit.
+    timeout-minutes: 330
 
     steps:
       - name: Checkout code
@@ -37,9 +38,15 @@ jobs:
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
+          import sys
 
           with open("ci/targets.json", encoding="utf-8") as handle:
               stable = json.load(handle)["stable"]
+          # The run step loops over shards and passes the timeout: refuse anything but a positive integer.
+          for key in ("timeout", "shards"):
+              value = stable[key]
+              if type(value) is not int or value < 1:
+                  sys.exit(f"ci/targets.json: stable {key} must be a positive integer, got {value!r}")
           print("url=" + stable["url"])
           print("sha256=" + stable["sha256"])
           print(f"timeout={stable['timeout']}")

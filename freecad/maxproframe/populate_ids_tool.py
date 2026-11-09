@@ -55,7 +55,7 @@ from freecad.maxproframe.ff_tools import (
     get_param_group,
     translate,
 )
-from freecad.maxproframe.populate_ids import populate_ids
+from freecad.maxproframe.populate_ids import populate_ids, set_profile_pid
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 from freecad.maxproframe.version import __version__ as ff_version
 
@@ -78,6 +78,11 @@ class PopulateIDsTaskPanel:
             self.form.cb_numbering_scheme.setCurrentIndex(param.GetInt("IDs numbering scheme", 0))
             self.form.sp_first_number.setValue(param.GetInt("First Number ID", 1))
             self.form.le_first_letter.setText(param.GetString("First Letter ID", "A"))
+
+        # OK numbers what was selected when the panel opened: clicks while it is open change nothing.
+        self.sel_profiles, self.sel_links = [], []
+        for obj in Gui.Selection.getSelection():
+            get_profiles_and_links_from_object(self.sel_profiles, self.sel_links, obj)
 
     def _translate_form(self):
         """Designer strings are not in the catalog: set their translations here."""
@@ -143,101 +148,79 @@ class PopulateIDsTaskPanel:
         return True
 
     def accept(self):
-        sel = Gui.Selection.getSelection()
-
-        if all(
-            [
-                is_fusion(sel)
-                or is_part(sel)
-                or is_group(sel)
-                or is_profile(sel)
-                or is_trimmedbody(sel)
-                or is_extrudedcutout(sel)
-                or is_link(sel)
-                for sel in Gui.Selection.getSelection()
-            ]
-        ):
-            # Only "Start at specific number/letter" reads the first letter, and only when letters are used.
-            start_letter = self.form.le_first_letter.text().strip()
-            uses_letters = self.form.cb_numbering_type.currentIndex() != 0
-            starts_at = self.form.cb_numbering_scheme.currentIndex() == 3
-            if starts_at and uses_letters and not re.fullmatch("[A-Za-z]+", start_letter):
-                self._show_message(translate("frameforge", "Enter a first letter: A to Z only."))
-                return False
-            self._show_message("")
-
-            param = get_param_group(writable=True)
-            param.SetBool("Allow Duplicating IDs", self.form.cb_allow_duplicated.isChecked())
-            param.SetBool("Group IDs", self.form.cb_group_ids_for_identical.isChecked())
-            param.SetBool("Include Count", self.form.cb_include_part_count_in_pid.isChecked())
-            param.SetBool("Keep Existing IDs", self.form.cb_keep_existing.isChecked())
-            param.SetInt("IDs numbering type", self.form.cb_numbering_type.currentIndex())
-            param.SetInt("IDs numbering scheme", self.form.cb_numbering_scheme.currentIndex())
-
-            param.SetInt("First Number ID", self.form.sp_first_number.value())
-            param.SetString("First Letter ID", self.form.le_first_letter.text())
-
-            sel_profiles, sel_links = [], []
-            for s in sel:
-                get_profiles_and_links_from_object(sel_profiles, sel_links, s)
-
-            doc_profiles, doc_links = get_profiles_and_links_from_document()
-
-            # handle compat here, Link don't have specific proxy
-            for l in doc_links:
-                if not hasattr(l, "PID"):
-                    l.addProperty(
-                        "App::PropertyString",
-                        "PID",
-                        "MaxProFrame",
-                        "Profile ID",
-                    ).PID = ""
-
-                if not hasattr(l, "MaxProFrameVersion"):
-                    l.addProperty(
-                        "App::PropertyString",
-                        "MaxProFrameVersion",
-                        "MaxProFrame",
-                        "MaxProFrame version used to create the object",
-                    ).MaxProFrameVersion = ff_version
-
-            numbering_type = [
-                "all_numbers",
-                "all_letters",
-                "number_for_profiles_letters_for_links",
-                "letters_for_profiles_number_for_links",
-            ][self.form.cb_numbering_type.currentIndex()]
-            allow_duplicated = self.form.cb_allow_duplicated.isChecked()
-            group_ids_for_identical = self.form.cb_group_ids_for_identical.isChecked()
-            include_part_count_in_pid = self.form.cb_include_part_count_in_pid.isChecked()
-            keep_existing = self.form.cb_keep_existing.isChecked()
-            numbering_scheme = ["fill_selection", "fill_document", "continue_document", "start_at"][
-                self.form.cb_numbering_scheme.currentIndex()
-            ]
-
-            populate_ids(
-                sel_profiles,
-                sel_links,
-                doc_profiles,
-                doc_links,
-                numbering_type,
-                allow_duplicated,
-                group_ids_for_identical,
-                include_part_count_in_pid,
-                keep_existing,
-                numbering_scheme,
-                start_number=str(self.form.sp_first_number.value()),
-                start_letter=start_letter,
-            )
-
-            App.ActiveDocument.commitTransaction()
-            # App.ActiveDocument.recompute()
-
-            return True
-
-        else:
-            App.ActiveDocument.abortTransaction()
+        # Only "Start at specific number/letter" reads the first letter, and only when letters are used.
+        start_letter = self.form.le_first_letter.text().strip()
+        uses_letters = self.form.cb_numbering_type.currentIndex() != 0
+        starts_at = self.form.cb_numbering_scheme.currentIndex() == 3
+        if starts_at and uses_letters and not re.fullmatch("[A-Za-z]+", start_letter):
+            self._show_message(translate("frameforge", "Enter a first letter: A to Z only."))
             return False
+        self._show_message("")
+
+        param = get_param_group(writable=True)
+        param.SetBool("Allow Duplicating IDs", self.form.cb_allow_duplicated.isChecked())
+        param.SetBool("Group IDs", self.form.cb_group_ids_for_identical.isChecked())
+        param.SetBool("Include Count", self.form.cb_include_part_count_in_pid.isChecked())
+        param.SetBool("Keep Existing IDs", self.form.cb_keep_existing.isChecked())
+        param.SetInt("IDs numbering type", self.form.cb_numbering_type.currentIndex())
+        param.SetInt("IDs numbering scheme", self.form.cb_numbering_scheme.currentIndex())
+
+        param.SetInt("First Number ID", self.form.sp_first_number.value())
+        param.SetString("First Letter ID", self.form.le_first_letter.text())
+
+        doc_profiles, doc_links = get_profiles_and_links_from_document()
+
+        # handle compat here, Link don't have specific proxy; links outside the selection are only read
+        for l in self.sel_links:
+            if not hasattr(l, "PID"):
+                l.addProperty(
+                    "App::PropertyString",
+                    "PID",
+                    "MaxProFrame",
+                    "Profile ID",
+                ).PID = ""
+
+            if not hasattr(l, "MaxProFrameVersion"):
+                l.addProperty(
+                    "App::PropertyString",
+                    "MaxProFrameVersion",
+                    "MaxProFrame",
+                    "MaxProFrame version used to create the object",
+                ).MaxProFrameVersion = ff_version
+
+        numbering_type = [
+            "all_numbers",
+            "all_letters",
+            "number_for_profiles_letters_for_links",
+            "letters_for_profiles_number_for_links",
+        ][self.form.cb_numbering_type.currentIndex()]
+        allow_duplicated = self.form.cb_allow_duplicated.isChecked()
+        group_ids_for_identical = self.form.cb_group_ids_for_identical.isChecked()
+        include_part_count_in_pid = self.form.cb_include_part_count_in_pid.isChecked()
+        keep_existing = self.form.cb_keep_existing.isChecked()
+        numbering_scheme = ["fill_selection", "fill_document", "continue_document", "start_at"][
+            self.form.cb_numbering_scheme.currentIndex()
+        ]
+
+        populate_ids(
+            self.sel_profiles,
+            self.sel_links,
+            doc_profiles,
+            doc_links,
+            numbering_type,
+            allow_duplicated,
+            group_ids_for_identical,
+            include_part_count_in_pid,
+            keep_existing,
+            numbering_scheme,
+            start_number=str(self.form.sp_first_number.value()),
+            start_letter=start_letter,
+        )
+
+        App.ActiveDocument.commitTransaction()
+        # App.ActiveDocument.recompute()
+
+        return True
 
     def _show_message(self, text):
         self.form.message_label.setText(text)
@@ -332,7 +315,10 @@ class ResetIDsCommand:
             for s in sel:
                 get_profiles_and_links_from_object(sel_profiles, sel_links, s)
 
-            for o in sel_profiles + sel_links:
+            # A trim or cutout copies its ID from the source profile: clear it there too.
+            for o in sel_profiles:
+                set_profile_pid(o, "")
+            for o in sel_links:
                 o.PID = ""
 
             App.ActiveDocument.commitTransaction()

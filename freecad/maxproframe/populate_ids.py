@@ -119,7 +119,7 @@ class IdGenerator:
         return self.from_int(n)
 
 
-def _set_profile_pid(profile, pid):
+def set_profile_pid(profile, pid):
     source = profile
     if is_trimmedbody(profile):
         source = get_profile_from_trimmedbody(profile)
@@ -236,7 +236,7 @@ def populate_ids(
             if include_part_count_in_pid:
                 pid += f" x{len(group)}"
             for p in group:
-                _set_profile_pid(p, pid)
+                set_profile_pid(p, pid)
 
         for sl in sel_links:
             links_grouped[group_links_key_func(sl)].append(sl)
@@ -250,6 +250,6 @@ def populate_ids(
 
     else:
         for sp in sel_profiles:
-            _set_profile_pid(sp, gen_profiles.next())
+            set_profile_pid(sp, gen_profiles.next())
         for sl in sel_links:
             sl.PID = gen_links.next()

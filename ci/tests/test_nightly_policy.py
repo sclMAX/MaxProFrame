@@ -296,8 +296,33 @@ class TestNightlyWorkflowPolicy(unittest.TestCase):
         stable = test_policy.load_targets()["stable"]
         worst_minutes = (20 + 1) * stable["shards"] * stable["timeout"] / 60
         budget = int(re.search(r"timeout-minutes: (\d+)", self.content).group(1))
-        self.assertGreaterEqual(budget, worst_minutes)
+        # Setup (install, cache, extraction) and the summary need time too: at least 15 minutes on top.
+        self.assertGreaterEqual(budget, worst_minutes + 15)
         self.assertLessEqual(budget, 360, "GitHub-hosted jobs stop at 360 minutes")
+
+    def read_target(self, stable):
+        """Run the Read pinned stable target script on a targets.json holding ``stable``."""
+        read = self.content.split("- name: Read pinned stable target", 1)[1].split("- name:", 1)[0]
+        script = re.search(r"<<'PY' >> \"\$GITHUB_OUTPUT\"\n(.*?)\n\s*PY\n", read, re.S).group(1)
+        script = "\n".join(line[10:] for line in script.splitlines())
+        with tempfile.TemporaryDirectory() as root:
+            os.mkdir(os.path.join(root, "ci"))
+            with open(os.path.join(root, "ci", "targets.json"), "w", encoding="utf-8") as handle:
+                json.dump({"stable": stable}, handle)
+            return subprocess.run([sys.executable, "-c", script], cwd=root, capture_output=True, text=True)
+
+    def test_target_timeout_and_shards_are_validated(self):
+        valid = {"url": "https://example.invalid/a.AppImage", "sha256": "0" * 64, "timeout": 420, "shards": 2}
+        proc = self.read_target(valid)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("timeout=420\n", proc.stdout)
+        self.assertIn("shards=2\n", proc.stdout)
+        for key, value in (("timeout", 0), ("timeout", "420"), ("shards", -1), ("shards", 1.5), ("shards", True)):
+            with self.subTest(key=key, value=value):
+                proc = self.read_target({**valid, key: value})
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertIn(f"ci/targets.json: stable {key} must be a positive integer, got {value!r}", proc.stderr)
+                self.assertNotIn(f"{key}=", proc.stdout)
 
     def test_all_runs_execute_and_job_fails_if_any_failed(self):
         self.assertNotIn("continue-on-error", self.content)
