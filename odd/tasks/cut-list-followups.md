@@ -32,3 +32,6 @@ encaremos los pendientes
 
 ### L4 — Worker decisions accepted by the parent
 S3: angle texts in the BOM and Cut List get the comma too in Spanish ("45,0 <80"), following "todo con coma". S4: bars are identical when they hold the same rows in any order; the printed rows are the first bar's. S2 extra fixes: Reset IDs crashed on a selected link without PID (assignment does not reach the linked object); BOM Parts row KeyError for a Part without ID; grouped BOM IDs kept in arrival order. Checked and dropped: reading `link.PID` in traverse_assembly does not fail, an App::Link reads the PID of its linked object.
+
+### L5 — Native review of PR #122 (approved, advisories)
+Fixed: R3-link-pid-guard-reads-through-link — `hasattr(link, "PID")` reads the PID of the linked profile, so Reset IDs on a never-numbered link to a profile asked to clear the profile's ID. `own_pid` reads only the link's own property (RED: asked to clear instead of "no IDs"). Kept: R3-locale-source-not-language — `QLocale()` is the number format FreeCAD itself uses for its fields (the Create BOM panel shows Kerf "1,00"), so the sheets match the UI; tests pin the language and its locale through `use_language`.

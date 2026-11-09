@@ -113,6 +113,19 @@ class ResetIDsChecks:
         self.assertFalse(self.doc.HasPendingTransaction)
         self.assertEqual(self.doc.UndoCount, undo_count + 1)
 
+    def test_a_link_never_numbered_leaves_the_id_of_what_it_links(self):
+        # An App::Link reads the PID of the profile it links: that ID is not the link's to clear.
+        link = self.doc.addObject("App::Link", "LinkToProfile")
+        link.LinkedObject = self.base
+        self.doc.recompute()
+        undo_count = self.doc.UndoCount
+        asked, printed = self.reset(link)
+        self.assertEqual(asked, [])
+        self.assertEqual(printed, "Reset IDs: the selection has no IDs to reset.\n")
+        self.assertEqual(self.base.PID, "42")
+        self.assertNotIn("PID", link.PropertiesList)
+        self.assertEqual(self.doc.UndoCount, undo_count)
+
     def test_selection_without_ids_neither_asks_nor_changes(self):
         self.reset(self.derived)
         undo_count = self.doc.UndoCount

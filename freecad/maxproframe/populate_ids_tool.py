@@ -372,8 +372,7 @@ class ResetIDsCommand:
             for o in sel_profiles:
                 set_profile_pid(o, "")
             for o in sel_links:
-                # A link Populate IDs never numbered has no PID.
-                if hasattr(o, "PID"):
+                if own_pid(o):
                     o.PID = ""
 
             App.ActiveDocument.commitTransaction()
@@ -387,11 +386,19 @@ class ResetIDsCommand:
             )
 
 
+def own_pid(obj):
+    """The PID property of ``obj`` itself, else "".
+
+    A link Populate IDs never numbered has none, and an App::Link reads the PID of what it links.
+    """
+    return obj.PID if "PID" in obj.PropertiesList else ""
+
+
 def ids_to_clear(profiles, links):
     """The objects Reset IDs changes, with their current ID: a trim or cutout and its source profile both."""
     cleared, seen = [], set()
     for obj in [o for p in profiles for o in (p, profile_source(p))] + list(links):
-        pid = getattr(obj, "PID", "")
+        pid = own_pid(obj)
         if pid and obj.Name not in seen:
             seen.add(obj.Name)
             cleared.append((obj, pid))
