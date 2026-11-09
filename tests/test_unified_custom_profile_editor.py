@@ -11,6 +11,8 @@ import FreeCADGui as Gui
 import test_custom_profile_cards as fixtures
 from PySide import QtCore, QtWidgets
 
+from freecad.maxproframe.custom_profile_editor import CustomProfileEditor
+
 
 class TestUnifiedCustomProfileEditor(unittest.TestCase):
     def setUp(self):
@@ -58,6 +60,10 @@ class TestUnifiedCustomProfileEditor(unittest.TestCase):
             editor.reject()
         with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Discard):
             self.dialog.close()
+        # An editor that went to Sketcher lives under the main window and only asks to be deleted later: delete it
+        # now, or later tests find its OK and Cancel among the main window's button boxes.
+        for editor in Gui.getMainWindow().findChildren(CustomProfileEditor):
+            QtCore.QCoreApplication.sendPostedEvents(editor, QtCore.QEvent.DeferredDelete)
 
     def open_properties(self, action):
         def interact():

@@ -18,6 +18,7 @@ def use_language(test, language, qt_locale):
         Gui.setLocale(locale)
         Gui.updateLocale()
         QtCore.QLocale.setDefault(qt_default)
+        deliver_language_change()
 
     test.addCleanup(restore)
     Gui.addLanguagePath(TRANSLATIONSPATH)
@@ -25,6 +26,14 @@ def use_language(test, language, qt_locale):
     Gui.setLocale(language)
     Gui.updateLocale()
     QtCore.QLocale.setDefault(QtCore.QLocale(qt_locale))
+
+
+def deliver_language_change():
+    """Deliver the language change posted to the windows now, not inside the next test.
+
+    A late one puts back the standard texts of the open dialogs, as Apply over Apply and continue.
+    """
+    QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.LanguageChange)
 
 
 def keep_auto_preview(test, value=None):
