@@ -19,6 +19,18 @@ COUNT_SUFFIX = re.compile(r" x[1-9][0-9]*\Z")
 # Relative tolerance on the measures of two finished solids that are the same piece. Float noise between copies
 # of one piece, moved or turned, is about 1e-14; a hole moved 0.05 mm along a 400 mm tube changes them by 1e-6.
 SHAPE_TOLERANCE = 1e-6
+# Numbering mode of the profiles and of the links for each numbering type.
+NUMBERING_MODES = {
+    "all_numbers": ("number", "number"),
+    "all_letters": ("letter", "letter"),
+    "number_for_profiles_letters_for_links": ("number", "letter"),
+    "letters_for_profiles_number_for_links": ("letter", "number"),
+}
+
+
+def ambiguous_prefix(prefix, mode):
+    """True when ``prefix`` ends in a character of the ``mode`` numbering: "P" + "A" reads back as "PA"."""
+    return bool(re.search(r"[A-Za-z]\Z" if mode == "letter" else r"[0-9]\Z", prefix))
 
 
 def letters_to_int(s: str) -> int:
@@ -64,14 +76,16 @@ def int_to_number_str(n: int) -> str:
 
 
 class IdGenerator:
-    def __init__(self, used_ids: set[str], mode: str, strategy: str, start_value: str | None = None):
+    def __init__(self, used_ids: set[str], mode: str, strategy: str, start_value: str | None = None, prefix: str = ""):
         """
         mode: "number" or "letter"
         strategy: "start_at", "continue", "fill_gaps"
         start_value: string, e.g. "1" or "A"
+        prefix: put before every ID; only the used IDs that carry it are reserved
         """
         self.mode = mode
         self.strategy = strategy
+        self.prefix = prefix
 
         # Choose converters
         if mode == "number":
@@ -86,9 +100,12 @@ class IdGenerator:
         # Convert used ids to ints
         self.used = set()
         for s in used_ids:
+            # Reserve the ID, not the optional count appended by populate_ids.
+            s = COUNT_SUFFIX.sub("", s)
+            if not s.startswith(prefix):
+                continue  # another prefix: another numbering
             try:
-                # Reserve the ID, not the optional count appended by populate_ids.
-                self.used.add(self.to_int(COUNT_SUFFIX.sub("", s)))
+                self.used.add(self.to_int(s[len(prefix) :]))
             except Exception:
                 pass  # ignore invalid IDs if needed
 
@@ -123,7 +140,7 @@ class IdGenerator:
         # Move cursor forward for next call
         self.cursor = n + 1
 
-        return self.from_int(n)
+        return self.prefix + self.from_int(n)
 
 
 def profile_source(profile):
@@ -242,6 +259,8 @@ def populate_ids(
     numbering_scheme,
     start_number="1",
     start_letter="A",
+    profiles_prefix="",
+    links_prefix="",
 ):
 
     if keep_existing:
@@ -278,27 +297,21 @@ def populate_ids(
     else:
         raise ValueError("Wrong numbering_scheme")
 
-    if numbering_type == "all_numbers":
-        gen_profiles = IdGenerator(
-            profiles_used | links_used, mode="number", strategy=strategy, start_value=start_number
-        )
-        gen_links = gen_profiles
-
-    elif numbering_type == "all_letters":
-        gen_profiles = IdGenerator(
-            profiles_used | links_used, mode="letter", strategy=strategy, start_value=start_letter
-        )
-        gen_links = gen_profiles
-
-    elif numbering_type == "number_for_profiles_letters_for_links":
-        gen_profiles = IdGenerator(profiles_used, mode="number", strategy=strategy, start_value=start_number)
-        gen_links = IdGenerator(links_used, mode="letter", strategy=strategy, start_value=start_letter)
-
-    elif numbering_type == "letters_for_profiles_number_for_links":
-        gen_profiles = IdGenerator(profiles_used, mode="letter", strategy=strategy, start_value=start_letter)
-        gen_links = IdGenerator(links_used, mode="number", strategy=strategy, start_value=start_number)
-    else:
+    if numbering_type not in NUMBERING_MODES:
         raise ValueError("Wrong numbering_type")
+    profiles_mode, links_mode = NUMBERING_MODES[numbering_type]
+    start_values = {"number": start_number, "letter": start_letter}
+    if profiles_mode == links_mode:
+        # One numbering for both kinds: an ID is unique among the profiles and links that carry its prefix.
+        profiles_used = links_used = profiles_used | links_used
+    gen_profiles = IdGenerator(
+        profiles_used, profiles_mode, strategy, start_values[profiles_mode], prefix=profiles_prefix
+    )
+    if (links_mode, links_prefix) == (profiles_mode, profiles_prefix):
+        gen_links = gen_profiles
+    else:
+        # Each numbering reserves only the IDs that carry its prefix: "P-1" and "L-1" do not clash.
+        gen_links = IdGenerator(links_used, links_mode, strategy, start_values[links_mode], prefix=links_prefix)
 
     # group profiles / links if needed
     if group_ids_for_identical:

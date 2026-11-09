@@ -11,7 +11,8 @@ from freecad.maxproframe.ff_tools import get_param_group
 from freecad.maxproframe.populate_ids import populate_ids
 from freecad.maxproframe.populate_ids_tool import PopulateIDsTaskPanel
 
-NUMBERING_TYPES = ["all_numbers", "all_letters"]
+NUMBERING_TYPES = ["all_numbers", "all_letters", "number_for_profiles_letters_for_links"]
+PREFIXES = ("Profiles Prefix", "Links Prefix")
 START_AT = 3  # index of "Start at specific number/letter"
 FILL_DOCUMENT = 1  # index of "Fill when available (whole document)"
 
@@ -96,8 +97,10 @@ class TestPopulateIDsPanel(unittest.TestCase):
             "ints": {k: param.GetInt(k) for k in ("First Number ID", "IDs numbering type", "IDs numbering scheme")},
             "letter": param.GetString("First Letter ID", "A"),
             "keep": param.GetBool("Keep Existing IDs", False),
+            "prefixes": {k: param.GetString(k, "") for k in PREFIXES},
         }
         stored = set(param.GetInts())
+        stored_strings = set(param.GetStrings())
 
         def restore():
             for key, value in saved["ints"].items():
@@ -107,6 +110,11 @@ class TestPopulateIDsPanel(unittest.TestCase):
                     param.RemInt(key)
             param.SetString("First Letter ID", saved["letter"])
             param.SetBool("Keep Existing IDs", saved["keep"])
+            for key, value in saved["prefixes"].items():
+                if key in stored_strings:
+                    param.SetString(key, value)
+                else:
+                    param.RemString(key)
 
         self.addCleanup(restore)
         self.doc = App.newDocument("PopulateIDsPanel")
@@ -240,6 +248,50 @@ class TestPopulateIDsPanel(unittest.TestCase):
         self.assertTrue(hasattr(self.link, "MaxProFrameVersion"))
         self.assertFalse(hasattr(other, "PID"))
         self.assertFalse(hasattr(other, "MaxProFrameVersion"))
+
+    def test_prefix_fields_are_enabled_and_trimmed(self):
+        panel = self.panel("number_for_profiles_letters_for_links")
+        self.assertTrue(panel.form.le_profiles_prefix.isEnabled())
+        self.assertTrue(panel.form.le_links_prefix.isEnabled())
+        panel.form.le_profiles_prefix.setText("P")
+        panel.form.le_links_prefix.setText("  L- ")
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.link.PID, "L-A")
+
+    def test_prefixes_are_remembered(self):
+        panel = self.panel("all_numbers")
+        panel.form.le_profiles_prefix.setText(" P-")
+        panel.form.le_links_prefix.setText("L")
+        self.assertTrue(panel.accept())
+        self.assertEqual(self.link.PID, "L1")
+        self.assertEqual([get_param_group().GetString(k, "") for k in PREFIXES], ["P-", "L"])
+        form = PopulateIDsTaskPanel().form
+        self.assertEqual([form.le_profiles_prefix.text(), form.le_links_prefix.text()], ["P-", "L"])
+
+    def test_prefix_ending_in_a_letter_or_digit_of_its_numbering_is_refused(self):
+        param = get_param_group(writable=True)
+        for numbering_type, profiles_prefix, links_prefix in (
+            ("all_numbers", "", "L1"),
+            ("all_numbers", "P7 ", "L-"),
+            ("all_letters", "P-", "l"),
+            ("number_for_profiles_letters_for_links", "P", "L"),
+        ):
+            with self.subTest(numbering_type=numbering_type, prefixes=(profiles_prefix, links_prefix)):
+                for key in PREFIXES:
+                    param.SetString(key, "")
+                panel = self.panel(numbering_type)
+                panel.form.le_profiles_prefix.setText(profiles_prefix)
+                panel.form.le_links_prefix.setText(links_prefix)
+                self.assertFalse(panel.accept())
+                # Refused before anything is written: the link does not even get a PID.
+                self.assertFalse(hasattr(self.link, "PID"))
+                self.assertEqual([param.GetString(k, "") for k in PREFIXES], ["", ""])
+                self.assertEqual(
+                    panel.form.message_label.text(),
+                    "A prefix cannot end in a letter when its IDs use letters, or in a digit when they use numbers.",
+                )
+                self.assertTrue(panel.form.message_label.isVisibleTo(panel.form))
+                self.doc.abortTransaction()
 
     def test_ids_of_links_outside_the_selection_are_still_reserved(self):
         other = self.add_link("Other", pid="1")

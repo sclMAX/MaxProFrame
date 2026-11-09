@@ -59,6 +59,18 @@ class TestPopulateIDsTranslations(unittest.TestCase):
         self.assertEqual(form.label_5.text(), "Prefijo de perfiles")
         self.assertEqual(form.label_6.text(), "Prefijo de enlaces")
 
+    def test_refused_prefix_message_is_spanish(self):
+        use_language(self, "Spanish", "es_ES")
+        panel = PopulateIDsTaskPanel()
+        panel.form.cb_numbering_type.setCurrentIndex(1)  # All Letters
+        panel.form.cb_numbering_scheme.setCurrentIndex(0)
+        panel.form.le_links_prefix.setText("L")
+        self.assertFalse(panel.accept())
+        self.assertEqual(
+            panel.form.message_label.text(),
+            "Un prefijo no puede terminar en letra si sus IDs usan letras, ni en dígito si usan números.",
+        )
+
     def test_panel_text_stays_english_in_english(self):
         use_language(self, "English", "en_US")
         form = PopulateIDsTaskPanel().form

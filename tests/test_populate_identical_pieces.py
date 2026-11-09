@@ -16,11 +16,13 @@ MOVED = App.Placement(App.Vector(500, 200, 0), App.Rotation(UP, 30))
 
 
 class PopulateFixture(DrillHoleFixture):
-    def populate(self, profiles=(), links=(), grouped=True, counted=True, scheme="fill_selection", start="1"):
+    def populate(
+        self, profiles=(), links=(), grouped=True, counted=True, scheme="fill_selection", start="1", **prefixes
+    ):
         doc_profiles, doc_links = get_profiles_and_links_from_document()
         populate_ids(
             list(profiles), list(links), doc_profiles, doc_links, "all_numbers", False, grouped, counted,
-            False, scheme, start_number=start,
+            False, scheme, start_number=start, **prefixes,
         )  # fmt: skip
 
     def drilled(self, along, placement=App.Placement()):
@@ -108,6 +110,15 @@ class TestCountInTheDocument(PopulateFixture):
 
     def test_without_count_the_pieces_outside_are_unchanged(self):
         self.assert_outside_unchanged(grouped=True, counted=False)
+
+    def test_prefixed_pieces_outside_the_selection_are_counted_and_get_the_count(self):
+        outside, selected = self.drilled(30.0), self.drilled(30.0)
+        self.populate([outside], profiles_prefix="P-")
+        self.assertEqual(outside.PID, "P-1 x1")
+        self.populate([selected], profiles_prefix="P-")
+        for obj in (outside, outside.baseObject[0], selected, selected.baseObject[0]):
+            self.assertEqual(obj.PID, "P-1 x2", obj.Name)
+        self.assertEqual(self.bom_id(selected), "P-1 x2")
 
     def test_links_outside_the_selection_are_counted_and_get_the_count(self):
         box = self.doc.addObject("Part::Box", "Box")

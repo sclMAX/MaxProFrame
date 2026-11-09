@@ -171,11 +171,7 @@
     </widget>
    </item>
    <item>
-    <widget class="QLineEdit" name="le_profiles_prefix">
-     <property name="enabled">
-      <bool>false</bool>
-     </property>
-    </widget>
+    <widget class="QLineEdit" name="le_profiles_prefix"/>
    </item>
    <item>
     <widget class="QLabel" name="label_6">
@@ -185,11 +181,7 @@
     </widget>
    </item>
    <item>
-    <widget class="QLineEdit" name="le_links_prefix">
-     <property name="enabled">
-      <bool>false</bool>
-     </property>
-    </widget>
+    <widget class="QLineEdit" name="le_links_prefix"/>
    </item>
    <item>
     <spacer name="verticalSpacer">

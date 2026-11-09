@@ -1022,6 +1022,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
 </source><translation>Asignar IDs cancelado
 </translation></message>
     <message><source>Enter a first letter: A to Z only.</source><translation>Ingresá una letra inicial: solo de la A a la Z.</translation></message>
+    <message><source>A prefix cannot end in a letter when its IDs use letters, or in a digit when they use numbers.</source><translation>Un prefijo no puede terminar en letra si sus IDs usan letras, ni en dígito si usan números.</translation></message>
     <message><source>Miter Ends</source><translation>Ingletes</translation></message>
     <message><source>Edit Miter</source><translation>Editar inglete</translation></message>
     <message><source>Profiles</source><translation>Perfiles</translation></message>

@@ -11,6 +11,7 @@
   - **Populate IDs**: **Keep existing IDs** replaces **Reset existing selection numbering**: pieces that already have an ID keep it and only the others are numbered. Before, every selected piece was numbered again, checked or not.
   - **Populate IDs**: **Group profiles ID if identical** compares the finished solid of each piece, wherever it is placed. Two bars of the same length with holes in different places got the same ID, and a bar turned end for end (its cutting angles swapped) got another ID. A piece and its mirror image still share an ID.
   - **Populate IDs**: **Include Part count in PID** counts every piece of the document left with the ID, also the ones outside the selection, which get the new count. It counted the selected pieces only, so two pieces with one ID could show different counts.
+  - **Populate IDs**: the **Profiles Prefix** and **Links Prefix** fields work and are remembered ("P-" gives P-1, P-2): gaps and the next ID are looked for among the IDs with that prefix. They were disabled and did nothing.
 
 * v1.10.3 (2026-11-07)
 
