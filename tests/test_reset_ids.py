@@ -1,21 +1,40 @@
-"""Reset IDs: a cleared ID stays cleared on trims and cutouts, after a recompute and in the BOM."""
+"""Reset IDs: asks before clearing, reports what it cleared, and a cleared ID stays cleared on trims and cutouts."""
 
 import unittest
+from unittest.mock import patch
 
+import FreeCAD as App
 import FreeCADGui as Gui
 import test_extruded_cutout_pid as cutout_fixture
 import test_trimmed_profile_pid as trimmed_fixture
 
 from freecad.maxproframe.create_bom import traverse_assembly
-from freecad.maxproframe.populate_ids_tool import ResetIDsCommand
+from freecad.maxproframe.populate_ids_tool import QtGui, ResetIDsCommand
+
+QMessageBox = QtGui.QMessageBox
 
 
 class ResetIDsChecks:
-    def reset(self, obj):
+    def reset(self, obj, answer=QMessageBox.Yes):
+        """Run Reset IDs on ``obj``; return the confirmation texts asked and the Report view messages."""
         Gui.Selection.clearSelection()
         self.addCleanup(Gui.Selection.clearSelection)
         Gui.Selection.addSelection(obj)
-        ResetIDsCommand().Activated()
+        asked, printed = [], []
+
+        def question(parent, title, text, *args):
+            asked.append((title, text))
+            return answer
+
+        with (
+            patch.object(QMessageBox, "question", side_effect=question),
+            patch.object(App.Console, "PrintMessage", side_effect=printed.append),
+        ):
+            ResetIDsCommand().Activated()
+        return asked, "".join(printed)
+
+    def status_message(self):
+        return Gui.getMainWindow().statusBar().currentMessage()
 
     def bom_id(self, obj):
         profiles, links = [], []
@@ -41,6 +60,40 @@ class ResetIDsChecks:
         self.assertEqual(self.bom_id(self.derived), "")
         # Cleared at the source profile, as Populate IDs sets it there.
         self.assertEqual(self.base.PID, "")
+
+    def test_asks_before_clearing_with_the_count(self):
+        asked, _ = self.reset(self.derived)
+        self.assertEqual(len(asked), 1)
+        title, text = asked[0]
+        self.assertEqual(title, "Reset IDs")
+        # The trim or cutout and its source profile both lose ID 42.
+        self.assertEqual(text, "Reset the IDs of the selection?\n\nIDs to clear: 2. Undo (Ctrl+Z) restores them.")
+
+    def test_declined_confirmation_changes_nothing(self):
+        undo_count = self.doc.UndoCount
+        asked, printed = self.reset(self.derived, answer=QMessageBox.No)
+        self.assertEqual(len(asked), 1)
+        self.assertEqual(self.derived.PID, "42")
+        self.assertEqual(self.base.PID, "42")
+        self.assertEqual(self.doc.UndoCount, undo_count)
+        self.assertEqual(printed, "")
+
+    def test_reports_what_it_cleared(self):
+        _, printed = self.reset(self.derived)
+        self.assertEqual(
+            printed,
+            f"Reset IDs: IDs cleared: 2.\n  {self.derived.Label}: 42\n  {self.base.Label}: 42\n",
+        )
+        self.assertEqual(self.status_message(), "IDs cleared: 2 (Ctrl+Z to undo)")
+
+    def test_selection_without_ids_neither_asks_nor_changes(self):
+        self.reset(self.derived)
+        undo_count = self.doc.UndoCount
+        asked, printed = self.reset(self.derived)
+        self.assertEqual(asked, [])
+        self.assertEqual(self.doc.UndoCount, undo_count)
+        self.assertEqual(printed, "Reset IDs: the selection has no IDs to reset.\n")
+        self.assertEqual(self.status_message(), "The selection has no IDs to reset.")
 
     def test_undo_restores_the_ids_in_one_step(self):
         self.reset(self.derived)
