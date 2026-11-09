@@ -1,6 +1,6 @@
 ## Changelog
 
-* Unreleased
+* v1.10.4 (2026-11-09)
 
   **Fixes**
   - **Cutout / Hole**: a count of the **Pattern** driven by an expression that gives 0 (for example a VarSet set to 0 for now) opens the panel with the Pattern checked. It opened unchecked, and the next change or OK removed the expression.
