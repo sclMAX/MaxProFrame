@@ -560,6 +560,6 @@ The Ends column tells how both ends sit:
 
 Both sheets end with a Legend of these marks.
 
-The column titles, the section titles and the Legend of both sheets follow the FreeCAD language (Spanish is available); the marks and the values are the same in every language.
+The column titles, the section titles, the stock bar titles ("used", "left"), the "Yes" of Drill/Cutout and the Legend of both sheets follow the FreeCAD language (Spanish is available); the marks, IDs, lengths and angles are the same in every language.
 
 Check your BOM for error !
