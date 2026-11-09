@@ -15,11 +15,12 @@ QMessageBox = QtGui.QMessageBox
 
 
 class ResetIDsChecks:
-    def reset(self, obj, answer=QMessageBox.Yes):
-        """Run Reset IDs on ``obj``; return the confirmation texts asked and the Report view messages."""
+    def reset(self, *objs, answer=QMessageBox.Yes):
+        """Run Reset IDs on ``objs``; return the confirmation texts asked and the Report view messages."""
         Gui.Selection.clearSelection()
         self.addCleanup(Gui.Selection.clearSelection)
-        Gui.Selection.addSelection(obj)
+        for obj in objs:
+            Gui.Selection.addSelection(obj)
         asked, printed = [], []
 
         def question(parent, title, text, *args):
@@ -85,6 +86,45 @@ class ResetIDsChecks:
             f"Reset IDs: IDs cleared: 2.\n  {self.derived.Label}: 42\n  {self.base.Label}: 42\n",
         )
         self.assertEqual(self.status_message(), "IDs cleared: 2 (Ctrl+Z to undo)")
+
+    def link(self, name, pid=None):
+        """A link to a box; ``pid`` None leaves it without PID, as before Populate IDs ever numbered it."""
+        box = self.doc.addObject("Part::Box", f"{name}Box")
+        link = self.doc.addObject("App::Link", name)
+        link.LinkedObject = box
+        if pid is not None:
+            link.addProperty("App::PropertyString", "PID", "MaxProFrame", "Profile ID").PID = pid
+        self.doc.recompute()
+        return link
+
+    def test_selected_links_are_counted_and_reported(self):
+        numbered, never_numbered = self.link("Numbered", "L1"), self.link("NeverNumbered")
+        undo_count = self.doc.UndoCount
+        asked, printed = self.reset(self.derived, numbered, never_numbered)
+        question = "Reset the IDs of the selection?\n\nIDs to clear: 3. Undo (Ctrl+Z) restores them."
+        self.assertEqual(asked, [("Reset IDs", question)])
+        self.assertEqual(
+            printed,
+            f"Reset IDs: IDs cleared: 3.\n  {self.derived.Label}: 42\n  {self.base.Label}: 42\n  {numbered.Label}: L1\n",
+        )
+        self.assertEqual(self.status_message(), "IDs cleared: 3 (Ctrl+Z to undo)")
+        self.assertEqual([self.derived.PID, self.base.PID, numbered.PID], ["", "", ""])
+        self.assertNotIn("PID", never_numbered.PropertiesList)
+        self.assertFalse(self.doc.HasPendingTransaction)
+        self.assertEqual(self.doc.UndoCount, undo_count + 1)
+
+    def test_a_link_never_numbered_leaves_the_id_of_what_it_links(self):
+        # An App::Link reads the PID of the profile it links: that ID is not the link's to clear.
+        link = self.doc.addObject("App::Link", "LinkToProfile")
+        link.LinkedObject = self.base
+        self.doc.recompute()
+        undo_count = self.doc.UndoCount
+        asked, printed = self.reset(link)
+        self.assertEqual(asked, [])
+        self.assertEqual(printed, "Reset IDs: the selection has no IDs to reset.\n")
+        self.assertEqual(self.base.PID, "42")
+        self.assertNotIn("PID", link.PropertiesList)
+        self.assertEqual(self.doc.UndoCount, undo_count)
 
     def test_selection_without_ids_neither_asks_nor_changes(self):
         self.reset(self.derived)

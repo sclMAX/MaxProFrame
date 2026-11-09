@@ -66,6 +66,9 @@ from freecad.maxproframe.populate_ids import (
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 from freecad.maxproframe.version import __version__ as ff_version
 
+# How long Reset IDs shows its result in the status bar, in milliseconds.
+STATUS_TIMEOUT_MS = 10000
+
 
 class PopulateIDsTaskPanel:
     def __init__(self):
@@ -349,7 +352,7 @@ class ResetIDsCommand:
             if not cleared:
                 message = translate("frameforge", "The selection has no IDs to reset.")
                 App.Console.PrintMessage("{}: {}\n".format(title, message[:1].lower() + message[1:]))
-                Gui.getMainWindow().statusBar().showMessage(message, 10000)
+                Gui.getMainWindow().statusBar().showMessage(message, STATUS_TIMEOUT_MS)
                 return
 
             answer = QtGui.QMessageBox.question(
@@ -369,7 +372,8 @@ class ResetIDsCommand:
             for o in sel_profiles:
                 set_profile_pid(o, "")
             for o in sel_links:
-                o.PID = ""
+                if own_pid(o):
+                    o.PID = ""
 
             App.ActiveDocument.commitTransaction()
             # App.ActiveDocument.recompute()
@@ -378,15 +382,23 @@ class ResetIDsCommand:
             lines += ["  {}: {}\n".format(obj.Label, pid) for obj, pid in cleared]
             App.Console.PrintMessage("".join(lines))
             Gui.getMainWindow().statusBar().showMessage(
-                translate("frameforge", "IDs cleared: {} (Ctrl+Z to undo)").format(len(cleared)), 10000
+                translate("frameforge", "IDs cleared: {} (Ctrl+Z to undo)").format(len(cleared)), STATUS_TIMEOUT_MS
             )
+
+
+def own_pid(obj):
+    """The PID property of ``obj`` itself, else "".
+
+    A link Populate IDs never numbered has none, and an App::Link reads the PID of what it links.
+    """
+    return obj.PID if "PID" in obj.PropertiesList else ""
 
 
 def ids_to_clear(profiles, links):
     """The objects Reset IDs changes, with their current ID: a trim or cutout and its source profile both."""
     cleared, seen = [], set()
     for obj in [o for p in profiles for o in (p, profile_source(p))] + list(links):
-        pid = getattr(obj, "PID", "")
+        pid = own_pid(obj)
         if pid and obj.Name not in seen:
             seen.add(obj.Name)
             cleared.append((obj, pid))

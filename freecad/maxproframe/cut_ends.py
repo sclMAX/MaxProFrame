@@ -21,6 +21,8 @@ ZERO_ANGLE = 0.05
 AREA_TOLERANCE = 1e-4
 # Smallest |nz| of a face crossing the axis: below it the face runs along the profile.
 AXIS_TOLERANCE = 1e-6
+# Largest angle, in radians, between the normals of end faces that lie on one plane.
+PLANE_TOLERANCE = 1e-6
 # Ends column: tilted apart on one face, tilted the same way on one face, one end square.
 TRAPEZOID, PARALLELOGRAM, ONE_SQUARE = "\\_/", "/_/", "|_/"
 
@@ -73,7 +75,7 @@ def _end_normal(shape, end, area):
     # Several faces are fine when they lie on one plane.
     for face, other in faces[1:]:
         offset = abs(normal.dot(face.CenterOfMass - first.CenterOfMass))
-        if other.getAngle(normal) > AXIS_TOLERANCE or offset > tolerance:
+        if other.getAngle(normal) > PLANE_TOLERANCE or offset > tolerance:
             return None
     projected = sum(face.Area for face, _ in faces) * abs(normal.z)
     if abs(projected - area) > AREA_TOLERANCE * area:
@@ -110,8 +112,8 @@ def _ends(start, end):
 def cut_ends(obj):
     """(cut angle 1, cut angle 2, ends) of the piece ``obj``: a profile, a trim of it or a cutout.
 
-    A piece whose ends are not each one flat cut (a notch, a cutout eating an end) keeps its CuttingAngleA/B
-    and gets no Ends symbol.
+    A piece whose ends are not each one flat cut (a notch, a cutout eating an end), or that cannot be read on its
+    profile (not made from a profile, no solid, no section), keeps its CuttingAngleA/B and gets no Ends symbol.
     """
     fallback = (obj.CuttingAngleA, obj.CuttingAngleB, "")
     source = profile_source(obj)
