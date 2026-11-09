@@ -541,7 +541,7 @@ It also can contains all the Links, ie the LaserCut Parts for instance.
 
 If selected, you can also create a CutList, **sorted to optimize your work** at the saw.
 - Add Kerf and Stock Length.
-- Identical pieces of one stock bar (same ID, length, angles and ends) take one row, with their Quantity. Pieces of different bars are never merged.
+- Identical pieces of one stock bar (same ID, length, angles and ends) take one row, with their Quantity. Pieces of different bars are never merged, and pieces without ID keep one row each.
 
 About Angles (CutAngle1 / CutAngle2, in the BOM and the CutList):
 - Each angle is read on the finished piece (bevels, End Miter, Extend / Cut, cutouts, inside a Part too), so a Profile and a TrimmedProfile are written the same way.
@@ -550,7 +550,7 @@ About Angles (CutAngle1 / CutAngle2, in the BOM and the CutList):
 - CutAngle1 is the start of the profile (the Bevel A side), CutAngle2 its end.
 - `45.0 <80 + 10.0 <40`: compound cut, the angle seen on each face.
 - Round Bar and Pipe have one angle, without face.
-- An end that is not one flat cut (a Notch, a cutout reaching the end) keeps the old marks: angle prefixed with "@", "P" for a Perfect Cut (Notch), "*" for angles rotated 90°, "?" when the angle can't be computed.
+- A piece with an end that is not one flat cut (a Notch, a cutout reaching the end), or a piece not made from a profile, keeps the old marks on both ends and no Ends symbol: angle prefixed with "@", "P" for a Perfect Cut (Notch), "*" for angles rotated 90°, "?" when the angle can't be computed.
 
 The Ends column tells how both ends sit:
 - `\_/`: both ends tilted on the same face in opposite directions (trapezoid, a frame miter).

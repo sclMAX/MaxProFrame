@@ -84,7 +84,6 @@ def traverse_assembly(profiles_data, links_data, obj, parent="", full_parent_pat
         p["size_name"] = obj.SizeName
         p["material"] = obj.Material
         p["length"] = f"{obj.Length.Value:.1f}"
-        p["obj"] = obj
         p["cut_angle_1"], p["cut_angle_2"], p["ends"] = cut_ends(obj)
         p["cutout"] = "Yes" if obj.Cutout else ""
         p["approx_weight"] = str(obj.ApproxWeight)
@@ -251,11 +250,14 @@ def make_bom(profiles_data, links_data, bom_name="BOM", spreadsheet=None):
 
 
 def group_stock_parts(stock):
-    """(piece, quantity) of each set of identical pieces (ID, length, angles, ends) of ``stock``, first seen first."""
+    """(piece, quantity) of each set of identical pieces (ID, length, angles, ends) of ``stock``, first seen first.
+
+    A piece without ID keeps its own row: nothing tells it is the same piece as another of its length and angles.
+    """
     groups = {}
-    for cut_part in stock.parts:
+    for index, cut_part in enumerate(stock.parts):
         prof = cut_part.obj
-        key = (prof["ID"], prof["length"], prof["cut_angle_1"], prof["cut_angle_2"], prof["ends"])
+        key = (prof["ID"] or index, prof["length"], prof["cut_angle_1"], prof["cut_angle_2"], prof["ends"])
         groups.setdefault(key, [prof, 0])[1] += 1
     return [tuple(group) for group in groups.values()]
 

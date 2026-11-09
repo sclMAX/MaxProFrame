@@ -44,3 +44,6 @@ User: me parece bien "<80"
 
 ### L4 — Worker decisions accepted by the parent
 `*` stays in the legends: a fallback piece beveled on different faces still prints it. End 1 is the Z-min end of the profile, so a miter or Extend/Cut at the start of the sketch edge now shows in CutAngle1 (before, trims always went to CutAngle2); noted in CHANGELOG and tutorial. A notch that leaves one flat square end now prints `0.0` instead of `@ P`. BOM columns after CutAngle2 move one to the right (Ends is H). Not tested: a trim in another container than its source profile.
+
+### L5 — Native review follow-up (user chose option 1: "1")
+Review of f860601..8721aae approved with advisories. Fixed: Cut List grouping merged pieces without ID of equal length and angles (they now keep one row each, RED observed: Quantity '2' vs two rows of '1'); unused `p["obj"]` removed; tutorial says which pieces keep the old marks.
