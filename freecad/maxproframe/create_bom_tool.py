@@ -38,6 +38,7 @@ from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrim
 class CreateBOMTaskPanel:
     def __init__(self):
         self.form = keep_alive_until_destroyed(Gui.PySideUic.loadUi(os.path.join(UIPATH, "create_bom.ui")))
+        self._translate_form()
 
         param = get_param_group()
         if not param.IsEmpty():
@@ -47,6 +48,23 @@ class CreateBOMTaskPanel:
             self.form.cut_list_cb.setChecked(param.GetBool("Generate Cut List", False))
             self.form.stock_length_sb.setValue(param.GetFloat("Stock Length", 6000.0))
             self.form.kerf_sb.setValue(param.GetFloat("Kerf", 1.0))
+
+    def _translate_form(self):
+        """Designer strings are not in the catalog: set their translations here."""
+        form = self.form
+        for setter, text in (
+            (form.setWindowTitle, translate("frameforge", "Create BOM")),
+            (form.groupBox.setTitle, translate("frameforge", "BOM")),
+            (form.label.setText, translate("frameforge", "BOM Name")),
+            (form.full_parent_path.setText, translate("frameforge", "Full Parent Path")),
+            (form.include_links_cb.setText, translate("frameforge", "Include Links")),
+            (form.group_profiles_cb.setText, translate("frameforge", "Group Profiles / Links")),
+            (form.groupBox_2.setTitle, translate("frameforge", "Cut List")),
+            (form.cut_list_cb.setText, translate("frameforge", "Generate Cut List")),
+            (form.label_2.setText, translate("frameforge", "Stock Material Length")),
+            (form.label_3.setText, translate("frameforge", "Kerf")),
+        ):
+            setter(text)
 
     def open(self):
         App.Console.PrintMessage(translate("frameforge", "Opening CreateBOM\n"))

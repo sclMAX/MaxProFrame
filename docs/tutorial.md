@@ -541,10 +541,25 @@ It also can contains all the Links, ie the LaserCut Parts for instance.
 
 If selected, you can also create a CutList, **sorted to optimize your work** at the saw.
 - Add Kerf and Stock Length.
+- Identical pieces of one stock bar (same ID, length, angles and ends) take one row, with their Quantity, also when one is turned end for end. Pieces of different bars are never merged, and pieces without ID keep one row each.
 
-About Angles:
-- If the Object is a Profile, the tool uses BevelsCut A/B - X/Y ("- / *" symbol for same direction cut or 90° rotated cut)
-- If the Object is a TrimmedProfile, the tool calculate the angle (angle prefix with "@" symbol)
-- If a TrimmedProfile is Perfect Cut (Notch) is is noted "P"
+About Angles (CutAngle1 / CutAngle2, in the BOM and the CutList):
+- Each angle is read on the finished piece (bevels, End Miter, Extend / Cut, cutouts, inside a Part too), so a Profile and a TrimmedProfile are written the same way.
+- `45.0 <80`: the 45° are seen on the 80 mm faces of the profile, the cut runs across the 80. On a 80x40 tube, `45.0 <40` is the other way round.
+- `0.0`: square end.
+- In the BOM, CutAngle1 is the start of the profile (the Bevel A side), CutAngle2 its end. In the CutList, the larger angle comes first, whatever end it is on.
+- `45.0 <80 + 10.0 <40`: compound cut, the angle seen on each face.
+- Round Bar and Pipe have one angle, without face.
+- A piece with an end that is not one flat cut (a Notch, a cutout reaching the end), or a piece not made from a profile, keeps the old marks on both ends and no Ends symbol: angle prefixed with "@", "P" for a Perfect Cut (Notch), "*" for angles rotated 90°, "?" when the angle can't be computed.
+
+The Ends column tells how both ends sit:
+- `\_/`: both ends tilted on the same face in opposite directions (trapezoid, a frame miter).
+- `/_/`: both ends tilted on the same face the same way (parallelogram).
+- `|_/`: one end square, the other tilted on one face.
+- Empty: both ends square, or tilted on different faces, or compound.
+
+Both sheets end with a Legend of these marks.
+
+The column titles, the section titles, the stock bar titles ("used", "left"), the "Yes" of Drill/Cutout and the Legend of both sheets follow the FreeCAD language (Spanish is available); the marks, IDs, lengths and angles are the same in every language.
 
 Check your BOM for error !

@@ -2,8 +2,16 @@
 
 * Unreleased
 
-  **Changes**
+  **Improvements**
   - **Reset IDs** asks before clearing, with the number of IDs it will clear, and reports what it cleared: the count in the status bar and each piece with its old ID in the Report view. Undo (Ctrl+Z) restores them. A selection without IDs is left alone, with a message. Before, it cleared at once and showed nothing.
+  - **BOM / Cut List**: every cut angle tells the face of the profile it is seen on: `45.0 <80` on a 80x40 tube means the 45° run across the 80 mm faces; a compound cut gives both, `45.0 <80 + 10.0 <40`. The angles are read on the finished piece, so a bevel, an End Miter, an Extend / Cut or a cutout give the same text, inside a Part too. CutAngle1 is the start of the profile (the Bevel A side) and CutAngle2 its end, also for a trimmed end, which always went to CutAngle2. An end that is not one flat cut (Notch) keeps its "@" / "P" marks.
+  - **BOM / Cut List**: a new **Ends** column shows how both ends sit: `\_/` (trapezoid), `/_/` (parallelogram) or `|_/` (one end square).
+  - **Cut List**: identical pieces of one stock bar (same ID, length, angles and ends) take one row with their Quantity, instead of one row each (pieces without ID keep one row each).
+  - **Cut List**: a piece turned end for end shares the row of the same piece: the Cut List prints the larger angle first, in CutAngle1. The BOM keeps CutAngle1 at the start of the profile.
+  - **BOM / Cut List**: the column titles, section titles and legends follow the FreeCAD language, with a Spanish translation, and so does the **Create BOM** panel. The marks, IDs, lengths and angles are not translated.
+
+  **Fixes**
+  - **BOM / Cut List**: the legends list the marks that are printed. The Cut List legend explained "~" while the angles of a TrimmedProfile are printed with "@", and both legends listed "-", which was never printed.
 
 * v1.10.5 (2026-11-09)
 
