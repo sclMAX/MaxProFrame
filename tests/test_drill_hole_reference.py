@@ -1,5 +1,8 @@
 """Drill Hole reference: the hole stays where it was placed when the vertex it was placed from changes."""
 
+import os
+import shutil
+import tempfile
 import unittest
 
 import FreeCAD as App
@@ -102,6 +105,23 @@ class TestDrillHoleReference(DrillHoleFixture):
         self.assert_hole_at(obj, body.Shape.Volume - ONE_HOLE, 180, 0, 24)
         body.AnchorY = "Bottom"
         self.doc.recompute()
+        self.assert_hole_at(obj, body.Shape.Volume - ONE_HOLE, 180, 0, 49)
+        self.assertEqual(obj.ReferenceWarning, "")
+
+    def test_a_hole_saved_before_the_anchor_snapshot_follows_an_anchor_changed_after_opening(self):
+        # The user's case: open a document saved by 1.11, change the anchor, and only then recompute.
+        body = self.tube()
+        obj = self.corner_hole(body, 230.0)
+        obj.removeProperty("ReferenceAnchor")
+        folder = tempfile.mkdtemp(prefix="drill_hole_anchor_")
+        self.addCleanup(shutil.rmtree, folder, True)
+        path = os.path.join(folder, "v1110.FCStd")
+        self.doc.saveCopy(path)
+        doc = App.openDocument(path)
+        self.addCleanup(App.closeDocument, doc.Name)
+        body, obj = doc.getObject(body.Name), doc.getObject(obj.Name)
+        body.AnchorY = "Bottom"
+        doc.recompute()
         self.assert_hole_at(obj, body.Shape.Volume - ONE_HOLE, 180, 0, 49)
         self.assertEqual(obj.ReferenceWarning, "")
 
