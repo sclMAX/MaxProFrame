@@ -60,6 +60,7 @@ from freecad.maxproframe.populate_ids import (
     ambiguous_prefix,
     count_like_prefix,
     populate_ids,
+    profile_source,
     set_profile_pid,
 )
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
@@ -339,11 +340,31 @@ class ResetIDsCommand:
             ]
         ):
 
-            App.ActiveDocument.openTransaction("Reset IDs")
             sel_profiles, sel_links = [], []
             for s in sel:
                 get_profiles_and_links_from_object(sel_profiles, sel_links, s)
 
+            cleared = ids_to_clear(sel_profiles, sel_links)
+            title = translate("frameforge", "Reset IDs")
+            if not cleared:
+                message = translate("frameforge", "The selection has no IDs to reset.")
+                App.Console.PrintMessage("{}: {}\n".format(title, message[:1].lower() + message[1:]))
+                Gui.getMainWindow().statusBar().showMessage(message, 10000)
+                return
+
+            answer = QtGui.QMessageBox.question(
+                Gui.getMainWindow(),
+                title,
+                translate("frameforge", "Reset the IDs of the selection?")
+                + "\n\n"
+                + translate("frameforge", "IDs to clear: {}. Undo (Ctrl+Z) restores them.").format(len(cleared)),
+                QtGui.QMessageBox.Yes | QtGui.QMessageBox.No,
+                QtGui.QMessageBox.No,
+            )
+            if answer != QtGui.QMessageBox.Yes:
+                return
+
+            App.ActiveDocument.openTransaction("Reset IDs")
             # A trim or cutout copies its ID from the source profile: clear it there too.
             for o in sel_profiles:
                 set_profile_pid(o, "")
@@ -352,6 +373,24 @@ class ResetIDsCommand:
 
             App.ActiveDocument.commitTransaction()
             # App.ActiveDocument.recompute()
+
+            lines = ["{}: {}\n".format(title, translate("frameforge", "IDs cleared: {}.").format(len(cleared)))]
+            lines += ["  {}: {}\n".format(obj.Label, pid) for obj, pid in cleared]
+            App.Console.PrintMessage("".join(lines))
+            Gui.getMainWindow().statusBar().showMessage(
+                translate("frameforge", "IDs cleared: {} (Ctrl+Z to undo)").format(len(cleared)), 10000
+            )
+
+
+def ids_to_clear(profiles, links):
+    """The objects Reset IDs changes, with their current ID: a trim or cutout and its source profile both."""
+    cleared, seen = [], set()
+    for obj in [o for p in profiles for o in (p, profile_source(p))] + list(links):
+        pid = getattr(obj, "PID", "")
+        if pid and obj.Name not in seen:
+            seen.add(obj.Name)
+            cleared.append((obj, pid))
+    return cleared
 
 
 add_command("MaxProFrame_PopulateIDs", PopulateIDsCommand())

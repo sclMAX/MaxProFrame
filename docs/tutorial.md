@@ -499,7 +499,7 @@ Workflow:
 
 Validate, and voila !
 
-You can also reset the existing document 's IDs with the "Reset IDs" Command
+You can also reset the IDs of the selected pieces with the "Reset IDs" Command: select profiles, links, groups or parts. It first asks for confirmation and tells how many IDs it will clear (a trim or cutout and the profile it is made from count as two, since the trim takes its ID from the profile). After you accept, the status bar shows the count and the Report view lists each piece with the ID it had. Undo (Ctrl+Z) restores them. A selection with no IDs is left as it is, with a message.
 
 ## Create Balloons inside TechDraw
 
