@@ -1,6 +1,6 @@
 ## Changelog
 
-* Unreleased
+* v1.10.5 (2026-11-09)
 
   **Fixes**
   - **Populate IDs**: OK refuses a prefix that ends in " x" when its IDs use numbers, with a message in the panel. "P x" + "3" read back as P with a count of 3, so the 3 was not reserved and the next OK gave it again.
