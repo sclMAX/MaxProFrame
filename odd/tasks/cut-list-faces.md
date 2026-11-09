@@ -33,7 +33,7 @@ Out of scope (L2, for later): merging the same profile from different libraries 
 - **T4 [S6] delegated, done (uncommitted).** Cut List: angles of a piece printed larger first; grouping on that order. Test: the same ID turned end for end in one bar gives one row, Quantity 2, larger angle in CutAngle1; BOM unchanged. Evidence: `larger_angle_first` in `create_bom.py` (first number of the string, unsigned; none = -1; tie: ascending string); RED: two rows `4.0 <80 | 45.0 <80` and `45.0 <80 | 4.0 <80`, Quantity 1 each; GREEN: test_cut_list 13 tests OK; BOM start-angle test passes before and after.
 - **T5 [S7] delegated, done (uncommitted).** Translate every BOM / Cut List text; Spanish in `maxproframe_es.ts` and `frameforge_es.ts`; `python3 freecad/maxproframe/compile_translations.py`. Tests: headers and legend in Spanish with the language set to Spanish; English unchanged. Evidence: 32 `frameforge` messages added to both `.ts` (byte-identical), 16 `.qm` rebuilt; RED: `'Profiles' != 'Perfiles'`, Cut List header still English; GREEN: test_cut_list 13 OK, test_cut_ends 14, test_compile_translations 2, test_toolbar_translations 4, test_workbench_translation_loading 2, test_populate_ids_translations 3 OK.
 
-Review slices: (1) f860601 cut_ends + tests, ~304 lines; (2) 78818c5 + the docs commit BOM/Cut List wiring, tests and docs, ~295 lines.
+Review slices: (1) f860601 cut_ends + tests, ~304 lines; (2) 78818c5 + the docs commit BOM/Cut List wiring, tests and docs, ~295 lines; (3) bc73cca + c1ab521 review fix, turned pieces and translations, ~275 lines.
 
 ## Log
 
