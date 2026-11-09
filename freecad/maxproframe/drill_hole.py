@@ -25,6 +25,7 @@ from freecad.maxproframe.extruded_cutout import (
 )
 from freecad.maxproframe.ff_tools import ICONPATH, translate
 from freecad.maxproframe.frameforge_exceptions import FrameForgeException
+from freecad.maxproframe.profile import section_shift
 
 # Depth of a new drill hole: the wall under the face.
 DEFAULT_CUT_TYPE = "One wall"
@@ -106,6 +107,21 @@ def offset_origin(face, vertex, along, across, center_along, center_across):
     if center_across:
         origin = origin + across * _middle_shift(face, vertex, across)
     return origin
+
+
+def _add_reference_anchor(obj, shift=None):
+    """Give ``obj`` the anchor shift of its section when the reference was taken, unless it has it."""
+    if hasattr(obj, "ReferenceAnchor"):
+        return
+    obj.addProperty(
+        "App::PropertyVector",
+        "ReferenceAnchor",
+        "DrillHole",
+        translate("frameforge", "Where the anchor put the section when the reference was taken, local to the profile"),
+    )
+    obj.setEditorMode("ReferenceAnchor", ["ReadOnly", "Hidden"])
+    if shift is not None:
+        obj.ReferenceAnchor = shift
 
 
 def _add_center_properties(obj):
@@ -355,6 +371,7 @@ class DrillHole(ExtrudedCutout):
         ):
             obj.addProperty(kind, name, "DrillHole", tip)
             obj.setEditorMode(name, ["ReadOnly", "Hidden"])
+        _add_reference_anchor(obj)
         obj.addProperty(
             "App::PropertyString",
             "ReferenceWarning",
@@ -400,12 +417,15 @@ class DrillHole(ExtrudedCutout):
         snapshot. Otherwise the snapshot is found again on the base shape: the named vertex, else
         the vertex now at its place; when none is, the hole keeps the snapshot and warns.
         """
+        profile = get_profile_from_extrudedcutout(fp)
+        # A drill hole saved before ReferenceAnchor was placed with the anchor its profile has.
+        _add_reference_anchor(fp, section_shift(profile))
         selected_object, (face_name, *_) = fp.baseObject
         # A face FreeCAD lost track of after an edit of the base is named "?Face3": it is still the
         # face of the snapshot, found again below from its plane.
         face_name = face_name.removeprefix(MISSING_ELEMENT_PREFIX)
         shape = selected_object.Shape
-        placement = get_profile_from_extrudedcutout(fp).Placement
+        placement = profile.Placement
         name = f"{face_name}/{fp.ReferenceVertex}"
         if fp.ReferenceName != name:
             face = shape.getElement(face_name)
@@ -420,9 +440,11 @@ class DrillHole(ExtrudedCutout):
             fp.ReferencePoint = placement.inverse().multVec(vertex)
             fp.ReferenceNormal = placement.Rotation.inverted().multVec(normal)
             fp.ReferenceName = name
+            fp.ReferenceAnchor = section_shift(profile)
             self._warn(fp, "")
             return vertex, normal, face.CenterOfMass, face
-        point = placement.multVec(fp.ReferencePoint)
+        # The anchor moves the section, not the profile: the snapshot moves with the section.
+        point = placement.multVec(fp.ReferencePoint + section_shift(profile) - fp.ReferenceAnchor)
         normal = placement.Rotation.multVec(fp.ReferenceNormal)
         vertex = _resolve_vertex(shape, fp.ReferenceVertex, point)
         face = _resolve_face(shape, face_name, normal, point)

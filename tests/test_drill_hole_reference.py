@@ -83,6 +83,28 @@ class TestDrillHoleReference(DrillHoleFixture):
         self.assertNotIn("Invalid shape name", obj.getStatusString())
         self.assertEqual(obj.ReferenceWarning, WARNING)
 
+    def test_the_holes_follow_the_section_when_the_anchor_changes(self):
+        # Bottom anchor: the section rises by half its height (25), the top face from z = 25 to z = 50.
+        body, first, obj = self.stacked_hole()
+        body.AnchorY = "Bottom"
+        self.doc.recompute()
+        self.assert_hole_at(first, body.Shape.Volume - ONE_HOLE, 80, 0, 49)
+        self.assert_hole_at(obj, first.Shape.Volume - ONE_HOLE, 180, 0, 49)
+        self.assertEqual([first.ReferenceWarning, obj.ReferenceWarning], ["", ""])
+
+    def test_a_hole_saved_before_the_anchor_snapshot_keeps_its_place(self):
+        body = self.tube()
+        obj = self.corner_hole(body, 230.0)
+        # A drill hole saved by 1.11 has no ReferenceAnchor: it was placed with the anchor the profile has.
+        obj.removeProperty("ReferenceAnchor")
+        obj.touch()
+        self.doc.recompute()
+        self.assert_hole_at(obj, body.Shape.Volume - ONE_HOLE, 180, 0, 24)
+        body.AnchorY = "Bottom"
+        self.doc.recompute()
+        self.assert_hole_at(obj, body.Shape.Volume - ONE_HOLE, 180, 0, 49)
+        self.assertEqual(obj.ReferenceWarning, "")
+
     def test_picking_another_vertex_places_the_hole_from_it(self):
         body = self.tube()
         obj = self.corner_hole(body, 30.0)
