@@ -2,6 +2,7 @@
 
 import unittest
 
+from miter_helpers import use_language
 from test_cut_ends import CutEndsFixture
 
 from freecad.maxproframe.best_fit import CutPart, best_fit_decreasing
@@ -37,9 +38,9 @@ class CutListFixture(CutEndsFixture):
         self.doc.recompute()
         return sheet
 
-    def legend(self, sheet):
-        """The marks listed under Legend, in order."""
-        row = next(row for row in range(1, 200) if cell(sheet, f"A{row}") == "Legend") + 1
+    def legend(self, sheet, title="Legend"):
+        """The marks listed under the legend ``title``, in order."""
+        row = next(row for row in range(1, 200) if cell(sheet, f"A{row}") == title) + 1
         marks = []
         while cell(sheet, f"A{row}"):
             marks.append(cell(sheet, f"A{row}"))
@@ -90,6 +91,15 @@ class TestCutListGrouping(CutListFixture):
             header, ["Material", "Stock", "CutPart ID", "Length", "CutAngle1", "CutAngle2", "Ends", "Quantity"]
         )
 
+    def test_a_piece_turned_end_for_end_shares_the_row_larger_angle_first(self):
+        profiles = self.pieces(
+            self.tube_with_id("11", BevelACutY=4.0, BevelBCutY=45.0),
+            self.tube_with_id("11", BevelACutY=45.0, BevelBCutY=4.0),
+        )
+        sheet = self.cut_list(profiles)
+        rows = [[cell(sheet, f"{column}{row}") for column in "BCEFGH"] for row in (2, 3)]
+        self.assertEqual(rows, [["0", "11", "45.0 <80", "4.0 <80", "\\_/", "2"], ["", "", "", "", "", ""]])
+
 
 class TestBOMAngles(CutListFixture):
     def test_the_bom_writes_the_face_of_each_angle_and_the_ends(self):
@@ -103,6 +113,10 @@ class TestBOMAngles(CutListFixture):
         sheet = self.bom(self.pieces(self.tube_with_id("7", BevelACutY=45.0, BevelBCutY=45.0)))
         self.assertEqual([cell(sheet, f"{column}3") for column in "FGH"], ["45.0 <80", "45.0 <80", "\\_/"])
 
+    def test_the_bom_keeps_the_start_angle_first(self):
+        sheet = self.bom(self.pieces(self.tube_with_id("11", BevelACutY=4.0, BevelBCutY=45.0)))
+        self.assertEqual([cell(sheet, f"{column}3") for column in "FGH"], ["4.0 <80", "45.0 <80", "\\_/"])
+
 
 class TestLegends(CutListFixture):
     def test_both_legends_list_exactly_the_printed_marks(self):
@@ -110,6 +124,76 @@ class TestLegends(CutListFixture):
         for name, sheet in (("BOM", self.bom(profiles)), ("Cut List", self.cut_list(profiles))):
             with self.subTest(name):
                 self.assertEqual(self.legend(sheet), LEGEND_MARKS)
+
+
+class TestSpanish(CutListFixture):
+    def setUp(self):
+        super().setUp()
+        use_language(self, "Spanish", "es_ES")
+        tube = self.tube_with_id("1", BevelACutY=45.0)
+        tube.Cutout = True
+        self.profiles = self.pieces(tube)
+
+    def test_the_bom_is_in_spanish(self):
+        sheet = self.doc.addObject("Spreadsheet::Sheet", "BOM")
+        link = {"parent": "", "ID": "L1", "label": "Link", "part": "Bracket", "quantity": "1", "price": "N/A"}
+        make_bom(self.profiles, [link], spreadsheet=sheet)
+        self.doc.recompute()
+        self.assertEqual(cell(sheet, "A1"), "Perfiles")
+        header = [cell(sheet, f"{column}2") for column in "ABCDEFGHIJKLMN"]
+        self.assertEqual(
+            header,
+            [
+                "Conjunto",
+                "ID",
+                "Familia",
+                "Medida",
+                "Longitud",
+                "Ángulo de corte 1",
+                "Ángulo de corte 2",
+                "Extremos",
+                "Agujero/Calado",
+                "Cantidad",
+                "Material",
+                "Peso aprox.",
+                "Precio/U",
+                "Nombre",
+            ],
+        )
+        self.assertEqual([cell(sheet, f"{column}3") for column in "FGHI"], ["45.0 <80", "0.0", "|_/", "Sí"])
+        self.assertEqual(cell(sheet, "A5"), "Piezas")
+        header = [cell(sheet, f"{column}6") for column in "ABCDEF"]
+        self.assertEqual(header, ["Conjunto", "ID", "Pieza/Tipo", "Precio/U", "Cantidad", "Nombre"])
+        self.assertEqual(self.legend(sheet, "Leyenda"), LEGEND_MARKS)
+        self.assertEqual(cell(sheet, "B15"), "Extremos: un extremo recto, el otro inclinado sobre una cara")
+
+    def test_the_cut_list_is_in_spanish(self):
+        sheet = self.cut_list(self.profiles)
+        header = [cell(sheet, f"{column}1") for column in "ABCDEFGH"]
+        self.assertEqual(
+            header,
+            [
+                "Material",
+                "Barra",
+                "ID de pieza",
+                "Longitud",
+                "Ángulo de corte 1",
+                "Ángulo de corte 2",
+                "Extremos",
+                "Cantidad",
+            ],
+        )
+        used = float(self.profiles[0]["length"]) + KERF
+        title = f"Metal_Rectangular Hollow_80x40x2 / usado = {used:.1f}, sobrante = {6000.0 - used:.1f}"
+        self.assertEqual(cell(sheet, "A2"), title)
+        row = next(row for row in range(1, 50) if cell(sheet, f"A{row}") == "Estadísticas de barras")
+        header = [cell(sheet, f"{column}{row}") for column in "BCD"]
+        self.assertEqual(header, ["Longitud usada", "Longitud de barras", "Cantidad de barras"])
+        self.assertEqual(self.legend(sheet, "Leyenda"), LEGEND_MARKS)
+
+    def test_the_marks_and_the_data_stay_as_they_are(self):
+        sheet = self.cut_list(self.profiles)
+        self.assertEqual([cell(sheet, f"{column}2") for column in "CEFG"], ["1", "45.0 <80", "0.0", "|_/"])
 
 
 if __name__ == "__main__":

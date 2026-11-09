@@ -1210,6 +1210,38 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Drag the lines in this global plane: move the mouse and click to give their direction and length.</source><translation>Arrastrar las líneas en este plano global: mové el mouse y hacé clic para dar su dirección y longitud.</translation></message>
     <message><source>Click a vertex: only a vertex starts a line.</source><translation>Hacé clic en un vértice: solo un vértice inicia una línea.</translation></message>
     <message><source>Close the open task panel before creating or editing a parametric line.</source><translation>Cerrá el panel de tareas abierto antes de crear o editar una línea paramétrica.</translation></message>
+    <message><source>Parent</source><translation>Conjunto</translation></message>
+    <message><source>ID</source><translation>ID</translation></message>
+    <message><source>SizeName</source><translation>Medida</translation></message>
+    <message><source>CutAngle1</source><translation>Ángulo de corte 1</translation></message>
+    <message><source>CutAngle2</source><translation>Ángulo de corte 2</translation></message>
+    <message><source>Ends</source><translation>Extremos</translation></message>
+    <message><source>Drill/Cutout</source><translation>Agujero/Calado</translation></message>
+    <message><source>Quantity</source><translation>Cantidad</translation></message>
+    <message><source>Material</source><translation>Material</translation></message>
+    <message><source>ApproxWeight</source><translation>Peso aprox.</translation></message>
+    <message><source>Price/U</source><translation>Precio/U</translation></message>
+    <message><source>Name</source><translation>Nombre</translation></message>
+    <message><source>Parts</source><translation>Piezas</translation></message>
+    <message><source>Part/Type</source><translation>Pieza/Tipo</translation></message>
+    <message><source>Yes</source><translation>Sí</translation></message>
+    <message><source>Legend</source><translation>Leyenda</translation></message>
+    <message><source>Stock</source><translation>Barra</translation></message>
+    <message><source>CutPart ID</source><translation>ID de pieza</translation></message>
+    <message><source>{} / used = {:.1f}, left = {:.1f}</source><translation>{} / usado = {:.1f}, sobrante = {:.1f}</translation></message>
+    <message><source>Stock statistics</source><translation>Estadísticas de barras</translation></message>
+    <message><source>Length Used</source><translation>Longitud usada</translation></message>
+    <message><source>Stock Used</source><translation>Longitud de barras</translation></message>
+    <message><source>Stock Count</source><translation>Cantidad de barras</translation></message>
+    <message><source>45.0 &lt;80: the angle is seen on the 80 mm faces of the profile (the cut runs across the 80)</source><translation>45.0 &lt;80: el ángulo se ve en las caras de 80 mm del perfil (el corte va sobre los 80)</translation></message>
+    <message><source>Compound cut: the angle seen on each face</source><translation>Corte compuesto: el ángulo que se ve en cada cara</translation></message>
+    <message><source>Ends: both ends tilted on the same face in opposite directions (trapezoid)</source><translation>Extremos: los dos extremos inclinados sobre la misma cara en sentidos opuestos (trapecio)</translation></message>
+    <message><source>Ends: both ends tilted on the same face the same way (parallelogram)</source><translation>Extremos: los dos extremos inclinados sobre la misma cara en el mismo sentido (paralelogramo)</translation></message>
+    <message><source>Ends: one end square, the other tilted on one face</source><translation>Extremos: un extremo recto, el otro inclinado sobre una cara</translation></message>
+    <message><source>Angle of a TrimmedProfile whose end is not one flat cut -&gt; check length, angles and cut direction</source><translation>Ángulo de un perfil recortado cuyo extremo no es un único corte plano -&gt; revisá la longitud, los ángulos y el sentido del corte</translation></message>
+    <message><source>Perfect Cut, you have to notch it !</source><translation>Corte perfecto: ¡hay que encastrarlo!</translation></message>
+    <message><source>Angles 1 and 2 are rotated 90° along the edge (end that is not one flat cut)</source><translation>Los ángulos 1 y 2 están girados 90° a lo largo de la arista (extremo que no es un único corte plano)</translation></message>
+    <message><source>Can't compute the angle, do it yourself !</source><translation>No se puede calcular el ángulo: ¡calculalo a mano!</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ParametricLine</name>

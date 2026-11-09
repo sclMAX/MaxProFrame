@@ -1,4 +1,5 @@
 import math
+import re
 from collections import defaultdict
 from itertools import groupby
 
@@ -18,18 +19,39 @@ from freecad.maxproframe._utils import (
     is_trimmedbody,
 )
 from freecad.maxproframe.cut_ends import ONE_SQUARE, PARALLELOGRAM, TRAPEZOID, cut_ends
+from freecad.maxproframe.ff_tools import QT_TRANSLATE_NOOP, translate
 
-# The marks the angle and Ends columns print, with what they mean.
+# The marks the angle and Ends columns print, with what they mean (translated when written).
 LEGEND = (
-    ("<", "45.0 <80: the angle is seen on the 80 mm faces of the profile (the cut runs across the 80)"),
-    ("+", "Compound cut: the angle seen on each face"),
-    (TRAPEZOID, "Ends: both ends tilted on the same face in opposite directions (trapezoid)"),
-    (PARALLELOGRAM, "Ends: both ends tilted on the same face the same way (parallelogram)"),
-    (ONE_SQUARE, "Ends: one end square, the other tilted on one face"),
-    ("@", "Angle of a TrimmedProfile whose end is not one flat cut -> check length, angles and cut direction"),
-    ("P", "Perfect Cut, you have to notch it !"),
-    ("*", "Angles 1 and 2 are rotated 90° along the edge (end that is not one flat cut)"),
-    ("?", "Can't compute the angle, do it yourself !"),
+    (
+        "<",
+        QT_TRANSLATE_NOOP(
+            "frameforge", "45.0 <80: the angle is seen on the 80 mm faces of the profile (the cut runs across the 80)"
+        ),
+    ),
+    ("+", QT_TRANSLATE_NOOP("frameforge", "Compound cut: the angle seen on each face")),
+    (
+        TRAPEZOID,
+        QT_TRANSLATE_NOOP("frameforge", "Ends: both ends tilted on the same face in opposite directions (trapezoid)"),
+    ),
+    (
+        PARALLELOGRAM,
+        QT_TRANSLATE_NOOP("frameforge", "Ends: both ends tilted on the same face the same way (parallelogram)"),
+    ),
+    (ONE_SQUARE, QT_TRANSLATE_NOOP("frameforge", "Ends: one end square, the other tilted on one face")),
+    (
+        "@",
+        QT_TRANSLATE_NOOP(
+            "frameforge",
+            "Angle of a TrimmedProfile whose end is not one flat cut -> check length, angles and cut direction",
+        ),
+    ),
+    ("P", QT_TRANSLATE_NOOP("frameforge", "Perfect Cut, you have to notch it !")),
+    (
+        "*",
+        QT_TRANSLATE_NOOP("frameforge", "Angles 1 and 2 are rotated 90° along the edge (end that is not one flat cut)"),
+    ),
+    ("?", QT_TRANSLATE_NOOP("frameforge", "Can't compute the angle, do it yourself !")),
 )
 
 
@@ -85,7 +107,7 @@ def traverse_assembly(profiles_data, links_data, obj, parent="", full_parent_pat
         p["material"] = obj.Material
         p["length"] = f"{obj.Length.Value:.1f}"
         p["cut_angle_1"], p["cut_angle_2"], p["ends"] = cut_ends(obj)
-        p["cutout"] = "Yes" if obj.Cutout else ""
+        p["cutout"] = translate("frameforge", "Yes") if obj.Cutout else ""
         p["approx_weight"] = str(obj.ApproxWeight)
         p["price"] = str(obj.Price)
         p["quantity"] = "1"
@@ -187,22 +209,22 @@ def make_bom(profiles_data, links_data, bom_name="BOM", spreadsheet=None):
     if spreadsheet is None:
         spreadsheet = doc.addObject("Spreadsheet::Sheet", bom_name)
 
-    spreadsheet.set("A1", "Profiles")
+    spreadsheet.set("A1", translate("frameforge", "Profiles"))
 
-    spreadsheet.set("A2", "Parent")
-    spreadsheet.set("B2", "ID")
-    spreadsheet.set("C2", "Family")
-    spreadsheet.set("D2", "SizeName")
-    spreadsheet.set("E2", "Length")
-    spreadsheet.set("F2", "CutAngle1")
-    spreadsheet.set("G2", "CutAngle2")
-    spreadsheet.set("H2", "Ends")
-    spreadsheet.set("I2", "Drill/Cutout")
-    spreadsheet.set("J2", "Quantity")
-    spreadsheet.set("K2", "Material")
-    spreadsheet.set("L2", "ApproxWeight")
-    spreadsheet.set("M2", "Price/U")
-    spreadsheet.set("N2", "Name")
+    spreadsheet.set("A2", translate("frameforge", "Parent"))
+    spreadsheet.set("B2", translate("frameforge", "ID"))
+    spreadsheet.set("C2", translate("frameforge", "Family"))
+    spreadsheet.set("D2", translate("frameforge", "SizeName"))
+    spreadsheet.set("E2", translate("frameforge", "Length"))
+    spreadsheet.set("F2", translate("frameforge", "CutAngle1"))
+    spreadsheet.set("G2", translate("frameforge", "CutAngle2"))
+    spreadsheet.set("H2", translate("frameforge", "Ends"))
+    spreadsheet.set("I2", translate("frameforge", "Drill/Cutout"))
+    spreadsheet.set("J2", translate("frameforge", "Quantity"))
+    spreadsheet.set("K2", translate("frameforge", "Material"))
+    spreadsheet.set("L2", translate("frameforge", "ApproxWeight"))
+    spreadsheet.set("M2", translate("frameforge", "Price/U"))
+    spreadsheet.set("N2", translate("frameforge", "Name"))
 
     row = 3
 
@@ -226,14 +248,14 @@ def make_bom(profiles_data, links_data, bom_name="BOM", spreadsheet=None):
 
     if len(links_data) > 0:
         row += 1
-        spreadsheet.set("A" + str(row), "Parts")
+        spreadsheet.set("A" + str(row), translate("frameforge", "Parts"))
         row += 1
-        spreadsheet.set("A" + str(row), "Parent")
-        spreadsheet.set("B" + str(row), "ID")
-        spreadsheet.set("C" + str(row), "Part/Type")
-        spreadsheet.set("D" + str(row), "Price/U")
-        spreadsheet.set("E" + str(row), "Quantity")
-        spreadsheet.set("F" + str(row), "Name")
+        spreadsheet.set("A" + str(row), translate("frameforge", "Parent"))
+        spreadsheet.set("B" + str(row), translate("frameforge", "ID"))
+        spreadsheet.set("C" + str(row), translate("frameforge", "Part/Type"))
+        spreadsheet.set("D" + str(row), translate("frameforge", "Price/U"))
+        spreadsheet.set("E" + str(row), translate("frameforge", "Quantity"))
+        spreadsheet.set("F" + str(row), translate("frameforge", "Name"))
         row += 1
 
         for lnk in links_data:
@@ -249,25 +271,36 @@ def make_bom(profiles_data, links_data, bom_name="BOM", spreadsheet=None):
     write_legend(spreadsheet, row + 2)
 
 
+def larger_angle_first(prof):
+    """Both cut angles of ``prof``, the larger leading number first (none counts as -1; a tie keeps string order)."""
+
+    def key(angle):
+        number = re.search(r"\d+(?:\.\d+)?", str(angle))
+        return (-float(number.group()) if number else 1.0, str(angle))
+
+    return tuple(sorted((prof["cut_angle_1"], prof["cut_angle_2"]), key=key))
+
+
 def group_stock_parts(stock):
     """(piece, quantity) of each set of identical pieces (ID, length, angles, ends) of ``stock``, first seen first.
 
+    A piece turned end for end is the same piece: angles are compared larger first.
     A piece without ID keeps its own row: nothing tells it is the same piece as another of its length and angles.
     """
     groups = {}
     for index, cut_part in enumerate(stock.parts):
         prof = cut_part.obj
-        key = (prof["ID"] or index, prof["length"], prof["cut_angle_1"], prof["cut_angle_2"], prof["ends"])
+        key = (prof["ID"] or index, prof["length"], *larger_angle_first(prof), prof["ends"])
         groups.setdefault(key, [prof, 0])[1] += 1
     return [tuple(group) for group in groups.values()]
 
 
 def write_legend(spreadsheet, row):
     """The Legend title at ``row``, then one row per mark."""
-    spreadsheet.set("A" + str(row), "Legend")
+    spreadsheet.set("A" + str(row), translate("frameforge", "Legend"))
     for offset, (mark, text) in enumerate(LEGEND, start=1):
         spreadsheet.set("A" + str(row + offset), "'" + mark)
-        spreadsheet.set("B" + str(row + offset), text)
+        spreadsheet.set("B" + str(row + offset), translate("frameforge", text))
 
 
 def make_cut_list(sorted_stocks, cutlist_name="CutList", spreadsheet=None):
@@ -276,14 +309,14 @@ def make_cut_list(sorted_stocks, cutlist_name="CutList", spreadsheet=None):
     if spreadsheet is None:
         spreadsheet = doc.addObject("Spreadsheet::Sheet", cutlist_name)
 
-    spreadsheet.set("A1", "Material")
-    spreadsheet.set("B1", "Stock")
-    spreadsheet.set("C1", "CutPart ID")
-    spreadsheet.set("D1", "Length")
-    spreadsheet.set("E1", "CutAngle1")
-    spreadsheet.set("F1", "CutAngle2")
-    spreadsheet.set("G1", "Ends")
-    spreadsheet.set("H1", "Quantity")
+    spreadsheet.set("A1", translate("frameforge", "Material"))
+    spreadsheet.set("B1", translate("frameforge", "Stock"))
+    spreadsheet.set("C1", translate("frameforge", "CutPart ID"))
+    spreadsheet.set("D1", translate("frameforge", "Length"))
+    spreadsheet.set("E1", translate("frameforge", "CutAngle1"))
+    spreadsheet.set("F1", translate("frameforge", "CutAngle2"))
+    spreadsheet.set("G1", translate("frameforge", "Ends"))
+    spreadsheet.set("H1", translate("frameforge", "Quantity"))
 
     row = 2
 
@@ -292,14 +325,20 @@ def make_cut_list(sorted_stocks, cutlist_name="CutList", spreadsheet=None):
         for stock in sorted_stocks[stocks]:
             cut_part_idx = 0
             for prof, quantity in group_stock_parts(stock):
+                cut_angle_1, cut_angle_2 = larger_angle_first(prof)
                 if cut_part_idx == 0:
-                    spreadsheet.set("A" + str(row), stocks + f" / used = {stock.used:.1f}, left = {stock.left:.1f}")
+                    spreadsheet.set(
+                        "A" + str(row),
+                        translate("frameforge", "{} / used = {:.1f}, left = {:.1f}").format(
+                            stocks, stock.used, stock.left
+                        ),
+                    )
 
                 spreadsheet.set("B" + str(row), str(stock_idx))
                 spreadsheet.set("C" + str(row), prof["ID"])
                 spreadsheet.set("D" + str(row), str(prof["length"]))
-                spreadsheet.set("E" + str(row), "'" + str(prof["cut_angle_1"]))
-                spreadsheet.set("F" + str(row), "'" + str(prof["cut_angle_2"]))
+                spreadsheet.set("E" + str(row), "'" + str(cut_angle_1))
+                spreadsheet.set("F" + str(row), "'" + str(cut_angle_2))
                 spreadsheet.set("G" + str(row), "'" + prof["ends"])
                 spreadsheet.set("H" + str(row), str(quantity))
 
@@ -311,10 +350,10 @@ def make_cut_list(sorted_stocks, cutlist_name="CutList", spreadsheet=None):
         row += 1
 
     row += 1
-    spreadsheet.set("A" + str(row), "Stock statistics")
-    spreadsheet.set("B" + str(row), "Length Used")
-    spreadsheet.set("C" + str(row), "Stock Used")
-    spreadsheet.set("D" + str(row), "Stock Count")
+    spreadsheet.set("A" + str(row), translate("frameforge", "Stock statistics"))
+    spreadsheet.set("B" + str(row), translate("frameforge", "Length Used"))
+    spreadsheet.set("C" + str(row), translate("frameforge", "Stock Used"))
+    spreadsheet.set("D" + str(row), translate("frameforge", "Stock Count"))
     row += 1
     for stocks in sorted_stocks:
         spreadsheet.set("A" + str(row), stocks)
