@@ -10,6 +10,7 @@
   - **Refresh Balloons** refreshes the selected balloons or every balloon of a view, reports how many it refreshed, and skips the ones whose piece was deleted.
   - **Create Balloons** puts the balloons on the page of the view, even when a detail view of it sits on another page.
   - **Create Balloons** / **Refresh Balloons**: a click on a detail view, which gets no balloons, says so in the status bar and waits for another view. A failure leaves the document unchanged, with no Undo step, and shows its reason in the status bar and the Report view instead of the click prompt.
+  - **Drill Hole** / **Cutout**: a hole or cutout on a profile trimmed against profiles of other Parts (for example a back rest profile on a parametric line between two side frames) no longer moves every profile of those Parts into its own Part. The hole or cutout joins its profile's Part before it links to the profile. With a face and a sketch selected, **Cutout** puts the sketch and the cutout in the profile's nearest Part or folder, not the outermost Part, and leaves a sketch already there in place.
 
 * v1.11.1 (2026-11-09)
 
