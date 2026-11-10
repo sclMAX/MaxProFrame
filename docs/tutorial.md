@@ -420,6 +420,24 @@ The hole remembers where its vertex was. When the profile changes and FreeCAD re
 The cut list and the IDs treat a drill hole like a cutout.
 
 
+## Profile Pattern
+
+**Profile Pattern** (Spanish *Patrón de perfiles*) repeats a piece along a straight edge, for example the 20 slats of a table top between the two long sides of its frame. The copies are Links to the piece: they are light, a change to the piece (section, length, miters, cutouts, holes) shows on every copy, and the BOM, the Cut List and the Piece Table count each copy as one more piece with the piece's ID.
+
+1. Select the piece to repeat: a profile, a trimmed profile, a cutout or a drill hole. Click on the **Profile Pattern** command, next to **Drill Hole**. Without a piece selected the panel waits for a click on one.
+2. Click a straight edge for the direction, for instance an edge of the frame. An edge selected with the piece before the command is used too.
+3. Choose the **Mode**:
+   - **Count and pitch**: **Copies** is the number of copies, not counting the piece, and **Pitch (center to center)** the distance from one to the next. **Sense** puts them in the sense of the edge (from its first vertex to its last), **Inverted** against it, or **Symmetric (count on each side)**: that many copies on each side of the piece (pattern ← piece → pattern). The piece does not move.
+   - **Between faces**: click the two planar faces the pieces go between, for example the inner faces of the two ends of the frame (a third click starts the pair again). **Pieces (the original included)** is the total number of pieces, the selected one too. Every piece ends up between the faces with the same free gap between neighbours and between each face and the piece next to it; the pitch follows, and the panel shows the gap and the pitch. The selected piece moves to the slot next to the first face clicked, by its own **Offset X** / **Offset Y** (for a trimmed profile, a cutout or a drill hole, those of its profile), so it stays on its path. That is why the edge has to run across the piece: with an edge along it, or a piece without a path edge, the panel says why **Between faces** cannot be used. When the pieces do not fit, the panel says so.
+4. The preview follows the panel. **OK** creates the pattern and its copies in one Undo step, in the same Part or folder as the piece; **Cancel** leaves the document unchanged, the piece where it was.
+
+To change a pattern, double-click it: the same panel opens with its values, and a click on another edge or other faces changes them. The copies are added, removed or moved to match, in one Undo step; **Cancel** puts the pattern back. The Count, Pitch, Sense and Mode can also be changed in the property editor. The copies are shown under the pattern in the tree. Deleting the pattern deletes its copies and keeps the piece.
+
+A trim, cutout or drill hole made from the piece after the pattern shows on every copy too: at the next recompute the copies follow the last piece built on the piece (a hole on a trim on the profile: the hole), the one shown in the 3D view. **Between faces** still moves the piece by the offsets of its profile.
+
+**Populate IDs** gives the copies the ID of the piece they copy, never one of their own: selecting the copies numbers the piece. With **Include Part count in PID**, the count includes the copies. **Reset IDs** on a copy clears the ID of the piece, of its profile and of every copy, and its confirmation counts them all.
+
+
 ## Expressions in panel fields
 
 The number fields of the panels that edit one object take FreeCAD expressions, as in the Part Design panels: click the **Fx** icon at the right of the field, or type `=`, and enter a formula such as `VarSet.HoleDiameter`, `Spreadsheet.Pitch * 2` or `20 mm + 5 mm`. The field then shows the value of the expression and the object keeps the expression, so changing the VarSet or the spreadsheet updates the object.

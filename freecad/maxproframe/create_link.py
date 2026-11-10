@@ -12,8 +12,19 @@ from freecad.maxproframe.version import __version__ as ff_version
 def makeLink(source):
     doc = App.ActiveDocument
 
-    link = doc.addObject("App::Link", source.Label + "_Link")
+    link = add_link(doc, source.Label + "_Link")
     link.LinkedObject = source
+
+    doc.recompute()
+    return link
+
+
+def add_link(doc, name):
+    """A MaxProFrame Link named ``name`` in ``doc``, linked to nothing yet: an attachment, a version and an ID.
+
+    No recompute: a caller placing it in a Part links it once it is there.
+    """
+    link = doc.addObject("App::Link", name)
 
     link.addExtension("Part::AttachExtensionPython")
     link.MapMode = "Deactivated"
@@ -32,7 +43,6 @@ def makeLink(source):
         "Profile ID",
     ).PID = ""
 
-    doc.recompute()
     return link
 
 

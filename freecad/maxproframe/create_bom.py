@@ -16,6 +16,7 @@ from freecad.maxproframe._utils import (
     is_link,
     is_part,
     is_part_or_part_design,
+    is_pattern_link,
     is_profile,
     is_trimmedbody,
 )
@@ -93,6 +94,14 @@ def traverse_assembly(profiles_data, links_data, obj, parent="", full_parent_pat
                     parent=(f"{parent} / " if full_parent_path else "") + obj.Label,
                     full_parent_path=full_parent_path,
                 )
+
+    elif is_pattern_link(obj):
+        # A Profile Pattern copy: one more piece of what it copies, with its ID, under its own name.
+        if obj.LinkedObject is not None:
+            start = len(profiles_data)
+            traverse_assembly(profiles_data, links_data, obj.LinkedObject, parent, full_parent_path)
+            for row in profiles_data[start:]:
+                row["label"] = obj.Label
 
     elif is_profile(obj) or is_trimmedbody(obj) or is_extrudedcutout(obj):
         p["parent"] = parent

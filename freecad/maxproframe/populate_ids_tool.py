@@ -42,6 +42,7 @@ from freecad.maxproframe._utils import (
     is_group,
     is_link,
     is_part,
+    is_pattern_link,
     is_profile,
     is_trimmedbody,
 )
@@ -59,6 +60,7 @@ from freecad.maxproframe.populate_ids import (
     NUMBERING_MODES,
     ambiguous_prefix,
     count_like_prefix,
+    pattern_copies,
     populate_ids,
     profile_source,
     set_profile_pid,
@@ -395,9 +397,27 @@ def own_pid(obj):
 
 
 def ids_to_clear(profiles, links):
-    """The objects Reset IDs changes, with their current ID: a trim or cutout and its source profile both."""
+    """The objects Reset IDs changes, with their current ID: a trim or cutout and its source profile both.
+
+    A Profile Pattern copy is reset through the piece it copies (see set_profile_pid): that piece, its profile and
+    the copies left showing an ID cleared are changed too.
+    """
+    written, candidates = set(), []
+    for obj in profiles:
+        piece = obj.LinkedObject if is_pattern_link(obj) and obj.LinkedObject is not None else obj
+        source = profile_source(piece)
+        written.update((piece.Name, source.Name))
+        candidates += [obj, piece, source, *pattern_copies(source)]
+
+    def changed(obj):
+        if obj.Name in written:
+            return True
+        # A copy takes the ID of the piece it copies once that is cleared.
+        linked = obj.LinkedObject if is_pattern_link(obj) else None
+        return linked is not None and (linked.Name in written or not own_pid(linked))
+
     cleared, seen = [], set()
-    for obj in [o for p in profiles for o in (p, profile_source(p))] + list(links):
+    for obj in [o for o in candidates if changed(o)] + list(links):
         pid = own_pid(obj)
         if pid and obj.Name not in seen:
             seen.add(obj.Name)
