@@ -44,7 +44,10 @@ class LostFaceFixture(MiterFixture):
             make_end_miter_profile(side, [(sides[index - 1], ("",)), (sides[(index + 1) % 4], ("",))])
             for index, side in enumerate(sides)
         ]
-        self.left, self.right = self.miters[0], self.miters[2]
+        self.doc.recompute()
+        # The pieces the slat is cut against: the left and right sides, or pieces made on them.
+        self.left, self.right = self.cut_targets(self.miters[0], self.miters[2])
+        self.doc.recompute()
         self.slat = self.in_part(self.profile("Edge5"))
         first = make_extend_cut_profile(self.slat, (self.left, (self.inner_face(self.left, 1),)))
         self.doc.recompute()
@@ -53,6 +56,10 @@ class LostFaceFixture(MiterFixture):
         self.doc.recompute()
         self.assert_all_valid(self.doc)
         self.assert_slat_between_the_sides(self.doc, WIDTH)
+
+    def cut_targets(self, left, right):
+        """The pieces the slat is cut against, given the left and right sides."""
+        return left, right
 
     def profile(self, edge):
         return self.make_profile(self.sketch, edge, extension=0.0, **CENTER)
@@ -157,6 +164,31 @@ class TestExtendCutLostFace(LostFaceFixture):
         self.resize(opened, 1000.0, 2100.0)
         self.assert_all_valid(opened)
         self.assert_slat_between_the_sides(opened, 1000.0)
+
+    def test_a_trim_deleted_and_undone_follows_the_next_size(self):
+        self.doc.UndoMode = 1
+        self.doc.openTransaction("delete")
+        self.doc.removeObject(self.trim.Name)
+        self.doc.commitTransaction()
+        self.doc.undo()
+        self.resize(self.doc, 1200.0, 2300.0)
+        self.assert_all_valid(self.doc)
+        self.assert_slat_between_the_sides(self.doc, 1200.0)
+
+    def test_a_resize_undone_then_another_size_moves_the_slat(self):
+        self.doc.UndoMode = 1
+        self.doc.openTransaction("resize")
+        self.resize(self.doc, 1200.0, 2300.0)
+        self.doc.commitTransaction()
+        self.doc.undo()
+        self.doc.recompute()
+        self.assert_all_valid(self.doc)
+        self.assert_slat_between_the_sides(self.doc, WIDTH)
+        for width, length in ((1000.0, 2100.0), (1200.0, 2300.0)):
+            with self.subTest(width=width, length=length):
+                self.resize(self.doc, width, length)
+                self.assert_all_valid(self.doc)
+                self.assert_slat_between_the_sides(self.doc, width)
 
     def test_a_document_opened_unchanged_recomputes_to_the_same_shapes(self):
         opened = self.reopen(self.doc)

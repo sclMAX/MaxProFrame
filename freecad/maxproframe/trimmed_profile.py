@@ -49,8 +49,9 @@ MISSING_ELEMENT_PREFIX = "?"
 FACE_TOLERANCE = 1e-3
 FACE_ANGLE_TOLERANCE = 1e-5
 # (document name, trim name) -> (target name, face name, point, normal): the face of its target an Extend Cut
-# last ended on, its point and normal in the frame of the profile the target is built on. Taken on opening and
-# on every recompute, so a face FreeCAD loses on the next change is found again.
+# ends on, its point and normal in the frame of the profile the target is built on. Taken from the face picked
+# (on opening, after an Undo or Redo, at the first recompute after the link is set) and from every face found
+# on its plane again, so a face FreeCAD loses or names after another face on the next change is found again.
 _TARGET_FACES = {}
 
 
@@ -135,6 +136,12 @@ class TrimPlacementObserver:
         for kept in (_TRIM_MOVES, _TARGET_FACES):
             kept.pop((obj.Document.Name, obj.Name), None)
 
+    def slotUndoDocument(self, doc):
+        remember_target_faces(doc)
+
+    def slotRedoDocument(self, doc):
+        remember_target_faces(doc)
+
     def slotDeletedDocument(self, doc):
         for kept in (_TRIM_MOVES, _TARGET_FACES):
             for key in [key for key in kept if key[0] == doc.Name]:
@@ -167,6 +174,23 @@ def _face_snapshot(target, face):
     return frame.multVec(face.CenterOfMass), frame.Rotation.multVec(face_normal(face))
 
 
+def remember_target_faces(doc):
+    """Remember the face each Extend / Cut of ``doc`` without one ends on, as its link names it now.
+
+    After an Undo or Redo: a trim deleted and brought back, or whose link was set back, is as it was.
+    """
+    for obj in doc.Objects:
+        proxy = getattr(obj, "Proxy", None)
+        if not isinstance(proxy, TrimmedProfile) or (doc.Name, obj.Name) in _TARGET_FACES:
+            continue
+        try:
+            if obj.TrimmedProfileType == "Extend Cut" and obj.TrimmingBoundary:
+                proxy._remember_target_face(obj, proxy.target_face(obj, obj.TrimmingBoundary[0]))
+        except Exception:
+            # The next recompute reports what is wrong with the target.
+            pass
+
+
 def _on_plane(face, point, normal):
     """Whether ``face`` is flat, looks along ``normal`` and its plane holds ``point``."""
     if not is_flat_face(face):
@@ -175,6 +199,20 @@ def _on_plane(face, point, normal):
         face_normal(face).getAngle(normal) < FACE_ANGLE_TOLERANCE
         and abs((point - face.CenterOfMass).dot(normal)) <= FACE_TOLERANCE
     )
+
+
+def _face_on_plane(target, name, point, normal):
+    """(face, face name, True) of ``target`` on the plane through ``point`` with ``normal``, or None.
+
+    The face called ``name`` when it is on the plane, else the one nearest ``point``.
+    """
+    faces = [(f"Face{index}", face) for index, face in enumerate(target.Shape.Faces, 1)]
+    faces = [(face_name, face) for face_name, face in faces if _on_plane(face, point, normal)]
+    named = [(face, face_name, True) for face_name, face in faces if face_name == name]
+    if named:
+        return named[0]
+    nearest = min(faces, key=lambda item: item[1].distToShape(Part.Vertex(point))[0], default=None)
+    return None if nearest is None else (nearest[1], nearest[0], True)
 
 
 def _between(ends, origin, normal):
@@ -302,7 +340,13 @@ class TrimmedProfile:
         ).KeepEnd = KEEP_ENDS
 
     def onChanged(self, fp, prop):
-        pass
+        doc = getattr(fp, "Document", None)
+        if prop != "TrimmingBoundary" or doc is None or doc.Recomputing or doc.Restoring:
+            return
+        # A target set by hand, by the panel or by Undo: its face is the one the link names, remembered at
+        # the next recompute (or after the Undo). FreeCAD renaming a face, and the trim linking a face found
+        # again, happen while recomputing and keep the face remembered.
+        _TARGET_FACES.pop((doc.Name, fp.Name), None)
 
     def onDocumentRestored(self, fp):
         """Trims saved with their tip-to-tip length open with their longest side.
@@ -437,18 +481,20 @@ class TrimmedProfile:
         found = self.target_face(fp, fp.TrimmingBoundary[0])
         if found is not None:
             target, (sub, *_) = fp.TrimmingBoundary[0]
-            # A face found again is linked by its name now: the link stops pointing at a lost face.
+            # A face found again is linked by its name now: the link stops pointing at a lost or another face.
             if sub != found[1]:
                 fp.TrimmingBoundary = [(target, (found[1],))]
         self._remember_target_face(fp, found)
         return body_shape, [plane.removal_volume(body_shape)]
 
     def target_face(self, fp, boundary):
-        """(face, face name) of the target face of ``boundary`` (a TrimmingBoundary item of ``fp``), or None.
+        """(face, face name, sure) of the target face of ``boundary`` (a TrimmingBoundary item of ``fp``), or None.
 
-        None stands for a whole target. The face is in the coordinates of the container of its target. A face
-        FreeCAD lost after a change of the target ("?Face2") is the face of the target on the plane ``fp`` last
-        ended on, seen from the profile the target is built on; when no face is there, the trim fails.
+        None stands for a whole target. The face is in the coordinates of the container of its target. The face
+        ``fp`` ends on is remembered on the plane of the face picked, seen from the profile the target is built
+        on: a face FreeCAD lost ("?Face2"), or whose name it gave to a face off that plane, is the face of the
+        target on it. ``sure`` is False only for a named face off that plane when no face is on it any more:
+        the trim ends there, as the link says, without remembering it. A lost face with none on the plane fails.
         """
         target, subs = boundary
         # A whole target is linked with an empty sub-element name.
@@ -456,11 +502,15 @@ class TrimmedProfile:
             return None
         sub = subs[0]
         name = sub.removeprefix(MISSING_ELEMENT_PREFIX)
-        if name == sub:
-            face = target.getSubObject(sub)
-            if is_flat_face(face):
-                return face, sub
-        found = self._found_again(fp, target, name)
+        named = target.getSubObject(sub) if name == sub else None
+        named = named if is_flat_face(named) else None
+        plane = self._kept_plane(fp, boundary)
+        if plane is None or (named is not None and _on_plane(named, *plane)):
+            found = None if named is None else (named, sub, True)
+        else:
+            found = _face_on_plane(target, name, *plane)
+            if found is None and named is not None:
+                found = (named, sub, False)
         if found is None:
             raise MiterError(
                 translate("frameforge", "Extend / Cut: the target face {} of {} is not planar.").format(
@@ -470,34 +520,35 @@ class TrimmedProfile:
         return found
 
     @staticmethod
-    def _found_again(fp, target, name):
-        """(face, face name) of ``target`` on the plane of the face ``name`` ``fp`` last ended on, or None.
+    def _kept_plane(fp, boundary):
+        """(point, normal), in the coordinates of the container of the target, of the face ``fp`` ends on.
 
-        The face still called ``name`` when it is on that plane, else the one nearest the point remembered.
+        None when it remembers none, or ``boundary`` is not its own link (a target the panel tries).
         """
         kept = _TARGET_FACES.get((fp.Document.Name, fp.Name))
-        if kept is None or kept[:2] != (target.Name, name):
+        target, subs = boundary
+        current = fp.TrimmingBoundary[0] if fp.TrimmingBoundary else None
+        if kept is None or current is None or current[0] != target or tuple(current[1]) != tuple(subs):
+            return None
+        if kept[0] != target.Name:
             return None
         frame = _target_frame(target)
-        point, normal = frame.multVec(kept[2]), frame.Rotation.multVec(kept[3])
-        faces = [(f"Face{index}", face) for index, face in enumerate(target.Shape.Faces, 1)]
-        faces = [(face_name, face) for face_name, face in faces if _on_plane(face, point, normal)]
-        named = [(face, face_name) for face_name, face in faces if face_name == name]
-        if named:
-            return named[0]
-        nearest = min(faces, key=lambda item: item[1].distToShape(Part.Vertex(point))[0], default=None)
-        return None if nearest is None else (nearest[1], nearest[0])
+        return frame.multVec(kept[2]), frame.Rotation.multVec(kept[3])
 
     @staticmethod
     def _remember_target_face(fp, found):
-        """Remember ``found`` (target_face of ``fp``) as the face ``fp`` ends on; None forgets it."""
+        """Remember ``found`` (target_face of ``fp``) as the face ``fp`` ends on; None forgets it.
+
+        A face found off the plane remembered leaves it remembered.
+        """
         key = (fp.Document.Name, fp.Name)
         if found is None:
             _TARGET_FACES.pop(key, None)
             return
-        face, name = found
-        target = fp.TrimmingBoundary[0][0]
-        _TARGET_FACES[key] = (target.Name, name, *_face_snapshot(target, face))
+        face, name, sure = found
+        if sure:
+            target = fp.TrimmingBoundary[0][0]
+            _TARGET_FACES[key] = (target.Name, name, *_face_snapshot(target, face))
 
     def extend_cut_plane(self, fp):
         """Plane the moving end of an Extend Cut ends on, moved by the gap, its normal towards the kept end."""
