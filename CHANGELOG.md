@@ -1,5 +1,14 @@
 ## Changelog
 
+* Unreleased
+
+  **Fixes**
+  - **Create Balloons** and **Refresh Balloons** are enabled whenever a document is open. Select a TechDraw view, or click the button and then a view; Esc cancels. Before, Create Balloons stayed disabled until a view and pieces were both selected, without telling why.
+  - **Create Balloons** marks every piece of the view, or only the pieces selected with it, and skips the pieces that already have a balloon in that view: running it again creates no duplicates.
+  - **Create Balloons** accepts a standalone TechDraw view, not only a view of a projection group.
+  - **Create Balloons**: a piece without ID gets no balloon; the status bar counts them and the Report view names them, so they can be numbered with Populate IDs. The bubble sits 20 mm from its arrow on the paper at any view scale; at a small scale it lay on the arrow.
+  - **Refresh Balloons** refreshes the selected balloons or every balloon of a view, reports how many it refreshed, and skips the ones whose piece was deleted.
+
 * v1.11.1 (2026-11-09)
 
   **Improvements**

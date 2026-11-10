@@ -503,28 +503,18 @@ You can also reset the IDs of the selected pieces with the "Reset IDs" Command: 
 
 ## Create Balloons inside TechDraw
 
-That has been a must have for a LOOONG time !
-
-This tool allows you to create/update Balloons inside a TechDraw View for all Links/Profiles.
-(It was so long and error-prone to do it manually !)
+Balloons mark each piece of a TechDraw drawing with its ID, the same ID the BOM and the Cut List show, so a piece on the drawing can be found in the lists.
 
 Workflow:
-- Create a TechDraw Page
-- Insert a View with Profiles, Links, Part Container of Profiles and Links
+- Number the pieces with "Populate IDs": a piece without ID gets no balloon.
+- Create a TechDraw Page and insert a View with Profiles, Links, or Part containers of Profiles and Links. A view of a projection group or a standalone view both work.
+- Select the View and click on the "Create Balloons" Command (`M, O`) in the MaxProFrame toolbar. Or click the Command first: the status bar asks for a View; click one (any of its edges) on the page. Esc, clicking the Command again or selecting something outside TechDraw cancels.
 
-- In the TreeView, select
-    - The TechDraw View to fill with balloons. (the View, not a View Group !)
-    - All the links and profiles to create balloons for.
+Each piece of the View gets a balloon with its ID, the arrow on the center of the piece and the bubble 20 mm away on the paper, at any view scale. Move the bubbles where you want them. Pieces that already have a balloon in that View are skipped, so after adding pieces, running it again marks only the new ones. To mark only some pieces, select them with the View, or before clicking the Command and then the View.
 
-- Click on the "Create Balloons" Command in FrameForge toolbar.
+The status bar tells how many balloons were created, how many pieces already had one, and how many have no ID; those are named in the Report view.
 
-Et voila! you've got the balloons, with their arrow pointing at the center of the parts ! 
-(you still have to move the balloon itself where you want)
-
-The Balloons are annotated with the Profile/Link ID.
-
-If you change the design, (dimensions) just select the balloons in the TreeView, and launch the "Resfresh Balloons" Command, 
-It will update arrow positions and labels accordingly.
+If you change the design, launch the "Refresh Balloons" Command on selected balloons, on a selected View (all its balloons), or click the Command and then a View: the arrows follow the pieces and the texts their current IDs; the bubbles stay where you put them. A balloon whose piece was deleted is left as it is and counted in the status bar.
 
 ## BOM Tool
 

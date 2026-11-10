@@ -83,12 +83,12 @@ EXPECTED = {
     "MaxProFrame_CreateBalloons": (
         "Create Balloons",
         "Crear globos",
-        "Crear globos automáticamente para los perfiles y enlaces seleccionados",
+        "Crear un globo con el ID de cada pieza de una vista de TechDraw",
     ),
     "MaxProFrame_RefreshBalloons": (
         "Refresh Balloons",
         "Actualizar globos",
-        "Actualizar los globos seleccionados",
+        "Seleccioná globos o una vista, o hacé clic en el botón y después en una vista",
     ),
     "MaxProFrame_CreateBOM": (
         "Create BOM",

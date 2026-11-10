@@ -3,6 +3,8 @@ from collections import defaultdict
 
 import FreeCAD as App
 import FreeCADGui as Gui
+import Part
+from PySide import QtCore, QtWidgets
 
 from freecad.maxproframe._utils import (
     get_profiles_and_links_from_object,
@@ -24,11 +26,61 @@ from freecad.maxproframe.ff_tools import (
     translate,
 )
 
+# Paper distance between the arrow tip and the bubble of a new balloon.
+BUBBLE_OFFSET_MM = 20
+STATUS_TIMEOUT_MS = 10000
 
-def place_balloon(balloon, move_balloon=False):
+
+def is_balloon_view(obj):
+    """A TechDraw view of a shape a balloon can point into; detail views use their own frame."""
+    return obj.isDerivedFrom("TechDraw::DrawViewPart") and not obj.isDerivedFrom("TechDraw::DrawViewDetail")
+
+
+def is_usable_view(obj):
+    """A balloon view on a page: the page receives the balloons."""
+    return is_balloon_view(obj) and find_page(obj) is not None
+
+
+def is_balloon_piece(obj):
+    return (
+        is_fusion(obj)
+        or is_part(obj)
+        or is_group(obj)
+        or is_profile(obj)
+        or is_trimmedbody(obj)
+        or is_extrudedcutout(obj)
+        or is_link(obj)
+    )
+
+
+def is_maxproframe_balloon(obj):
+    return obj.TypeId == "TechDraw::DrawViewBalloon" and "TargetName" in obj.PropertiesList
+
+
+def piece_id(obj):
+    """The ID of ``obj`` itself, else "": an App::Link would read the PID of what it links."""
+    return obj.PID if "PID" in obj.PropertiesList else ""
+
+
+def show_status(message, timeout=STATUS_TIMEOUT_MS):
+    Gui.getMainWindow().statusBar().showMessage(message, timeout)
+
+
+def is_alive(obj):
+    """False once ``obj`` was deleted or its document closed."""
+    try:
+        return obj.Document.getObject(obj.Name) is not None
+    except Exception:
+        return False
+
+
+def place_balloon(balloon, obj, move_balloon=False):
+    """Point ``balloon`` at the center of ``obj`` and write its ID.
+
+    OriginX/Y and X/Y are unscaled view coordinates: TechDraw multiplies them by the view scale.
+    """
     view = balloon.SourceView
-    obj = App.ActiveDocument.getObject(balloon.TargetName)
-    P = obj.Shape.CenterOfGravity
+    P = Part.getShape(obj).CenterOfGravity
 
     D = view.Direction.normalize()
     X = view.XDirection.normalize()
@@ -37,46 +89,209 @@ def place_balloon(balloon, move_balloon=False):
     C = view.getGeometricCenter()
 
     d = P.sub(C)
-    x2d = d.dot(X)  # * view.Scale
-    y2d = d.dot(Y)  # * view.Scale
-
-    pageX = view.X.Value + x2d
-    pageY = view.Y.Value + y2d
+    x2d = d.dot(X)
+    y2d = d.dot(Y)
 
     balloon.OriginX = x2d
     balloon.OriginY = y2d
 
     if move_balloon:
-        balloon.X = x2d + 20
-        balloon.Y = y2d + 20
+        offset = BUBBLE_OFFSET_MM / view.getScale()
+        balloon.X = x2d + offset
+        balloon.Y = y2d + offset
 
-    balloon.Text = obj.PID
+    balloon.Text = piece_id(obj)
 
 
-def create_balloon(view, src_obj):
-    doc = App.ActiveDocument
-    page = None
-    for obj in doc.Objects:
-        if obj.TypeId == "TechDraw::DrawPage":
-            if hasattr(obj, "Views"):
-                for v in obj.Views:
-                    if view == v:
-                        page = obj
-                        break
-                    elif v.TypeId == "TechDraw::DrawProjGroup":
-                        for vv in v.Views:
-                            if view == vv:
-                                page = obj
-                                break
-    if page is None:
-        raise RuntimeError("Impossible de trouver la page contenant la vue")
+def find_page(view):
+    for obj in view.InListRecursive:
+        if obj.isDerivedFrom("TechDraw::DrawPage"):
+            return obj
+    return None
 
+
+def create_balloon(page, view, src_obj):
+    doc = view.Document
     balloon = doc.addObject("TechDraw::DrawViewBalloon", f"Balloon_{src_obj.Label}")
     balloon.addProperty("App::PropertyString", "TargetName", "MaxProFrame", "Target Profile").TargetName = src_obj.Name
     balloon.SourceView = view
     page.addView(balloon)
 
-    place_balloon(balloon, move_balloon=True)
+    place_balloon(balloon, src_obj, move_balloon=True)
+    return balloon
+
+
+def view_balloons(view):
+    return [
+        b
+        for b in view.Document.Objects
+        if is_maxproframe_balloon(b) and b.SourceView is not None and b.SourceView.Name == view.Name
+    ]
+
+
+def view_sources(view):
+    sources = list(view.Source)
+    if "XSource" in view.PropertiesList:
+        sources += list(view.XSource)
+    return sources
+
+
+def create_balloons(view, selected_pieces=None):
+    """Mark the pieces of ``view``, or only ``selected_pieces``, that have no balloon in it yet."""
+    title = translate("frameforge", "Create Balloons")
+    page = find_page(view)
+    sources = view_sources(view) if selected_pieces is None else [o for o in selected_pieces if is_alive(o)]
+
+    profiles, links = [], []
+    for s in sources:
+        get_profiles_and_links_from_object(profiles, links, s)
+    # A piece reached twice, as by itself and through its group, gets one balloon.
+    pieces = list({(o.Document.Name, o.Name): o for o in profiles + links}.values())
+
+    marked = {b.TargetName for b in view_balloons(view)}
+    already = [o for o in pieces if o.Name in marked]
+    new = [o for o in pieces if o.Name not in marked]
+    with_id = [o for o in new if piece_id(o)]
+    without_id = [o for o in new if not piece_id(o)]
+
+    if with_id:
+        view.Document.openTransaction("Create Balloons")
+        for o in with_id:
+            create_balloon(page, view, o)
+        view.Document.commitTransaction()
+
+    message = translate("frameforge", "Balloons created: {}.").format(len(with_id))
+    if already:
+        message += " " + translate("frameforge", "Already had a balloon: {}.").format(len(already))
+    if without_id:
+        message += " " + translate("frameforge", "Without ID: {} (run Populate IDs).").format(len(without_id))
+        App.Console.PrintMessage(
+            "{}: {}: {}\n".format(title, translate("frameforge", "without ID"), ", ".join(o.Label for o in without_id))
+        )
+    show_status(message)
+
+
+def refresh_balloons(balloons):
+    targets = [(b, b.Document.getObject(b.TargetName)) for b in balloons]
+    found = [(b, o) for b, o in targets if o is not None]
+    missing = len(targets) - len(found)
+
+    if found:
+        doc = found[0][0].Document
+        doc.openTransaction("Refresh Balloons")
+        for b, o in found:
+            place_balloon(b, o)
+        doc.commitTransaction()
+
+    message = translate("frameforge", "Balloons refreshed: {}.").format(len(found))
+    if missing:
+        message += " " + translate("frameforge", "Piece not found: {}.").format(missing)
+    show_status(message)
+
+
+class ViewPicker(QtCore.QObject):
+    """Wait for one click on a TechDraw view, then run ``action`` with it.
+
+    A selection outside TechDraw or Esc cancels; a TechDraw object that is no view (page, template,
+    balloon, projection group frame) or an empty click keeps waiting.
+    """
+
+    def __init__(self, owner, title, action):
+        super().__init__()
+        self.owner = owner
+        self.title = title
+        self.action = action
+        self.doc_name = App.ActiveDocument.Name
+        self.waiting = False
+        self.attached = False
+
+    def start(self):
+        Gui.Selection.addObserver(self)
+        QtWidgets.QApplication.instance().installEventFilter(self)
+        self.attached = True
+        self.waiting = True
+        # No timeout: the prompt stays while the pick waits.
+        show_status("{}: {}".format(self.title, translate("frameforge", "Click a TechDraw view (Esc to cancel).")), 0)
+
+    def detach(self):
+        if self.attached:
+            self.attached = False
+            Gui.Selection.removeObserver(self)
+            QtWidgets.QApplication.instance().removeEventFilter(self)
+
+    def stop(self):
+        """End the wait; returns False if it had already ended."""
+        global _active_picker
+        if not self.waiting:
+            return False
+        self.waiting = False
+        if _active_picker is self:
+            _active_picker = None
+        return True
+
+    def cancel(self):
+        if self.stop():
+            self.detach()
+            show_status("{}: {}".format(self.title, translate("frameforge", "Cancelled.")))
+
+    def resolve_view(self, obj, sub):
+        """The view clicked: ``obj`` itself, or the view named in a sub-object path such as "Front.Edge3"."""
+        if is_usable_view(obj):
+            return obj
+        for name in reversed((sub or "").split(".")[:-1]):
+            child = obj.Document.getObject(name)
+            if child is not None and is_usable_view(child):
+                return child
+        return None
+
+    def addSelection(self, doc_name, obj_name, sub, pnt):
+        if not self.waiting:
+            return
+        doc = App.listDocuments().get(doc_name)
+        obj = doc.getObject(obj_name) if doc is not None and doc_name == self.doc_name else None
+        view = self.resolve_view(obj, sub) if obj is not None else None
+        if view is None and obj is not None and obj.TypeId.startswith("TechDraw::"):
+            return
+        # The document must not change, nor the observer go, inside the selection callback.
+        self.stop()
+        QtCore.QTimer.singleShot(0, lambda: self.finish(view))
+
+    def finish(self, view):
+        self.detach()
+        if view is None or not is_alive(view):
+            show_status("{}: {}".format(self.title, translate("frameforge", "Cancelled.")))
+            return
+        self.action(view)
+
+    def eventFilter(self, watched, event):
+        if not self.waiting or event.type() not in (QtCore.QEvent.ShortcutOverride, QtCore.QEvent.KeyPress):
+            return False
+        if event.key() != QtCore.Qt.Key_Escape:
+            return False
+        if event.type() == QtCore.QEvent.ShortcutOverride:
+            # Claim Esc so no shortcut takes it: the key press follows.
+            event.accept()
+        else:
+            self.cancel()
+        return True
+
+
+_active_picker = None
+
+
+def cancel_view_pick():
+    """Cancel the click a command waits for; returns the command that was waiting, else None."""
+    picker = _active_picker
+    if picker is None:
+        return None
+    picker.cancel()
+    return picker.owner
+
+
+def pick_view(owner, title, action):
+    global _active_picker
+    _active_picker = ViewPicker(owner, title, action)
+    _active_picker.start()
 
 
 class CreateBalloonsCommand:
@@ -87,107 +302,70 @@ class CreateBalloonsCommand:
             "Accel": "M, O",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_CreateBalloons",
-                "<b>Automatically create balloons for selected profiles and links</b><br><br>Select profiles and links.",
+                "<b>Create a balloon with the ID of each piece of a TechDraw view</b><br><br>"
+                "Select a view, or click the button and then a view. Pieces that already have a balloon are "
+                "skipped. Select pieces with the view to mark only those.",
             ),
         }
 
     def IsActive(self):
-        if App.ActiveDocument:
-            selection = Gui.Selection.getSelection()
-
-            views = [s for s in selection if s.TypeId == "TechDraw::DrawProjGroupItem"]
-            if len(views) != 1:
-                return False
-
-            objects = [
-                sel
-                for sel in selection
-                if is_fusion(sel)
-                or is_part(sel)
-                or is_group(sel)
-                or is_profile(sel)
-                or is_trimmedbody(sel)
-                or is_extrudedcutout(sel)
-                or is_link(sel)
-            ]
-
-            if len(objects) <= 0:
-                return False
-
-            return True
-
-        return False
+        return App.ActiveDocument is not None
 
     def Activated(self):
-        selection = Gui.Selection.getSelection()
-
-        views = [s for s in selection if s.TypeId == "TechDraw::DrawProjGroupItem"]
-        objects = [
-            sel
-            for sel in selection
-            if is_fusion(sel)
-            or is_part(sel)
-            or is_group(sel)
-            or is_profile(sel)
-            or is_trimmedbody(sel)
-            or is_extrudedcutout(sel)
-            or is_link(sel)
-        ]
-
-        if len(objects) <= 0 or len(views) != 1:
+        # Pressed again while waiting for a click: that cancels the wait.
+        if cancel_view_pick() == "MaxProFrame_CreateBalloons":
             return
+        selection = Gui.Selection.getSelection()
+        views = [s for s in selection if is_usable_view(s)]
+        # Pieces selected alone are kept for the view clicked next.
+        pieces = [s for s in selection if is_balloon_piece(s)] or None
 
-        view = views[0]
-
-        App.ActiveDocument.openTransaction("Create Balloons")
-
-        sel_profiles, sel_links = [], []
-        for s in objects:
-            get_profiles_and_links_from_object(sel_profiles, sel_links, s)
-
-        ff_objects = sel_profiles + sel_links
-
-        for o in ff_objects:
-            create_balloon(view, o)
-
-        App.ActiveDocument.commitTransaction()
-        # App.ActiveDocument.recompute()
+        if len(views) > 1:
+            show_status(translate("frameforge", "More than one TechDraw view is selected: select one."))
+        elif views:
+            create_balloons(views[0], pieces)
+        else:
+            pick_view(
+                "MaxProFrame_CreateBalloons",
+                translate("frameforge", "Create Balloons"),
+                lambda view: create_balloons(view, pieces),
+            )
 
 
-class ResfreshBalloonsCommand:
+class RefreshBalloonsCommand:
     def GetResources(self):
         return {
             "Pixmap": os.path.join(ICONPATH, "refresh-balloons.svg"),
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_RefreshBalloons", "Refresh Balloons"),
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_RefreshBalloons",
-                "<b>Refresh selected balloons</b>",
+                "<b>Refresh balloons</b><br><br>"
+                "Select balloons or a view, or click the button and then a view: the arrows follow their pieces "
+                "and the texts their IDs.",
             ),
         }
 
     def IsActive(self):
-        if App.ActiveDocument:
-            selection = Gui.Selection.getSelection()
-
-            balloons = [b for b in selection if b.TypeId == "TechDraw::DrawViewBalloon" and hasattr(b, "TargetName")]
-            if len(balloons) <= 0:
-                return False
-            return True
-
-        return False
+        return App.ActiveDocument is not None
 
     def Activated(self):
+        if cancel_view_pick() == "MaxProFrame_RefreshBalloons":
+            return
         selection = Gui.Selection.getSelection()
+        balloons = [b for b in selection if is_maxproframe_balloon(b)]
+        views = [s for s in selection if is_usable_view(s)]
 
-        App.ActiveDocument.openTransaction("Resfresh Balloons")
-
-        balloons = [b for b in selection if b.TypeId == "TechDraw::DrawViewBalloon" and hasattr(b, "TargetName")]
-        for b in balloons:
-            place_balloon(b)
-
-        App.ActiveDocument.commitTransaction()
-        # App.ActiveDocument.recompute()
+        if balloons:
+            refresh_balloons(balloons)
+        elif views:
+            refresh_balloons([b for v in views for b in view_balloons(v)])
+        else:
+            pick_view(
+                "MaxProFrame_RefreshBalloons",
+                translate("frameforge", "Refresh Balloons"),
+                lambda view: refresh_balloons(view_balloons(view)),
+            )
 
 
 add_command("MaxProFrame_CreateBalloons", CreateBalloonsCommand())
-add_command("MaxProFrame_RefreshBalloons", ResfreshBalloonsCommand())
+add_command("MaxProFrame_RefreshBalloons", RefreshBalloonsCommand())
