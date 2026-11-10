@@ -349,6 +349,28 @@ def restore_length(obj, measured=lambda obj: obj):
         obj.purgeTouched()
 
 
+def add_custom_profile_link(obj):
+    """Give ``obj`` its read-only CustomProfile: a global link, as library sections live outside its Part."""
+    obj.addProperty("App::PropertyLinkGlobal", "CustomProfile", "Profile", "Target profile")
+    obj.setEditorMode("CustomProfile", 1)
+
+
+def restore_custom_profile_link(obj):
+    """Turn the local CustomProfile link of ``obj``, as saved before it was global, into a global one.
+
+    For a document being opened: the link keeps its section and ``obj`` stays as touched as it was.
+    """
+    if obj.getTypeIdOfProperty("CustomProfile") == "App::PropertyLinkGlobal":
+        return
+    touched = "Touched" in obj.State
+    section = obj.CustomProfile
+    obj.removeProperty("CustomProfile")
+    add_custom_profile_link(obj)
+    obj.CustomProfile = section
+    if not touched:
+        obj.purgeTouched()
+
+
 def get_readable_cutting_angles(ba_y, ba_x, bb_y, bb_x, *trim_cuts):
     all_bevels = [ba_y, ba_x, bb_y, bb_x]
     start_bevels = [ba_y, ba_x]

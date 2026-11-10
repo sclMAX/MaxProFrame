@@ -8,12 +8,14 @@ import Part
 from PySide import QtCore, QtGui
 
 from freecad.maxproframe._utils import (
+    add_custom_profile_link,
     get_childrens_from_extrudedcutout,
     get_profile_from_extrudedcutout,
     get_readable_cutting_angles,
     get_trimmed_profile_all_cutting_angles,
     get_trimmedprofile_from_extrudedcutout,
     length_along_normal,
+    restore_custom_profile_link,
     restore_length,
 )
 from freecad.maxproframe.ff_tools import ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, translate
@@ -341,8 +343,7 @@ class ExtrudedCutout:
         obj.addProperty("App::PropertyString", "CatalogFamily", "Profile", "")
         obj.setEditorMode("CatalogFamily", 1)
 
-        obj.addProperty("App::PropertyLink", "CustomProfile", "Profile", "Target profile").CustomProfile = None
-        obj.setEditorMode("CustomProfile", 1)
+        add_custom_profile_link(obj)
 
         obj.addProperty("App::PropertyString", "SizeName", "Profile", "")
         obj.setEditorMode("SizeName", 1)
@@ -400,6 +401,7 @@ class ExtrudedCutout:
             obj.CutType = current
         self.add_pattern_properties(obj)
         restore_length(obj, measured_piece)
+        restore_custom_profile_link(obj)
 
     def onChanged(self, fp, prop):
         """Respond to property changes."""
