@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="64px" height="64px" viewBox="0 0 64 64" version="1.1" id="piece-table" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" style="stop-color:#729fcf;stop-opacity:1" />
+      <stop offset="1" style="stop-color:#3465a4;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- The sheet -->
+  <rect x="5" y="9" width="54" height="46" rx="2" ry="2" style="fill:#ffffff;stroke:#2e3436;stroke-width:2" />
+  <!-- Header row -->
+  <rect x="6" y="10" width="52" height="10" style="fill:url(#header);stroke:none" />
+  <!-- Rows -->
+  <path d="M 6,20 H 58 M 6,29 H 58 M 6,38 H 58 M 6,47 H 58" style="fill:none;stroke:#2e3436;stroke-width:1.5" />
+  <!-- Columns: ID, piece, quantity, length, angles -->
+  <path d="M 16,10 V 54 M 34,10 V 54 M 44,10 V 54" style="fill:none;stroke:#2e3436;stroke-width:1.5" />
+  <!-- ID column, as on the balloons -->
+  <circle cx="11" cy="24.5" r="3" style="fill:#fce94f;stroke:#c4a000;stroke-width:1" />
+  <circle cx="11" cy="33.5" r="3" style="fill:#fce94f;stroke:#c4a000;stroke-width:1" />
+  <circle cx="11" cy="42.5" r="3" style="fill:#fce94f;stroke:#c4a000;stroke-width:1" />
+  <!-- A profile in each row -->
+  <path d="M 19,24.5 H 31 M 19,33.5 H 29 M 19,42.5 H 31" style="fill:none;stroke:#888a85;stroke-width:3" />
+  <!-- Mitered end in the angle column -->
+  <path d="M 47,27 L 55,22 M 47,36 L 55,31 M 47,45 L 55,40" style="fill:none;stroke:#cc0000;stroke-width:1.8" />
+</svg>

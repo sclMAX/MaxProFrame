@@ -516,6 +516,24 @@ The status bar tells how many balloons were created, how many pieces already had
 
 If you change the design, launch the "Refresh Balloons" Command on selected balloons, on a selected View (all its balloons), or click the Command and then a View: the arrows follow the pieces and the texts their current IDs; the bubbles stay where you put them. A balloon whose piece was deleted is left as it is and counted in the status bar.
 
+## Piece Table inside TechDraw
+
+The "Piece Table" Command puts on the page a table of the pieces shown in one or more TechDraw Views, with the numbers of their balloons:
+
+| ID | Piece | Quantity | Length | CutAngle1 | CutAngle2 |
+|----|-------|----------|--------|-----------|-----------|
+| 1 | TC80x40x1.5 | 2 | 1442.0 | 45.0 <80 | 0.0 |
+
+Workflow:
+- Number the pieces with "Populate IDs": a piece without ID gets no row.
+- Select one or more Views and click on the "Piece Table" Command in the MaxProFrame Output toolbar. Or click the Command first, then a View on the page. A detail view gets no table: the status bar says so and waits for another View. Esc, clicking the Command again or selecting something outside TechDraw cancels.
+
+The table lists only the pieces of the selected Views, one row per ID, with how many pieces have that ID: the same numbers as the balloons. A piece shown in several of the Views counts once. Piece is the name of the profile only (`TC80x40x1.5`, not `Profile_TC80x40x1.5_001_Tr`). The cut angles are written as in the BOM, with the face each one is seen on: `45.0 <80`, or `45.0 <80 + 10.0 <40` for a compound cut. Lengths and angles take the decimal separator of the FreeCAD language (`45,0 <80` in Spanish).
+
+The table is a spreadsheet (Spreadsheet workbench) shown on the page of the first selected View; move it on the page where you want it. The status bar tells how many rows and pieces it lists and how many pieces have no ID; those are named in the Report view. If no piece has an ID, no table is made.
+
+If you change the design, run the Command again on the same Views: their table is refreshed, where you put it, instead of adding another. One Undo (Ctrl+Z) removes a new table, or brings back the previous contents of a refreshed one.
+
 ## BOM Tool
 
 Another fancy tool is the BOM tool.

@@ -15,6 +15,7 @@ from freecad.maxproframe import (  # noqa: F401  (importing registers the comman
     create_extruded_cutout_tool,
     create_link,
     create_notch_tool,
+    create_piece_table_tool,
     create_profiles_tool,
     library_manager_dialog,
     parametric_line,
@@ -89,6 +90,11 @@ EXPECTED = {
         "Refresh Balloons",
         "Actualizar globos",
         "Seleccioná globos o una vista, o hacé clic en el botón y después en una vista",
+    ),
+    "MaxProFrame_CreatePieceTable": (
+        "Piece Table",
+        "Tabla de piezas",
+        "Seleccioná una o más vistas, o hacé clic en el botón y después en una vista",
     ),
     "MaxProFrame_CreateBOM": (
         "Create BOM",

@@ -2,6 +2,9 @@
 
 * Unreleased
 
+  **Improvements**
+  - **Piece Table**: a new command (MaxProFrame Output toolbar) puts on a TechDraw page a table of the pieces shown in the selected views: ID, Piece (the profile name only, e.g. `TC80x40x1.5`), Quantity, Length and both cut angles with their faces, as the BOM writes them (`45.0 <80`). One row per ID, so the numbers match the balloons; pieces without ID get no row and are counted in the status bar and named in the Report view. The table is a spreadsheet shown on the page of the first view; running it again on the same views refreshes it. Lengths and angles take the decimal separator of the FreeCAD language (`45,0 <80` in Spanish). Select the views, or click the button and then a view; Esc cancels.
+
   **Fixes**
   - **Create Balloons** and **Refresh Balloons** are enabled whenever a document is open. Select a TechDraw view, or click the button and then a view; Esc cancels. Before, Create Balloons stayed disabled until a view and pieces were both selected, without telling why.
   - **Create Balloons** marks every piece of the view, or only the pieces selected with it, and skips the pieces that already have a balloon in that view: running it again creates no duplicates.

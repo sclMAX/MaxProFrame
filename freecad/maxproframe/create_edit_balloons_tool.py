@@ -157,17 +157,22 @@ def view_sources(view):
     return list(view.Source)
 
 
+def pieces_of(sources):
+    """The profiles and links of ``sources``, through their groups, parts and fusions, each once."""
+    profiles, links = [], []
+    for s in sources:
+        get_profiles_and_links_from_object(profiles, links, s)
+    # A piece reached twice, as by itself and through its group, counts once.
+    return list({o.Name: o for o in profiles + links}.values())
+
+
 def create_balloons(view, selected_pieces=None):
     """Mark the pieces of ``view``, or only ``selected_pieces``, that have no balloon in it yet."""
     title = translate("frameforge", "Create Balloons")
     page = find_page(view)
     sources = view_sources(view) if selected_pieces is None else [o for o in selected_pieces if is_alive(o)]
 
-    profiles, links = [], []
-    for s in sources:
-        get_profiles_and_links_from_object(profiles, links, s)
-    # A piece reached twice, as by itself and through its group, gets one balloon.
-    pieces = list({o.Name: o for o in profiles + links}.values())
+    pieces = pieces_of(sources)
 
     marked = {b.TargetName for b in view_balloons(view)}
     already = [o for o in pieces if o.Name in marked]
@@ -220,14 +225,16 @@ class ViewPicker(QtCore.QObject):
     """Wait for one click on a TechDraw view, then run ``action`` with it.
 
     A selection outside TechDraw or Esc cancels; a TechDraw object that is no view (page, template,
-    balloon, projection group frame) or an empty click keeps waiting.
+    balloon, projection group frame) or an empty click keeps waiting. A click on a detail view shows
+    ``detail_message``, by default that it gets no balloons.
     """
 
-    def __init__(self, owner, title, action):
+    def __init__(self, owner, title, action, detail_message=None):
         super().__init__()
         self.owner = owner
         self.title = title
         self.action = action
+        self.detail_message = detail_message
         self.doc_name = App.ActiveDocument.Name
         self.waiting = False
         self.attached = False
@@ -279,7 +286,9 @@ class ViewPicker(QtCore.QObject):
         view = self.resolve_view(obj, sub) if obj is not None else None
         if view is None and obj is not None and obj.TypeId.startswith("TechDraw::"):
             if obj.isDerivedFrom("TechDraw::DrawViewDetail"):
-                message = translate("frameforge", "A detail view gets no balloons: click another view (Esc to cancel).")
+                message = self.detail_message or translate(
+                    "frameforge", "A detail view gets no balloons: click another view (Esc to cancel)."
+                )
                 show_status("{}: {}".format(self.title, message), 0)
             return
         # The document must not change, nor the observer go, inside the selection callback.
@@ -318,10 +327,10 @@ def cancel_view_pick():
     return picker.owner
 
 
-def pick_view(owner, title, action):
+def pick_view(owner, title, action, detail_message=None):
     """Wait for a click on a view for the command ``owner``; callers cancel any wait first."""
     global _active_picker
-    _active_picker = ViewPicker(owner, title, action)
+    _active_picker = ViewPicker(owner, title, action, detail_message)
     _active_picker.start()
 
 

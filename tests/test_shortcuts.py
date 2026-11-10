@@ -41,7 +41,12 @@ SHORTCUTS = {
     "MaxProFrame_RecomputeFrameForgeObjects": "M, R",
     "MaxProFrame_ExportTechDraw": "M, T",
 }
-WITHOUT_SHORTCUT = ("MaxProFrame_ManageProfileLibraries", "MaxProFrame_ResetIDs", "MaxProFrame_RefreshBalloons")
+WITHOUT_SHORTCUT = (
+    "MaxProFrame_ManageProfileLibraries",
+    "MaxProFrame_ResetIDs",
+    "MaxProFrame_RefreshBalloons",
+    "MaxProFrame_CreatePieceTable",
+)
 
 
 def declared(name):
