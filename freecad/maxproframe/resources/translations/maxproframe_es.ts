@@ -1041,6 +1041,12 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>without ID</source><translation>sin ID</translation></message>
     <message><source>Balloons refreshed: {}.</source><translation>Globos actualizados: {}.</translation></message>
     <message><source>Piece not found: {}.</source><translation>Pieza no encontrada: {}.</translation></message>
+    <message><source>Piece Table</source><translation>Tabla de piezas</translation></message>
+    <message><source>Piece</source><translation>Pieza</translation></message>
+    <message><source>Piece table created. Rows: {}. Pieces: {}.</source><translation>Tabla de piezas creada. Filas: {}. Piezas: {}.</translation></message>
+    <message><source>Piece table refreshed. Rows: {}. Pieces: {}.</source><translation>Tabla de piezas actualizada. Filas: {}. Piezas: {}.</translation></message>
+    <message><source>No piece with ID.</source><translation>Ninguna pieza con ID.</translation></message>
+    <message><source>A detail view gets no table: click another view (Esc to cancel).</source><translation>Una vista de detalle no lleva tabla: hacé clic en otra vista (Esc para cancelar).</translation></message>
     <message><source>IDs cleared: {} (Ctrl+Z to undo)</source><translation>IDs borrados: {} (Ctrl+Z para deshacer)</translation></message>
     <message><source>Miter Ends</source><translation>Ingletes</translation></message>
     <message><source>Edit Miter</source><translation>Editar inglete</translation></message>
@@ -1336,6 +1342,11 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <name>MaxProFrame_RefreshBalloons</name>
     <message><source>Refresh Balloons</source><translation>Actualizar globos</translation></message>
     <message><source>&lt;b&gt;Refresh balloons&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select balloons or a view, or click the button and then a view: the arrows follow their pieces and the texts their IDs.</source><translation>&lt;b&gt;Actualizar globos&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná globos o una vista, o hacé clic en el botón y después en una vista: las flechas siguen a sus piezas y los textos a sus IDs.</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_CreatePieceTable</name>
+    <message><source>Piece Table</source><translation>Tabla de piezas</translation></message>
+    <message><source>&lt;b&gt;Insert a table of the pieces of TechDraw views&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select one or more views, or click the button and then a view: one row per ID with the piece, its quantity, length and cut angles. Run it again on the same views to refresh their table.</source><translation>&lt;b&gt;Insertar una tabla con las piezas de vistas de TechDraw&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná una o más vistas, o hacé clic en el botón y después en una vista: una fila por ID con la pieza, su cantidad, longitud y ángulos de corte. Ejecutalo de nuevo sobre las mismas vistas para actualizar su tabla.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_CreateBOM</name>

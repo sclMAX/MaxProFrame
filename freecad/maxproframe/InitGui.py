@@ -44,6 +44,7 @@ class MaxProFrame(Gui.Workbench):
         "MaxProFrame_ResetIDs",
         "MaxProFrame_CreateBalloons",
         "MaxProFrame_RefreshBalloons",
+        "MaxProFrame_CreatePieceTable",
         "MaxProFrame_CreateBOM",
     ]
 
@@ -75,6 +76,7 @@ class MaxProFrame(Gui.Workbench):
             create_extruded_cutout_tool,
             create_link,
             create_notch_tool,
+            create_piece_table_tool,
             create_profiles_tool,
             edit_profile_tool,
             library_manager_dialog,

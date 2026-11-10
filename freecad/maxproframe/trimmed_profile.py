@@ -12,6 +12,7 @@ from freecad.maxproframe._utils import (
     get_trimmed_profile_all_cutting_angles,
     is_profile,
     length_along_normal,
+    restore_length,
 )
 from freecad.maxproframe.ff_tools import ICONPATH, translate
 from freecad.maxproframe.miter_geometry import (
@@ -265,6 +266,10 @@ class TrimmedProfile:
 
     def onChanged(self, fp, prop):
         pass
+
+    def onDocumentRestored(self, fp):
+        """Trims saved with their tip-to-tip length open with their longest side."""
+        restore_length(fp)
 
     def execute(self, fp):
         if fp.TrimmedBody is None:
