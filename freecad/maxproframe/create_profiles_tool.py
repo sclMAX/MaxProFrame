@@ -25,6 +25,8 @@ from freecad.maxproframe.ff_tools import (
     add_command,
     get_param_group,
     move_profile_to_parent_if_supported,
+    nearest_group,
+    place_in_container_of,
     translate,
 )
 from freecad.maxproframe.library_manager import LibraryManager, get_canonical_family
@@ -1499,21 +1501,6 @@ def _guard_reconciliation(method):
     return guarded
 
 
-def _nearest_group(obj):
-    """Closest group holding obj: a folder (getParentGroup) or else a Part/Body (getParentGeoFeatureGroup)."""
-    folder = obj.getParentGroup() if hasattr(obj, "getParentGroup") else None
-    if folder is not None:
-        return folder
-    return obj.getParentGeoFeatureGroup() if hasattr(obj, "getParentGeoFeatureGroup") else None
-
-
-def place_in_container_of(obj, source):
-    """Put ``obj`` in the closest folder or Part/Body holding ``source``, like Create Profile does."""
-    group = _nearest_group(source)
-    if group is not None:
-        move_profile_to_parent_if_supported(obj, group)
-
-
 def _is_container(obj):
     """Parts, Bodies and groups: their shape's edge names do not resolve to a child."""
     return hasattr(obj, "hasExtension") and obj.hasExtension("App::GroupExtension")
@@ -2596,13 +2583,13 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
     def _place_beside_source(self, profile, source):
         """In place: a profile joins its source's own group, or the nearest enclosing group that accepts it."""
-        group = _nearest_group(source) if source is not None else None
+        group = nearest_group(source) if source is not None else None
         while group is not None:
             move_profile_to_parent_if_supported(profile, group)
             if profile in group.Group:
                 return
             # A Body rejects profiles; climb to the Part or folder that holds it.
-            group = _nearest_group(group)
+            group = nearest_group(group)
 
     @_guard_reconciliation
     def _place_previews_in_place(self):

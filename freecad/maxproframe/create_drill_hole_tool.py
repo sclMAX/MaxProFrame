@@ -21,7 +21,6 @@ from freecad.maxproframe.create_extend_cut_tool import (
     trimmed_body_problem,
 )
 from freecad.maxproframe.create_extruded_cutout_tool import CUT_TYPE_LABELS, MAX_DEPTH, MIN_DEPTH, face_problem
-from freecad.maxproframe.create_profiles_tool import place_in_container_of
 from freecad.maxproframe.drill_hole import (
     DEFAULT_CUT_TYPE,
     DEFAULT_DIAMETER,
@@ -1236,7 +1235,6 @@ class DrillHoleTaskPanel:
             if getattr(body, "ViewObject", None) is not None
         ]
         self.obj = make_drill_hole((base, (face,)), self.vertex)
-        place_in_container_of(self.obj, base)
         restore_expressions(self.obj, self._expressions)
         self._bind_fields()
 
