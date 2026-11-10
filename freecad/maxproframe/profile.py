@@ -9,6 +9,7 @@ from freecad.maxproframe._utils import (
     get_readable_cutting_angles,
     length_along_normal,
     normalize_anchor,
+    restore_length,
 )
 from freecad.maxproframe.custom_section_geometry import build_custom_section_face
 from freecad.maxproframe.expression_fields import expression_of
@@ -1340,6 +1341,8 @@ class Profile:
                     "Profile",
                     "Lip length for C profiles",
                 ).LipLength = 0.0
+        # Profiles saved with their tip-to-tip length open with their longest side.
+        restore_length(obj)
 
 
 class ViewProviderProfile:

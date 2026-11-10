@@ -14,6 +14,7 @@ from freecad.maxproframe._utils import (
     get_trimmed_profile_all_cutting_angles,
     get_trimmedprofile_from_extrudedcutout,
     length_along_normal,
+    restore_length,
 )
 from freecad.maxproframe.ff_tools import ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, translate
 from freecad.maxproframe.frameforge_exceptions import FrameForgeException
@@ -282,6 +283,11 @@ def _uncut_shape(shape):
     return uncut
 
 
+def measured_piece(cutout):
+    """The piece whose length is the Length of ``cutout``: the trimmed profile it cuts, else the profile."""
+    return get_trimmedprofile_from_extrudedcutout(cutout) or get_profile_from_extrudedcutout(cutout)
+
+
 class ExtrudedCutout:
     def __init__(self, obj, sketch, selected_face):
         """Initialize the parametric Sheet Metal Cut object and add
@@ -384,12 +390,16 @@ class ExtrudedCutout:
         _add_pattern_properties(obj)
 
     def onDocumentRestored(self, obj):
-        """Cutouts saved before One wall gain it, keeping their cut type; those saved before the pattern gain it."""
+        """Cutouts saved before One wall gain it, keeping their cut type; those saved before the pattern gain it.
+
+        Cutouts saved with the tip-to-tip length of their piece open with its longest side.
+        """
         if obj.getEnumerationsOfProperty("CutType") != CUT_TYPES:
             current = obj.CutType
             obj.CutType = list(CUT_TYPES)
             obj.CutType = current
         self.add_pattern_properties(obj)
+        restore_length(obj, measured_piece)
 
     def onChanged(self, fp, prop):
         """Respond to property changes."""
@@ -487,7 +497,7 @@ class ExtrudedCutout:
         obj.ApproxWeight = prof.ApproxWeight
         obj.Price = prof.Price
 
-        obj.Length = length_along_normal(trim_prof if trim_prof else prof)
+        obj.Length = length_along_normal(measured_piece(obj))
 
         cut_angles = get_readable_cutting_angles(
             getattr(prof, "BevelACutY", "N/A"),

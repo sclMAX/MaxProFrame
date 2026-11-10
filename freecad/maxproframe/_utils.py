@@ -5,6 +5,7 @@ __author__ = "Christophe Grellier (Chris_G)"
 __license__ = "LGPL 2.1"
 __doc__ = "Curves workbench utilities common to all tools."
 
+import math
 from numbers import Number
 
 import FreeCAD
@@ -272,7 +273,8 @@ def length_along_normal(obj):
 
     A section without a straight edge along the axis (round tube or bar) keeps its tip-to-tip extent.
     """
-    doc = FreeCAD.ActiveDocument
+    # The document of the piece, not the active one: a document being opened is not always active.
+    doc = obj.Document
 
     if is_profile(obj):
         if hasattr(obj, "Target"):
@@ -305,6 +307,26 @@ def length_along_normal(obj):
 
     length = max(projections) - min(projections)
     return length
+
+
+def restore_length(obj, measured=lambda obj: obj):
+    """Set the Length of ``obj`` to the tape length of ``measured(obj)`` as its shape is, without recomputing it.
+
+    For a document being opened: a piece saved before the tape length gets it at once. Every shape is read from
+    the file before any object is told the document is restored, whatever the order of the objects. A path or
+    shape that gives no length (missing, empty) keeps the saved Length. ``obj`` stays as touched as it was: the
+    shape is unchanged, so a Length set here asks for no recompute.
+    """
+    try:
+        length = length_along_normal(measured(obj))
+    except Exception:
+        return
+    if not isinstance(length, Number) or not math.isfinite(length) or length == obj.Length.Value:
+        return
+    touched = "Touched" in obj.State
+    obj.Length = length
+    if not touched:
+        obj.purgeTouched()
 
 
 def get_readable_cutting_angles(ba_y, ba_x, bb_y, bb_x, *trim_cuts):

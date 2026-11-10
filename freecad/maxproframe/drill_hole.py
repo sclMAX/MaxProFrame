@@ -15,6 +15,7 @@ from freecad.maxproframe._utils import (
     get_profile_from_extrudedcutout,
     is_extrudedcutout,
     is_trimmedbody,
+    restore_length,
 )
 from freecad.maxproframe.extruded_cutout import (
     ExtrudedCutout,
@@ -22,6 +23,7 @@ from freecad.maxproframe.extruded_cutout import (
     _uncut_shape,
     axis_positions,
     cut_tools,
+    measured_piece,
 )
 from freecad.maxproframe.ff_tools import ICONPATH, place_in_container_of, translate
 from freecad.maxproframe.frameforge_exceptions import FrameForgeException
@@ -403,6 +405,8 @@ class DrillHole(ExtrudedCutout):
         profile = get_profile_from_extrudedcutout(obj) if obj.baseObject else None
         if profile is not None:
             _add_reference_anchor(obj, section_shift(profile))
+        # Saved before the tape length: the length of the piece it cuts, as a cutout gets it.
+        restore_length(obj, measured_piece)
 
     def onBeforeChange(self, fp, prop):
         if prop == "baseObject" and fp.baseObject:
