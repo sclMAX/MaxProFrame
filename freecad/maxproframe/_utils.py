@@ -319,9 +319,10 @@ def restore_length(obj, measured=lambda obj: obj):
     """
     try:
         length = length_along_normal(measured(obj))
+        saved = obj.Length.Value
     except Exception:
         return
-    if not isinstance(length, Number) or not math.isfinite(length) or length == obj.Length.Value:
+    if not isinstance(length, Number) or not math.isfinite(length) or length == saved:
         return
     touched = "Touched" in obj.State
     obj.Length = length
