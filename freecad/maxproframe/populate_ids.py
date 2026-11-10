@@ -10,6 +10,7 @@ from freecad.maxproframe._utils import (
     get_profile_from_extrudedcutout,
     get_profile_from_trimmedbody,
     is_extrudedcutout,
+    is_pattern_link,
     is_trimmedbody,
 )
 from freecad.maxproframe.ff_tools import ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, translate
@@ -149,7 +150,12 @@ class IdGenerator:
 
 
 def profile_source(profile):
-    """The profile a trim or cutout is made from, which holds its ID; a profile is its own source."""
+    """The profile a trim or cutout is made from, which holds its ID; a profile is its own source.
+
+    A Profile Pattern copy has the source of the piece it copies.
+    """
+    if is_pattern_link(profile) and profile.LinkedObject is not None:
+        return profile_source(profile.LinkedObject)
     if is_trimmedbody(profile):
         return get_profile_from_trimmedbody(profile)
     if is_extrudedcutout(profile):
@@ -158,20 +164,51 @@ def profile_source(profile):
 
 
 def set_profile_pid(profile, pid):
+    if is_pattern_link(profile) and profile.LinkedObject is not None:
+        # A Profile Pattern copy carries the ID of the piece it copies.
+        profile = profile.LinkedObject
     source = profile_source(profile)
     source.PID = pid
     # Keep the selected object's BOM data current without waiting for recompute.
     if source is not profile:
         profile.PID = pid
+    sync_copies(source)
+
+
+def sync_copies(source):
+    """Give the Profile Pattern copies of ``source``, or of a trim or cutout of it, the ID of what they copy."""
+    for obj in getattr(source, "InListRecursive", ()):
+        if is_pattern_link(obj) and profile_source(obj) is source and obj.PID != obj.LinkedObject.PID:
+            obj.PID = obj.LinkedObject.PID
+
+
+def originals(pieces):
+    """``pieces`` with the Profile Pattern copies left out, and the pieces they copy added once when missing."""
+    seen = {id(obj) for obj in pieces if not is_pattern_link(obj)}
+    found = []
+    for obj in pieces:
+        if is_pattern_link(obj):
+            obj = obj.LinkedObject
+            if obj is None or id(obj) in seen:
+                continue
+            seen.add(id(obj))
+        found.append(obj)
+    return found
 
 
 def set_piece_pid(source, pid):
-    """Write ``pid`` on a profile and on the trims and cutouts made from it, as their recompute copies it."""
+    """Write ``pid`` on a profile and on the trims and cutouts made from it, as their recompute copies it.
+
+    Their Profile Pattern copies follow; a copy itself takes it from its profile.
+    """
+    if is_pattern_link(source):
+        return
     for obj in (source, *getattr(source, "InListRecursive", ())):
         if obj is not source and not (is_trimmedbody(obj) or is_extrudedcutout(obj)):
             continue
         if getattr(obj, "PID", pid) != pid and profile_source(obj) is source:
             obj.PID = pid
+    sync_copies(source)
 
 
 def profile_family(obj):
@@ -267,6 +304,8 @@ def populate_ids(
     profiles_prefix="",
     links_prefix="",
 ):
+    # A Profile Pattern copy is numbered through the piece it copies: it takes that ID.
+    sel_profiles = originals(sel_profiles)
 
     if keep_existing:
         # Pieces that already have an ID keep it: only the others are numbered.

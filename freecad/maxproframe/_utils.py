@@ -120,6 +120,18 @@ def is_part_or_part_design(obj):
     return obj.TypeId.startswith(("Part::", "PartDesign::"))
 
 
+def is_profile_pattern(obj):
+    """A Profile Pattern: the object repeating a piece as Links."""
+    return obj.TypeId == "App::FeaturePython" and "Piece" in obj.PropertiesList and "Copies" in obj.PropertiesList
+
+
+def is_pattern_link(obj):
+    """A copy a Profile Pattern made of its piece: a Link it keeps in its Copies, counted as that piece."""
+    return obj.TypeId == "App::Link" and any(
+        is_profile_pattern(parent) and obj.Name in (copy.Name for copy in parent.Copies) for parent in obj.InList
+    )
+
+
 def get_profiles_and_links_from_object(profiles, links, obj):
     if is_fusion(obj):
         for child in obj.Shapes:
@@ -137,7 +149,8 @@ def get_profiles_and_links_from_object(profiles, links, obj):
             if child.getParentGroup() in (obj, None) and child.Visibility:
                 get_profiles_and_links_from_object(profiles, links, child)
 
-    elif is_profile(obj) or is_trimmedbody(obj) or is_extrudedcutout(obj):
+    elif is_profile(obj) or is_trimmedbody(obj) or is_extrudedcutout(obj) or is_pattern_link(obj):
+        # A Profile Pattern copy is one more piece of what it copies, not a link of its own.
         profiles.append(obj)
 
     elif is_link(obj):
@@ -145,8 +158,14 @@ def get_profiles_and_links_from_object(profiles, links, obj):
 
 
 def get_profiles_and_links_from_document():
+    """(profiles and Profile Pattern copies, other links) of the active document."""
     doc = FreeCAD.ActiveDocument
-    return [o for o in doc.Objects if is_profile(o)], [o for o in doc.Objects if is_link(o)]
+    copies = [o for o in doc.Objects if is_pattern_link(o)]
+    names = {o.Name for o in copies}
+    return (
+        [o for o in doc.Objects if is_profile(o)] + copies,
+        [o for o in doc.Objects if is_link(o) and o.Name not in names],
+    )
 
 
 # TODO move this code into TrimmedProfile ?
