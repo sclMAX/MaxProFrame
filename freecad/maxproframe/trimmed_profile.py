@@ -49,9 +49,9 @@ MISSING_ELEMENT_PREFIX = "?"
 FACE_TOLERANCE = 1e-3
 FACE_ANGLE_TOLERANCE = 1e-5
 # (document name, trim name) -> (target name, face name, point, normal): the face of its target an Extend Cut
-# ends on, its point and normal in the frame of the profile the target is built on. Taken from the face picked
-# (on opening, after an Undo or Redo, at the first recompute after the link is set) and from every face found
-# on its plane again, so a face FreeCAD loses or names after another face on the next change is found again.
+# ends on, its point and normal in the frame of the path of the profile the target is built on. Taken from the
+# face its link names when the link is set, on opening and after an Undo or Redo, and from every face found on
+# its plane again, so a face FreeCAD loses or names after another face on the next change is found again.
 _TARGET_FACES = {}
 
 
@@ -158,14 +158,37 @@ def is_flat_face(face):
     return isinstance(face, Part.Face) and face.findPlane() is not None
 
 
+def _own_placement(obj):
+    """Placement of ``obj`` in its container, as FreeCAD places its shape (a Link's included)."""
+    return App.Placement(obj.getLinkedObject(True, App.Matrix())[1])
+
+
+def _path_frame(profile):
+    """Global placement of the path of ``profile``: where its attachment puts it, before its own offset.
+
+    The attachment offset turns and moves the section (RotationAngle, OffsetX, OffsetY): left out, a face
+    keeps its place in this frame only while the section stays as it was.
+    """
+    placement = _container_placement(profile).multiply(_own_placement(profile))
+    if getattr(profile, "MapMode", "Deactivated") != "Deactivated" and hasattr(profile, "AttachmentOffset"):
+        placement = placement.multiply(profile.AttachmentOffset.inverse())
+    return placement
+
+
 def _target_frame(target):
-    """Placement, in the coordinates of the container of ``target``, of the profile ``target`` is built on.
+    """Placement, in the coordinates of the shape of ``target``, of the path of the profile it is built on.
 
     A piece moves with the path of its profile: its side faces keep their normal and their distance to the
-    axis in this frame, wherever a new size of the sketch takes the profile.
+    axis in this frame, wherever a new size of the sketch takes the path. A Link stands for the piece it
+    links, moved where the Link puts it.
     """
-    profile = get_profile_from_trimmedbody(target)
-    return _container_placement(target).inverse().multiply(profile.getGlobalPlacement())
+    linked, matrix = target.getLinkedObject(True, App.Matrix())
+    frame = _container_placement(linked).inverse().multiply(_path_frame(get_profile_from_trimmedbody(linked)))
+    if linked is not target:
+        # The Link places the shape of the linked piece instead of its own placement.
+        own = linked.getLinkedObject(True, App.Matrix())[1]
+        frame = App.Placement(matrix.multiply(own.inverse())).multiply(frame)
+    return frame
 
 
 def _face_snapshot(target, face):
@@ -174,21 +197,35 @@ def _face_snapshot(target, face):
     return frame.multVec(face.CenterOfMass), frame.Rotation.multVec(face_normal(face))
 
 
-def remember_target_faces(doc):
-    """Remember the face each Extend / Cut of ``doc`` without one ends on, as its link names it now.
+def take_target_face(fp):
+    """Remember the face the link of the trim ``fp`` names now as the face it ends on; forget it without one.
 
-    After an Undo or Redo: a trim deleted and brought back, or whose link was set back, is as it was.
+    For a link set, opened or put back by Undo / Redo: the shapes are the ones the face was picked on.
+    Only an Extend / Cut links a face.
+    """
+    key = (fp.Document.Name, fp.Name)
+    try:
+        target, subs = fp.TrimmingBoundary[0] if fp.TrimmingBoundary else (None, ())
+        sub = subs[0] if subs else ""
+        face = target.getSubObject(sub) if sub and not sub.startswith(MISSING_ELEMENT_PREFIX) else None
+        if is_flat_face(face):
+            _TARGET_FACES[key] = (target.Name, sub, *_face_snapshot(target, face))
+            return
+    except Exception:
+        # The next recompute reports what is wrong with the target.
+        pass
+    _TARGET_FACES.pop(key, None)
+
+
+def remember_target_faces(doc):
+    """After an Undo or Redo, every trim of ``doc`` remembers the face its link names in the state brought back.
+
+    A trim deleted and brought back, or whose link was set back, is as it was. The links Undo sets one by one
+    are read again here, once every shape is back.
     """
     for obj in doc.Objects:
-        proxy = getattr(obj, "Proxy", None)
-        if not isinstance(proxy, TrimmedProfile) or (doc.Name, obj.Name) in _TARGET_FACES:
-            continue
-        try:
-            if obj.TrimmedProfileType == "Extend Cut" and obj.TrimmingBoundary:
-                proxy._remember_target_face(obj, proxy.target_face(obj, obj.TrimmingBoundary[0]))
-        except Exception:
-            # The next recompute reports what is wrong with the target.
-            pass
+        if isinstance(getattr(obj, "Proxy", None), TrimmedProfile):
+            take_target_face(obj)
 
 
 def _on_plane(face, point, normal):
@@ -206,7 +243,8 @@ def _face_on_plane(target, name, point, normal):
 
     The face called ``name`` when it is on the plane, else the one nearest ``point``.
     """
-    faces = [(f"Face{index}", face) for index, face in enumerate(target.Shape.Faces, 1)]
+    # Part.getShape: a Link has its shape there, as getSubObject reads its faces.
+    faces = [(f"Face{index}", face) for index, face in enumerate(Part.getShape(target).Faces, 1)]
     faces = [(face_name, face) for face_name, face in faces if _on_plane(face, point, normal)]
     named = [(face, face_name, True) for face_name, face in faces if face_name == name]
     if named:
@@ -343,10 +381,10 @@ class TrimmedProfile:
         doc = getattr(fp, "Document", None)
         if prop != "TrimmingBoundary" or doc is None or doc.Recomputing or doc.Restoring:
             return
-        # A target set by hand, by the panel or by Undo: its face is the one the link names, remembered at
-        # the next recompute (or after the Undo). FreeCAD renaming a face, and the trim linking a face found
+        # A target set by hand, by the panel or by Undo: its face is the one the link names now (Undo reads
+        # it again once every shape is back). FreeCAD renaming a face, and the trim linking a face found
         # again, happen while recomputing and keep the face remembered.
-        _TARGET_FACES.pop((doc.Name, fp.Name), None)
+        take_target_face(fp)
 
     def onDocumentRestored(self, fp):
         """Trims saved with their tip-to-tip length open with their longest side.
@@ -355,12 +393,8 @@ class TrimmedProfile:
         makes FreeCAD lose its name finds it again.
         """
         restore_length(fp)
-        try:
-            if fp.TrimmedProfileType == "Extend Cut" and fp.TrimmingBoundary:
-                self._remember_target_face(fp, self.target_face(fp, fp.TrimmingBoundary[0]))
-        except Exception:
-            # Opening never fails on it: the next recompute reports what is wrong with the target.
-            pass
+        # Opening never fails on it: the next recompute reports what is wrong with the target.
+        take_target_face(fp)
 
     def execute(self, fp):
         if fp.TrimmedBody is None:

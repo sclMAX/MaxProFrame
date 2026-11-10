@@ -12,13 +12,16 @@ import unittest
 import FreeCAD as App
 import Part
 import Sketcher
+from PySide import QtWidgets
 from test_extend_cut_lost_face import HALF, LENGTH, PART_PLACEMENT, PLACES, WIDTH, LostFaceFixture
 
-from freecad.maxproframe.create_extend_cut_tool import make_extend_cut_profile
+from freecad.maxproframe.create_extend_cut_tool import ExtendCutTaskPanel, make_extend_cut_profile
 from freecad.maxproframe.create_notch_tool import make_notch_profile
 from freecad.maxproframe.drill_hole import make_drill_hole
 
 SIZES = ((1200.0, 2300.0), (1000.0, 2100.0), (WIDTH, LENGTH))
+# Shrinking first: FreeCAD gives the name of the inner face of a side to its outer face.
+SHRINK_FIRST = ((1000.0, 2100.0), (900.0, 1900.0), (1200.0, 2300.0), (WIDTH, LENGTH))
 # The crossbar a Notch cuts the left side with runs across it at this height, in the Part.
 CROSSBAR_Y = 700.0
 # The post starts on the top side, on the Y axis, and its path stops this far above the slat path.
@@ -37,8 +40,8 @@ class ProbeFixture(LostFaceFixture):
         index, _ = max(faces, key=lambda item: item[1].CenterOfMass.dot(direction))
         return f"Face{index}"
 
-    def assert_follows_every_size(self):
-        for width, length in SIZES:
+    def assert_follows_every_size(self, sizes=SIZES):
+        for width, length in sizes:
             with self.subTest(width=width, length=length):
                 self.resize(self.doc, width, length)
                 self.assert_all_valid(self.doc)
@@ -62,6 +65,9 @@ class TestTargetIsADrillHole(ProbeFixture):
         self.assertEqual(self.left.Proxy.__class__.__name__, "DrillHole")
         self.assert_follows_every_size()
 
+    def test_the_slat_cut_against_a_drill_hole_follows_a_shrink_first(self):
+        self.assert_follows_every_size(SHRINK_FIRST)
+
 
 class TestTargetIsANotch(ProbeFixture):
     def cut_targets(self, left, right):
@@ -78,6 +84,9 @@ class TestTargetIsANotch(ProbeFixture):
     def test_the_slat_cut_against_a_notch_follows_the_sides(self):
         self.assertEqual(self.left.TrimmedProfileType, "Notch")
         self.assert_follows_every_size()
+
+    def test_the_slat_cut_against_a_notch_follows_a_shrink_first(self):
+        self.assert_follows_every_size(SHRINK_FIRST)
 
 
 class TestTargetIsAnExtendCut(ProbeFixture):
@@ -182,6 +191,53 @@ class TestDocumentsAndDeletedTrims(ProbeFixture):
                 reach = max(vertex.Point.dot(across) for vertex in slat.Vertexes)
                 self.assertAlmostEqual(reach, center + width / 2.0 + HALF, places=PLACES)
                 self.assertAlmostEqual(trim.Length.Value, width, places=PLACES)
+
+
+class TestPanelEdit(ProbeFixture):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    def slat_reach(self, width):
+        """Where the slat ends past the right side, in document coordinates, and where its outer face is."""
+        part = self.part.getGlobalPlacement()
+        across = part.Rotation.multVec(App.Vector(1, 0, 0))
+        slat = self.trim.Shape.transformed(part.toMatrix())
+        center = part.multVec(App.Vector(0, 0, 0)).dot(across)
+        return max(vertex.Point.dot(across) for vertex in slat.Vertexes), center + width / 2.0 + HALF
+
+    def assert_on_the_outer_face(self, width):
+        self.assert_all_valid(self.doc)
+        reach, outer = self.slat_reach(width)
+        self.assertAlmostEqual(reach, outer, places=PLACES)
+
+    def test_a_face_set_in_the_panel_is_followed_through_undo_and_redo(self):
+        self.doc.UndoMode = 1
+        self.doc.clearUndos()
+        App.setActiveDocument(self.doc.Name)
+        outer = self.face_towards(self.right, App.Vector(1, 0, 0))
+        panel = ExtendCutTaskPanel(edited=self.trim)
+        self.addCleanup(panel.clean)
+        panel.set_target(self.right, (outer,))
+        self.assertTrue(panel.accept())
+        self.assert_on_the_outer_face(WIDTH)
+        self.doc.openTransaction("resize")
+        self.resize(self.doc, 1000.0, 2100.0)
+        self.doc.commitTransaction()
+        self.assert_on_the_outer_face(1000.0)
+        for _ in range(2):
+            self.doc.undo()
+            self.doc.recompute()
+        self.assert_all_valid(self.doc)
+        self.assert_slat_between_the_sides(self.doc, WIDTH)
+        for _ in range(2):
+            self.doc.redo()
+            self.doc.recompute()
+        self.assert_on_the_outer_face(1000.0)
+        for width, length in ((900.0, 1900.0), (1200.0, 2300.0)):
+            with self.subTest(width=width, length=length):
+                self.resize(self.doc, width, length)
+                self.assert_on_the_outer_face(width)
 
 
 if __name__ == "__main__":
