@@ -8,6 +8,7 @@ __doc__ = "Curves workbench utilities common to all tools."
 from numbers import Number
 
 import FreeCAD
+import Part
 
 
 def getRootObject(obj):
@@ -239,12 +240,37 @@ def normalize_anchor(val):
     return max(0, min(2, int(val)))
 
 
-def length_along_normal(obj):
-    """
-    Calcule la longueur de l'objet le long d'un vecteur normal.
+# A straight edge whose direction is this far (sine of the angle) from the axis still runs along it.
+PARALLEL_TOLERANCE = 1e-6
+# Straight edges whose lines are this close lie on one side of the piece.
+COLLINEAR_TOLERANCE = 1e-6
 
-    obj    : objet FreeCAD
-    normal : FreeCAD.Vector (doit être normalisé)
+
+def longest_side(shape, axis):
+    """Length of the longest side of ``shape`` along the unit vector ``axis``, as a tape measures it.
+
+    A side is a line of straight edges parallel to ``axis``; a side left in several edges on one line
+    (split by a trim) is measured from its first to its last end. None when no straight edge runs along ``axis``.
+    """
+    sides = []  # [point of the line off the axis, lowest projection, highest projection]
+    for edge in shape.Edges:
+        if not isinstance(edge.Curve, Part.Line) or edge.Curve.Direction.cross(axis).Length > PARALLEL_TOLERANCE:
+            continue
+        start, end = (vertex.Point.dot(axis) for vertex in (edge.Vertexes[0], edge.Vertexes[-1]))
+        offset = edge.Vertexes[0].Point - axis * start
+        for side in sides:
+            if (side[0] - offset).Length <= COLLINEAR_TOLERANCE:
+                side[1], side[2] = min(side[1], start, end), max(side[2], start, end)
+                break
+        else:
+            sides.append([offset, min(start, end), max(start, end)])
+    return max((high - low for _, low, high in sides), default=None)
+
+
+def length_along_normal(obj):
+    """Length of a piece along its axis, the direction of its path edge: its longest side, as taped to cut it.
+
+    A section without a straight edge along the axis (round tube or bar) keeps its tip-to-tip extent.
     """
     doc = FreeCAD.ActiveDocument
 
@@ -268,6 +294,10 @@ def length_along_normal(obj):
 
     dir_vec = (edge.Vertexes[-1].Point.sub(edge.Vertexes[0].Point)).normalize()
     n = dir_vec.normalize()
+
+    side = longest_side(obj.Shape, n)
+    if side is not None:
+        return side
 
     vertices = obj.Shape.Vertexes
 
