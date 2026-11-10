@@ -358,17 +358,25 @@ def add_custom_profile_link(obj):
 def restore_custom_profile_link(obj):
     """Turn the local CustomProfile link of ``obj``, as saved before it was global, into a global one.
 
-    For a document being opened: the link keeps its section and ``obj`` stays as touched as it was.
+    For a document being opened: the link keeps its section (or none), ``obj`` saved without it gains an
+    empty one, and ``obj`` stays as touched as it was. Opening never fails on it: a link that cannot be
+    turned is left as saved.
     """
-    if obj.getTypeIdOfProperty("CustomProfile") == "App::PropertyLinkGlobal":
+    try:
+        section = None
+        if "CustomProfile" in obj.PropertiesList:
+            if obj.getTypeIdOfProperty("CustomProfile") == "App::PropertyLinkGlobal":
+                return
+            section = obj.CustomProfile
+        touched = "Touched" in obj.State
+        if "CustomProfile" in obj.PropertiesList:
+            obj.removeProperty("CustomProfile")
+        add_custom_profile_link(obj)
+        obj.CustomProfile = section
+        if not touched:
+            obj.purgeTouched()
+    except Exception:
         return
-    touched = "Touched" in obj.State
-    section = obj.CustomProfile
-    obj.removeProperty("CustomProfile")
-    add_custom_profile_link(obj)
-    obj.CustomProfile = section
-    if not touched:
-        obj.purgeTouched()
 
 
 def get_readable_cutting_angles(ba_y, ba_x, bb_y, bb_x, *trim_cuts):
