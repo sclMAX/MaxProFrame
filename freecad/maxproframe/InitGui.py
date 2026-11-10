@@ -33,6 +33,7 @@ class MaxProFrame(Gui.Workbench):
         "MaxProFrame_Notch",
         "MaxProFrame_AddExtrudeCutout",
         "MaxProFrame_DrillHole",
+        "MaxProFrame_ProfilePattern",
     ]
 
     toolbox_group = ["Std_Group", "Std_Part"]
@@ -77,6 +78,7 @@ class MaxProFrame(Gui.Workbench):
             create_link,
             create_notch_tool,
             create_piece_table_tool,
+            create_profile_pattern_tool,
             create_profiles_tool,
             edit_profile_tool,
             library_manager_dialog,

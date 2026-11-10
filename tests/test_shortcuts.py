@@ -16,6 +16,7 @@ from freecad.maxproframe import (  # noqa: F401  (importing registers the comman
     create_extruded_cutout_tool,
     create_link,
     create_notch_tool,
+    create_profile_pattern_tool,
     create_profiles_tool,
     library_manager_dialog,
     parametric_line,
@@ -46,6 +47,7 @@ WITHOUT_SHORTCUT = (
     "MaxProFrame_ResetIDs",
     "MaxProFrame_RefreshBalloons",
     "MaxProFrame_CreatePieceTable",
+    "MaxProFrame_ProfilePattern",
 )
 
 

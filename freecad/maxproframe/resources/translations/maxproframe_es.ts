@@ -1277,6 +1277,39 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Generate Cut List</source><translation>Generar lista de cortes</translation></message>
     <message><source>Stock Material Length</source><translation>Longitud de la barra</translation></message>
     <message><source>Kerf</source><translation>Ancho de corte (kerf)</translation></message>
+    <message><source>Count and pitch</source><translation>Cantidad y paso</translation></message>
+    <message><source>Between faces</source><translation>Entre caras</translation></message>
+    <message><source>Edge sense</source><translation>Sentido de la arista</translation></message>
+    <message><source>Inverted</source><translation>Invertido</translation></message>
+    <message><source>Symmetric (count on each side)</source><translation>Simétrico (cantidad a cada lado)</translation></message>
+    <message><source>Profile Pattern: the direction must be a straight edge.</source><translation>Patrón de perfiles: la dirección tiene que ser una arista recta.</translation></message>
+    <message><source>Profile Pattern: the limits must be planar faces.</source><translation>Patrón de perfiles: los límites tienen que ser caras planas.</translation></message>
+    <message><source>Between faces moves the piece by the offsets of its profile, and {} has no path edge to offset from. Use Count and pitch.</source><translation>Entre caras mueve la pieza con los desplazamientos de su perfil, y {} no tiene arista de trayectoria desde donde desplazarla. Usá Cantidad y paso.</translation></message>
+    <message><source>Between faces moves the piece by the offsets of its profile, across the piece: click an edge across it, not along it, or use Count and pitch.</source><translation>Entre caras mueve la pieza con los desplazamientos de su perfil, a lo ancho de la pieza: hacé clic en una arista que la cruce, no en una a lo largo, o usá Cantidad y paso.</translation></message>
+    <message><source>Between faces moves the piece by the offsets of its profile, and an expression sets {} of {}.</source><translation>Entre caras mueve la pieza con los desplazamientos de su perfil, y una expresión fija {} de {}.</translation></message>
+    <message><source>Profile Pattern: {} pieces of {} mm do not fit between the faces ({} mm).</source><translation>Patrón de perfiles: {} piezas de {} mm no entran entre las caras ({} mm).</translation></message>
+    <message><source>Profile Pattern: a piece and a direction edge are needed.</source><translation>Patrón de perfiles: hacen falta una pieza y una arista de dirección.</translation></message>
+    <message><source>Profile Pattern: Between faces needs two planar faces.</source><translation>Patrón de perfiles: Entre caras necesita dos caras planas.</translation></message>
+    <message><source>Profile Pattern</source><translation>Patrón de perfiles</translation></message>
+    <message><source>Piece and direction</source><translation>Pieza y dirección</translation></message>
+    <message><source>Click a straight edge, of the frame for instance, for the direction. For Between faces, click the two planar faces the pieces go between.</source><translation>Hacé clic en una arista recta, del marco por ejemplo, para la dirección. Para Entre caras, hacé clic en las dos caras planas entre las que van las piezas.</translation></message>
+    <message><source>Mode</source><translation>Modo</translation></message>
+    <message><source>Pitch (center to center)</source><translation>Paso (centro a centro)</translation></message>
+    <message><source>Sense</source><translation>Sentido</translation></message>
+    <message><source>Copies</source><translation>Copias</translation></message>
+    <message><source>Pieces (the original included)</source><translation>Piezas (incluida la original)</translation></message>
+    <message><source>Gap: {}. Pitch: {}.</source><translation>Hueco: {}. Paso: {}.</translation></message>
+    <message><source>Piece: {}</source><translation>Pieza: {}</translation></message>
+    <message><source>Piece: none</source><translation>Pieza: ninguna</translation></message>
+    <message><source>Direction: {}</source><translation>Dirección: {}</translation></message>
+    <message><source>Direction: none</source><translation>Dirección: ninguna</translation></message>
+    <message><source>Faces: {}</source><translation>Caras: {}</translation></message>
+    <message><source>Select the piece to repeat: click a profile, a trimmed profile, a cutout or a drill hole.</source><translation>Seleccioná la pieza a repetir: hacé clic en un perfil, un perfil recortado, un calado o un agujero.</translation></message>
+    <message><source>Click a straight edge for the direction of the copies.</source><translation>Hacé clic en una arista recta para la dirección de las copias.</translation></message>
+    <message><source>Click the frame, not a copy of the pattern.</source><translation>Hacé clic en el marco, no en una copia del patrón.</translation></message>
+    <message><source>The faces must not be on the piece: it moves between them.</source><translation>Las caras no pueden ser de la pieza: la pieza se mueve entre ellas.</translation></message>
+    <message><source>Click a straight edge for the direction, or a planar face for Between faces.</source><translation>Hacé clic en una arista recta para la dirección, o en una cara plana para Entre caras.</translation></message>
+    <message><source>Click the two planar faces the pieces go between.</source><translation>Hacé clic en las dos caras planas entre las que van las piezas.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ParametricLine</name>
@@ -1317,6 +1350,11 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <name>MaxProFrame_DrillHole</name>
     <message><source>Drill Hole</source><translation>Agujero</translation></message>
     <message><source>&lt;b&gt;Drill Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile or a cutout, then one of its nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the offsets from that point: one, or a pattern on both sides of it along and across the profile, with a diameter and a depth.</source><translation>&lt;b&gt;Agujero&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego en uno de sus nueve círculos para medir desde ahí: una esquina, el medio de un borde o el centro. Se perforan agujeros redondos a las distancias indicadas desde ese punto: uno solo, o un patrón a ambos lados, a lo largo y a lo ancho del perfil, con un diámetro y una profundidad.</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_ProfilePattern</name>
+    <message><source>Profile Pattern</source><translation>Patrón de perfiles</translation></message>
+    <message><source>&lt;b&gt;Profile Pattern&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a profile, a trimmed profile, a cutout or a drill hole and click a straight edge for the direction: the copies are Links placed by count and pitch (in the edge's sense, inverted or symmetric) or between two faces with equal gaps. A change to the piece shows on every copy; the BOM counts them with its ID. Double-click the pattern to edit it.</source><translation>&lt;b&gt;Patrón de perfiles&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná un perfil, un perfil recortado, un calado o un agujero y hacé clic en una arista recta para la dirección: las copias son enlaces ubicados por cantidad y paso (en el sentido de la arista, invertido o simétrico) o entre dos caras con el mismo hueco. Un cambio en la pieza se ve en todas las copias; la lista de materiales las cuenta con su ID. Doble clic en el patrón para editarlo.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_Link</name>

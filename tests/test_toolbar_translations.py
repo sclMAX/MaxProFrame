@@ -16,6 +16,7 @@ from freecad.maxproframe import (  # noqa: F401  (importing registers the comman
     create_link,
     create_notch_tool,
     create_piece_table_tool,
+    create_profile_pattern_tool,
     create_profiles_tool,
     library_manager_dialog,
     parametric_line,
@@ -65,6 +66,11 @@ EXPECTED = {
         "Drill Hole",
         "Agujero",
         "Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego en uno de sus nueve círculos",
+    ),
+    "MaxProFrame_ProfilePattern": (
+        "Profile Pattern",
+        "Patrón de perfiles",
+        "las copias son enlaces ubicados por cantidad y paso",
     ),
     "MaxProFrame_Link": (
         "Attached Link",
