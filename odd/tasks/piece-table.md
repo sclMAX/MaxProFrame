@@ -25,6 +25,9 @@ length and cut angles with their faces, as a native spreadsheet shown on the pag
   longest straight edge of the finished piece parallel to its axis, not the tip-to-tip extent along the axis. On the
   user's chair: piece 2 (45 deg top / 12 deg bottom) 399.1 instead of 407.6, piece 3 (12/12 parallelogram) 429.4
   instead of 437.9; pieces 1, 4, 5 unchanged (420.0, 494.1, 488.4).
+- S7 Saved documents: choice "Actualizar al abrir" (L15) -> when a document saved before S6 is opened, every piece
+  (profile, trimmed profile, cutout) gets the S6 length at once, without the user editing or recomputing it: the user's
+  saved chair shows the longest sides (399.1 / 429.4 for pieces 2 / 3) in the BOM, the Cut List and the Piece Table.
 
 ## Tasks
 - T1 S2 S3 S5 table data: pieces of the selected views grouped by ID, piece name, quantity, length, angle texts; sheet
@@ -33,6 +36,7 @@ length and cut angles with their faces, as a native spreadsheet shown on the pag
   step; icon, toolbar/menu, translations (ES), CHANGELOG and docs — worker — commit: 609969f (done)
 - T3 S6 tape length: Length = longest straight edge parallel to the axis, everywhere Length is computed; tests,
   CHANGELOG, docs — worker — commit: 815b883 (done)
+- T4 S7 refresh Length on document restore; save/reopen tests; CHANGELOG — worker — commit: pending
 
 ## Log
 - L1 (user): "seria interesante tener un comando para poder agregar una tabla en techdraw, que tenga las piezas, largo y angulos, que opinas?" (with a screenshot of a TechDraw page with balloons 1-5 on an isometric view of a chair frame)
@@ -49,3 +53,6 @@ length and cut angles with their faces, as a native spreadsheet shown on the pag
 - L11 (decision): a section with no straight edge parallel to the axis (round tube or bar) keeps the tip-to-tip length, since no side can be taped along a straight edge there.
 - L12 (worker, T3): callers — length_along_normal only feeds the Length property (profile.py:1314, trimmed_profile.py:571, extruded_cutout.py:490 on its trim or profile); no caller uses it for geometry, so it was changed in place. Length readers: create_bom.py:111 (BOM, Cut List rows and stock bars), piece_table.py:47, populate_ids.py:217 (grouping key only for objects without a solid). New `longest_side` in _utils.py: straight edges parallel to the path direction (sine tolerance 1e-6), edges on one line measured together as one side (an Extend Cut of a beveled end leaves the long side in two edges, 0-288.5 and 300-382.7); none -> tip-to-tip extent as before (L11).
 - L13 (worker, T3): RED observed — tests/test_tape_length.py 8/12 failed with the old tip-to-tip value (parallelogram 12/12 on 40x40: 308.50 vs 300; 45/12: 324.25 vs 315.75; rounded corners 308.50; Extend Cut parallelogram: 0 vs 23.09 = 40*tan 30; cutout 308.50; BOM/Cut List 308.5; Piece Table '308.5'); 4 preserve cases passed (square 300, trapezoid 380, round tube 311.55, split side 382.68). GREEN observed — test_tape_length 12/12 OK. No pre-existing expectation changed: test_cut_list 27, test_piece_table 23, test_cut_ends 15, test_extend_cut_geometry 20, test_keep_end_geometry 11, test_notch_geometry 30, test_end_miter_extend_gap 6, test_end_miter_geometry 6, test_miter_followups_geometry 8, test_miter_after_extend_cut 12, test_drill_hole_geometry 26, test_extruded_cutout_pid 2, test_trimmed_profile_pid 2, test_populate_identical_pieces 10, test_populate_derived_pid 6, test_reset_ids 18, test_balloons 32 and 8 more modules all OK (their pieces are square-cut, trapezoids or one-end cuts, where the longest side is tip to tip).
+
+- L14 (verify mwau65vj, S6 pass): rule, frames (rotated Parts, ParametricLine in another Part), tolerances (max noise 3.3e-16) and readers OK; 12 tests fail on old code. Advisory: stock bar fitting does not add the ~w*tan(a) waste of the first parallelogram cut in a bar. Open: a document saved before S6 keeps the old Length after open and recompute; only touch()+recompute updates it.
+- L15 (user choice among "Actualizar al abrir" / "Dejarlo como está"): "Actualizar al abrir".
