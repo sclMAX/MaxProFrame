@@ -19,12 +19,20 @@ length and cut angles with their faces, as a native spreadsheet shown on the pag
   instead of adding another; numbers and angle texts use the decimal separator of the FreeCAD language, as the Cut List
   does (`45,0 <80` in Spanish); the command is enabled whenever a document is open: select the view(s) first, or
   click the button and then a view, Esc cancels (as Create Balloons).
+- S6 Tape length: "Lo que pasa que normalmente en un taller se mide un lado del tubo con la cinta para cortarlo." and
+  the choice "Cambiar en todos lados" (L10) -> the length of a piece (its `Length`, shown by the Piece Table, the BOM and
+  the Cut List and used by the stock bars of the Cut List) is the longest side of the piece measured along its axis: the
+  longest straight edge of the finished piece parallel to its axis, not the tip-to-tip extent along the axis. On the
+  user's chair: piece 2 (45 deg top / 12 deg bottom) 399.1 instead of 407.6, piece 3 (12/12 parallelogram) 429.4
+  instead of 437.9; pieces 1, 4, 5 unchanged (420.0, 494.1, 488.4).
 
 ## Tasks
 - T1 S2 S3 S5 table data: pieces of the selected views grouped by ID, piece name, quantity, length, angle texts; sheet
   writer — worker — commit: 609969f (done)
 - T2 S1 S4 S5 command: selection / click flow, sheet + DrawViewSpreadsheet on the page, refresh, no-ID report, one Undo
   step; icon, toolbar/menu, translations (ES), CHANGELOG and docs — worker — commit: 609969f (done)
+- T3 S6 tape length: Length = longest straight edge parallel to the axis, everywhere Length is computed; tests,
+  CHANGELOG, docs — worker — commit: pending
 
 ## Log
 - L1 (user): "seria interesante tener un comando para poder agregar una tabla en techdraw, que tenga las piezas, largo y angulos, que opinas?" (with a screenshot of a TechDraw page with balloons 1-5 on an isometric view of a chair frame)
@@ -34,3 +42,8 @@ length and cut angles with their faces, as a native spreadsheet shown on the pag
 - L5 (worker, T1+T2): RED observed — tests/test_piece_table.py against a do-nothing stub command: 21/21 failed; Spanish cases failed (2) until the ES strings were added; Undo of a refresh failed with Sheet.clearAll (sheet empty after undo), fixed by setting/clearing cells one by one. GREEN observed — test_piece_table 23/23 OK; PRESERVE test_balloons 32/32, test_toolbar_translations 4/4, test_workbench_commands 2/2, test_compile_translations 2/2, test_workbench_translation_loading 2/2, test_cut_list 27/27 OK. Expected failure until the parent lists the command: test_shortcuts.test_every_maxproframe_command_is_in_the_scheme (MaxProFrame_CreatePieceTable missing from WITHOUT_SHORTCUT). Uncommitted (worker may not commit); .qm rebuilt with the AppImage lrelease, which reproduces the committed .qm byte for byte.
 - L6 (worker decisions, not in the specs): Piece = SizeName (falls back to Label); rows sorted by ID (2 before 10, Z before AA); a link row takes its own PID and the name/length/angles of what it links (empty length/angles if it links no profile); the table remembers its views in a SourceViews string list on the DrawViewSpreadsheet; no table is made when no piece has an ID; a detail-view click says "A detail view gets no table" (ViewPicker got an optional detail_message, balloons unchanged); no shortcut.
 - L7 (parent): MaxProFrame_CreatePieceTable added to WITHOUT_SHORTCUT (test_shortcuts 5/5); test_piece_table 23/23. T1+T2 committed together as one behavior in 609969f (~705 authored lines incl. 353 test lines and .ts strings): past the ~400-line advisory slice, kept as a single reviewable feature commit.
+
+- L8 (user, manual test): "porque son diferentes las medidas?" (table 407,6 / 437,9 vs drawing dimensions 399 / 429; 494 and 486 on piece 4)
+- L9 (user): "entonces la tabla muestra el boundingbox del perfil ?" then "Lo que pasa que normalmente en un taller se mide un lado del tubo con la cinta para cortarlo."
+- L10 (user choice among: longest side in the table only / both in the table / change everywhere): "Cambiar en todos lados" -> Table, BOM and Cut List show the longest side; the Cut List stock bars use it too.
+- L11 (decision): a section with no straight edge parallel to the axis (round tube or bar) keeps the tip-to-tip length, since no side can be taped along a straight edge there.
