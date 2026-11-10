@@ -37,7 +37,7 @@ symmetric) or a count distributed between two faces with equal gaps; editable af
 - T3 S7 copies follow the newest piece of the chain; review follow-ups (Part left touched after lowering Count,
   Reset IDs confirmation count, verifier regression scenes) — worker — commit: 88491aa, 41a88cd (done)
 - T4 S8 edge and faces survive a frame resize (re-find renamed elements like Extend Cut does); RED
-  tests/test_profile_pattern_resize.py — worker — commit: ce6c613 (done) (implemented, uncommitted)
+  tests/test_profile_pattern_resize.py — worker — commit: ce6c613 (done)
 
 ## Log
 - L1 (user): "mientras tanto quiero analizar una feature que me aria falta, [Image#6] tengo que hacer una mesa la cual lleva 20 perfiles como el que esta seleccionado, seria bueno tener un comado que permita hacer un patron de perfiles asi selecciono uno y pongo cantida y paso para que se coloquen todos lo que necesito. Que opinas?" (screenshot: Part with a rectangular TC80x40x1.5 frame and one Profile_PGC100_000_Tr_Tr custom-profile slat trimmed between the long sides, selected)
