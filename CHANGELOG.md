@@ -8,6 +8,8 @@
   - **Create Balloons** accepts a standalone TechDraw view, not only a view of a projection group.
   - **Create Balloons**: a piece without ID gets no balloon; the status bar counts them and the Report view names them, so they can be numbered with Populate IDs. The bubble sits 20 mm from its arrow on the paper at any view scale; at a small scale it lay on the arrow.
   - **Refresh Balloons** refreshes the selected balloons or every balloon of a view, reports how many it refreshed, and skips the ones whose piece was deleted.
+  - **Create Balloons** puts the balloons on the page of the view, even when a detail view of it sits on another page.
+  - **Create Balloons** / **Refresh Balloons**: a click on a detail view, which gets no balloons, says so in the status bar and waits for another view. A failure leaves the document unchanged, with no Undo step, and shows its reason in the status bar and the Report view instead of the click prompt.
 
 * v1.11.1 (2026-11-09)
 

@@ -29,6 +29,8 @@ from freecad.maxproframe.ff_tools import (
 # Paper distance between the arrow tip and the bubble of a new balloon.
 BUBBLE_OFFSET_MM = 20
 STATUS_TIMEOUT_MS = 10000
+CREATE_COMMAND = "MaxProFrame_CreateBalloons"
+REFRESH_COMMAND = "MaxProFrame_RefreshBalloons"
 
 
 def is_balloon_view(obj):
@@ -74,6 +76,20 @@ def is_alive(obj):
         return False
 
 
+def apply_in_transaction(doc, name, title, apply):
+    """Run ``apply`` as one undo step; a failure leaves ``doc`` as it was and is reported."""
+    doc.openTransaction(name)
+    try:
+        apply()
+    except Exception as error:
+        doc.abortTransaction()
+        App.Console.PrintError("{}: {}\n".format(title, error))
+        show_status("{}: {}".format(title, error))
+        return False
+    doc.commitTransaction()
+    return True
+
+
 def place_balloon(balloon, obj, move_balloon=False):
     """Point ``balloon`` at the center of ``obj`` and write its ID.
 
@@ -104,9 +120,16 @@ def place_balloon(balloon, obj, move_balloon=False):
 
 
 def find_page(view):
-    for obj in view.InListRecursive:
-        if obj.isDerivedFrom("TechDraw::DrawPage"):
-            return obj
+    """The page showing ``view``, directly or through its projection group or clip.
+
+    Not any page that depends on it: a detail view of it may sit on another page.
+    """
+    for parent in view.InList:
+        if parent.isDerivedFrom("TechDraw::DrawPage"):
+            return parent
+    for parent in view.InList:
+        if parent.isDerivedFrom("TechDraw::DrawProjGroup") or parent.isDerivedFrom("TechDraw::DrawViewClip"):
+            return find_page(parent)
     return None
 
 
@@ -143,9 +166,8 @@ def create_balloons(view, selected_pieces=None):
     profiles, links = [], []
     for s in sources:
         get_profiles_and_links_from_object(profiles, links, s)
-    # A piece reached twice, as by itself and through its group, gets one balloon; one of another
-    # document gets none, Refresh could not find it again.
-    pieces = list({o.Name: o for o in profiles + links if o.Document.Name == view.Document.Name}.values())
+    # A piece reached twice, as by itself and through its group, gets one balloon.
+    pieces = list({o.Name: o for o in profiles + links}.values())
 
     marked = {b.TargetName for b in view_balloons(view)}
     already = [o for o in pieces if o.Name in marked]
@@ -154,10 +176,13 @@ def create_balloons(view, selected_pieces=None):
     without_id = [o for o in new if not piece_id(o)]
 
     if with_id:
-        view.Document.openTransaction("Create Balloons")
-        for o in with_id:
-            create_balloon(page, view, o)
-        view.Document.commitTransaction()
+
+        def apply():
+            for o in with_id:
+                create_balloon(page, view, o)
+
+        if not apply_in_transaction(view.Document, "Create Balloons", title, apply):
+            return
 
     message = translate("frameforge", "Balloons created: {}.").format(len(with_id))
     if already:
@@ -176,11 +201,14 @@ def refresh_balloons(balloons):
     missing = len(targets) - len(found)
 
     if found:
-        doc = found[0][0].Document
-        doc.openTransaction("Refresh Balloons")
-        for b, o in found:
-            place_balloon(b, o)
-        doc.commitTransaction()
+
+        def apply():
+            for b, o in found:
+                place_balloon(b, o)
+
+        title = translate("frameforge", "Refresh Balloons")
+        if not apply_in_transaction(found[0][0].Document, "Refresh Balloons", title, apply):
+            return
 
     message = translate("frameforge", "Balloons refreshed: {}.").format(len(found))
     if missing:
@@ -250,6 +278,9 @@ class ViewPicker(QtCore.QObject):
         obj = doc.getObject(obj_name) if doc is not None and doc_name == self.doc_name else None
         view = self.resolve_view(obj, sub) if obj is not None else None
         if view is None and obj is not None and obj.TypeId.startswith("TechDraw::"):
+            if obj.isDerivedFrom("TechDraw::DrawViewDetail"):
+                message = translate("frameforge", "A detail view gets no balloons: click another view (Esc to cancel).")
+                show_status("{}: {}".format(self.title, message), 0)
             return
         # The document must not change, nor the observer go, inside the selection callback.
         self.stop()
@@ -288,6 +319,7 @@ def cancel_view_pick():
 
 
 def pick_view(owner, title, action):
+    """Wait for a click on a view for the command ``owner``; callers cancel any wait first."""
     global _active_picker
     _active_picker = ViewPicker(owner, title, action)
     _active_picker.start()
@@ -311,8 +343,8 @@ class CreateBalloonsCommand:
         return App.ActiveDocument is not None
 
     def Activated(self):
-        # Pressed again while waiting for a click: that cancels the wait.
-        if cancel_view_pick() == "MaxProFrame_CreateBalloons":
+        # Any click still awaited is cancelled; if it was this command's, pressing it again only cancels.
+        if cancel_view_pick() == CREATE_COMMAND:
             return
         selection = Gui.Selection.getSelection()
         views = [s for s in selection if is_usable_view(s)]
@@ -325,7 +357,7 @@ class CreateBalloonsCommand:
             create_balloons(views[0], pieces)
         else:
             pick_view(
-                "MaxProFrame_CreateBalloons",
+                CREATE_COMMAND,
                 translate("frameforge", "Create Balloons"),
                 lambda view: create_balloons(view, pieces),
             )
@@ -348,7 +380,8 @@ class RefreshBalloonsCommand:
         return App.ActiveDocument is not None
 
     def Activated(self):
-        if cancel_view_pick() == "MaxProFrame_RefreshBalloons":
+        # Any click still awaited is cancelled; if it was this command's, pressing it again only cancels.
+        if cancel_view_pick() == REFRESH_COMMAND:
             return
         selection = Gui.Selection.getSelection()
         balloons = [b for b in selection if is_maxproframe_balloon(b)]
@@ -360,11 +393,11 @@ class RefreshBalloonsCommand:
             refresh_balloons([b for v in views for b in view_balloons(v)])
         else:
             pick_view(
-                "MaxProFrame_RefreshBalloons",
+                REFRESH_COMMAND,
                 translate("frameforge", "Refresh Balloons"),
                 lambda view: refresh_balloons(view_balloons(view)),
             )
 
 
-add_command("MaxProFrame_CreateBalloons", CreateBalloonsCommand())
-add_command("MaxProFrame_RefreshBalloons", RefreshBalloonsCommand())
+add_command(CREATE_COMMAND, CreateBalloonsCommand())
+add_command(REFRESH_COMMAND, RefreshBalloonsCommand())

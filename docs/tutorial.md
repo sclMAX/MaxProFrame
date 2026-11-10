@@ -508,7 +508,7 @@ Balloons mark each piece of a TechDraw drawing with its ID, the same ID the BOM 
 Workflow:
 - Number the pieces with "Populate IDs": a piece without ID gets no balloon.
 - Create a TechDraw Page and insert a View with Profiles, Links, or Part containers of Profiles and Links. A view of a projection group or a standalone view both work.
-- Select the View and click on the "Create Balloons" Command (`M, O`) in the MaxProFrame toolbar. Or click the Command first: the status bar asks for a View; click one (any of its edges) on the page. Esc, clicking the Command again or selecting something outside TechDraw cancels.
+- Select the View and click on the "Create Balloons" Command (`M, O`) in the MaxProFrame toolbar. Or click the Command first: the status bar asks for a View; click one (any of its edges) on the page. A detail view gets no balloons: the status bar says so and waits for another View. Esc, clicking the Command again or selecting something outside TechDraw cancels.
 
 Each piece of the View gets a balloon with its ID, the arrow on the center of the piece and the bubble 20 mm away on the paper, at any view scale. Move the bubbles where you want them. Pieces that already have a balloon in that View are skipped, so after adding pieces, running it again marks only the new ones. To mark only some pieces, select them with the View, or before clicking the Command and then the View.
 
