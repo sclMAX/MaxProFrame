@@ -1290,6 +1290,8 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Profile Pattern: {} pieces of {} mm do not fit between the faces ({} mm).</source><translation>Patrón de perfiles: {} piezas de {} mm no entran entre las caras ({} mm).</translation></message>
     <message><source>Profile Pattern: a piece and a direction edge are needed.</source><translation>Patrón de perfiles: hacen falta una pieza y una arista de dirección.</translation></message>
     <message><source>Profile Pattern: Between faces needs two planar faces.</source><translation>Patrón de perfiles: Entre caras necesita dos caras planas.</translation></message>
+    <message><source>Profile Pattern: {} has no straight edge where its edge {} was.</source><translation>Patrón de perfiles: {} no tiene ninguna arista recta donde estaba su arista {}.</translation></message>
+    <message><source>Profile Pattern: {} has no planar face where its face {} was.</source><translation>Patrón de perfiles: {} no tiene ninguna cara plana donde estaba su cara {}.</translation></message>
     <message><source>Profile Pattern</source><translation>Patrón de perfiles</translation></message>
     <message><source>Piece and direction</source><translation>Pieza y dirección</translation></message>
     <message><source>Click a straight edge, of the frame for instance, for the direction. For Between faces, click the two planar faces the pieces go between.</source><translation>Hacé clic en una arista recta, del marco por ejemplo, para la dirección. Para Entre caras, hacé clic en las dos caras planas entre las que van las piezas.</translation></message>

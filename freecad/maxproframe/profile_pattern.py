@@ -42,6 +42,18 @@ MOVE_TOLERANCE = 1e-7
 # A piece FreeCAD keeps hidden after an Undo is shown again every SHOW_RETRY_MS, SHOW_TRIES times at most.
 SHOW_RETRY_MS = 50
 SHOW_TRIES = 60
+# Distance (mm) and angle (radians) within which an element lies where the element a link named was, as Extend Cut.
+ELEMENT_TOLERANCE = 1e-3
+ELEMENT_ANGLE_TOLERANCE = 1e-5
+# Kinds of the elements a pattern links: its direction edge, its two faces.
+EDGE, FACE = "Edge", "Face"
+# (document name, pattern name) -> {"Edge": kept, "Faces": [kept, ...]}: where the edge and the faces its links
+# name are, each kept as (object name, point, vector) in the frame of the path of the profile its object is built
+# on: a point of the line of the edge and its direction, the center of the face and its normal. Taken from the
+# elements the links name when they are set, on opening and after an Undo or Redo, and from every element found
+# there again: a new size of the frame makes FreeCAD lose their names ("?Edge1") or give them to other elements.
+# Kept out of the proxy, which is saved with the document.
+_KEPT_ELEMENTS = {}
 
 X = App.Vector(1, 0, 0)
 Y = App.Vector(0, 1, 0)
@@ -86,10 +98,18 @@ def link_sub(link):
     return link[0], link[1][0]
 
 
+def is_straight_edge(element):
+    return isinstance(element, Part.Edge) and isinstance(element.Curve, Part.Line) and len(element.Vertexes) == 2
+
+
+def is_planar_face(element):
+    return isinstance(element, Part.Face) and isinstance(element.Surface, Part.Plane)
+
+
 def edge_direction(obj, sub):
     """Global unit vector of the straight edge ``sub`` of ``obj``, from its first vertex to its last."""
     edge = global_element(obj, sub)
-    if not isinstance(edge, Part.Edge) or not isinstance(edge.Curve, Part.Line) or len(edge.Vertexes) != 2:
+    if not is_straight_edge(edge):
         raise ValueError(translate("frameforge", "Profile Pattern: the direction must be a straight edge."))
     return (edge.Vertexes[-1].Point - edge.Vertexes[0].Point).normalize()
 
@@ -104,9 +124,197 @@ def extent_along(shape, direction):
 def face_position(obj, sub, direction):
     """Where the planar face ``sub`` of ``obj`` is along ``direction``: the projection of its center."""
     face = global_element(obj, sub)
-    if not isinstance(face, Part.Face) or not isinstance(face.Surface, Part.Plane):
+    if not is_planar_face(face):
         raise ValueError(translate("frameforge", "Profile Pattern: the limits must be planar faces."))
     return face.CenterOfMass.dot(direction)
+
+
+def _holder(obj, sub):
+    """(object whose shape has the element ``sub`` of ``obj`` names, path to it, element name, whether lost).
+
+    The holder is ``obj`` itself, or the object at the end of the path through Links and Parts; its element names
+    are the ones the link uses. Lost: FreeCAD marked the name as found no more ("?Face2"). None for no holder.
+    """
+    from freecad.maxproframe.trimmed_profile import MISSING_ELEMENT_PREFIX
+
+    path, _, name = sub.rpartition(".")
+    lost = sub.startswith(MISSING_ELEMENT_PREFIX) or name.startswith(MISSING_ELEMENT_PREFIX)
+    path, name = path.removeprefix(MISSING_ELEMENT_PREFIX), name.removeprefix(MISSING_ELEMENT_PREFIX)
+    try:
+        holder = obj.getSubObject(path + ".", 1) if path else obj
+    except Exception:
+        holder = None
+    return (holder, path, name, lost) if holder is not None else None
+
+
+def _holder_frame(holder):
+    """Placement, in the coordinates of the shape of ``holder``, of the path of the profile it is built on.
+
+    As Extend Cut finds its target face again: an element of a piece keeps its place in this frame wherever a new
+    size of the sketch takes the path. An object built on no profile: its own placement.
+    """
+    from freecad.maxproframe.trimmed_profile import _target_frame
+
+    try:
+        return _target_frame(holder)
+    except Exception:
+        return App.Placement(holder.getLinkedObject(True, App.Matrix())[1])
+
+
+def _point_and_vector(element, kind):
+    """An edge: its first vertex and its direction. A face: its center and its normal."""
+    from freecad.maxproframe.trimmed_profile import face_normal
+
+    if kind == EDGE:
+        return element.Vertexes[0].Point, (element.Vertexes[-1].Point - element.Vertexes[0].Point).normalize()
+    return element.CenterOfMass, face_normal(element)
+
+
+def _is_kind(element, kind):
+    return is_straight_edge(element) if kind == EDGE else is_planar_face(element)
+
+
+def _named_element(shape, name, kind):
+    """The element ``name`` of ``shape`` when it is of ``kind`` (straight edge, planar face), else None."""
+    try:
+        element = shape.getElement(name)
+    except Exception:
+        return None
+    return element if _is_kind(element, kind) else None
+
+
+def element_snapshot(obj, sub, kind):
+    """(object name, point, vector) of the element ``sub`` of ``obj`` in the frame of its holder, or None."""
+    found = _holder(obj, sub)
+    if found is None or found[3]:
+        return None
+    holder, _, name, _ = found
+    element = _named_element(Part.getShape(holder), name, kind)
+    if element is None:
+        return None
+    frame = _holder_frame(holder).inverse()
+    point, vector = _point_and_vector(element, kind)
+    return obj.Name, frame.multVec(point), frame.Rotation.multVec(vector)
+
+
+def _faces_of(obj):
+    """The two (object, face) limits of the pattern ``obj``, in order."""
+    return [(face_obj, sub) for face_obj, subs in getattr(obj, "Faces", ()) for sub in subs]
+
+
+def remember_elements(obj):
+    """Remember where the edge and the faces the links of the pattern ``obj`` name are, for a new size to find them.
+
+    For links set, opened or put back by Undo / Redo: the shapes are the ones they were picked on. A name lost
+    keeps what was remembered for that link, when it is on the same object.
+    """
+    if obj.Document is None or not {"Edge", "Faces"} <= set(obj.PropertiesList):
+        return
+    key = (obj.Document.Name, obj.Name)
+    before = _KEPT_ELEMENTS.get(key, {})
+
+    def kept(link_obj, sub, kind, old):
+        try:
+            new = element_snapshot(link_obj, sub, kind)
+        except Exception:
+            # The next recompute reports what is wrong with the element.
+            new = None
+        return new if new is not None or old is None or old[0] != link_obj.Name else old
+
+    edge = link_sub(obj.Edge)
+    old_faces = before.get("Faces", [])
+    _KEPT_ELEMENTS[key] = {
+        "Edge": kept(*edge, EDGE, before.get("Edge")) if edge else None,
+        "Faces": [
+            kept(face_obj, sub, FACE, old_faces[index] if index < len(old_faces) else None)
+            for index, (face_obj, sub) in enumerate(_faces_of(obj))
+        ],
+    }
+
+
+def remember_all_elements(doc):
+    """After an Undo or Redo, every pattern of ``doc`` remembers the elements its links name in the state back."""
+    for obj in doc.Objects:
+        if is_profile_pattern(obj) and isinstance(getattr(obj, "Proxy", None), ProfilePattern):
+            remember_elements(obj)
+
+
+def _lies_on(element, point, vector, kind):
+    """An edge: on the line through ``point`` along ``vector``, either sense. A face: on the plane through ``point``
+    with the normal ``vector``."""
+    if kind == EDGE:
+        start, direction = _point_and_vector(element, EDGE)
+        if direction.cross(vector).Length > ELEMENT_ANGLE_TOLERANCE:
+            return False
+        offset = point - start
+        return (offset - direction * offset.dot(direction)).Length <= ELEMENT_TOLERANCE
+    from freecad.maxproframe.trimmed_profile import _on_plane
+
+    return _on_plane(element, point, vector)
+
+
+def _parallel(element, vector):
+    return element.Curve.Direction.cross(vector).Length <= ELEMENT_ANGLE_TOLERANCE
+
+
+def _lost_error(holder, name, kind):
+    if kind == EDGE:
+        message = translate("frameforge", "Profile Pattern: {} has no straight edge where its edge {} was.")
+    else:
+        message = translate("frameforge", "Profile Pattern: {} has no planar face where its face {} was.")
+    return ValueError(message.format(holder.Label, name))
+
+
+def find_element(obj, sub, kept, kind):
+    """(sub-element, sure) the link (``obj``, ``sub``) of a pattern stands for now.
+
+    ``kept`` is what the pattern remembers of it (``remember_elements``). The element named when it lies where
+    the remembered one was (an edge on its line, a face on its plane); else the element of that kind there: the one
+    named so, else the one nearest the remembered point. Nothing there any more: an edge takes the straight edge
+    named, else the nearest one, along the remembered direction (only the direction counts); a face takes the face
+    named, as the link says. ``sure`` is False then: what is remembered stays. Nothing found fails naming the object.
+    Nothing remembered: the link as it is, sure.
+    """
+    found = _holder(obj, sub)
+    if found is None:
+        return sub, False
+    holder, path, name, lost = found
+    shape = Part.getShape(holder)
+    named = None if lost else _named_element(shape, name, kind)
+    if kept is None or kept[0] != obj.Name:
+        if lost:
+            raise _lost_error(holder, name, kind)
+        # Nothing remembered: the link as it is, with the errors of a wrong element.
+        return sub, True
+    frame = _holder_frame(holder)
+    point, vector = frame.multVec(kept[1]), frame.Rotation.multVec(kept[2])
+    full = lambda element_name: f"{path}.{element_name}" if path else element_name  # noqa: E731
+    if named is not None and _lies_on(named, point, vector, kind):
+        return sub, True
+    elements = shape.Edges if kind == EDGE else shape.Faces
+    elements = [(f"{kind}{index}", element) for index, element in enumerate(elements, 1) if _is_kind(element, kind)]
+
+    def nearest(candidates):
+        exact = [element_name for element_name, _ in candidates if element_name == name]
+        if exact:
+            return exact[0]
+        return min(candidates, key=lambda item: item[1].distToShape(Part.Vertex(point))[0])[0]
+
+    there = [(element_name, element) for element_name, element in elements if _lies_on(element, point, vector, kind)]
+    if there:
+        return full(nearest(there)), True
+    if kind == EDGE:
+        along = [(element_name, element) for element_name, element in elements if _parallel(element, vector)]
+        if along:
+            chosen = nearest(along)
+            App.Console.PrintLog(
+                f"Profile Pattern: no edge of {holder.Label} on the line of {name}; {chosen} along it is used.\n"
+            )
+            return full(chosen), False
+    elif named is not None:
+        App.Console.PrintLog(f"Profile Pattern: no face of {holder.Label} on the plane of {name}; it is used.\n")
+        return sub, False
+    raise _lost_error(holder, name, kind)
 
 
 def offset_axes(profile):
@@ -289,6 +497,16 @@ class ProfilePattern:
     def onChanged(self, obj, prop):
         if prop in ("Count", "Mode", "Sense"):
             self._drop_extra_copies(obj)
+        elif prop in ("Edge", "Faces"):
+            doc = obj.Document
+            # Set by hand, by the panel or by Undo (read again once every shape is back). The pattern linking an
+            # element found again happens while recomputing and keeps what is remembered.
+            if doc is not None and not doc.Recomputing and not doc.Restoring:
+                remember_elements(obj)
+
+    def onDocumentRestored(self, obj):
+        """Remember the elements the links name as saved: a new size that makes FreeCAD lose them finds them again."""
+        remember_elements(obj)
 
     @staticmethod
     def _drop_extra_copies(obj):
@@ -315,7 +533,7 @@ class ProfilePattern:
         edge = link_sub(obj.Edge)
         if piece is None or edge is None:
             raise ValueError(translate("frameforge", "Profile Pattern: a piece and a direction edge are needed."))
-        direction = edge_direction(*edge)
+        direction = self._direction(obj, edge)
         # The copies show the newest piece: Between faces measures it, and moves it by the offsets of its profile.
         piece = newest_piece(piece)
         if obj.Mode == BETWEEN_FACES:
@@ -324,12 +542,50 @@ class ProfilePattern:
             moves = [direction * (step * obj.Pitch.Value) for step in count_and_pitch_steps(obj.Count, obj.Sense)]
         self._place_copies(obj, piece, moves)
 
+    @staticmethod
+    def _kept_elements(obj):
+        return _KEPT_ELEMENTS.setdefault((obj.Document.Name, obj.Name), {"Edge": None, "Faces": []})
+
+    def _direction(self, obj, edge):
+        """Global direction of the edge of ``obj``, found again where it was; the link follows it, in its sense."""
+        edge_obj, sub = edge
+        kept = self._kept_elements(obj)
+        before = kept["Edge"]
+        found, sure = find_element(edge_obj, sub, before, EDGE)
+        if found != sub:
+            obj.Edge = (edge_obj, (found,))
+        direction = edge_direction(edge_obj, found)
+        now = element_snapshot(edge_obj, found, EDGE)
+        if now is not None and before is not None and before[0] == now[0] and now[2].dot(before[2]) < 0:
+            # The edge found runs the other way: the copies keep the sense of the edge picked.
+            direction = -direction
+            now = (now[0], now[1], -now[2])
+        if sure and now is not None:
+            kept["Edge"] = now
+        return direction
+
+    def _faces(self, obj):
+        """The two (object, face) limits of ``obj``, found again where they were; the links follow them."""
+        faces = _faces_of(obj)
+        kept = self._kept_elements(obj)
+        remembered = list(kept["Faces"]) + [None] * (len(faces) - len(kept["Faces"]))
+        found = []
+        for index, (face_obj, sub) in enumerate(faces):
+            name, sure = find_element(face_obj, sub, remembered[index], FACE)
+            found.append((face_obj, name))
+            if sure:
+                remembered[index] = element_snapshot(face_obj, name, FACE) or remembered[index]
+        kept["Faces"] = remembered[: len(faces)]
+        if found != faces:
+            obj.Faces = [(face_obj, (name,)) for face_obj, name in found]
+        return found
+
     def _between_faces(self, obj, piece, direction):
         """Moves of the copies from the piece; the piece itself goes to its slot."""
         problem = between_faces_problem(piece, direction)
         if problem:
             raise ValueError(problem)
-        faces = [(face_obj, sub) for face_obj, subs in obj.Faces for sub in subs]
+        faces = self._faces(obj)
         if len(faces) != 2:
             raise ValueError(translate("frameforge", "Profile Pattern: Between faces needs two planar faces."))
         low, high = extent_along(global_shape(piece), direction)
@@ -466,13 +722,22 @@ class NewestPieceObserver:
             self._relinked.setdefault(obj.Document.Name, set()).add(obj.Name)
 
     def slotUndoDocument(self, doc):
+        remember_all_elements(doc)
         show_newest_pieces(doc, self._relinked.pop(doc.Name, set()))
 
     def slotRedoDocument(self, doc):
+        remember_all_elements(doc)
         show_newest_pieces(doc, self._relinked.pop(doc.Name, set()))
+
+    def slotDeletedObject(self, obj):
+        doc = getattr(obj, "Document", None)
+        if doc is not None:
+            _KEPT_ELEMENTS.pop((doc.Name, obj.Name), None)
 
     def slotDeletedDocument(self, doc):
         self._relinked.pop(doc.Name, None)
+        for key in [key for key in _KEPT_ELEMENTS if key[0] == doc.Name]:
+            del _KEPT_ELEMENTS[key]
 
 
 if "_NEWEST_PIECE_OBSERVER" not in globals():
