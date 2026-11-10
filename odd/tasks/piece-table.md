@@ -22,9 +22,9 @@ length and cut angles with their faces, as a native spreadsheet shown on the pag
 
 ## Tasks
 - T1 S2 S3 S5 table data: pieces of the selected views grouped by ID, piece name, quantity, length, angle texts; sheet
-  writer — worker — commit: pending
+  writer — worker — commit: 609969f (done)
 - T2 S1 S4 S5 command: selection / click flow, sheet + DrawViewSpreadsheet on the page, refresh, no-ID report, one Undo
-  step; icon, toolbar/menu, translations (ES), CHANGELOG and docs — worker — commit: pending
+  step; icon, toolbar/menu, translations (ES), CHANGELOG and docs — worker — commit: 609969f (done)
 
 ## Log
 - L1 (user): "seria interesante tener un comando para poder agregar una tabla en techdraw, que tenga las piezas, largo y angulos, que opinas?" (with a screenshot of a TechDraw page with balloons 1-5 on an isometric view of a chair frame)
@@ -33,3 +33,4 @@ length and cut angles with their faces, as a native spreadsheet shown on the pag
 - L4 (decision): "angulos y caras" read as the BOM angle text, which already names the face (`45.0 <80`); the Ends glyph column of the proposal was not requested and is left out.
 - L5 (worker, T1+T2): RED observed — tests/test_piece_table.py against a do-nothing stub command: 21/21 failed; Spanish cases failed (2) until the ES strings were added; Undo of a refresh failed with Sheet.clearAll (sheet empty after undo), fixed by setting/clearing cells one by one. GREEN observed — test_piece_table 23/23 OK; PRESERVE test_balloons 32/32, test_toolbar_translations 4/4, test_workbench_commands 2/2, test_compile_translations 2/2, test_workbench_translation_loading 2/2, test_cut_list 27/27 OK. Expected failure until the parent lists the command: test_shortcuts.test_every_maxproframe_command_is_in_the_scheme (MaxProFrame_CreatePieceTable missing from WITHOUT_SHORTCUT). Uncommitted (worker may not commit); .qm rebuilt with the AppImage lrelease, which reproduces the committed .qm byte for byte.
 - L6 (worker decisions, not in the specs): Piece = SizeName (falls back to Label); rows sorted by ID (2 before 10, Z before AA); a link row takes its own PID and the name/length/angles of what it links (empty length/angles if it links no profile); the table remembers its views in a SourceViews string list on the DrawViewSpreadsheet; no table is made when no piece has an ID; a detail-view click says "A detail view gets no table" (ViewPicker got an optional detail_message, balloons unchanged); no shortcut.
+- L7 (parent): MaxProFrame_CreatePieceTable added to WITHOUT_SHORTCUT (test_shortcuts 5/5); test_piece_table 23/23. T1+T2 committed together as one behavior in 609969f (~705 authored lines incl. 353 test lines and .ts strings): past the ~400-line advisory slice, kept as a single reviewable feature commit.
