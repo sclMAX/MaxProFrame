@@ -17,7 +17,7 @@ changes size, because FreeCAD loses the face name; the trimmed piece then keeps 
 
 ## Tasks
 - T1 S1 S2 reproduce on a copy of the user's file and in a fixture; re-find the lost target face; tests; CHANGELOG —
-  worker — commit: pending (uncommitted in the worktree; tests green)
+  worker — commit: 2f60cdc (done)
 
 ## Log
 - L1 (user): "cambie la medida del croquis base y salen estos errores cuando recalculo: [log: Profile_PGC100_000_Tr / _Tr_Tr: Profile_004_Tr links are out of scope. Out of scope links to: PGC100; MiterError: Extender / cortar: la cara destino ?Face2 de Profile_TC80x40x1.5_000_Mt (and _002_Mt) no es plana.] el primer perfil del patron no se mueve con el croquis"
