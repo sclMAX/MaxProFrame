@@ -3,6 +3,7 @@
 * Unreleased
 
   **Improvements**
+  - **Russian translation**, contributed by [@c0n5t](https://github.com/c0n5t) ([#130](https://github.com/sclMAX/MaxProFrame/issues/130)): with FreeCAD in Russian the commands, panels and messages of v1.11.1 show in Russian. Texts added after v1.11.1 (Piece Table, Balloons changes) show in English until they are translated.
   - **Piece Table**: a new command (MaxProFrame Output toolbar) puts on a TechDraw page a table of the pieces shown in the selected views: ID, Piece (the profile name only, e.g. `TC80x40x1.5`), Quantity, Length and both cut angles with their faces, as the BOM writes them (`45.0 <80`). One row per ID, so the numbers match the balloons; pieces without ID get no row and are counted in the status bar and named in the Report view. The table is a spreadsheet shown on the page of the first view; running it again on the same views refreshes it. Lengths and angles take the decimal separator of the FreeCAD language (`45,0 <80` in Spanish). Select the views, or click the button and then a view; Esc cancels.
   - **Length** (BOM, Cut List and its stock bars, Piece Table): the length of a piece is its longest side along its axis, the one a tape measures to cut it, not the tip-to-tip extent. Square ends and cuts converging (`\_/`) keep their length; a parallelogram cut 12°/12° on a 40x40 tube is 40 × tan 12° = 8.5 mm shorter than before, the length of its sides. A round tube or bar, with no straight side, keeps its tip-to-tip length. A document saved before opens with the new length of every piece (profiles, trimmed profiles, cutouts and drill holes) at once, without editing or recomputing them; a BOM, Cut List or Piece Table already in the document keeps the numbers it was made with until it is made or refreshed again.
 
@@ -15,6 +16,9 @@
   - **Create Balloons** puts the balloons on the page of the view, even when a detail view of it sits on another page.
   - **Create Balloons** / **Refresh Balloons**: a click on a detail view, which gets no balloons, says so in the status bar and waits for another view. A failure leaves the document unchanged, with no Undo step, and shows its reason in the status bar and the Report view instead of the click prompt.
   - **Drill Hole** / **Cutout**: a hole or cutout on a profile trimmed against profiles of other Parts (for example a back rest profile on a parametric line between two side frames) no longer moves every profile of those Parts into its own Part. The hole or cutout joins its profile's Part before it links to the profile. With a face and a sketch selected, **Cutout** puts the sketch and the cutout in the profile's nearest Part or folder, not the outermost Part, and leaves a sketch already there in place.
+
+  **Contributors**
+  - [@c0n5t](https://github.com/c0n5t): Russian translation ([#130](https://github.com/sclMAX/MaxProFrame/issues/130)).
 
 * v1.11.1 (2026-11-09)
 
