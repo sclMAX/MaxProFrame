@@ -32,7 +32,7 @@ length and cut angles with their faces, as a native spreadsheet shown on the pag
 - T2 S1 S4 S5 command: selection / click flow, sheet + DrawViewSpreadsheet on the page, refresh, no-ID report, one Undo
   step; icon, toolbar/menu, translations (ES), CHANGELOG and docs — worker — commit: 609969f (done)
 - T3 S6 tape length: Length = longest straight edge parallel to the axis, everywhere Length is computed; tests,
-  CHANGELOG, docs — worker — commit: pending
+  CHANGELOG, docs — worker — commit: 815b883 (done)
 
 ## Log
 - L1 (user): "seria interesante tener un comando para poder agregar una tabla en techdraw, que tenga las piezas, largo y angulos, que opinas?" (with a screenshot of a TechDraw page with balloons 1-5 on an isometric view of a chair frame)
