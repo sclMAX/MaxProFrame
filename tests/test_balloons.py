@@ -5,6 +5,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -12,6 +13,7 @@ import Part
 from miter_helpers import use_language
 from PySide import QtCore, QtGui, QtWidgets
 
+from freecad.maxproframe import create_edit_balloons_tool
 from freecad.maxproframe.create_edit_balloons_tool import (
     CreateBalloonsCommand,
     RefreshBalloonsCommand,
@@ -151,6 +153,7 @@ class TestBalloons(unittest.TestCase):
 
     def test_a_piece_of_another_document_gets_no_balloon(self):
         # A balloon keeps only the Name of its piece: it could not find one in another document again.
+        # Were XSource read, the other "Left" would take the place of this one and give it the ID 9.
         other = App.newDocument("BalloonsOther")
         self.addCleanup(App.closeDocument, other.Name)
         external = make_profile(other, "Left", 400)
@@ -401,6 +404,88 @@ class TestBalloons(unittest.TestCase):
         self.assertEqual(balloon.Text, text)
         self.assertEqual(self.status_message(), "Balloons refreshed: 0. Piece not found: 1.")
 
+    def add_page(self, name):
+        page = self.doc.addObject("TechDraw::DrawPage", name)
+        template = self.doc.addObject("TechDraw::DrawSVGTemplate", f"{name}Template")
+        template.Template = page_template()
+        page.Template = template
+        return page
+
+    def add_detail(self, page):
+        detail = self.doc.addObject("TechDraw::DrawViewDetail", "Detail")
+        page.addView(detail)
+        detail.BaseView = self.view
+        detail.Source = self.view.Source
+        self.doc.recompute()
+        return detail
+
+    def test_balloons_go_to_the_page_of_the_view_not_to_the_page_of_its_detail(self):
+        other_page = self.add_page("OtherPage")
+        self.add_detail(other_page)
+        balloons = self.create(self.view)
+        self.assertEqual(sorted(balloons), ["Left", "Right"])
+        self.assertIn(balloons["Left"], self.page.Views)
+        self.assertNotIn(balloons["Left"], other_page.Views)
+
+    def test_a_click_on_a_detail_view_says_it_gets_no_balloons_and_waits(self):
+        detail = self.add_detail(self.page)
+        self.create()
+        self.select(detail)
+        self.assertEqual(self.balloons(), {})
+        self.assertEqual(
+            self.status_message(),
+            "Create Balloons: A detail view gets no balloons: click another view (Esc to cancel).",
+        )
+        self.select(self.view)
+        self.assertEqual(sorted(self.balloons()), ["Left", "Right"])
+        self.assertEqual(self.status_message(), "Balloons created: 2.")
+
+    def fail_placing(self):
+        printed = []
+        self.addCleanup(setattr, App.Console, "PrintError", App.Console.PrintError)
+        App.Console.PrintError = printed.append
+        patch = mock.patch.object(create_edit_balloons_tool, "place_balloon", side_effect=RuntimeError("boom"))
+        patch.start()
+        self.addCleanup(patch.stop)
+        return printed
+
+    def test_a_failed_creation_leaves_the_document_as_it_was_and_says_why(self):
+        undo_count = self.doc.UndoCount
+        self.create()
+        printed = self.fail_placing()
+        self.select(self.view)
+        self.assertEqual(self.balloons(), {})
+        self.assertEqual(self.doc.UndoCount, undo_count)
+        self.assertFalse(self.doc.HasPendingTransaction)
+        # The pick prompt does not stay: the failure replaces it.
+        self.assertEqual(self.status_message(), "Create Balloons: boom")
+        self.assertEqual("".join(printed), "Create Balloons: boom\n")
+
+    def test_a_failed_refresh_leaves_the_balloons_as_they_were_and_says_why(self):
+        balloons = self.create(self.view)
+        origin = value(balloons["Left"].OriginX)
+        undo_count = self.doc.UndoCount
+        self.left.AttachmentOffset = App.Placement(App.Vector(30, 0, 0), App.Rotation())
+        self.doc.recompute()
+        printed = self.fail_placing()
+        self.refresh(self.view)
+        self.assertEqual(value(balloons["Left"].OriginX), origin)
+        self.assertEqual(self.doc.UndoCount, undo_count)
+        self.assertFalse(self.doc.HasPendingTransaction)
+        self.assertEqual(self.status_message(), "Refresh Balloons: boom")
+        self.assertEqual("".join(printed), "Refresh Balloons: boom\n")
+
+    def test_a_link_gets_its_own_id_not_the_one_of_what_it_links(self):
+        link = self.doc.addObject("App::Link", "LeftLink")
+        link.LinkedObject = self.left
+        view = self.add_view("LinkView", link)
+        self.assertEqual(self.create(view), {})
+        self.assertEqual(self.status_message(), "Balloons created: 0. Without ID: 1 (run Populate IDs).")
+        link.addProperty("App::PropertyString", "PID", "MaxProFrame", "Profile ID").PID = "7"
+        balloons = self.create(view)
+        self.assertEqual(sorted(balloons), ["LeftLink"])
+        self.assertEqual(balloons["LeftLink"].Text, "7")
+
     def test_messages_are_spanish(self):
         use_language(self, "Spanish", "es_ES")
         self.create()
@@ -422,6 +507,13 @@ class TestBalloons(unittest.TestCase):
         other = self.add_view("OtherView", self.left)
         self.create(self.view, other)
         self.assertEqual(self.status_message(), "Hay más de una vista de TechDraw seleccionada: seleccioná una.")
+        detail = self.add_detail(self.page)
+        self.create()
+        self.select(detail)
+        self.assertEqual(
+            self.status_message(),
+            "Crear globos: Una vista de detalle no lleva globos: hacé clic en otra vista (Esc para cancelar).",
+        )
 
 
 if __name__ == "__main__":

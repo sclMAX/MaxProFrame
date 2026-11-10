@@ -1032,6 +1032,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Create Balloons</source><translation>Crear globos</translation></message>
     <message><source>Refresh Balloons</source><translation>Actualizar globos</translation></message>
     <message><source>Click a TechDraw view (Esc to cancel).</source><translation>Hacé clic en una vista de TechDraw (Esc para cancelar).</translation></message>
+    <message><source>A detail view gets no balloons: click another view (Esc to cancel).</source><translation>Una vista de detalle no lleva globos: hacé clic en otra vista (Esc para cancelar).</translation></message>
     <message><source>Cancelled.</source><translation>Cancelado.</translation></message>
     <message><source>More than one TechDraw view is selected: select one.</source><translation>Hay más de una vista de TechDraw seleccionada: seleccioná una.</translation></message>
     <message><source>Balloons created: {}.</source><translation>Globos creados: {}.</translation></message>
