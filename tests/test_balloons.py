@@ -163,6 +163,8 @@ class TestBalloons(unittest.TestCase):
         self.doc.saveAs(os.path.join(folder, "Drawing.FCStd"))
         self.view.XSource = [external]
         self.doc.recompute()
+        # newDocument made the other document active; the command reads the active document's selection.
+        App.setActiveDocument(self.doc.Name)
         balloons = self.create(self.view)
         self.assertEqual(sorted(balloons), ["Left", "Right"])
         self.assertEqual(balloons["Left"].Text, "1")
