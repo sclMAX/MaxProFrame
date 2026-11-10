@@ -130,10 +130,8 @@ def view_balloons(view):
 
 
 def view_sources(view):
-    sources = list(view.Source)
-    if "XSource" in view.PropertiesList:
-        sources += list(view.XSource)
-    return sources
+    # Not XSource: a balloon keeps only the Name of its piece, found again in its own document.
+    return list(view.Source)
 
 
 def create_balloons(view, selected_pieces=None):
@@ -145,8 +143,9 @@ def create_balloons(view, selected_pieces=None):
     profiles, links = [], []
     for s in sources:
         get_profiles_and_links_from_object(profiles, links, s)
-    # A piece reached twice, as by itself and through its group, gets one balloon.
-    pieces = list({(o.Document.Name, o.Name): o for o in profiles + links}.values())
+    # A piece reached twice, as by itself and through its group, gets one balloon; one of another
+    # document gets none, Refresh could not find it again.
+    pieces = list({o.Name: o for o in profiles + links if o.Document.Name == view.Document.Name}.values())
 
     marked = {b.TargetName for b in view_balloons(view)}
     already = [o for o in pieces if o.Name in marked]

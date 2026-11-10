@@ -2,6 +2,8 @@
 
 import glob
 import os
+import shutil
+import tempfile
 import unittest
 
 import FreeCAD as App
@@ -145,6 +147,25 @@ class TestBalloons(unittest.TestCase):
         # The arrows point at each piece: 200 mm apart along the view X, same height.
         self.assertAlmostEqual(value(balloons["Right"].OriginX) - value(balloons["Left"].OriginX), 200, places=6)
         self.assertAlmostEqual(value(balloons["Right"].OriginY), value(balloons["Left"].OriginY), places=6)
+        self.assertEqual(self.status_message(), "Balloons created: 2.")
+
+    def test_a_piece_of_another_document_gets_no_balloon(self):
+        # A balloon keeps only the Name of its piece: it could not find one in another document again.
+        other = App.newDocument("BalloonsOther")
+        self.addCleanup(App.closeDocument, other.Name)
+        external = make_profile(other, "Left", 400)
+        external.PID = "9"
+        other.recompute()
+        folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, folder, True)
+        # FreeCAD links another document only once both are saved.
+        other.saveAs(os.path.join(folder, "Other.FCStd"))
+        self.doc.saveAs(os.path.join(folder, "Drawing.FCStd"))
+        self.view.XSource = [external]
+        self.doc.recompute()
+        balloons = self.create(self.view)
+        self.assertEqual(sorted(balloons), ["Left", "Right"])
+        self.assertEqual(balloons["Left"].Text, "1")
         self.assertEqual(self.status_message(), "Balloons created: 2.")
 
     def test_running_it_again_only_marks_the_pieces_without_a_balloon(self):
