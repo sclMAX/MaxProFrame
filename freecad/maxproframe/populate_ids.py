@@ -175,10 +175,17 @@ def set_profile_pid(profile, pid):
     sync_copies(source)
 
 
+def pattern_copies(source):
+    """The Profile Pattern copies of the profile ``source``, or of a trim or cutout of it."""
+    return [
+        obj for obj in getattr(source, "InListRecursive", ()) if is_pattern_link(obj) and profile_source(obj) is source
+    ]
+
+
 def sync_copies(source):
     """Give the Profile Pattern copies of ``source``, or of a trim or cutout of it, the ID of what they copy."""
-    for obj in getattr(source, "InListRecursive", ()):
-        if is_pattern_link(obj) and profile_source(obj) is source and obj.PID != obj.LinkedObject.PID:
+    for obj in pattern_copies(source):
+        if obj.PID != obj.LinkedObject.PID:
             obj.PID = obj.LinkedObject.PID
 
 

@@ -1,7 +1,8 @@
 """Profile Pattern: Links to a piece repeated along a straight edge, by count and pitch or between two faces.
 
 The copies are App::Link objects to the piece: a change to it shows on every copy, and the BOM, the Cut
-List and the Piece Table count each copy as one more piece with its ID.
+List and the Piece Table count each copy as one more piece with its ID. A trim, cutout or drill hole made
+from the piece later shows on every copy too: they link the newest piece of its chain.
 """
 
 import os
@@ -9,7 +10,7 @@ import os
 import FreeCAD as App
 import Part
 
-from freecad.maxproframe._utils import get_profile_from_trimmedbody, is_profile
+from freecad.maxproframe._utils import get_profile_from_trimmedbody, is_profile, is_profile_pattern
 from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, place_in_container_of, translate
 from freecad.maxproframe.version import __version__ as ff_version
 
@@ -192,6 +193,27 @@ def move_piece(piece, move):
             setattr(profile, prop, getattr(profile, prop).Value + step)
 
 
+def newest_piece(piece):
+    """The piece built on ``piece`` last: the end of the trims, cutouts and drill holes made from it, one on another.
+
+    Where two are made from one piece, the chain goes on through the one whose end is shown (a trim or a cutout
+    hides what it is made from); ``piece`` itself when none is made from it, or when that tells none apart.
+    """
+    from freecad.maxproframe.drill_hole import _builds_on
+
+    def ends(obj, seen):
+        later = [child for child in obj.InList if child.Name not in seen and _builds_on(child, obj)]
+        if not later:
+            return [obj]
+        seen = seen | {child.Name for child in later}
+        return [end for child in later for end in ends(child, seen)]
+
+    found = ends(piece, {piece.Name})
+    if len(found) > 1:
+        found = [end for end in found if end.Visibility]
+    return found[0] if len(found) == 1 else piece
+
+
 def make_profile_pattern(piece, edge, mode=COUNT_AND_PITCH, count=1, pitch=DEFAULT_PITCH, sense=EDGE_SENSE, faces=()):
     """A Profile Pattern of ``piece`` along the straight edge ``edge`` (object, sub-element).
 
@@ -260,6 +282,8 @@ class ProfilePattern:
         if piece is None or edge is None:
             raise ValueError(translate("frameforge", "Profile Pattern: a piece and a direction edge are needed."))
         direction = edge_direction(*edge)
+        # The copies show the newest piece: Between faces measures it, and moves it by the offsets of its profile.
+        piece = newest_piece(piece)
         if obj.Mode == BETWEEN_FACES:
             moves = self._between_faces(obj, piece, direction)
         else:
@@ -285,19 +309,28 @@ class ProfilePattern:
         return [direction * move for move in moves[1:]]
 
     def _place_copies(self, obj, piece, moves):
-        """One Link per move, moved that far (global) from the piece, with the ID of the piece."""
+        """One Link per move to ``piece``, moved that far (global) from it, with the ID of its profile.
+
+        The ID of the profile: a trim or cutout made during this recompute gets it from there later in it.
+        """
         doc = obj.Document
         copies = [link for link in obj.Copies if doc.getObject(link.Name) is not None]
         while len(copies) < len(moves):
             copies.append(self._new_copy(obj, piece))
         for extra in copies[len(moves) :]:
+            # FreeCAD deletes it once the recompute is over: out of its Part or folder now, while the recompute
+            # still reaches them, or they would be left to recompute. Through Group: removeObject would take what
+            # it links out of a Part too.
+            parent = extra.getParentGroup() or extra.getParentGeoFeatureGroup()
+            if parent is not None:
+                parent.Group = [child for child in parent.Group if child != extra]
             doc.removeObject(extra.Name)
         copies = copies[: len(moves)]
         if [link.Name for link in obj.Copies] != [link.Name for link in copies]:
             obj.Copies = copies
         # The copies share the Part of the piece: their placements are in its coordinates.
         to_local = container_placement(piece).Rotation.inverted()
-        pid = getattr(piece, "PID", "")
+        pid = getattr(get_profile_from_trimmedbody(piece) or piece, "PID", "")
         for link, move in zip(copies, moves):
             if link.LinkedObject != piece:
                 link.LinkedObject = piece
@@ -333,6 +366,35 @@ class ProfilePattern:
 
     def loads(self, state):
         return None
+
+
+def follow_newest_pieces(doc):
+    """Link the copies of every pattern of ``doc`` to the newest piece of its chain; touch the patterns relinked.
+
+    A trim, cutout or drill hole made from the piece later links the piece, not the pattern, and one removed leaves
+    the copies linking nothing: before the recompute, so it computes them before the patterns that place them.
+    """
+    for obj in doc.Objects:
+        if not is_profile_pattern(obj) or obj.Piece is None:
+            continue
+        newest = newest_piece(obj.Piece)
+        stale = [link for link in obj.Copies if link.LinkedObject != newest]
+        for link in stale:
+            link.LinkedObject = newest
+        if stale:
+            obj.touch()
+
+
+class NewestPieceObserver:
+    """Has every pattern follow the newest piece of its chain at each recompute of a document."""
+
+    def slotBeforeRecomputeDocument(self, doc):
+        follow_newest_pieces(doc)
+
+
+if "_NEWEST_PIECE_OBSERVER" not in globals():
+    _NEWEST_PIECE_OBSERVER = NewestPieceObserver()
+    App.addDocumentObserver(_NEWEST_PIECE_OBSERVER)
 
 
 class ViewProviderProfilePattern:

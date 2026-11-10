@@ -5,6 +5,7 @@ import unittest
 import FreeCAD as App
 from test_cut_list import cell
 from test_piece_table import PieceTableFixture
+from test_reset_ids import ResetIDsChecks
 
 from freecad.maxproframe._utils import get_profiles_and_links_from_document, get_profiles_and_links_from_object
 from freecad.maxproframe.create_bom import group_links, group_profiles, traverse_assembly
@@ -75,6 +76,23 @@ class TestPatternInBom(PatternIdsFixture):
         self.assertEqual([cell(sheet, f"{column}2") for column in "CH"], ["1", "4"])
         self.assertEqual(cell(sheet, "C3"), "")
 
+    def test_a_cutout_added_after_the_pattern_keeps_the_original_and_its_copies_in_one_row(self):
+        part = self.doc.addObject("App::Part", "Table")
+        tube = self.tube_with_id("1")
+        part.addObjects([tube, *tube.OutList])
+        pattern = make_profile_pattern(tube, (self.frame, "Edge1"), count=3, pitch=200.0)
+        self.doc.recompute()
+        cutout = self.hole_in_the_middle(tube)
+        part.addObject(cutout)
+        self.doc.recompute()
+        profiles, links = self.bom_data(part)
+        self.assertEqual(links, [])
+        self.assertEqual(
+            sorted(row["label"] for row in profiles), sorted([cutout.Label] + [c.Label for c in pattern.Copies])
+        )
+        grouped = group_profiles(profiles)
+        self.assertEqual([(row["ID"], row["cutout"], row["quantity"]) for row in grouped], [("1", "Yes", 4)])
+
     def test_an_attached_link_stays_a_part_of_its_own(self):
         tube = self.tube_with_id("1")
         link = makeLink(tube)
@@ -120,6 +138,24 @@ class TestPatternIds(PatternIdsFixture):
         set_profile_pid(pattern.Copies[1], "")
         self.assertEqual(tube.PID, "")
         self.assertEqual([c.PID for c in pattern.Copies], [""] * 3)
+
+    def test_resetting_through_a_copy_counts_every_id_it_clears(self):
+        tube, pattern = self.patterned_tube(pid="1")
+        cutout = self.hole_in_the_middle(tube)
+        self.assertEqual([cutout.PID] + [c.PID for c in pattern.Copies], ["1"] * 4)
+        owned = [o for o in self.doc.Objects if "PID" in o.PropertiesList]
+        before = {o.Name: o.PID for o in owned}
+        asked, printed = ResetIDsChecks.reset(self, pattern.Copies[0])
+        cleared = [o for o in owned if before[o.Name] != o.PID]
+        # The copies, the cutout they show and its profile: every one loses ID 1.
+        self.assertEqual(
+            sorted(o.Name for o in cleared), sorted([tube.Name, cutout.Name, *(c.Name for c in pattern.Copies)])
+        )
+        question = "Reset the IDs of the selection?\n\nIDs to clear: 5. Undo (Ctrl+Z) restores them."
+        self.assertEqual(asked, [("Reset IDs", question)])
+        lines = printed.splitlines()
+        self.assertEqual(lines[0], "Reset IDs: IDs cleared: 5.")
+        self.assertEqual(sorted(lines[1:]), sorted(f"  {o.Label}: 1" for o in cleared))
 
     def test_attached_links_are_still_numbered_on_their_own(self):
         tube = self.tube_with_id("")

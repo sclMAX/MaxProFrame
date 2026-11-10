@@ -11,6 +11,7 @@ from test_end_miter_geometry import CENTER, MiterFixture
 
 from freecad.maxproframe._utils import is_pattern_link
 from freecad.maxproframe.create_extend_cut_tool import make_extend_cut_profile
+from freecad.maxproframe.create_extruded_cutout_tool import make_cutout_sketch, make_extruded_cutout
 from freecad.maxproframe.drill_hole import make_drill_hole
 from freecad.maxproframe.profile_pattern import make_profile_pattern
 from freecad.maxproframe.trimmed_profile import TrimmedProfile
@@ -19,6 +20,7 @@ from freecad.maxproframe.trimmed_profile import TrimmedProfile
 SLAT_X = 100.0
 X = App.Vector(1, 0, 0)
 Y = App.Vector(0, 1, 0)
+Z = App.Vector(0, 0, 1)
 
 
 def global_shape(obj):
@@ -88,6 +90,54 @@ class PatternFixture(MiterFixture):
     def links(self):
         return sorted(o.Name for o in self.doc.Objects if o.TypeId == "App::Link")
 
+    def touched(self):
+        return [o.Name for o in self.doc.Objects if "Touched" in o.State]
+
+    def drill(self, piece, along=100.0):
+        """A drill hole on the top face of ``piece``, ``along`` mm along it from a corner of that face."""
+        top = face_named(piece, Z, 25)
+        point = piece.Shape.getElement(top).Vertexes[0].Point
+        vertex = next(f"Vertex{i}" for i, v in enumerate(piece.Shape.Vertexes, start=1) if v.Point.isEqual(point, 1e-6))
+        hole = make_drill_hole((piece, (top,)), vertex)
+        hole.OffsetAlong, hole.OffsetAcross = along, 25.0
+        self.doc.recompute()
+        self.assert_valid(hole)
+        self.assertLess(hole.Shape.Volume, piece.Shape.Volume - 1.0)
+        return hole
+
+    def cut_out(self, piece):
+        """A cutout of a 10 mm circle in the middle of the top face of ``piece``."""
+        top = face_named(piece, Z, 25)
+        middle = piece.Shape.getElement(top).CenterOfMass
+        sketch = make_cutout_sketch(piece, top)
+        self.doc.recompute()
+        local = sketch.Placement.inverse().multVec(middle)
+        sketch.addGeometry(Part.Circle(App.Vector(local.x, local.y, 0), Z, 10.0))
+        cutout = make_extruded_cutout(sketch, (piece, [top]))
+        self.doc.recompute()
+        self.assert_valid(cutout)
+        self.assertLess(cutout.Shape.Volume, piece.Shape.Volume - 1.0)
+        return cutout
+
+    def extend_cut(self, piece, y):
+        """An Extend Cut of ``piece`` up to the face at ``y`` of a stop box beyond it."""
+        stop = self.box(f"Stop{int(y)}", -100)
+        stop.Placement.Base = App.Vector(-100, y, -25)
+        stop.Length, stop.Width = 1200, 100
+        self.doc.recompute()
+        trim = make_extend_cut_profile(piece, (stop, (face_named(stop, Y, y),)))
+        self.doc.recompute()
+        self.assert_valid(trim)
+        return trim
+
+    def assert_copies_are(self, obj, piece):
+        """Every copy of ``obj`` shows ``piece``: links it, and has its volume and length."""
+        self.assert_valid(obj)
+        for link in obj.Copies:
+            self.assertEqual(link.LinkedObject, piece)
+            self.assertAlmostEqual(global_shape(link).Volume, piece.Shape.Volume, places=6)
+            self.assertAlmostEqual(global_shape(link).BoundBox.YLength, piece.Shape.BoundBox.YLength, places=6)
+
 
 class TestCountAndPitch(PatternFixture):
     def test_the_copies_follow_the_edge_at_the_pitch_center_to_center(self):
@@ -128,8 +178,23 @@ class TestCountAndPitch(PatternFixture):
         self.assertEqual(sorted(link.Name for link in obj.Copies), self.links())
         self.assertEqual(self.touched(), [])
 
-    def touched(self):
-        return [o.Name for o in self.doc.Objects if "Touched" in o.State]
+    def test_lowering_the_count_of_a_pattern_in_a_part_leaves_nothing_to_recompute(self):
+        part = self.doc.addObject("App::Part", "Table")
+        part.addObjects([self.slat, *self.slat.OutList, self.frame])
+        self.doc.recompute()
+        obj = self.pattern(count=5, pitch=100.0)
+        self.assertEqual(obj.getParentGeoFeatureGroup(), part)
+        self.assertEqual(self.touched(), [])
+        kept = [o.Name for o in part.Group if o not in obj.Copies[3:]]
+        # As the property editor does: the value, then one recompute.
+        obj.Count = 3
+        self.doc.recompute()
+        self.assert_valid(obj)
+        self.assertEqual(self.copy_centers(obj), [200.0, 300.0, 400.0])
+        self.assertEqual(sorted(link.Name for link in obj.Copies), self.links())
+        # Only the copies left over leave the Part: not what they linked.
+        self.assertEqual([o.Name for o in part.Group], kept)
+        self.assertEqual(self.touched(), [])
 
     def test_a_change_on_the_original_shows_on_every_copy(self):
         obj = self.pattern(count=2, pitch=100.0)
@@ -225,9 +290,6 @@ class TestBetweenFaces(PatternFixture):
         self.assertAlmostEqual(abs(self.slat.OffsetX.Value) + abs(self.slat.OffsetY.Value), 50.0)
         self.assertEqual(self.touched(), [])
 
-    def touched(self):
-        return [o.Name for o in self.doc.Objects if "Touched" in o.State]
-
     def test_the_original_takes_the_slot_next_to_the_first_face_picked(self):
         left, right = self.walls()
         obj = self.pattern(mode="Between faces", count=5, faces=(right, left))
@@ -283,6 +345,65 @@ class TestBetweenFaces(PatternFixture):
         self.assertFalse(obj.isValid())
         self.assertIn("do not fit", obj.getStatusString())
         self.assertEqual(round(center(self.slat).x, 6), SLAT_X)
+
+
+class TestLaterChanges(PatternFixture):
+    """A drill hole, cutout or trim added to the original after the pattern shows on every copy."""
+
+    def test_a_drill_hole_added_to_the_original_shows_on_every_copy(self):
+        obj = self.pattern(count=2, pitch=100.0)
+        hole = self.drill(self.slat)
+        self.assert_copies_are(obj, hole)
+        self.assertEqual(self.copy_centers(obj), [200.0, 300.0])
+        self.assertEqual(self.touched(), [])
+
+    def test_a_cutout_added_to_the_original_shows_on_every_copy(self):
+        obj = self.pattern(count=2, pitch=100.0)
+        cutout = self.cut_out(self.slat)
+        self.assert_copies_are(obj, cutout)
+        self.assertEqual(self.copy_centers(obj), [200.0, 300.0])
+        self.assertEqual(self.touched(), [])
+
+    def test_a_trim_added_to_the_original_shows_on_every_copy(self):
+        obj = self.pattern(count=2, pitch=100.0)
+        trim = self.extend_cut(self.slat, 500)
+        self.assert_copies_are(obj, trim)
+        for link in obj.Copies:
+            self.assertAlmostEqual(global_shape(link).BoundBox.YMax, 500.0)
+        self.assertEqual(self.touched(), [])
+
+    def test_the_copies_follow_the_last_piece_built_on_the_original(self):
+        trim = self.extend_cut(self.slat, 500)
+        obj = self.pattern(piece=trim, count=2, pitch=100.0)
+        self.assert_copies_are(obj, trim)
+        hole = self.drill(trim)
+        self.assert_copies_are(obj, hole)
+        second = self.drill(hole, along=300.0)
+        self.assert_copies_are(obj, second)
+        self.assertEqual(self.copy_centers(obj), [200.0, 300.0])
+        self.assertEqual(self.touched(), [])
+
+    def test_removing_the_later_hole_brings_back_the_piece_it_was_made_on(self):
+        obj = self.pattern(count=2, pitch=100.0)
+        hole = self.drill(self.slat)
+        self.assert_copies_are(obj, hole)
+        self.doc.removeObject(hole.Name)
+        self.doc.recompute()
+        self.assert_copies_are(obj, self.slat)
+        self.assertEqual(self.copy_centers(obj), [200.0, 300.0])
+
+    def test_between_faces_still_moves_the_original_by_its_profile_when_a_hole_is_added(self):
+        obj = self.pattern(mode="Between faces", count=5, faces=self.walls())
+        hole = self.drill(self.slat)
+        self.assert_copies_are(obj, hole)
+        self.assertAlmostEqual(center(hole).x, 150.0)
+        self.assertEqual(self.copy_centers(obj), [325.0, 500.0, 675.0, 850.0])
+        obj.Count = 3
+        self.doc.recompute()
+        self.assert_copies_are(obj, hole)
+        self.assertAlmostEqual(center(hole).x, 237.5)
+        self.assertEqual(self.copy_centers(obj), [500.0, 762.5])
+        self.assertEqual(self.touched(), [])
 
 
 class TestPatternContainer(MiterFixture):

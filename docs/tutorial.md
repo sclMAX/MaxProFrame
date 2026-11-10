@@ -433,7 +433,9 @@ The cut list and the IDs treat a drill hole like a cutout.
 
 To change a pattern, double-click it: the same panel opens with its values, and a click on another edge or other faces changes them. The copies are added, removed or moved to match, in one Undo step; **Cancel** puts the pattern back. The Count, Pitch, Sense and Mode can also be changed in the property editor. The copies are shown under the pattern in the tree. Deleting the pattern deletes its copies and keeps the piece.
 
-**Populate IDs** gives the copies the ID of the piece they copy, never one of their own: selecting the copies numbers the piece. With **Include Part count in PID**, the count includes the copies.
+A trim, cutout or drill hole made from the piece after the pattern shows on every copy too: at the next recompute the copies follow the last piece built on the piece (a hole on a trim on the profile: the hole), the one shown in the 3D view. **Between faces** still moves the piece by the offsets of its profile.
+
+**Populate IDs** gives the copies the ID of the piece they copy, never one of their own: selecting the copies numbers the piece. With **Include Part count in PID**, the count includes the copies. **Reset IDs** on a copy clears the ID of the piece, of its profile and of every copy, and its confirmation counts them all.
 
 
 ## Expressions in panel fields
