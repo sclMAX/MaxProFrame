@@ -196,6 +196,27 @@ class TestCountAndPitch(PatternFixture):
         self.assertEqual([o.Name for o in part.Group], kept)
         self.assertEqual(self.touched(), [])
 
+    def test_lowering_the_count_recomputed_after_its_undo_step_leaves_no_orphan(self):
+        self.doc.UndoMode = 1
+        part = self.doc.addObject("App::Part", "Table")
+        part.addObjects([self.slat, *self.slat.OutList, self.frame])
+        self.doc.recompute()
+        self.doc.clearUndos()
+        self.doc.openTransaction("Create")
+        obj = self.pattern(count=5, pitch=100.0)
+        self.doc.commitTransaction()
+        self.doc.openTransaction("Edit Count")
+        obj.Count = 2
+        self.doc.commitTransaction()
+        # Recomputed outside the step that changed the count, as a later refresh does.
+        self.doc.recompute()
+        self.assertEqual(self.doc.UndoNames, ["Edit Count", "Create"])
+        self.doc.undo()
+        self.doc.recompute()
+        self.assertEqual(sorted(link.Name for link in obj.Copies), self.links())
+        self.assertTrue(all(link.getParentGeoFeatureGroup() == part for link in obj.Copies))
+        self.assertEqual(self.copy_centers(obj), [200.0, 300.0, 400.0, 500.0, 600.0])
+
     def test_a_change_on_the_original_shows_on_every_copy(self):
         obj = self.pattern(count=2, pitch=100.0)
         self.assertEqual(len(obj.Copies), 2)

@@ -157,6 +157,20 @@ class TestPatternIds(PatternIdsFixture):
         self.assertEqual(lines[0], "Reset IDs: IDs cleared: 5.")
         self.assertEqual(sorted(lines[1:]), sorted(f"  {o.Label}: 1" for o in cleared))
 
+    def test_the_reset_count_is_what_changes_for_every_selection(self):
+        tube, pattern = self.patterned_tube(pid="1")
+        cutout = self.hole_in_the_middle(tube)
+        first = pattern.Copies[0]
+        for selection in ((first,), (cutout,), (tube,), (first, tube), (first, pattern.Copies[1]), (self.group,)):
+            with self.subTest(selection=[o.Name for o in selection]):
+                owned = [o for o in self.doc.Objects if "PID" in o.PropertiesList]
+                before = {o.Name: o.PID for o in owned}
+                asked, _ = ResetIDsChecks.reset(self, *selection)
+                changed = [o for o in owned if before[o.Name] != o.PID]
+                self.assertIn(f"IDs to clear: {len(changed)}.", asked[0][1])
+                self.doc.undo()
+                self.doc.recompute()
+
     def test_attached_links_are_still_numbered_on_their_own(self):
         tube = self.tube_with_id("")
         link = makeLink(tube)

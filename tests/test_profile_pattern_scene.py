@@ -8,6 +8,7 @@ gaps of 70 mm.
 import os
 import shutil
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -259,6 +260,31 @@ class TestIds(SceneFixture):
         self.assert_copies_show(obj, hole)
         grouped = group_profiles(self.slat_rows())
         self.assertEqual([(row["ID"], row["cutout"], row["quantity"]) for row in grouped], [(SLAT_ID, "Yes", 5)])
+
+    def wait_for(self, done, seconds=5.0):
+        """Let the GUI run, the tree view refreshing, until ``done()`` or ``seconds`` pass."""
+        end = time.monotonic() + seconds
+        while not done() and time.monotonic() < end:
+            QtWidgets.QApplication.processEvents()
+            time.sleep(0.01)
+
+    def test_undoing_a_later_hole_shows_the_original_again_and_counts_it(self):
+        self.doc.UndoMode = 1
+        obj = self.pattern(count=3, pitch=120.0)
+        # It failed now and then (7 runs in 40): ten rounds.
+        for _ in range(10):
+            self.doc.clearUndos()
+            self.doc.openTransaction("Create Drill Hole")
+            self.drill(self.piece)
+            self.doc.commitTransaction()
+            self.doc.undo()
+            self.wait_for(lambda: self.piece.Visibility)
+            self.doc.recompute()
+            self.assertTrue(self.piece.Visibility)
+            self.assertTrue(self.piece.ViewObject.Visibility)
+            self.assert_copies_show(obj, self.piece)
+            self.assertEqual([(r["ID"], r["quantity"]) for r in group_profiles(self.slat_rows())], [(SLAT_ID, 4)])
+            self.assertEqual(self.touched(), [])
 
 
 class TestPanel(SceneFixture):

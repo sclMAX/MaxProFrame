@@ -39,6 +39,9 @@ MAX_COUNT = 10000
 ACROSS_TOLERANCE = 1e-6
 # Moves and gaps (mm) smaller than this are none: what is already in place is not changed.
 MOVE_TOLERANCE = 1e-7
+# A piece FreeCAD keeps hidden after an Undo is shown again every SHOW_RETRY_MS, SHOW_TRIES times at most.
+SHOW_RETRY_MS = 50
+SHOW_TRIES = 60
 
 X = App.Vector(1, 0, 0)
 Y = App.Vector(0, 1, 0)
@@ -162,6 +165,13 @@ def count_and_pitch_steps(count, sense):
     return forward
 
 
+def copies_needed(obj):
+    """How many copies the values of the pattern ``obj`` ask for."""
+    if obj.Mode == BETWEEN_FACES:
+        return max(obj.Count - 1, 0)
+    return len(count_and_pitch_steps(obj.Count, obj.Sense))
+
+
 def between_faces_moves(low, high, first, second, count):
     """(moves, gap) of ``count`` pieces, the piece first, between two faces with equal free gaps.
 
@@ -276,6 +286,30 @@ class ProfilePattern:
             obj.setEditorMode(prop, 1)
         obj.Proxy = self
 
+    def onChanged(self, obj, prop):
+        if prop in ("Count", "Mode", "Sense"):
+            self._drop_extra_copies(obj)
+
+    @staticmethod
+    def _drop_extra_copies(obj):
+        """Delete the copies the new values leave over now, in the Undo step that changes them.
+
+        Deleted by the recompute, they would get a Delete step of their own, and its Undo would bring them back
+        without the pattern or the Part keeping them. Not while the document is opened, undone or recomputed.
+        """
+        doc = obj.Document
+        if doc is None or "Copies" not in obj.PropertiesList:
+            return
+        if any(getattr(doc, state, False) for state in ("Restoring", "Transacting", "Recomputing")):
+            return
+        copies = [link for link in obj.Copies if doc.getObject(link.Name) is not None]
+        needed = copies_needed(obj)
+        if len(copies) <= needed:
+            return
+        obj.Copies = copies[:needed]
+        for extra in copies[needed:]:
+            doc.removeObject(extra.Name)
+
     def execute(self, obj):
         piece = obj.Piece
         edge = link_sub(obj.Edge)
@@ -385,11 +419,60 @@ def follow_newest_pieces(doc):
             obj.touch()
 
 
+def show_newest_pieces(doc, relinked):
+    """Show the newest piece of every pattern of ``doc`` whose copies an Undo or Redo relinked (``relinked``: names).
+
+    Undoing a hole, cutout or trim made on the piece after the pattern relinks the copies back to the piece. Until
+    the tree view catches up, the piece is still listed only under a copy, as a child of the hole that copy showed:
+    FreeCAD then refuses to show it, and the Undo leaves it hidden. Shown again once the tree lets it.
+    """
+    pieces = []
+    for obj in doc.Objects:
+        if is_profile_pattern(obj) and obj.Piece is not None and any(link.Name in relinked for link in obj.Copies):
+            pieces.append(newest_piece(obj.Piece))
+    show_when_showable(pieces)
+
+
+def show_when_showable(pieces, tries=SHOW_TRIES):
+    """Show ``pieces``; those FreeCAD keeps hidden yet are tried again later, ``tries`` times in all."""
+    hidden = []
+    for piece in pieces:
+        try:
+            if piece.Document.getObject(piece.Name) is not piece or piece.Visibility:
+                continue
+        except Exception:
+            continue  # deleted meanwhile
+        piece.Visibility = True
+        if not piece.Visibility:
+            hidden.append(piece)
+    if hidden and tries > 1 and App.GuiUp:
+        from PySide import QtCore
+
+        QtCore.QTimer.singleShot(SHOW_RETRY_MS, lambda: show_when_showable(hidden, tries - 1))
+
+
 class NewestPieceObserver:
-    """Has every pattern follow the newest piece of its chain at each recompute of a document."""
+    """Has every pattern follow the newest piece of its chain at each recompute of a document, and show it after an
+    Undo or Redo that relinked its copies."""
+
+    def __init__(self):
+        self._relinked = {}
 
     def slotBeforeRecomputeDocument(self, doc):
         follow_newest_pieces(doc)
+
+    def slotChangedObject(self, obj, prop):
+        if prop == "LinkedObject" and getattr(obj.Document, "Transacting", False):
+            self._relinked.setdefault(obj.Document.Name, set()).add(obj.Name)
+
+    def slotUndoDocument(self, doc):
+        show_newest_pieces(doc, self._relinked.pop(doc.Name, set()))
+
+    def slotRedoDocument(self, doc):
+        show_newest_pieces(doc, self._relinked.pop(doc.Name, set()))
+
+    def slotDeletedDocument(self, doc):
+        self._relinked.pop(doc.Name, None)
 
 
 if "_NEWEST_PIECE_OBSERVER" not in globals():
