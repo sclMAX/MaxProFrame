@@ -1029,6 +1029,17 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Reset the IDs of the selection?</source><translation>¿Restablecer los IDs de la selección?</translation></message>
     <message><source>IDs to clear: {}. Undo (Ctrl+Z) restores them.</source><translation>IDs a borrar: {}. Deshacer (Ctrl+Z) los recupera.</translation></message>
     <message><source>IDs cleared: {}.</source><translation>IDs borrados: {}.</translation></message>
+    <message><source>Create Balloons</source><translation>Crear globos</translation></message>
+    <message><source>Refresh Balloons</source><translation>Actualizar globos</translation></message>
+    <message><source>Click a TechDraw view (Esc to cancel).</source><translation>Hacé clic en una vista de TechDraw (Esc para cancelar).</translation></message>
+    <message><source>Cancelled.</source><translation>Cancelado.</translation></message>
+    <message><source>More than one TechDraw view is selected: select one.</source><translation>Hay más de una vista de TechDraw seleccionada: seleccioná una.</translation></message>
+    <message><source>Balloons created: {}.</source><translation>Globos creados: {}.</translation></message>
+    <message><source>Already had a balloon: {}.</source><translation>Ya tenían globo: {}.</translation></message>
+    <message><source>Without ID: {} (run Populate IDs).</source><translation>Sin ID: {} (ejecutá Asignar IDs).</translation></message>
+    <message><source>without ID</source><translation>sin ID</translation></message>
+    <message><source>Balloons refreshed: {}.</source><translation>Globos actualizados: {}.</translation></message>
+    <message><source>Piece not found: {}.</source><translation>Pieza no encontrada: {}.</translation></message>
     <message><source>IDs cleared: {} (Ctrl+Z to undo)</source><translation>IDs borrados: {} (Ctrl+Z para deshacer)</translation></message>
     <message><source>Miter Ends</source><translation>Ingletes</translation></message>
     <message><source>Edit Miter</source><translation>Editar inglete</translation></message>
@@ -1318,12 +1329,12 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
 <context>
     <name>MaxProFrame_CreateBalloons</name>
     <message><source>Create Balloons</source><translation>Crear globos</translation></message>
-    <message><source>&lt;b&gt;Automatically create balloons for selected profiles and links&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select profiles and links.</source><translation>&lt;b&gt;Crear globos automáticamente para los perfiles y enlaces seleccionados&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná perfiles y enlaces.</translation></message>
+    <message><source>&lt;b&gt;Create a balloon with the ID of each piece of a TechDraw view&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a view, or click the button and then a view. Pieces that already have a balloon are skipped. Select pieces with the view to mark only those.</source><translation>&lt;b&gt;Crear un globo con el ID de cada pieza de una vista de TechDraw&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná una vista, o hacé clic en el botón y después en una vista. Las piezas que ya tienen globo se saltean. Seleccioná piezas junto con la vista para marcar solo esas.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_RefreshBalloons</name>
     <message><source>Refresh Balloons</source><translation>Actualizar globos</translation></message>
-    <message><source>&lt;b&gt;Refresh selected balloons&lt;/b&gt;</source><translation>&lt;b&gt;Actualizar los globos seleccionados&lt;/b&gt;</translation></message>
+    <message><source>&lt;b&gt;Refresh balloons&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select balloons or a view, or click the button and then a view: the arrows follow their pieces and the texts their IDs.</source><translation>&lt;b&gt;Actualizar globos&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná globos o una vista, o hacé clic en el botón y después en una vista: las flechas siguen a sus piezas y los textos a sus IDs.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_CreateBOM</name>
