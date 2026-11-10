@@ -64,12 +64,17 @@ LENGTH_TOLERANCE = 1e-6
 
 
 def make_extruded_cutout(sketch, selected_face):
-    """A cutout of the face ``selected_face`` (object, face name) by ``sketch``; the caller places it."""
+    """A cutout of the face ``selected_face`` (object, face name) by ``sketch``.
+
+    It is in the folder or Part/Body holding the object of the face.
+    """
     selected_object = selected_face[0]
     obj = selected_object.Document.addObject("Part::FeaturePython", f"{selected_object.Name}_Ex")
     # Named after the object, labelled after its label, as trims are (_Tr, _Mt).
     obj.Label = f"{selected_object.Label}_Ex"
     obj.addExtension("Part::AttachExtensionPython")
+    # Placed before it links to its base, so the Part does not drag in what the base links to.
+    place_in_container_of(obj, selected_object)
     ExtrudedCutout(obj, sketch, selected_face)
     if getattr(obj, "ViewObject", None) is not None:
         ViewProviderExtrudedCutout(obj.ViewObject)
@@ -303,7 +308,6 @@ class CutoutTaskPanel:
         try:
             sketch = make_cutout_sketch(obj, sub)
             cutout = make_extruded_cutout(sketch, (obj, [sub]))
-            place_in_container_of(cutout, obj)
             cutout.CutType = GUIDED_CUT_TYPE
             doc.recompute()
             error = _failures([sketch, cutout])
@@ -705,13 +709,10 @@ class AddExtrudedCutoutCommandClass:
 
         App.ActiveDocument.openTransaction("Create Cutout")
 
+        # The sketch joins the face's container before the cutout links to it: a Part receiving it later would
+        # drag in what the cutout links to, up to the profiles of other Parts a trim is cut against.
+        place_in_container_of(cutSketch, selected_object)
         obj = make_extruded_cutout(cutSketch, selected_face)
-
-        if len(selected_object.Parents) > 0:
-            part = selected_object.Parents[-1][0]
-            part.addObject(obj)
-
-            part.addObject(cutSketch)
 
         App.ActiveDocument.commitTransaction()
 

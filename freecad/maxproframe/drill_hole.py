@@ -23,7 +23,7 @@ from freecad.maxproframe.extruded_cutout import (
     axis_positions,
     cut_tools,
 )
-from freecad.maxproframe.ff_tools import ICONPATH, translate
+from freecad.maxproframe.ff_tools import ICONPATH, place_in_container_of, translate
 from freecad.maxproframe.frameforge_exceptions import FrameForgeException
 from freecad.maxproframe.profile import section_shift
 
@@ -45,12 +45,17 @@ MISSING_ELEMENT_PREFIX = "?"
 
 
 def make_drill_hole(selected_face, vertex):
-    """A drill hole on the face ``selected_face`` (object, (face name,)) placed from ``vertex``; the caller places it."""
+    """A drill hole on the face ``selected_face`` (object, (face name,)) placed from ``vertex``.
+
+    It is in the folder or Part/Body holding the object of the face.
+    """
     selected_object = selected_face[0]
     obj = selected_object.Document.addObject("Part::FeaturePython", f"{selected_object.Name}_Dh")
     # Named after the object, labelled after its label, as cutouts are (_Ex).
     obj.Label = f"{selected_object.Label}_Dh"
     obj.addExtension("Part::AttachExtensionPython")
+    # Placed before it links to its base, so the Part does not drag in what the base links to.
+    place_in_container_of(obj, selected_object)
     DrillHole(obj, selected_face, vertex)
     if getattr(obj, "ViewObject", None) is not None:
         ViewProviderDrillHole(obj.ViewObject)

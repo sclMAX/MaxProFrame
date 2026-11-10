@@ -11,6 +11,7 @@ from test_cutout_flow import HOLE_RADIUS, UP, WALL, CutoutFixture
 
 from freecad.maxproframe import create_extruded_cutout_tool
 from freecad.maxproframe.create_extruded_cutout_tool import AddExtrudedCutoutCommandClass
+from freecad.maxproframe.trimmed_profile import TrimmedProfile
 
 
 class TestDirectCutout(CutoutFixture):
@@ -65,6 +66,57 @@ class TestDirectCutout(CutoutFixture):
                 self.assertEqual(cutout.getStatusString(), "Valid")
                 removed = 2 * math.pi * HOLE_RADIUS**2 * WALL
                 self.assertAlmostEqual(cutout.Shape.Volume, body.Shape.Volume - removed, places=3)
+
+    def trim_against_another_part(self):
+        """(side Part, back Part, trim in back cut against the side profile)."""
+        side = self.doc.addObject("App::Part", "Side")
+        back = self.doc.addObject("App::Part", "Back")
+        side_path = self.make_sketch(((0, 0, 0), (0, 200, 0)))
+        back_path = self.make_sketch(((200, 0, 0), (0, 0, 0)))
+        side_profile = self.make_profile(side_path, "Edge1")
+        back_profile = self.make_profile(back_path, "Edge1")
+        side.addObjects([side_path, side_profile])
+        back.addObjects([back_path, back_profile])
+        trim = self.doc.addObject("Part::FeaturePython", "Miter")
+        back.addObject(trim)
+        TrimmedProfile(trim)
+        trim.TrimmedBody = back_profile
+        trim.TrimmingBoundary = [(side_profile, ("Edge1",))]
+        trim.TrimmedProfileType = "End Miter"
+        self.doc.recompute()
+        return side, back, trim
+
+    def test_a_sketch_in_the_part_with_external_geometry_of_the_trim_leaves_another_part_untouched(self):
+        # The sketch is already in the trim's Part: adding it again would drag what its external geometry links to.
+        side, back, trim = self.trim_against_another_part()
+        top = self.face_towards(trim, UP)
+        sketch = self.hole_sketch(trim, top)
+        back.addObject(sketch)
+        sketch.AttachmentSupport = [(trim, top)]
+        sketch.MapMode = "FlatFace"
+        sketch.addExternal(trim.Name, "Edge1")
+        self.doc.recompute()
+        side_group, back_group = list(side.Group), list(back.Group)
+        self.select((trim, top), (sketch, ""))
+        self.run_direct()
+        cutout = self.doc.getObject(f"{trim.Name}_Ex")
+        self.assertEqual(side.Group, side_group)
+        self.assertEqual(sorted(o.Name for o in back.Group), sorted(o.Name for o in back_group + [cutout]))
+        self.assertEqual(sketch.getParentGeoFeatureGroup(), back)
+
+    def test_a_cutout_on_a_trim_against_another_part_leaves_that_part_untouched(self):
+        # A Part receiving an object pulls in what it links to locally: the trim's boundary is in another Part.
+        side, back, trim = self.trim_against_another_part()
+        top = self.face_towards(trim, UP)
+        sketch = self.hole_sketch(trim, top)
+        side_group, back_group = list(side.Group), list(back.Group)
+        self.select((trim, top), (sketch, ""))
+        self.run_direct()
+        cutout = self.doc.getObject(f"{trim.Name}_Ex")
+        self.assertEqual(side.Group, side_group)
+        self.assertEqual(sorted(o.Name for o in back.Group), sorted(o.Name for o in back_group + [cutout, sketch]))
+        self.assertEqual(cutout.getParentGeoFeatureGroup(), back)
+        self.assertEqual(sketch.getParentGeoFeatureGroup(), back)
 
 
 if __name__ == "__main__":
