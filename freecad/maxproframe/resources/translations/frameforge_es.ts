@@ -1313,6 +1313,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Press Change next to Direction to pick another edge.</source><translation>Tocá Cambiar junto a Dirección para elegir otra arista.</translation></message>
     <message><source>Press Change next to the faces to pick two other faces.</source><translation>Tocá Cambiar junto a las caras para elegir otras dos caras.</translation></message>
     <message><source>Click the piece itself, not a copy of a pattern.</source><translation>Hacé clic en la pieza misma, no en una copia de un patrón.</translation></message>
+    <message><source>The former piece stays where Between faces placed it.</source><translation>La pieza anterior queda donde la ubicó Entre caras.</translation></message>
     <message><source>Select the piece to repeat: click a profile, a trimmed profile, a cutout or a drill hole.</source><translation>Seleccioná la pieza a repetir: hacé clic en un perfil, un perfil recortado, un calado o un agujero.</translation></message>
     <message><source>Click a straight edge for the direction of the copies.</source><translation>Hacé clic en una arista recta para la dirección de las copias.</translation></message>
     <message><source>Click the frame, not a copy of the pattern.</source><translation>Hacé clic en el marco, no en una copia del patrón.</translation></message>
