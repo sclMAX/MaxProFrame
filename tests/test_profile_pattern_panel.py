@@ -7,9 +7,11 @@ from unittest.mock import patch
 
 import FreeCAD as App
 import FreeCADGui as Gui
+from elision_helpers import font_ellipsis
 from miter_helpers import use_language
 from PySide import QtWidgets
-from test_profile_pattern import SLAT_X, PatternFixture, center
+from test_end_miter_geometry import CENTER
+from test_profile_pattern import SLAT_X, PatternFixture, X, center, face_named
 
 from freecad.maxproframe import create_profile_pattern_tool
 from freecad.maxproframe.create_profile_pattern_tool import ProfilePatternCommand
@@ -161,8 +163,8 @@ class TestPatternCommand(PatternPanelFixture):
         self.assertIn("Edge1", panel.form.edge_label.text())
         self.click(*left)
         self.click(*right)
-        self.assertIn(left[0].Label, panel.form.faces_label.text())
-        self.assertIn(right[0].Label, panel.form.faces_label.text())
+        self.assertIn(left[0].Label, panel.form.face1_label.text())
+        self.assertIn(right[0].Label, panel.form.face2_label.text())
         self.set_values(panel, mode=BETWEEN_FACES, count=5)
         self.assertTrue(panel.accept())
         (pattern,) = self.patterns()
@@ -170,13 +172,14 @@ class TestPatternCommand(PatternPanelFixture):
         self.assertEqual(sorted(round(center(c).x, 6) for c in pattern.Copies), [325.0, 500.0, 675.0, 850.0])
         self.assertIn("125", panel.form.result_label.text())
 
-    def test_a_third_face_starts_the_pair_again(self):
+    def test_a_third_face_without_change_keeps_the_pair(self):
         left, right = self.walls()
         panel = self.run_command((self.slat, ""), (self.frame, "Edge1"))
         self.click(*left)
         self.click(*right)
         self.click(*right)
-        self.assertEqual(panel.faces, [right])
+        self.assertEqual(panel.faces, [left, right])
+        self.assertIn("Change", panel.form.message_label.text())
 
     def test_ok_without_an_edge_says_what_is_missing(self):
         panel = self.run_command((self.slat, ""))
@@ -191,6 +194,7 @@ class TestPatternCommand(PatternPanelFixture):
         self.assertTrue(form.mode_label.isVisibleTo(form))
         item = form.combo_mode.model().item(form.combo_mode.findData(BETWEEN_FACES))
         self.assertFalse(item.isEnabled())
+        form.button_edge.click()
         self.click(self.frame, "Edge1")
         self.assertFalse(form.mode_label.isVisibleTo(form))
         self.assertTrue(item.isEnabled())
@@ -208,6 +212,165 @@ class TestPatternCommand(PatternPanelFixture):
         self.assertIn("Select the piece to repeat", panel.form.message_label.text())
         self.click(self.slat, "Face1")
         self.assertIn(self.slat.Label, panel.form.piece_label.text())
+
+
+class TestPatternReferences(PatternPanelFixture):
+    """The Change buttons replace the piece, the direction or the faces; long names never widen the panel."""
+
+    def existing(self):
+        obj = make_profile_pattern(self.slat, (self.frame, "Edge1"), count=3, pitch=100.0)
+        self.doc.recompute()
+        self.doc.clearUndos()
+        return obj
+
+    def edit(self, obj):
+        Gui.getDocument(self.doc.Name).setEdit(obj.Name, 0)
+        self.events()
+        return self.recorded[-1]
+
+    def other_piece(self):
+        other = self.make_profile(self.make_sketch(((SLAT_X, 0, 0), (SLAT_X, 300, 0))), "Edge1", **CENTER)
+        self.doc.recompute()
+        return other
+
+    def preview(self, panel):
+        panel._update_preview()
+        self.events()
+
+    def test_long_names_are_elided_in_the_middle_and_do_not_widen_the_panel(self):
+        panel = self.run_command((self.slat, ""), (self.frame, "Edge1"))
+        width = panel.form.sizeHint().width()
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+        self.frame.Label = "Frame_" + "x" * 400 + "_end"
+        panel = self.run_command((self.slat, ""), (self.frame, "Edge1"))
+        label = panel.form.edge_label
+        self.assertLessEqual(panel.form.sizeHint().width(), width)
+        self.assertEqual(label.toolTip(), f"{self.frame.Label} · Edge1")
+        self.assertTrue(label.text().startswith("Frame_"), label.text())
+        self.assertTrue(label.text().endswith(" · Edge1"), label.text())
+        self.assertIn(font_ellipsis(label.fontMetrics()), label.text())
+
+    def test_a_click_without_change_does_not_replace_the_direction(self):
+        obj = self.existing()
+        other = self.make_sketch(((1000, 0, 0), (0, 0, 0)))
+        panel = self.edit(obj)
+        self.click(other, "Edge1")
+        self.preview(panel)
+        self.assertEqual(panel.edge, (self.frame, "Edge1"))
+        self.assertIn("Change", panel.form.message_label.text())
+        self.assertEqual(self.copy_centers(obj), [200.0, 300.0, 400.0])
+
+    def test_change_direction_picks_another_edge_in_one_undo_step(self):
+        obj = self.existing()
+        other = self.make_sketch(((1000, 0, 0), (0, 0, 0)))
+        self.doc.clearUndos()
+        panel = self.edit(obj)
+        panel.form.button_edge.click()
+        self.assertTrue(panel.form.button_edge.isChecked())
+        self.assertIn("straight edge", panel.form.hint_label.text())
+        self.click(self.slat, "Face1")
+        self.assertTrue(panel.form.button_edge.isChecked())
+        self.click(other, "Edge1")
+        self.assertFalse(panel.form.button_edge.isChecked())
+        self.assertEqual(panel.edge[0], other)
+        self.assertTrue(panel.edge[1].endswith("Edge1"), panel.edge[1])
+        self.assertTrue(panel.form.edge_label.text().endswith(" · Edge1"), panel.form.edge_label.text())
+        self.preview(panel)
+        self.assertEqual(self.copy_centers(obj), [-200.0, -100.0, 0.0])
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        self.assertEqual(self.doc.UndoNames, ["Edit Profile Pattern"])
+        self.doc.undo()
+        self.doc.recompute()
+        self.assertEqual(self.copy_centers(obj), [200.0, 300.0, 400.0])
+
+    def test_change_faces_picks_a_new_pair_and_one_button_is_armed_at_a_time(self):
+        left, right = self.walls()
+        middle = self.box("Middle", 400)
+        panel = self.run_command((self.slat, ""), (self.frame, "Edge1"), left, right)
+        self.set_values(panel, mode=BETWEEN_FACES, count=3)
+        form = panel.form
+        form.button_edge.click()
+        form.button_faces.click()
+        self.assertFalse(form.button_edge.isChecked())
+        self.assertTrue(form.button_faces.isChecked())
+        inner = (middle, face_named(middle, X, 500))
+        self.click(*inner)
+        self.assertEqual(panel.faces, [left, right])
+        self.assertTrue(form.button_faces.isChecked())
+        self.click(*right)
+        self.assertFalse(form.button_faces.isChecked())
+        self.assertEqual(panel.faces, [inner, right])
+        self.assertIn("Middle", form.face1_label.toolTip())
+        self.preview(panel)
+        self.assertEqual(panel._error, "")
+        self.assertTrue(panel.accept())
+        (pattern,) = self.patterns()
+        self.assertEqual([face for face, _ in pattern.Faces], [middle, right[0]])
+
+    def test_change_piece_relinks_the_copies_in_one_undo_step(self):
+        obj = self.existing()
+        other = self.other_piece()
+        self.doc.clearUndos()
+        panel = self.edit(obj)
+        panel.form.button_piece.click()
+        self.click(other, "Face1")
+        self.assertFalse(panel.form.button_piece.isChecked())
+        self.assertEqual(panel.piece, other)
+        self.assertEqual(panel.form.piece_label.toolTip(), other.Label)
+        self.preview(panel)
+        self.assertEqual(obj.Piece, other)
+        self.assert_copies_are(obj, other)
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        self.assertEqual(self.doc.UndoNames, ["Edit Profile Pattern"])
+        self.doc.undo()
+        self.doc.recompute()
+        self.assertEqual(obj.Piece, self.slat)
+        self.assert_copies_are(obj, self.slat)
+
+    def test_a_copy_cannot_be_the_piece(self):
+        obj = self.existing()
+        panel = self.edit(obj)
+        panel.form.button_piece.click()
+        self.click(obj.Copies[0], "")
+        self.assertEqual(panel.piece, self.slat)
+        self.assertTrue(panel.form.button_piece.isChecked())
+        self.assertIn("copy", panel.form.message_label.text())
+
+    def test_cancel_with_undo_disabled_puts_the_piece_back(self):
+        obj = self.existing()
+        other = self.other_piece()
+        self.doc.UndoMode = 0
+        panel = self.edit(obj)
+        panel.form.button_piece.click()
+        self.click(other, "Face1")
+        self.preview(panel)
+        self.assert_copies_are(obj, other)
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+        self.doc.recompute()
+        self.assertEqual(obj.Piece, self.slat)
+        self.assert_copies_are(obj, self.slat)
+
+    def test_between_faces_moves_only_the_current_piece_and_cancel_puts_both_back(self):
+        left, right = self.walls()
+        other = self.other_piece()
+        panel = self.run_command((self.slat, ""), (self.frame, "Edge1"), left, right)
+        self.set_values(panel, mode=BETWEEN_FACES, count=5)
+        self.assertAlmostEqual(center(self.slat).x, 150.0)
+        panel.form.button_piece.click()
+        self.click(other, "Face1")
+        self.preview(panel)
+        self.assertAlmostEqual(center(self.slat).x, SLAT_X)
+        self.assertAlmostEqual(center(other).x, 150.0)
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+        self.doc.recompute()
+        self.assertAlmostEqual(center(self.slat).x, SLAT_X)
+        self.assertAlmostEqual(center(other).x, SLAT_X)
+        self.assertEqual(self.offsets(), (0.0, 0.0))
 
 
 class TestPatternEdit(PatternPanelFixture):
