@@ -28,12 +28,14 @@ longer widen the panel. Branch `feat/pattern-panel-edit`.
 
 ## Tasks
 - T1 S2 S3 S6 S7 inline: reference rows with elided labels + tooltips, checkable Change buttons for direction and
-  faces, contextual hint; tests. Commit: - (one commit with T2: same pick code)
+  faces, contextual hint; tests. [x] Commit: f39c7ad (with T2: same pick code)
 - T2 S1 S7 inline: Change piece (armed pick, Piece in VALUES/_wanted, offsets snapshot of every touched piece,
-  reject pattern links); tests. Commit: -
-- T3 S4 S5 inline: preview checkbox (persisted) + Fx on Count/Pitch (bind, restore on Cancel, compare on OK); tests.
-  Commit: -
-- T4 S1-S7 inline: Spanish translations (.ts + .qm), README/docs, full pattern suites on 1.1.4 and weekly. Commit: -
+  reject pattern links); tests. [x] Commit: f39c7ad
+  Slice boundary: f39c7ad is slice 1 (~495 lines: panel + tests); T3 and T4 go in the next slice.
+- T3 S4 S5 worker (context backstop): preview checkbox (persisted) + Fx on Count/Pitch (bind, restore on Cancel, compare on OK); tests.
+  [x] Commit: 61e2b7c
+- T4 S1-S7 inline: Spanish translations (.ts + .qm), README/docs, full pattern suites on 1.1.4 and weekly. [x] Commit: see below
+  Slice 2: 61e2b7c + T4 commit (preview/Fx, translations, docs).
 
 ## Log
 - L1 (2026-11-11) "quiero hacer unas mejoras en el panel de patron [Image#1]:
@@ -49,3 +51,5 @@ longer widen the panel. Branch `feat/pattern-panel-edit`.
 - L4 Exploration: the panel already has a Sense combo with "Inverted" (profile_pattern.py SENSES), so no extra invert
   button; Count/Pitch use count_field/length_field but never bind() (no Fx today); Drill Hole is the edit-mode Fx and
   "Update automatically" reference; Extend Cut has the checkable "Change target" button.
+- L5 Verification (T4): test_profile_pattern_panel 33, test_profile_pattern 26, _scene 15, _resize 9, _ids 12,
+  test_library_translations 3: all OK on FreeCAD 1.1.4 and on weekly-2026.11.11.

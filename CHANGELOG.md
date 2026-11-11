@@ -1,5 +1,10 @@
 ## Changelog
 
+* Unreleased
+
+  **Improvements**
+  - **Profile Pattern panel**: each reference (piece, direction, face 1, face 2) has its own row with a **Change** button, so an existing pattern can repeat another piece (its copies follow it, and the former piece goes back to where it was), follow another edge or go between two other faces. A click with no **Change** pressed only fills what is still missing, so a pattern is never changed by a stray click. Long names are shortened in the middle, keeping the face or edge, with the full name as tooltip: the panel no longer widens. A **Preview** group adds **Update automatically** (remembered): unchecked, the changes wait for **OK**. **Copies** / **Pieces** and **Pitch** take expressions (**Fx**).
+
 * v1.12.0 (2026-11-10)
 
   **Improvements**

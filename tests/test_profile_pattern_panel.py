@@ -248,6 +248,13 @@ class TestPatternCommand(PatternPanelFixture):
         self.assertIn("Hacé clic en una arista recta para la dirección de las copias.", panel.form.message_label.text())
         self.assertEqual(panel.form.combo_mode.itemText(0), "Cantidad y paso")
         self.assertEqual(panel.form.combo_mode.itemText(1), "Entre caras")
+        self.assertEqual(panel.form.button_edge.text(), "Cambiar")
+        self.assertEqual(panel.form.face1_title.text(), "Cara 1")
+        self.assertEqual(panel.form.edge_label.text(), "Ninguna")
+        panel.form.button_edge.click()
+        self.assertEqual(
+            panel.form.hint_label.text(), "Hacé clic en una arista recta, del marco por ejemplo, para la dirección."
+        )
 
     def test_a_click_on_something_that_is_no_piece_is_explained(self):
         panel = self.run_command()

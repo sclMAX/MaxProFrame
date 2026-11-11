@@ -1304,11 +1304,15 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Copies</source><translation>Copias</translation></message>
     <message><source>Pieces (the original included)</source><translation>Piezas (incluida la original)</translation></message>
     <message><source>Gap: {}. Pitch: {}.</source><translation>Hueco: {}. Paso: {}.</translation></message>
-    <message><source>Piece: {}</source><translation>Pieza: {}</translation></message>
-    <message><source>Piece: none</source><translation>Pieza: ninguna</translation></message>
-    <message><source>Direction: {}</source><translation>Dirección: {}</translation></message>
-    <message><source>Direction: none</source><translation>Dirección: ninguna</translation></message>
-    <message><source>Faces: {}</source><translation>Caras: {}</translation></message>
+    <message><source>Face 1</source><translation>Cara 1</translation></message>
+    <message><source>Face 2</source><translation>Cara 2</translation></message>
+    <message><source>Change</source><translation>Cambiar</translation></message>
+    <message><source>None</source><translation>Ninguna</translation></message>
+    <message><source>Click a straight edge, of the frame for instance, for the direction.</source><translation>Hacé clic en una arista recta, del marco por ejemplo, para la dirección.</translation></message>
+    <message><source>Press Change to pick another piece, direction or faces.</source><translation>Tocá Cambiar para elegir otra pieza, dirección o caras.</translation></message>
+    <message><source>Press Change next to Direction to pick another edge.</source><translation>Tocá Cambiar junto a Dirección para elegir otra arista.</translation></message>
+    <message><source>Press Change next to the faces to pick two other faces.</source><translation>Tocá Cambiar junto a las caras para elegir otras dos caras.</translation></message>
+    <message><source>Click the piece itself, not a copy of a pattern.</source><translation>Hacé clic en la pieza misma, no en una copia de un patrón.</translation></message>
     <message><source>Select the piece to repeat: click a profile, a trimmed profile, a cutout or a drill hole.</source><translation>Seleccioná la pieza a repetir: hacé clic en un perfil, un perfil recortado, un calado o un agujero.</translation></message>
     <message><source>Click a straight edge for the direction of the copies.</source><translation>Hacé clic en una arista recta para la dirección de las copias.</translation></message>
     <message><source>Click the frame, not a copy of the pattern.</source><translation>Hacé clic en el marco, no en una copia del patrón.</translation></message>
