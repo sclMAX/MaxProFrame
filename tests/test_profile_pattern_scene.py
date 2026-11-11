@@ -372,6 +372,16 @@ class TestPanel(SceneFixture):
         self.doc.recompute()
         self.assert_gaps(obj, 70.0, 5)
 
+    def test_double_click_in_the_tree_opens_the_panel_not_the_rename(self):
+        obj = self.between()
+        count = len(self.recorded)
+        # True: the tree takes the double-click as handled and does not start renaming the pattern.
+        self.assertIs(obj.ViewObject.doubleClicked(), True)
+        self.events()
+        self.assertEqual(len(self.recorded), count + 1)
+        self.assertIs(self.recorded[-1].edited, obj)
+        self.assertIs(Gui.getDocument(self.doc.Name).getInEdit().Object, obj)
+
     def test_deleting_the_pattern_removes_its_copies_and_undo_brings_them_back(self):
         obj = self.between()
         name, copies = obj.Name, sorted(link.Name for link in obj.Copies)
