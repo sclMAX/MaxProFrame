@@ -2730,9 +2730,6 @@ class CreateProfileTaskPanel(BaseProfileTaskPanel):
 
             if custom_profile_sketch is not None:
                 # Library sections are shared sources, not children of each profile's Part.
-                # Only new profiles are changed; existing saved links are not migrated.
-                obj.removeProperty("CustomProfile")
-                obj.addProperty("App::PropertyLinkGlobal", "CustomProfile", "Profile", "Target profile")
                 obj.CustomProfile = custom_profile_sketch
 
             # Create a ViewObject in current GUI
