@@ -6,12 +6,14 @@ import FreeCADGui as Gui
 import Part
 
 from freecad.maxproframe._utils import (
+    add_custom_profile_link,
     get_childrens_from_trimmedbody,
     get_profile_from_trimmedbody,
     get_readable_cutting_angles,
     get_trimmed_profile_all_cutting_angles,
     is_profile,
     length_along_normal,
+    restore_custom_profile_link,
     restore_length,
 )
 from freecad.maxproframe.ff_tools import ICONPATH, translate
@@ -323,8 +325,7 @@ class TrimmedProfile:
         obj.addProperty("App::PropertyString", "CatalogFamily", "Profile", "")
         obj.setEditorMode("CatalogFamily", 1)
 
-        obj.addProperty("App::PropertyLink", "CustomProfile", "Profile", "Target profile").CustomProfile = None
-        obj.setEditorMode("CustomProfile", 1)
+        add_custom_profile_link(obj)
 
         obj.addProperty("App::PropertyString", "SizeName", "Profile", "")
         obj.setEditorMode("SizeName", 1)
@@ -393,6 +394,7 @@ class TrimmedProfile:
         makes FreeCAD lose its name finds it again.
         """
         restore_length(fp)
+        restore_custom_profile_link(fp)
         # Opening never fails on it: the next recompute reports what is wrong with the target.
         take_target_face(fp)
 
