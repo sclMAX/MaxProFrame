@@ -16,8 +16,16 @@ from freecad.maxproframe._utils import (
 )
 from freecad.maxproframe.create_end_miter_tool import GAP_DELAY_MS, _alive_document, _failures
 from freecad.maxproframe.create_extend_cut_tool import _in_document, _selected_items, _trim_chain
-from freecad.maxproframe.expression_fields import count_field, length_field, length_text
-from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, translate
+from freecad.maxproframe.expression_fields import (
+    bind,
+    count_field,
+    expression_of,
+    expressions_of,
+    length_field,
+    length_text,
+    restore_expressions,
+)
+from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, get_param_group, translate
 from freecad.maxproframe.profile_pattern import (
     BETWEEN_FACES,
     COUNT_AND_PITCH,
@@ -39,6 +47,8 @@ from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 MAX_PITCH = 1e6
 # Properties the panel sets, in the order it sets them.
 VALUES = ("Piece", "Mode", "Count", "Pitch", "Sense", "Edge", "Faces")
+# Properties whose fields take an expression (Fx).
+EXPRESSION_PROPERTIES = ("Count", "Pitch")
 # What a Change button picks.
 PIECE, EDGE, FACES = "piece", "edge", "faces"
 # Between an object and its sub-element in a reference row.
@@ -127,8 +137,14 @@ class ProfilePatternTaskPanel:
     Without ``edited`` the preview is the pattern OK keeps, made once a piece and an edge are picked, inside one
     transaction that Cancel aborts. With ``edited`` the edited pattern itself is the preview, inside the edit
     transaction: OK keeps the changes in one Undo step, or none when nothing changed; Cancel puts it back.
-    Value changes are previewed once typing pauses, picks at once.
+    Value changes are previewed once typing pauses, picks at once, under the Update automatically check box; OK
+    applies the panel values in any case. Count and Pitch take expressions (Fx) once there is a pattern: Cancel puts
+    the expressions of the edited pattern back.
     """
+
+    # Remembered state of the "Update automatically" check box, and its value until first changed.
+    auto_preview_param = "Profile Pattern Auto Preview"
+    auto_preview_default = True
 
     def __init__(self, selection=(), edited=None):
         self.edited = edited
@@ -156,7 +172,10 @@ class ProfilePatternTaskPanel:
         # first changed the document: Cancel puts them back, undo or not; a piece replaced gets its own back.
         self._offsets = {}
         if edited is not None:
+            # The values and expressions Cancel puts back, also when undo is disabled.
             self._before = self._values(edited)
+            self._expressions = expressions_of(edited, EXPRESSION_PROPERTIES)
+            # The expression editor (Fx) changes the edited pattern at once: inside the edit transaction.
             self._open_transaction()
         self.form = keep_alive_until_destroyed(self._build_form())
         self.form.destroyed.connect(self._form_gone)
@@ -230,17 +249,33 @@ class ProfilePatternTaskPanel:
         fields.addRow(form.result_label)
         layout.addWidget(form.groupBox_pattern)
 
+        form.groupBox_preview = QtGui.QGroupBox(translate("frameforge", "Preview"))
+        preview = QtGui.QVBoxLayout(form.groupBox_preview)
+        form.cb_auto_update = QtGui.QCheckBox(translate("frameforge", "Update automatically"))
+        form.cb_auto_update.setChecked(get_param_group().GetBool(self.auto_preview_param, self.auto_preview_default))
+        form.status_label = QtGui.QLabel()
+        preview.addWidget(form.cb_auto_update)
+        preview.addWidget(form.status_label)
+        layout.addWidget(form.groupBox_preview)
+
         form.message_label = QtGui.QLabel()
         form.message_label.setWordWrap(True)
         layout.addWidget(form.message_label)
-        form.status_label = QtGui.QLabel()
-        layout.addWidget(form.status_label)
 
+        if obj is not None:
+            self._bind_fields(form)
+        form.cb_auto_update.toggled.connect(self._on_auto_update_toggled)
         form.combo_mode.currentIndexChanged.connect(self._mode_changed)
         form.combo_sense.currentIndexChanged.connect(self._changed)
         form.spin_count.valueChanged.connect(self._changed)
         form.spin_pitch.valueChanged.connect(self._changed)
         return form
+
+    def _bind_fields(self, form=None):
+        """Bind Count and Pitch to the pattern shown, for the expression editor (Fx)."""
+        form = form or self.form
+        for prop, spin in (("Count", form.spin_count), ("Pitch", form.spin_pitch)):
+            bind(spin, self.obj, prop)
 
     def _mode(self):
         return self.form.combo_mode.currentData()
@@ -493,6 +528,10 @@ class ProfilePatternTaskPanel:
         self._show_messages()
         self._timer.start()
 
+    def _on_auto_update_toggled(self, checked):
+        get_param_group(writable=True).SetBool(self.auto_preview_param, checked)
+        self._update_preview()
+
     def _mode_changed(self, *args):
         if not self._active():
             return
@@ -507,7 +546,8 @@ class ProfilePatternTaskPanel:
             self._transaction_open = True
 
     def _update_preview(self, *args, force=False):
-        """Make the pattern shown match the panel; never during a recompute of the panel: it follows it."""
+        """Make the pattern shown match the panel when Update automatically is checked (or ``force``); never during
+        a recompute of the panel: it follows it."""
         if not self._active():
             return
         if self._recomputing:
@@ -517,7 +557,8 @@ class ProfilePatternTaskPanel:
         try:
             while True:
                 self._pending = False
-                self._preview(force)
+                if force or self.form.cb_auto_update.isChecked():
+                    self._preview(force)
                 if not (self._pending and self._active()) or self._deferred is not None:
                     break
         finally:
@@ -544,6 +585,7 @@ class ProfilePatternTaskPanel:
         try:
             if self.obj is None or not _in_document(self.obj):
                 self.obj = make_profile_pattern(self.piece, self.edge)
+                self._bind_fields()
             self._apply_to(self.obj)
             self.doc.recompute()
             self._error = _failures([self.obj])
@@ -563,6 +605,9 @@ class ProfilePatternTaskPanel:
             "Faces": [(face, (sub,)) for face, sub in self.faces],
         }
         for prop in VALUES:
+            if prop in EXPRESSION_PROPERTIES and expression_of(obj, prop) is not None:
+                # An expression drives its property on its own: the field only shows its value.
+                continue
             if self._values(obj)[VALUES.index(prop)] != self._value(values[prop], prop):
                 setattr(obj, prop, values[prop])
 
@@ -650,19 +695,23 @@ class ProfilePatternTaskPanel:
                 pass
         self._transaction_open = False
         changed = False
-        if self.edited is None and self.obj is not None and _in_document(self.obj):
-            self.doc.removeObject(self.obj.Name)
-            changed = True
-        elif self.edited is not None and _in_document(self.edited) and self._values(self.edited) != self._before:
-            for prop, value in zip(VALUES, self._before):
-                if prop == "Piece":
-                    value = self.doc.getObject(value) if value else None
-                elif prop == "Edge":
-                    value = (self.doc.getObject(value[0]), value[1]) if value else None
-                elif prop == "Faces":
-                    value = [(self.doc.getObject(name), subs) for name, subs in value]
-                setattr(self.edited, prop, value)
-            changed = True
+        if self.edited is None:
+            if self.obj is not None and _in_document(self.obj):
+                self.doc.removeObject(self.obj.Name)
+                changed = True
+        elif _in_document(self.edited):
+            # Expressions first: one would drive a value put back.
+            changed = restore_expressions(self.edited, self._expressions)
+            if self._values(self.edited) != self._before:
+                for prop, value in zip(VALUES, self._before):
+                    if prop == "Piece":
+                        value = self.doc.getObject(value) if value else None
+                    elif prop == "Edge":
+                        value = (self.doc.getObject(value[0]), value[1]) if value else None
+                    elif prop == "Faces":
+                        value = [(self.doc.getObject(name), subs) for name, subs in value]
+                    setattr(self.edited, prop, value)
+                changed = True
         changed = self._put_offsets_back() or changed
         if changed:
             self.doc.recompute()
@@ -710,7 +759,11 @@ class ProfilePatternTaskPanel:
         if self._error:
             # The panel stays open with the error, to change the values.
             return False
-        if self.edited is not None and self._values(self.edited) == self._before:
+        if (
+            self.edited is not None
+            and self._values(self.edited) == self._before
+            and expressions_of(self.edited, EXPRESSION_PROPERTIES) == self._expressions
+        ):
             # Nothing changed in the end: no Undo step.
             self._discard()
         else:

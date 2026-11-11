@@ -3,6 +3,7 @@
 import os
 import unittest
 import xml.etree.ElementTree as ElementTree
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import FreeCAD as App
@@ -11,13 +12,18 @@ from elision_helpers import font_ellipsis
 from miter_helpers import use_language
 from PySide import QtWidgets
 from test_end_miter_geometry import CENTER
+from test_extend_cut_preview import keep_auto_preview
 from test_profile_pattern import SLAT_X, PatternFixture, X, center, face_named
 
 from freecad.maxproframe import create_profile_pattern_tool
 from freecad.maxproframe.create_profile_pattern_tool import ProfilePatternCommand
+from freecad.maxproframe.ff_tools import get_param_group
 from freecad.maxproframe.profile_pattern import BETWEEN_FACES, COUNT_AND_PITCH, make_profile_pattern
 
 NO_EDGE = "Click a straight edge for the direction of the copies."
+# Remembered state of the Update automatically check box of the panel.
+AUTO_PREVIEW_PARAM = "Profile Pattern Auto Preview"
+AUTO_PREVIEW = SimpleNamespace(auto_preview_param=AUTO_PREVIEW_PARAM)
 
 
 class PatternPanelFixture(PatternFixture):
@@ -28,6 +34,8 @@ class PatternPanelFixture(PatternFixture):
     def setUp(self):
         super().setUp()
         use_language(self, "English", "en_US")
+        # Every test starts with Update automatically at its default, and leaves the remembered state as it was.
+        keep_auto_preview(self, AUTO_PREVIEW)
         self.doc.UndoMode = 1
         App.setActiveDocument(self.doc.Name)
         Gui.Selection.clearSelection()
@@ -102,6 +110,20 @@ class PatternPanelFixture(PatternFixture):
     def offsets(self):
         return (self.slat.OffsetX.Value, self.slat.OffsetY.Value)
 
+    def status(self, panel):
+        return panel.form.status_label.text()
+
+    def expressions(self, obj):
+        return {path.lstrip("."): expression for path, expression in obj.ExpressionEngine}
+
+    def varset(self, step):
+        """A VarSet with a Step length, for an expression on the pitch."""
+        varset = self.doc.addObject("App::VarSet", "VarSet")
+        varset.addProperty("App::PropertyLength", "Step")
+        varset.Step = step
+        self.doc.recompute()
+        return varset
+
 
 class TestPatternCommand(PatternPanelFixture):
     def test_the_command_has_its_icon_and_needs_a_document(self):
@@ -118,6 +140,27 @@ class TestPatternCommand(PatternPanelFixture):
         self.assertEqual(sorted(round(center(c).x, 6) for c in pattern.Copies), [250.0, 400.0, 550.0])
         self.assertTrue(panel.accept())
         self.close_dialog()
+        self.assertEqual(len(self.doc.UndoNames), undos + 1)
+        self.assertEqual(self.doc.UndoNames[0], "Create Profile Pattern")
+        self.doc.undo()
+        self.doc.recompute()
+        self.assertEqual(self.names(), before)
+
+    def test_with_update_automatically_unchecked_ok_creates_the_pattern_in_one_undo_step(self):
+        # S4: picks and values make no pattern until OK, which keeps the panel values.
+        keep_auto_preview(self, AUTO_PREVIEW, False)
+        before, undos = self.names(), len(self.doc.UndoNames)
+        panel = self.run_command((self.slat, ""))
+        self.assertFalse(panel.form.cb_auto_update.isChecked())
+        self.click(self.frame, "Edge1")
+        self.assertIn("Edge1", panel.form.edge_label.text())
+        self.set_values(panel, count=3, pitch=150.0)
+        self.assertEqual(self.names(), before)
+        self.assertEqual(self.status(panel), "Pending changes")
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        (pattern,) = self.patterns()
+        self.assertEqual(self.copy_centers(pattern), [250.0, 400.0, 550.0])
         self.assertEqual(len(self.doc.UndoNames), undos + 1)
         self.assertEqual(self.doc.UndoNames[0], "Create Profile Pattern")
         self.doc.undo()
@@ -330,6 +373,26 @@ class TestPatternReferences(PatternPanelFixture):
         self.assertEqual(obj.Piece, self.slat)
         self.assert_copies_are(obj, self.slat)
 
+    def test_with_update_automatically_unchecked_change_piece_waits_for_ok(self):
+        # S4: a Change pick is not previewed; OK applies it in one Undo step.
+        obj = self.existing()
+        other = self.other_piece()
+        self.doc.clearUndos()
+        panel = self.edit(obj)
+        panel.form.cb_auto_update.setChecked(False)
+        panel.form.button_piece.click()
+        self.click(other, "Face1")
+        self.preview(panel)
+        self.assertEqual(panel.piece, other)
+        self.assertEqual(obj.Piece, self.slat)
+        self.assert_copies_are(obj, self.slat)
+        self.assertEqual(self.status(panel), "Pending changes")
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        self.assertEqual(obj.Piece, other)
+        self.assert_copies_are(obj, other)
+        self.assertEqual(self.doc.UndoNames, ["Edit Profile Pattern"])
+
     def test_a_copy_cannot_be_the_piece(self):
         obj = self.existing()
         panel = self.edit(obj)
@@ -419,6 +482,147 @@ class TestPatternEdit(PatternPanelFixture):
         self.assertTrue(panel.accept())
         self.assertEqual(self.doc.UndoNames, [])
         self.assertEqual(len(obj.Copies), 3)
+
+    # S4: Update automatically.
+
+    def test_update_automatically_is_checked_by_default_in_a_preview_group(self):
+        panel = self.edit(self.existing())
+        form = panel.form
+        self.assertEqual(form.groupBox_preview.title(), "Preview")
+        self.assertEqual(form.cb_auto_update.text(), "Update automatically")
+        self.assertTrue(form.cb_auto_update.isChecked())
+        self.assertIs(form.status_label.parentWidget(), form.groupBox_preview)
+
+    def test_unchecked_an_edit_waits_for_ok_and_the_choice_is_remembered(self):
+        obj = self.existing()
+        panel = self.edit(obj)
+        panel.form.cb_auto_update.setChecked(False)
+        self.assertFalse(get_param_group().GetBool(AUTO_PREVIEW_PARAM, True))
+        self.set_values(panel, count=5)
+        self.assertEqual(self.copy_centers(obj), [200.0, 300.0, 400.0])
+        self.assertEqual(obj.Count, 3)
+        self.assertEqual(self.status(panel), "Pending changes")
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        self.assertEqual(self.copy_centers(obj), [200.0, 300.0, 400.0, 500.0, 600.0])
+        self.assertEqual(self.doc.UndoNames, ["Edit Profile Pattern"])
+        # A new panel opens unchecked.
+        panel = self.edit(obj)
+        self.assertFalse(panel.form.cb_auto_update.isChecked())
+
+    def test_checking_update_automatically_again_previews_at_once(self):
+        obj = self.existing()
+        panel = self.edit(obj)
+        panel.form.cb_auto_update.setChecked(False)
+        self.set_values(panel, count=5)
+        self.assertEqual(len(obj.Copies), 3)
+        panel.form.cb_auto_update.setChecked(True)
+        self.assertEqual(self.copy_centers(obj), [200.0, 300.0, 400.0, 500.0, 600.0])
+        self.assertEqual(self.status(panel), "Preview updated")
+        self.assertTrue(get_param_group().GetBool(AUTO_PREVIEW_PARAM, False))
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+        self.doc.recompute()
+        self.assertEqual(self.copy_centers(obj), [200.0, 300.0, 400.0])
+        self.assertEqual(self.doc.UndoNames, [])
+
+    # S5: Fx on Count and Pitch.
+
+    def test_count_and_pitch_are_bound_to_the_edited_pattern(self):
+        panel = self.edit(self.existing())
+        for field in (panel.form.spin_count, panel.form.spin_pitch):
+            binding = Gui.ExpressionBinding(field)
+            self.assertTrue(binding.isBound())
+            self.assertFalse(binding.hasExpression())
+
+    def test_a_new_pattern_binds_count_and_pitch_once_it_exists(self):
+        panel = self.run_command((self.slat, ""), (self.frame, "Edge1"))
+        (pattern,) = self.patterns()
+        self.assertEqual(panel.obj, pattern)
+        for field in (panel.form.spin_count, panel.form.spin_pitch):
+            self.assertTrue(Gui.ExpressionBinding(field).isBound())
+
+    def test_ok_keeps_an_expression_set_in_the_panel_in_one_undo_step(self):
+        varset = self.varset(120.0)
+        obj = self.existing()
+        panel = self.edit(obj)
+        # What the Fx editor does: the expression goes on the bound property and the field shows its value.
+        obj.setExpression("Pitch", f"{varset.Name}.Step")
+        self.doc.recompute()
+        self.events()
+        self.assertTrue(Gui.ExpressionBinding(panel.form.spin_pitch).hasExpression())
+        self.assertAlmostEqual(panel.form.spin_pitch.value(), 120.0, places=6)
+        panel._update_preview()
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        self.assertEqual(self.expressions(obj), {"Pitch": f"{varset.Name}.Step"})
+        self.assertEqual(self.copy_centers(obj), [220.0, 340.0, 460.0])
+        self.assertEqual(self.doc.UndoNames, ["Edit Profile Pattern"])
+        # The VarSet drives the pitch from now on.
+        varset.Step = 50.0
+        self.doc.recompute()
+        self.assertEqual(self.copy_centers(obj), [150.0, 200.0, 250.0])
+
+    def test_cancel_removes_an_expression_set_in_the_panel(self):
+        varset = self.varset(120.0)
+        obj = self.existing()
+        panel = self.edit(obj)
+        obj.setExpression("Pitch", f"{varset.Name}.Step")
+        self.doc.recompute()
+        self.events()
+        self.assertEqual(self.copy_centers(obj), [220.0, 340.0, 460.0])
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+        self.doc.recompute()
+        self.assertEqual(self.expressions(obj), {})
+        self.assertAlmostEqual(obj.Pitch.Value, 100.0, places=6)
+        self.assertEqual(self.copy_centers(obj), [200.0, 300.0, 400.0])
+        self.assertEqual(self.doc.UndoNames, [])
+
+    def test_cancel_with_undo_disabled_removes_an_expression_set_in_the_panel(self):
+        varset = self.varset(120.0)
+        obj = self.existing()
+        self.doc.UndoMode = 0
+        panel = self.edit(obj)
+        obj.setExpression("Pitch", f"{varset.Name}.Step")
+        self.doc.recompute()
+        self.events()
+        self.assertEqual(self.copy_centers(obj), [220.0, 340.0, 460.0])
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+        self.doc.recompute()
+        self.assertEqual(self.expressions(obj), {})
+        self.assertAlmostEqual(obj.Pitch.Value, 100.0, places=6)
+        self.assertEqual(self.copy_centers(obj), [200.0, 300.0, 400.0])
+
+    def test_an_existing_expression_is_shown_and_kept_by_an_unchanged_ok(self):
+        varset = self.varset(120.0)
+        obj = self.existing()
+        obj.setExpression("Pitch", f"{varset.Name}.Step")
+        self.doc.recompute()
+        self.doc.clearUndos()
+        panel = self.edit(obj)
+        self.assertTrue(Gui.ExpressionBinding(panel.form.spin_pitch).hasExpression())
+        self.assertAlmostEqual(panel.form.spin_pitch.value(), 120.0, places=6)
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        self.assertEqual(self.doc.UndoNames, [])
+        self.assertEqual(self.expressions(obj), {"Pitch": f"{varset.Name}.Step"})
+        self.assertEqual(self.copy_centers(obj), [220.0, 340.0, 460.0])
+
+    def test_a_count_change_beside_a_pitch_expression_keeps_the_expression(self):
+        varset = self.varset(120.0)
+        obj = self.existing()
+        obj.setExpression("Pitch", f"{varset.Name}.Step")
+        self.doc.recompute()
+        self.doc.clearUndos()
+        panel = self.edit(obj)
+        self.set_values(panel, count=4)
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        self.assertEqual(self.expressions(obj), {"Pitch": f"{varset.Name}.Step"})
+        self.assertEqual(self.copy_centers(obj), [220.0, 340.0, 460.0, 580.0])
+        self.assertEqual(self.doc.UndoNames, ["Edit Profile Pattern"])
 
 
 if __name__ == "__main__":
