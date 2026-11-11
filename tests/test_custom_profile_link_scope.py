@@ -1,10 +1,11 @@
-"""The library section of a trimmed profile or a cutout is linked from anywhere, as the profile links it.
+"""The library section of a profile, a trimmed profile or a cutout is linked from anywhere.
 
 A library section lives outside the Part of the piece: a local link to it makes FreeCAD report the piece's
 links as out of scope on every recompute. Documents saved with the local link open with the global one.
 """
 
 import unittest
+from unittest.mock import patch
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -12,6 +13,8 @@ from PySide import QtGui
 from test_cut_ends import SLANTED_TARGET
 from test_end_miter_geometry import CENTER
 from test_length_restore import LengthRestoreFixture
+
+from freecad.maxproframe._utils import restore_custom_profile_link
 
 GLOBAL_LINK = "App::PropertyLinkGlobal"
 
@@ -35,8 +38,6 @@ class TestCustomProfileLinkScope(LengthRestoreFixture):
         target = self.make_profile(self.make_sketch(SLANTED_TARGET), "Edge1", **CENTER)
         section = self.doc.addObject("Sketcher::SketchObject", "Section") if with_section else None
         # As a custom profile links its library section.
-        body.removeProperty("CustomProfile")
-        body.addProperty(GLOBAL_LINK, "CustomProfile", "Profile", "Target profile")
         body.CustomProfile = section
         self.doc.recompute()
         trim = self.valid_extend_cut(body, target)
@@ -53,13 +54,14 @@ class TestCustomProfileLinkScope(LengthRestoreFixture):
             self.assertEqual(obj.getParentGeoFeatureGroup(), part, obj.Name)
         return section, (trim, cutout)
 
-    def saved_with_local_link(self, obj):
+    def saved_with_local_link(self, obj, read_only=True):
         """``obj`` as a document saved before the global link has it: a local link to the same section."""
         section = obj.CustomProfile
+        obj.CustomProfile = None
         obj.removeProperty("CustomProfile")
         obj.addProperty("App::PropertyLink", "CustomProfile", "Profile", "Target profile")
         obj.CustomProfile = section
-        obj.setEditorMode("CustomProfile", 1)
+        obj.setEditorMode("CustomProfile", 1 if read_only else 0)
         obj.purgeTouched()
 
     def recompute_report(self, objs):
@@ -69,18 +71,18 @@ class TestCustomProfileLinkScope(LengthRestoreFixture):
         before = len(view.toPlainText())
         for obj in objs:
             obj.touch()
-        self.doc.recompute()
+        objs[0].Document.recompute()
         QtGui.QApplication.processEvents()
         return view.toPlainText()[before:]
 
-    def assert_opened_global(self, opened, pieces, section):
+    def assert_opened_global(self, opened, pieces, section, read_only=True):
         for obj in pieces:
             with self.subTest(obj.Name):
                 piece = opened.getObject(obj.Name)
                 self.assertEqual(piece.getTypeIdOfProperty("CustomProfile"), GLOBAL_LINK)
                 self.assertEqual(piece.CustomProfile, section and opened.getObject(section.Name))
                 self.assertEqual(piece.getGroupOfProperty("CustomProfile"), "Profile")
-                self.assertIn("ReadOnly", piece.getEditorMode("CustomProfile"))
+                self.assertEqual("ReadOnly" in piece.getEditorMode("CustomProfile"), read_only)
         self.assert_nothing_to_recompute(opened)
 
     def test_recomputing_the_pieces_reports_no_link_out_of_scope(self):
@@ -97,6 +99,21 @@ class TestCustomProfileLinkScope(LengthRestoreFixture):
         self.saved_with_local_link(trim)
         report = self.recompute_report([trim])
         self.assertTrue(out_of_scope(report, trim), report)
+
+    def test_pieces_opened_with_a_global_link_can_be_deleted(self):
+        section, (trim, cutout) = self.pieces_with_section()
+        profile = trim.TrimmedBody
+        self.saved_with_local_link(profile, read_only=False)
+        self.saved_with_local_link(trim)
+        self.saved_with_local_link(cutout)
+        opened = self.reopen()
+        opened_section = opened.getObject(section.Name)
+        self.assertEqual(
+            sorted(obj.Name for obj in opened_section.InList), sorted([profile.Name, trim.Name, cutout.Name])
+        )
+        for name in (cutout.Name, trim.Name, profile.Name):
+            opened.removeObject(name)
+        self.assertEqual(opened_section.InList, [])
 
     def test_new_pieces_link_the_section_globally(self):
         section, pieces = self.pieces_with_section()
@@ -137,6 +154,60 @@ class TestCustomProfileLinkScope(LengthRestoreFixture):
                 self.assertEqual(piece.getTypeIdOfProperty("CustomProfile"), GLOBAL_LINK)
                 self.assertEqual(piece.CustomProfile, opened.getObject(section.Name))
         self.assert_nothing_to_recompute(opened)
+
+    def test_a_link_that_cannot_be_turned_is_reported_and_opening_goes_on(self):
+        _, (trim, _) = self.pieces_with_section()
+        self.saved_with_local_link(trim)
+        failing = patch("freecad.maxproframe._utils.add_custom_profile_link", side_effect=RuntimeError("no link"))
+        with failing, patch.object(App.Console, "PrintWarning") as warning:
+            restore_custom_profile_link(trim)
+        warning.assert_called_once()
+        text = warning.call_args.args[0]
+        self.assertIn(trim.Label, text)
+        self.assertIn("CustomProfile", text)
+        self.assertTrue(text.endswith("\n"), text)
+
+    def test_a_link_turned_global_prints_nothing(self):
+        section, (trim, _) = self.pieces_with_section()
+        self.saved_with_local_link(trim)
+        with patch.object(App.Console, "PrintWarning") as warning:
+            restore_custom_profile_link(trim)
+        warning.assert_not_called()
+        self.assertEqual(trim.getTypeIdOfProperty("CustomProfile"), GLOBAL_LINK)
+        self.assertEqual(trim.CustomProfile, section)
+
+    def profile_with_section(self, with_section=True):
+        """The profile of the pieces, inside the Part, and its section outside (or none)."""
+        section, (trim, _) = self.pieces_with_section(with_section)
+        return section, trim.TrimmedBody
+
+    def test_a_new_profile_links_the_section_globally(self):
+        self.assertEqual(self.square_tube().getTypeIdOfProperty("CustomProfile"), GLOBAL_LINK)
+        section, profile = self.profile_with_section()
+        self.assertEqual(profile.getTypeIdOfProperty("CustomProfile"), GLOBAL_LINK)
+        self.assertEqual(profile.CustomProfile, section)
+        self.assertEqual(profile.getGroupOfProperty("CustomProfile"), "Profile")
+        # The section of a profile stays editable, as before.
+        self.assertNotIn("ReadOnly", profile.getEditorMode("CustomProfile"))
+        self.assertFalse(out_of_scope(self.recompute_report([profile]), profile))
+
+    def test_a_profile_saved_with_a_local_link_opens_with_a_global_one(self):
+        section, profile = self.profile_with_section()
+        self.saved_with_local_link(profile, read_only=False)
+        # As saved, the Report view shows the profile's links out of scope.
+        self.assertTrue(out_of_scope(self.recompute_report([profile]), profile))
+        profile.purgeTouched()
+        opened = self.reopen()
+        self.assert_opened_global(opened, [profile], section, read_only=False)
+        piece = opened.getObject(profile.Name)
+        report = self.recompute_report([piece])
+        self.assertFalse(out_of_scope(report, piece), report)
+        self.assertEqual(piece.getStatusString(), "Valid")
+
+    def test_a_profile_saved_with_an_empty_local_link_opens_with_an_empty_global_one(self):
+        _, profile = self.profile_with_section(with_section=False)
+        self.saved_with_local_link(profile, read_only=False)
+        self.assert_opened_global(self.reopen(), [profile], None, read_only=False)
 
 
 if __name__ == "__main__":

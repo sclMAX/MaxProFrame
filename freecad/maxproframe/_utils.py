@@ -11,6 +11,8 @@ from numbers import Number
 import FreeCAD
 import Part
 
+from freecad.maxproframe.ff_tools import translate
+
 
 def getRootObject(obj):
     if obj.isDerivedFrom("PartDesign::Feature"):
@@ -349,18 +351,22 @@ def restore_length(obj, measured=lambda obj: obj):
         obj.purgeTouched()
 
 
-def add_custom_profile_link(obj):
-    """Give ``obj`` its read-only CustomProfile: a global link, as library sections live outside its Part."""
+def add_custom_profile_link(obj, read_only=True):
+    """Give ``obj`` its CustomProfile: a global link, as library sections live outside its Part.
+
+    A profile keeps it editable (``read_only=False``); the pieces made from it only show it.
+    """
     obj.addProperty("App::PropertyLinkGlobal", "CustomProfile", "Profile", "Target profile")
-    obj.setEditorMode("CustomProfile", 1)
+    if read_only:
+        obj.setEditorMode("CustomProfile", 1)
 
 
-def restore_custom_profile_link(obj):
+def restore_custom_profile_link(obj, read_only=True):
     """Turn the local CustomProfile link of ``obj``, as saved before it was global, into a global one.
 
     For a document being opened: the link keeps its section (or none), ``obj`` saved without it gains an
     empty one, and ``obj`` stays as touched as it was. Opening never fails on it: a link that cannot be
-    turned is left as saved.
+    turned is reported on the console.
     """
     try:
         section = None
@@ -370,13 +376,20 @@ def restore_custom_profile_link(obj):
             section = obj.CustomProfile
         touched = "Touched" in obj.State
         if "CustomProfile" in obj.PropertiesList:
+            # Unlinked first: a property removed while linking leaves the section listing ``obj`` twice, and
+            # deleting ``obj`` then crashes FreeCAD.
+            obj.CustomProfile = None
             obj.removeProperty("CustomProfile")
-        add_custom_profile_link(obj)
+        add_custom_profile_link(obj, read_only)
         obj.CustomProfile = section
         if not touched:
             obj.purgeTouched()
     except Exception:
-        return
+        FreeCAD.Console.PrintWarning(
+            translate("frameforge", "{}: its CustomProfile link could not be turned into a global one.\n").format(
+                getattr(obj, "Label", "")
+            )
+        )
 
 
 def get_readable_cutting_angles(ba_y, ba_x, bb_y, bb_x, *trim_cuts):

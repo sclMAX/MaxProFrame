@@ -11,7 +11,7 @@ def elf_hash(val_bytes):
     h = 0
     for b in val_bytes:
         h = (h << 4) + b
-        g = h & 0xf0000000
+        g = h & 0xF0000000
         if g:
             h ^= g >> 24
         h &= ~g
@@ -22,10 +22,7 @@ def build_qm_bytes(entries):
     """
     Builds binary QM file content from list of (context, source, translation).
     """
-    magic = bytes([
-        0x3c, 0xb8, 0x64, 0x18, 0xca, 0xef, 0x9c, 0x95,
-        0xcd, 0x21, 0x1c, 0xbf, 0x60, 0xa1, 0xbd, 0xdd
-    ])
+    magic = bytes([0x3C, 0xB8, 0x64, 0x18, 0xCA, 0xEF, 0x9C, 0x95, 0xCD, 0x21, 0x1C, 0xBF, 0x60, 0xA1, 0xBD, 0xDD])
 
     messages = bytearray()
     hash_pairs = []
@@ -97,7 +94,8 @@ def compile_ts(ts_path, qm_path=None):
             if src_elem is not None and trans_elem is not None:
                 src_text = src_elem.text or ""
                 trans_text = trans_elem.text or ""
-                if src_text and trans_text and trans_elem.get("type") != "unfinished":
+                # As Qt's lrelease: unfinished messages and those gone from the sources are left out.
+                if src_text and trans_text and trans_elem.get("type") not in ("unfinished", "vanished", "obsolete"):
                     entries.append((ctx_name, src_text, trans_text))
 
     qm_data = build_qm_bytes(entries)
@@ -145,6 +143,7 @@ def compile_all_translations(translations_dir):
 
 if __name__ == "__main__":
     import sys
+
     base_dir = os.path.dirname(__file__)
     trans_dir = os.path.join(base_dir, "resources", "translations")
     out = compile_all_translations(trans_dir)

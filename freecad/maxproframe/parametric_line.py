@@ -86,6 +86,9 @@ def _migrate_local_links(obj):
             continue
         value = obj.getPropertyByName(name) if name in obj.PropertiesList else None
         if name in obj.PropertiesList:
+            # Unlinked first: a property removed while linking leaves the vertex object listing obj twice, and
+            # deleting obj then crashes FreeCAD.
+            setattr(obj, name, None)
             obj.removeProperty(name)
         obj.addProperty(LINK_TYPE, name, "ParametricLine", doc)
         if value:

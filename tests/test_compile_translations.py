@@ -69,6 +69,32 @@ def folds_case(directory):
         os.rmdir(probe)
 
 
+RETIRED_MESSAGES_TS = """<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
+<TS version="2.1" language="fr" sourcelanguage="en">
+<context>
+    <name>custom</name>
+    <message>
+        <source>Hello</source>
+        <translation>Bonjour</translation>
+    </message>
+    <message>
+        <source>Count</source>
+        <translation type="vanished">Nombre</translation>
+    </message>
+    <message>
+        <source>Width</source>
+        <translation type="obsolete">Largeur</translation>
+    </message>
+    <message>
+        <source>Height</source>
+        <translation type="unfinished">Hauteur</translation>
+    </message>
+</context>
+</TS>
+"""
+
+
 class TestCompileTranslations(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.mkdtemp(prefix="ff_test_compile_")
@@ -107,6 +133,21 @@ class TestCompileTranslations(unittest.TestCase):
                     "Crear perfil",
                     f"Wrong translation in {alias_name}",
                 )
+
+    @unittest.skipUnless(HAS_PYSIDE, "PySide is required to read the compiled catalog")
+    def test_vanished_obsolete_and_unfinished_messages_stay_untranslated(self):
+        """As Qt's lrelease: only finished messages of the current sources are compiled."""
+        ts_path = os.path.join(self.test_dir, "custom_fr.ts")
+        with open(ts_path, "w", encoding="utf-8") as f:
+            f.write(RETIRED_MESSAGES_TS)
+        qm_path = os.path.join(self.test_dir, "custom_fr.qm")
+        compile_ts(ts_path, qm_path)
+        translator = QtCore.QTranslator()
+        self.assertTrue(translator.load(qm_path))
+        self.assertEqual(translator.translate("custom", "Hello"), "Bonjour")
+        for source in ("Count", "Width", "Height"):
+            with self.subTest(source):
+                self.assertEqual(translator.translate("custom", source), "")
 
     def test_unrelated_catalogs_preserve_own_output_without_overwriting_or_aliasing(self):
         """Unrelated Spanish and non-Spanish catalogs only compile to their own single output."""

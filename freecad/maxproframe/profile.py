@@ -6,9 +6,11 @@ import Part
 from pivy import coin
 
 from freecad.maxproframe._utils import (
+    add_custom_profile_link,
     get_readable_cutting_angles,
     length_along_normal,
     normalize_anchor,
+    restore_custom_profile_link,
     restore_length,
 )
 from freecad.maxproframe.custom_section_geometry import build_custom_section_face
@@ -161,7 +163,8 @@ class Profile:
             catalog_family if catalog_family is not None else fam
         )
 
-        obj.addProperty("App::PropertyLink", "CustomProfile", "Profile", "Target profile").CustomProfile = None
+        # Library sections live outside the profile's Part; the section stays editable.
+        add_custom_profile_link(obj, read_only=False)
 
         obj.addProperty(
             "App::PropertyString",
@@ -1343,6 +1346,8 @@ class Profile:
                 ).LipLength = 0.0
         # Profiles saved with their tip-to-tip length open with their longest side.
         restore_length(obj)
+        # Profiles saved with a local link to their section open with a global one.
+        restore_custom_profile_link(obj, read_only=False)
 
 
 class ViewProviderProfile:

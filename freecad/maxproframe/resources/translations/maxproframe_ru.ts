@@ -1662,6 +1662,12 @@ All files and sketches on disk will be kept intact.</source>
         <translation>Вырез: зазор в {} мм невозможно применить к {}. {}</translation>
     </message>
     <message>
+        <source>{}: its CustomProfile link could not be turned into a global one.
+</source>
+        <translation>{}: не удалось преобразовать ссылку CustomProfile в глобальную.
+</translation>
+    </message>
+    <message>
         <source>Notch</source>
         <translation>Вырез</translation>
     </message>
