@@ -117,7 +117,7 @@ MaxProFrame started as a fork of [FrameForge](https://github.com/lukh/frameforge
 
 ## Languages
 
-The workbench is available in English, Spanish and Russian and follows the language selected in **Edit → Preferences → General**. The Russian translation is contributed by [@c0n5t](https://github.com/c0n5t); texts added after v1.11.1 show in English until they are translated.
+The workbench is available in English, Spanish and Russian and follows the language selected in **Edit → Preferences → General**. The Russian translation is contributed by [@c0n5t](https://github.com/c0n5t) and covers every text of v1.13.0.
 
 To translate, open the catalog of your language in `freecad/maxproframe/resources/translations/` (or start from `maxproframe_es.ts`, which always holds every current text) with Qt Linguist, and send it in a pull request or an issue.
 

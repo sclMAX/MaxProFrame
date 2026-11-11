@@ -1331,103 +1331,103 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>A prefix cannot end in &quot; x&quot; when its IDs use numbers: &quot;P x&quot; + &quot;3&quot; reads back as P with a count of 3.</source>
-        <translation>Un prefijo no puede terminar en &quot; x&quot; si sus IDs usan números: &quot;P x&quot; + &quot;3&quot; se lee como P con una cantidad de 3.</translation>
+        <translation>Префикс не может заканчиваться на « x», если в его идентификаторах используются числа: «P x» + «3» интерпретируется как P с количеством 3.</translation>
     </message>
     <message>
         <source>Reset IDs</source>
-        <translation>Restablecer IDs</translation>
+        <translation>Сбросить идентификаторы</translation>
     </message>
     <message>
         <source>The selection has no IDs to reset.</source>
-        <translation>La selección no tiene IDs para restablecer.</translation>
+        <translation>В выделенном фрагменте нет идентификаторов, которые нужно сбросить.</translation>
     </message>
     <message>
         <source>Reset the IDs of the selection?</source>
-        <translation>¿Restablecer los IDs de la selección?</translation>
+        <translation>Сбросить идентификаторы выделенных элементов?</translation>
     </message>
     <message>
         <source>IDs to clear: {}. Undo (Ctrl+Z) restores them.</source>
-        <translation>IDs a borrar: {}. Deshacer (Ctrl+Z) los recupera.</translation>
+        <translation>Идентификаторы для удаления: {}. Отмена (Ctrl+Z) восстанавливает их.</translation>
     </message>
     <message>
         <source>IDs cleared: {}.</source>
-        <translation>IDs borrados: {}.</translation>
+        <translation>Идентификаторы очищены: {}.</translation>
     </message>
     <message>
         <source>Create Balloons</source>
-        <translation type="unfinished"></translation>
+        <translation>Создать выноски</translation>
     </message>
     <message>
         <source>Refresh Balloons</source>
-        <translation type="unfinished"></translation>
+        <translation>Обновить выноски</translation>
     </message>
     <message>
         <source>Click a TechDraw view (Esc to cancel).</source>
-        <translation type="unfinished"></translation>
+        <translation>Щёлкните по виду TechDraw (нажмите Esc для отмены).</translation>
     </message>
     <message>
         <source>A detail view gets no balloons: click another view (Esc to cancel).</source>
-        <translation type="unfinished"></translation>
+        <translation>На выносном виде выноски не размещаются: выберите другой вид (для отмены нажмите Esc).</translation>
     </message>
     <message>
         <source>Cancelled.</source>
-        <translation type="unfinished"></translation>
+        <translation>Отменено.</translation>
     </message>
     <message>
         <source>More than one TechDraw view is selected: select one.</source>
-        <translation type="unfinished"></translation>
+        <translation>Выбрано более одного вида TechDraw: выберите один.</translation>
     </message>
     <message>
         <source>Balloons created: {}.</source>
-        <translation type="unfinished"></translation>
+        <translation>Создано выносок: {}.</translation>
     </message>
     <message>
         <source>Already had a balloon: {}.</source>
-        <translation type="unfinished"></translation>
+        <translation>Выноска уже была: {}.</translation>
     </message>
     <message>
         <source>Without ID: {} (run Populate IDs).</source>
-        <translation type="unfinished"></translation>
+        <translation>Без ID: {} (запустите Populate IDs).</translation>
     </message>
     <message>
         <source>without ID</source>
-        <translation type="unfinished"></translation>
+        <translation>Без ID</translation>
     </message>
     <message>
         <source>Balloons refreshed: {}.</source>
-        <translation type="unfinished"></translation>
+        <translation>Обновлено выносок: {}.</translation>
     </message>
     <message>
         <source>Piece not found: {}.</source>
-        <translation type="unfinished"></translation>
+        <translation>Фрагмент не найден: {}.</translation>
     </message>
     <message>
         <source>Piece Table</source>
-        <translation type="unfinished"></translation>
+        <translation>Таблица фрагментов</translation>
     </message>
     <message>
         <source>Piece</source>
-        <translation type="unfinished"></translation>
+        <translation>Фрагмент</translation>
     </message>
     <message>
         <source>Piece table created. Rows: {}. Pieces: {}.</source>
-        <translation type="unfinished"></translation>
+        <translation>Создана таблица фрагментов. Строк: {}. Фрагментов: {}.</translation>
     </message>
     <message>
         <source>Piece table refreshed. Rows: {}. Pieces: {}.</source>
-        <translation type="unfinished"></translation>
+        <translation>Таблица фрагментов обновлена. Строк: {}. Фрагментов: {}.</translation>
     </message>
     <message>
         <source>No piece with ID.</source>
-        <translation type="unfinished"></translation>
+        <translation>Нет элемента с таким идентификатором.</translation>
     </message>
     <message>
         <source>A detail view gets no table: click another view (Esc to cancel).</source>
-        <translation type="unfinished"></translation>
+        <translation>Для детального представления таблица не предусмотрена: выберите другое представление (нажмите Esc для отмены).</translation>
     </message>
     <message>
         <source>IDs cleared: {} (Ctrl+Z to undo)</source>
-        <translation>IDs borrados: {} (Ctrl+Z para deshacer)</translation>
+        <translation>Идентификаторы очищены: {} (Ctrl+Z для отмены)</translation>
     </message>
     <message>
         <source>Miter Ends</source>
@@ -2352,124 +2352,184 @@ All files and sketches on disk will be kept intact.</source>
         <translation>Ширина пропила</translation>
     </message>
     <message>
-        <source>Press Change to pick another piece, direction or faces.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Select the piece to repeat: click a profile, a trimmed profile, a cutout or a drill hole.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Click a straight edge for the direction of the copies.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Click the two planar faces the pieces go between.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>The faces must not be on the piece: it moves between them.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Profile Pattern</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Piece and direction</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Mode</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Pitch (center to center)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Sense</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Click a straight edge, of the frame for instance, for the direction.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Click a straight edge, of the frame for instance, for the direction. For Between faces, click the two planar faces the pieces go between.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Face 1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Face 2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Change</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Copies</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Pieces (the original included)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>None</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>The former piece stays where Between faces placed it.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Gap: {}. Pitch: {}.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Click the frame, not a copy of the pattern.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Click a straight edge for the direction, or a planar face for Between faces.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Click the piece itself, not a copy of a pattern.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Press Change next to Direction to pick another edge.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Press Change next to the faces to pick two other faces.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Count and pitch</source>
-        <translation type="unfinished"></translation>
+        <translation>Количество и шаг</translation>
     </message>
     <message>
         <source>Between faces</source>
-        <translation type="unfinished"></translation>
+        <translation>Между гранями</translation>
     </message>
     <message>
         <source>Edge sense</source>
-        <translation type="unfinished"></translation>
+        <translation>Направление ребра</translation>
     </message>
     <message>
         <source>Inverted</source>
-        <translation type="unfinished"></translation>
+        <translation>Инвертированный</translation>
     </message>
     <message>
         <source>Symmetric (count on each side)</source>
-        <translation type="unfinished"></translation>
+        <translation>Симметричный (поровну с каждой стороны)</translation>
+    </message>
+    <message>
+        <source>Profile Pattern: the direction must be a straight edge.</source>
+        <translation>Шаблон профиля: направление должно представлять собой прямую кромку.</translation>
+    </message>
+    <message>
+        <source>Profile Pattern: the limits must be planar faces.</source>
+        <translation>Шаблон профиля: границы должны представлять собой плоские грани.</translation>
+    </message>
+    <message>
+        <source>Between faces moves the piece by the offsets of its profile, and {} has no path edge to offset from. Use Count and pitch.</source>
+        <translation>Деталь перемещается между гранями согласно смещениям своего профиля, а у {} нет ребра контура, от которого можно было бы выполнить смещение. Используйте параметры «Количество» (Count) и «Шаг» (Pitch).</translation>
+    </message>
+    <message>
+        <source>Between faces moves the piece by the offsets of its profile, across the piece: click an edge across it, not along it, or use Count and pitch.</source>
+        <translation>Перемещение детали между гранями осуществляется путем задания смещений ее профиля; для перемещения детали поперек нее выберите ребро (в поперечном, а не продольном направлении) либо воспользуйтесь параметрами «Количество» (Count) и «Шаг» (Pitch).</translation>
+    </message>
+    <message>
+        <source>Between faces moves the piece by the offsets of its profile, and an expression sets {} of {}.</source>
+        <translation>Между гранями фигура перемещается согласно смещениям своего профиля, а выражение задаёт {} от {}.</translation>
+    </message>
+    <message>
+        <source>Profile Pattern: {} pieces of {} mm do not fit between the faces ({} mm).</source>
+        <translation>Шаблон профиля: {} шт. по {} мм не помещаются между гранями ({} мм).</translation>
+    </message>
+    <message>
+        <source>Profile Pattern: a piece and a direction edge are needed.</source>
+        <translation>Шаблон профиля: требуются элемент и направляющая кромка.</translation>
+    </message>
+    <message>
+        <source>Profile Pattern: Between faces needs two planar faces.</source>
+        <translation>Шаблон профиля: между гранями должны находиться две плоские грани.</translation>
+    </message>
+    <message>
+        <source>Profile Pattern: {} has no straight edge where its edge {} was.</source>
+        <translation>Шаблон профиля: у {} нет прямого края там, где раньше был его край {}.</translation>
+    </message>
+    <message>
+        <source>Profile Pattern: {} has no planar face where its face {} was.</source>
+        <translation>Шаблон профиля: у {} нет плоской грани там, где раньше была его грань {}.</translation>
+    </message>
+    <message>
+        <source>Profile Pattern</source>
+        <translation>Шаблон профиля</translation>
+    </message>
+    <message>
+        <source>Piece and direction</source>
+        <translation>Элемент и направление</translation>
+    </message>
+    <message>
+        <source>Click a straight edge, of the frame for instance, for the direction. For Between faces, click the two planar faces the pieces go between.</source>
+        <translation>Чтобы задать направление, укажите прямолинейную кромку (например, кромку рамы). В режиме «Между гранями» выберите две плоские грани, между которыми должны располагаться детали.</translation>
+    </message>
+    <message>
+        <source>Mode</source>
+        <translation>Режим</translation>
+    </message>
+    <message>
+        <source>Pitch (center to center)</source>
+        <translation>Шаг (от центра до центра)</translation>
+    </message>
+    <message>
+        <source>Sense</source>
+        <translation>Значение</translation>
+    </message>
+    <message>
+        <source>Copies</source>
+        <translation>Копии</translation>
+    </message>
+    <message>
+        <source>Pieces (the original included)</source>
+        <translation>Фрагменты (включая оригинал)</translation>
+    </message>
+    <message>
+        <source>Gap: {}. Pitch: {}.</source>
+        <translation>Зазор: {}. Шаг: {}.</translation>
+    </message>
+    <message>
+        <source>Face 1</source>
+        <translation>Сторона 1</translation>
+    </message>
+    <message>
+        <source>Face 2</source>
+        <translation>Сторона 2</translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation>Поменять</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Ничего</translation>
+    </message>
+    <message>
+        <source>Click a straight edge, of the frame for instance, for the direction.</source>
+        <translation>Щёлкните по прямому краю — например, по краю рамки, — чтобы задать направление.</translation>
+    </message>
+    <message>
+        <source>Press Change to pick another piece, direction or faces.</source>
+        <translation>Нажмите «Изменить», чтобы выбрать другой элемент, направление или грани.</translation>
+    </message>
+    <message>
+        <source>Press Change next to Direction to pick another edge.</source>
+        <translation>Нажмите «Изменить» (Change) рядом с параметром «Направление» (Direction), чтобы выбрать другое ребро.</translation>
+    </message>
+    <message>
+        <source>Press Change next to the faces to pick two other faces.</source>
+        <translation>Нажмите «Изменить» рядом с лицами, чтобы выбрать два других лица.</translation>
+    </message>
+    <message>
+        <source>Click the piece itself, not a copy of a pattern.</source>
+        <translation>Нажмите на саму деталь, а не на копию выкройки.</translation>
+    </message>
+    <message>
+        <source>The former piece stays where Between faces placed it.</source>
+        <translation>Предыдущий элемент остаётся там, где его разместили между гранями.</translation>
+    </message>
+    <message>
+        <source>Select the piece to repeat: click a profile, a trimmed profile, a cutout or a drill hole.</source>
+        <translation>Выберите элемент для повторения: щелкните по профилю, обрезанному профилю, вырезу или отверстию.</translation>
+    </message>
+    <message>
+        <source>Click a straight edge for the direction of the copies.</source>
+        <translation>Щёлкните по прямому краю, чтобы задать направление копий.</translation>
+    </message>
+    <message>
+        <source>Click the frame, not a copy of the pattern.</source>
+        <translation>Нажмите на рамку, а не на копию узора.</translation>
+    </message>
+    <message>
+        <source>The faces must not be on the piece: it moves between them.</source>
+        <translation>Грани не должны находиться на самом предмете: он перемещается между ними.</translation>
+    </message>
+    <message>
+        <source>Click a straight edge for the direction, or a planar face for Between faces.</source>
+        <translation>Выберите прямолинейное ребро для задания направления или плоскую грань для опции «Между гранями».</translation>
+    </message>
+    <message>
+        <source>Click the two planar faces the pieces go between.</source>
+        <translation>Щёлкните по двум плоским граням, между которыми располагаются детали.</translation>
+    </message>
+    <message>
+        <source>Piece: {}</source>
+        <translation type="vanished">Деталь: {}</translation>
+    </message>
+    <message>
+        <source>Piece: none</source>
+        <translation type="vanished">Деталь: отсутствует</translation>
+    </message>
+    <message>
+        <source>Direction: {}</source>
+        <translation type="vanished">Направление: {}</translation>
+    </message>
+    <message>
+        <source>Direction: none</source>
+        <translation type="vanished">Направление: отсутствует</translation>
+    </message>
+    <message>
+        <source>Faces: {}</source>
+        <translation type="vanished">Грани: {}</translation>
     </message>
     <message>
         <source>Count</source>
@@ -2589,6 +2649,17 @@ All files and sketches on disk will be kept intact.</source>
     </message>
 </context>
 <context>
+    <name>MaxProFrame_ProfilePattern</name>
+    <message>
+        <source>Profile Pattern</source>
+        <translation>Шаблон профиля</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Profile Pattern&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a profile, a trimmed profile, a cutout or a drill hole and click a straight edge for the direction: the copies are Links placed by count and pitch (in the edge&apos;s sense, inverted or symmetric) or between two faces with equal gaps. A change to the piece shows on every copy; the BOM counts them with its ID. Double-click the pattern to edit it.</source>
+        <translation>&lt;b&gt;Массив профилей&lt;/b&gt;&lt;br&gt;&lt;br&gt;Выберите профиль, обрезанный профиль, вырез или отверстие, а затем укажите прямолинейное ребро для определения направления. Копии могут быть созданы как связанные элементы (с заданным количеством и шагом — в направлении ребра, в обратном направлении или симметрично) либо размещены между двумя гранями с равными промежутками. Любое изменение исходного элемента отражается на всех его копиях; в спецификации (BOM) они учитываются под своим идентификатором. Чтобы отредактировать массив, дважды щелкните по нему.</translation>
+    </message>
+</context>
+<context>
     <name>MaxProFrame_Link</name>
     <message>
         <source>Attached Link</source>
@@ -2629,7 +2700,7 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>&lt;b&gt;Create a balloon with the ID of each piece of a TechDraw view&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a view, or click the button and then a view. Pieces that already have a balloon are skipped. Select pieces with the view to mark only those.</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;Создание выносок с идентификаторами для каждой детали на виде TechDraw&lt;/b&gt;&lt;br&gt;&lt;br&gt;Выберите вид или нажмите кнопку, а затем укажите нужный вид. Детали, для которых выноски уже созданы, будут пропущены. Выделите детали на виде, чтобы промаркировать только их.</translation>
     </message>
     <message>
         <source>&lt;b&gt;Automatically create balloons for selected profiles and links&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select profiles and links.</source>
@@ -2644,7 +2715,7 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>&lt;b&gt;Refresh balloons&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select balloons or a view, or click the button and then a view: the arrows follow their pieces and the texts their IDs.</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;Обновить выноски&lt;/b&gt;&lt;br&gt;&lt;br&gt;Выберите выноски или вид, либо нажмите кнопку, а затем выберите вид: стрелки будут следовать за соответствующими деталями, а текст — за их идентификаторами.</translation>
     </message>
     <message>
         <source>&lt;b&gt;Refresh selected balloons&lt;/b&gt;</source>
@@ -2655,11 +2726,11 @@ All files and sketches on disk will be kept intact.</source>
     <name>MaxProFrame_CreatePieceTable</name>
     <message>
         <source>Piece Table</source>
-        <translation type="unfinished"></translation>
+        <translation>Таблица фрагментов</translation>
     </message>
     <message>
         <source>&lt;b&gt;Insert a table of the pieces of TechDraw views&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select one or more views, or click the button and then a view: one row per ID with the piece, its quantity, length and cut angles. Run it again on the same views to refresh their table.</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;Вставка таблицы элементов для видов TechDraw&lt;/b&gt;&lt;br&gt;&lt;br&gt;Выберите один или несколько видов (либо нажмите кнопку, а затем выберите вид): для каждого идентификатора (ID) будет создана отдельная строка с указанием элемента, его количества, длины и углов реза. Чтобы обновить таблицу, выполните эту операцию повторно для тех же видов.</translation>
     </message>
 </context>
 <context>
