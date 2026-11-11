@@ -758,6 +758,13 @@ class ViewProviderProfilePattern:
     def claimChildren(self):
         return list(self.Object.Copies)
 
+    def doubleClicked(self, vobj):
+        """Edit the pattern: unhandled, the tree of an App::FeaturePython starts renaming it instead."""
+        import FreeCADGui as Gui
+
+        Gui.getDocument(vobj.Object.Document.Name).setEdit(vobj.Object.Name, 0)
+        return True
+
     def setEdit(self, vobj, mode):
         """Double-click: the Profile Pattern panel on this pattern."""
         if mode != 0:
