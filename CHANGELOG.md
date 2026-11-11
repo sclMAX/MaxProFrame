@@ -1,5 +1,10 @@
 ## Changelog
 
+* Unreleased
+
+  **Fixes**
+  - **Russian translation** updated by [@c0n5t](https://github.com/c0n5t) ([#130](https://github.com/sclMAX/MaxProFrame/issues/130)): with FreeCAD in Russian every text of v1.13.0 shows in Russian, Piece Table, Balloons and Profile Pattern included. Reset IDs and its messages used to show in Spanish.
+
 * v1.13.0 (2026-11-11)
 
   **Improvements**
