@@ -259,13 +259,13 @@ class TestPatternCommand(PatternPanelFixture):
             panel.form.hint_label.text(), "Hacé clic en una arista recta, del marco por ejemplo, para la dirección."
         )
 
-    def test_in_russian_the_texts_still_to_translate_show_in_english(self):
-        # S8: maxproframe_ru.ts lists them with an empty unfinished translation, for the contributor.
+    def test_in_russian_the_panel_shows_in_russian(self):
+        # Translated by @c0n5t for v1.13.1 (#130).
         use_language(self, "Russian", "ru_RU")
         panel = self.run_command((self.slat, ""))
         self.assertEqual(panel.form.groupBox_preview.title(), "Предварительный просмотр")
-        self.assertEqual(panel.form.button_edge.text(), "Change")
-        self.assertEqual(panel.form.face1_title.text(), "Face 1")
+        self.assertEqual(panel.form.button_edge.text(), "Поменять")
+        self.assertEqual(panel.form.face1_title.text(), "Сторона 1")
 
     def test_a_click_on_something_that_is_no_piece_is_explained(self):
         panel = self.run_command()
