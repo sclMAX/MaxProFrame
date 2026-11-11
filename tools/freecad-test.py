@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """Launch a downloaded FreeCAD AppImage with a checkout-local test profile."""
 import argparse
+import json
 import os
 import subprocess
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+# The weekly is the one pinned for CI: bumping it there moves the local one too.
+WEEKLY_URL = json.loads((ROOT / "ci" / "targets.json").read_text(encoding="utf-8"))["weekly"]["url"]
 IMAGES = {
     "1.1.4": "FreeCAD_1.1.4-Linux-x86_64-py311.AppImage",
-    "26.3rc2": "FreeCAD_26.3rc2-Linux-x86_64.AppImage",
+    "weekly": WEEKLY_URL.rsplit("/", 1)[1],
 }
 
 
@@ -19,7 +23,7 @@ def main():
     parser.add_argument("version", choices=IMAGES)
     parser.add_argument("files", nargs="*", help="Optional FCStd documents or FCMacro files to open")
     args = parser.parse_args()
-    root = Path(__file__).resolve().parents[1]
+    root = ROOT
     image = root.parent / IMAGES[args.version]
     if not image.is_file():
         try:
