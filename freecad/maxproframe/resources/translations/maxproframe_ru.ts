@@ -2352,6 +2352,126 @@ All files and sketches on disk will be kept intact.</source>
         <translation>Ширина пропила</translation>
     </message>
     <message>
+        <source>Press Change to pick another piece, direction or faces.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select the piece to repeat: click a profile, a trimmed profile, a cutout or a drill hole.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click a straight edge for the direction of the copies.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click the two planar faces the pieces go between.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The faces must not be on the piece: it moves between them.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Profile Pattern</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Piece and direction</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pitch (center to center)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sense</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click a straight edge, of the frame for instance, for the direction.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click a straight edge, of the frame for instance, for the direction. For Between faces, click the two planar faces the pieces go between.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Face 1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Face 2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Change</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copies</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pieces (the original included)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The former piece stays where Between faces placed it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Gap: {}. Pitch: {}.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click the frame, not a copy of the pattern.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click a straight edge for the direction, or a planar face for Between faces.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click the piece itself, not a copy of a pattern.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Press Change next to Direction to pick another edge.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Press Change next to the faces to pick two other faces.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Count and pitch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Between faces</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edge sense</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Inverted</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Symmetric (count on each side)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Count</source>
         <translation type="vanished">Количество</translation>
     </message>

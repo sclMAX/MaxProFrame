@@ -169,7 +169,8 @@ class ProfilePatternTaskPanel:
         self._timer.setInterval(GAP_DELAY_MS)
         self._timer.timeout.connect(self._update_preview)
         # {name: (profile, OffsetX, OffsetY)} of each profile Between faces may move, as they were before the panel
-        # first changed the document: Cancel puts them back, undo or not; a piece replaced gets its own back.
+        # first changed the document: Cancel puts them back, undo or not; a piece replaced gets its own back at the
+        # next preview (or OK). A piece an earlier Between faces had moved was already moved then: it stays there.
         self._offsets = {}
         if edited is not None:
             # The values and expressions Cancel puts back, also when undo is disabled.
@@ -272,7 +273,10 @@ class ProfilePatternTaskPanel:
         return form
 
     def _bind_fields(self, form=None):
-        """Bind Count and Pitch to the pattern shown, for the expression editor (Fx)."""
+        """Bind Count and Pitch to the pattern shown, for the expression editor (Fx).
+
+        ``form`` is the form being built, before it becomes ``self.form``.
+        """
         form = form or self.form
         for prop, spin in (("Count", form.spin_count), ("Pitch", form.spin_pitch)):
             bind(spin, self.obj, prop)
@@ -289,7 +293,9 @@ class ProfilePatternTaskPanel:
         for widget in (form.face1_title, form.face1_label, form.face2_title, form.face2_label, form.button_faces):
             widget.setVisible(not count_and_pitch)
         if count_and_pitch and self._armed == FACES:
+            # The face rows are hidden: Change faces is released, and its hint goes with it.
             self._set_armed(None)
+            self._show_hint()
         form.label_count.setText(
             translate("frameforge", "Copies")
             if count_and_pitch
@@ -320,8 +326,7 @@ class ProfilePatternTaskPanel:
     def _show(self, messages):
         self._messages = list(messages)
         form = self.form
-        none = translate("frameforge", "None")
-        form.piece_label.set_reference(self.piece.Label if self.piece is not None else none)
+        form.piece_label.set_reference(*self._name((self.piece, "") if self.piece is not None else None))
         form.edge_label.set_reference(*self._name(self.edge))
         faces = self._new_faces if self._armed == FACES and self._new_faces else self.faces
         form.face1_label.set_reference(*self._name(faces[0] if faces else None))
@@ -341,21 +346,23 @@ class ProfilePatternTaskPanel:
         return obj.Label, f"{SUB_SEPARATOR}{sub}" if sub else ""
 
     def _show_hint(self):
+        self.form.hint_label.setText(self._hint())
+
+    def _hint(self):
+        """The help line: what the armed Change button takes, or what a click does with none armed."""
         if self._armed == PIECE:
-            text = self._piece_hint()
-        elif self._armed == EDGE:
-            text = translate("frameforge", "Click a straight edge, of the frame for instance, for the direction.")
-        elif self._armed == FACES:
-            text = translate("frameforge", "Click the two planar faces the pieces go between.")
-        elif self.piece is None or self.edge is None:
-            text = translate(
+            return self._piece_hint()
+        if self._armed == EDGE:
+            return translate("frameforge", "Click a straight edge, of the frame for instance, for the direction.")
+        if self._armed == FACES:
+            return self._faces_hint()
+        if self.piece is None or self.edge is None:
+            return translate(
                 "frameforge",
                 "Click a straight edge, of the frame for instance, for the direction. For Between faces, click the "
                 "two planar faces the pieces go between.",
             )
-        else:
-            text = translate("frameforge", "Press Change to pick another piece, direction or faces.")
-        self.form.hint_label.setText(text)
+        return translate("frameforge", "Press Change to pick another piece, direction or faces.")
 
     # Change buttons.
 
@@ -415,8 +422,17 @@ class ProfilePatternTaskPanel:
         return translate("frameforge", "Click a straight edge for the direction of the copies.")
 
     @staticmethod
+    def _faces_hint():
+        return translate("frameforge", "Click the two planar faces the pieces go between.")
+
+    @staticmethod
     def _faces_on_piece():
         return translate("frameforge", "The faces must not be on the piece: it moves between them.")
+
+    def _faces_on(self, piece):
+        """Whether a face of Between faces is on ``piece`` or on what it is built on."""
+        chain = list(_trim_chain(piece))
+        return any(face in chain for face, _ in self.faces)
 
     def _pick(self, obj, sub):
         """Take a click on ``sub`` of ``obj``: (whether a pick changed, messages)."""
@@ -428,8 +444,7 @@ class ProfilePatternTaskPanel:
         kind = {"edge": EDGE, "face": FACES}.get(element_kind(obj, sub))
         if kind is None or self._armed not in (None, kind):
             if self._armed is not None:
-                self._show_hint()
-                return False, [self.form.hint_label.text()]
+                return False, [self._hint()]
             return False, [
                 translate("frameforge", "Click a straight edge for the direction, or a planar face for Between faces.")
             ]
@@ -458,17 +473,28 @@ class ProfilePatternTaskPanel:
             return False, [translate("frameforge", "Click the piece itself, not a copy of a pattern.")]
         if not is_piece(obj):
             return False, [self._piece_hint()]
-        if any(face in list(_trim_chain(obj)) for face, _ in self.faces):
+        # The faces only count in Between faces: in Count and pitch they are hidden and unused.
+        if self._mode() == BETWEEN_FACES and self._faces_on(obj):
             return False, [self._faces_on_piece()]
         self._set_armed(None)
         if obj == self.piece:
             return False, []
         previous, self.piece = self.piece, obj
-        # The piece left behind goes back to where it was; the new one is remembered before it moves.
-        self._put_offsets_back(self._profile_of(previous))
+        # Remembered before the preview moves it; the preview puts the piece left behind back (see _preview).
         if self._transaction_open:
             self._remember_offsets()
-        return True, [] if self.edge is not None else [self._edge_hint()]
+        messages = [] if self.edge is not None else [self._edge_hint()]
+        if self._placed_before(previous):
+            messages.append(translate("frameforge", "The former piece stays where Between faces placed it."))
+        return True, messages
+
+    def _placed_before(self, piece):
+        """Whether ``piece`` is the one the edited Between faces pattern had moved before the panel opened: the
+        panel cannot know where it was before that, so it stays there."""
+        if self.edited is None or piece is None or self._profile_of(piece) is None:
+            return False
+        before = dict(zip(VALUES, self._before))
+        return before["Mode"] == BETWEEN_FACES and before["Piece"] == piece.Name
 
     def addSelection(self, doc, obj, sub, other):
         if not self._active():
@@ -519,7 +545,9 @@ class ProfilePatternTaskPanel:
             if problem:
                 return problem
             if len(self.faces) != 2:
-                return translate("frameforge", "Click the two planar faces the pieces go between.")
+                return self._faces_hint()
+            if self._faces_on(self.piece):
+                return self._faces_on_piece()
         return ""
 
     def _changed(self, *args):
@@ -587,6 +615,8 @@ class ProfilePatternTaskPanel:
                 self.obj = make_profile_pattern(self.piece, self.edge)
                 self._bind_fields()
             self._apply_to(self.obj)
+            # A piece left behind by Change goes back to where it was before the panel moved it.
+            self._put_offsets_back(but=self._profile_of(self.piece))
             self.doc.recompute()
             self._error = _failures([self.obj])
         except Exception as error:
@@ -594,13 +624,13 @@ class ProfilePatternTaskPanel:
         self._previewed = wanted
 
     def _apply_to(self, obj):
-        _, mode, count, pitch, sense, _, _ = self._wanted()
+        wanted = dict(zip(VALUES, self._wanted()))
         values = {
             "Piece": self.piece,
-            "Mode": mode,
-            "Count": count,
-            "Pitch": pitch,
-            "Sense": sense,
+            "Mode": wanted["Mode"],
+            "Count": wanted["Count"],
+            "Pitch": wanted["Pitch"],
+            "Sense": wanted["Sense"],
             "Edge": (self.edge[0], (self.edge[1],)),
             "Faces": [(face, (sub,)) for face, sub in self.faces],
         }
@@ -649,11 +679,11 @@ class ProfilePatternTaskPanel:
         if profile is not None and profile.Name not in self._offsets:
             self._offsets[profile.Name] = (profile, profile.OffsetX.Value, profile.OffsetY.Value)
 
-    def _put_offsets_back(self, only=None):
-        """Give the profiles Between faces moved (or just ``only``) their offsets back; whether one changed."""
+    def _put_offsets_back(self, but=None):
+        """Give the profiles Between faces moved, all of them but ``but``, their offsets back; whether one changed."""
         changed = False
         for profile, offset_x, offset_y in list(self._offsets.values()):
-            if (only is not None and profile != only) or not _in_document(profile):
+            if not _in_document(profile) or profile == but:
                 continue
             for prop, value in (("OffsetX", offset_x), ("OffsetY", offset_y)):
                 if getattr(profile, prop).Value != value:

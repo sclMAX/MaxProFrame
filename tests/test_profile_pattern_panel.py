@@ -21,6 +21,9 @@ from freecad.maxproframe.ff_tools import get_param_group
 from freecad.maxproframe.profile_pattern import BETWEEN_FACES, COUNT_AND_PITCH, make_profile_pattern
 
 NO_EDGE = "Click a straight edge for the direction of the copies."
+FACES_ON_PIECE = "The faces must not be on the piece: it moves between them."
+FORMER_PIECE = "The former piece stays where Between faces placed it."
+NO_CHANGE_ARMED = "Press Change to pick another piece, direction or faces."
 # Remembered state of the Update automatically check box of the panel.
 AUTO_PREVIEW_PARAM = "Profile Pattern Auto Preview"
 AUTO_PREVIEW = SimpleNamespace(auto_preview_param=AUTO_PREVIEW_PARAM)
@@ -256,6 +259,14 @@ class TestPatternCommand(PatternPanelFixture):
             panel.form.hint_label.text(), "Hacé clic en una arista recta, del marco por ejemplo, para la dirección."
         )
 
+    def test_in_russian_the_texts_still_to_translate_show_in_english(self):
+        # S8: maxproframe_ru.ts lists them with an empty unfinished translation, for the contributor.
+        use_language(self, "Russian", "ru_RU")
+        panel = self.run_command((self.slat, ""))
+        self.assertEqual(panel.form.groupBox_preview.title(), "Предварительный просмотр")
+        self.assertEqual(panel.form.button_edge.text(), "Change")
+        self.assertEqual(panel.form.face1_title.text(), "Face 1")
+
     def test_a_click_on_something_that_is_no_piece_is_explained(self):
         panel = self.run_command()
         self.click(self.frame, "Edge1")
@@ -435,12 +446,75 @@ class TestPatternReferences(PatternPanelFixture):
         self.preview(panel)
         self.assertAlmostEqual(center(self.slat).x, SLAT_X)
         self.assertAlmostEqual(center(other).x, 150.0)
+        self.assertNotIn(FORMER_PIECE, panel.form.message_label.text())
         self.assertTrue(panel.reject())
         self.close_dialog()
         self.doc.recompute()
         self.assertAlmostEqual(center(self.slat).x, SLAT_X)
         self.assertAlmostEqual(center(other).x, SLAT_X)
         self.assertEqual(self.offsets(), (0.0, 0.0))
+
+    def test_with_update_automatically_unchecked_ok_puts_the_former_piece_back(self):
+        left, right = self.walls()
+        other = self.other_piece()
+        panel = self.run_command((self.slat, ""), (self.frame, "Edge1"), left, right)
+        self.set_values(panel, mode=BETWEEN_FACES, count=5)
+        self.assertAlmostEqual(center(self.slat).x, 150.0)
+        panel.form.cb_auto_update.setChecked(False)
+        panel.form.button_piece.click()
+        self.click(other, "Face1")
+        # A recompute before OK: the pattern still repeats the former piece.
+        self.doc.recompute()
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        self.assertAlmostEqual(center(self.slat).x, SLAT_X)
+        self.assertAlmostEqual(center(other).x, 150.0)
+
+    def test_the_former_piece_of_a_between_faces_pattern_stays_in_its_slot_and_the_panel_says_so(self):
+        # The pattern does not keep where the piece was before Between faces moved it.
+        left, right = self.walls()
+        obj = make_profile_pattern(self.slat, (self.frame, "Edge1"), mode=BETWEEN_FACES, count=5, faces=(left, right))
+        self.doc.recompute()
+        self.doc.clearUndos()
+        self.assertAlmostEqual(center(self.slat).x, 150.0)
+        other = self.other_piece()
+        panel = self.edit(obj)
+        panel.form.button_piece.click()
+        self.click(other, "Face1")
+        self.preview(panel)
+        self.assertAlmostEqual(center(other).x, 150.0)
+        self.assertAlmostEqual(center(self.slat).x, 150.0)
+        self.assertIn(FORMER_PIECE, panel.form.message_label.text())
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        self.assertEqual(self.doc.UndoNames, ["Edit Profile Pattern"])
+
+    def test_in_count_and_pitch_the_hidden_faces_do_not_refuse_a_piece_but_block_between_faces(self):
+        left, _ = self.walls()
+        other = self.other_piece()
+        obj = make_profile_pattern(
+            self.slat, (self.frame, "Edge1"), count=3, pitch=100.0, faces=(left, (other, "Face1"))
+        )
+        self.doc.recompute()
+        self.doc.clearUndos()
+        panel = self.edit(obj)
+        panel.form.button_piece.click()
+        self.click(other, "Face1")
+        self.assertEqual(panel.piece, other)
+        self.assertNotIn(FACES_ON_PIECE, panel.form.message_label.text())
+        self.set_values(panel, mode=BETWEEN_FACES)
+        self.assertFalse(panel.accept())
+        self.assertIn(FACES_ON_PIECE, panel.form.message_label.text())
+
+    def test_switching_to_count_and_pitch_releases_change_faces_and_its_hint(self):
+        left, right = self.walls()
+        panel = self.run_command((self.slat, ""), (self.frame, "Edge1"), left, right)
+        self.set_values(panel, mode=BETWEEN_FACES, count=3)
+        panel.form.button_faces.click()
+        self.assertIn("planar faces", panel.form.hint_label.text())
+        self.set_values(panel, mode=COUNT_AND_PITCH)
+        self.assertFalse(panel.form.button_faces.isChecked())
+        self.assertEqual(panel.form.hint_label.text(), NO_CHANGE_ARMED)
 
 
 class TestPatternEdit(PatternPanelFixture):
