@@ -1,6 +1,6 @@
 ## Changelog
 
-* Unreleased
+* v1.12.0 (2026-11-10)
 
   **Improvements**
   - **Russian translation**, contributed by [@c0n5t](https://github.com/c0n5t) ([#130](https://github.com/sclMAX/MaxProFrame/issues/130)): with FreeCAD in Russian the commands, panels and messages of v1.11.1 show in Russian. Texts added after v1.11.1 (Piece Table, Balloons changes) show in English until they are translated.
