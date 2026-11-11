@@ -10,10 +10,20 @@ import unittest
 from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[2] / "tools" / "freecad-test.py"
+TARGETS = Path(__file__).resolve().parents[2] / "ci" / "targets.json"
+WEEKLY_URL = json.loads(TARGETS.read_text())["weekly"]["url"]
 IMAGES = {
     "1.1.4": "FreeCAD_1.1.4-Linux-x86_64-py311.AppImage",
-    "26.3rc2": "FreeCAD_26.3rc2-Linux-x86_64.AppImage",
+    # The weekly pinned for CI, so a weekly bump moves the local one too.
+    "weekly": WEEKLY_URL.rsplit("/", 1)[1],
 }
+
+
+def copy_launcher(root):
+    (root / "tools").mkdir(parents=True)
+    (root / "ci").mkdir()
+    shutil.copy2(SOURCE, root / "tools/freecad-test.py")
+    shutil.copy2(TARGETS, root / "ci/targets.json")
 
 
 class FreeCADTestLauncher(unittest.TestCase):
@@ -25,8 +35,7 @@ class FreeCADTestLauncher(unittest.TestCase):
     def test_versions_use_separate_profiles_and_same_checkout(self):
         with tempfile.TemporaryDirectory(prefix="freecad launcher ") as tmp:
             root = Path(tmp) / "MaxProFrame"
-            (root / "tools").mkdir(parents=True)
-            shutil.copy2(SOURCE, root / "tools/freecad-test.py")
+            copy_launcher(root)
             for version, name in IMAGES.items():
                 image = Path(tmp) / name
                 image.write_text(
@@ -70,13 +79,12 @@ class FreeCADTestLauncher(unittest.TestCase):
                     ],
                 )
                 self.assertEqual((profile / "data/FreeCAD/Mod/MaxProFrame").resolve(), root)
-            self.assertNotEqual((root / ".freecad-test/1.1.4").resolve(), (root / ".freecad-test/26.3rc2").resolve())
+            self.assertNotEqual((root / ".freecad-test/1.1.4").resolve(), (root / ".freecad-test/weekly").resolve())
 
     def test_missing_image_does_not_create_profile(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "MaxProFrame"
-            (root / "tools").mkdir(parents=True)
-            shutil.copy2(SOURCE, root / "tools/freecad-test.py")
+            copy_launcher(root)
             result = subprocess.run(
                 [sys.executable, str(root / "tools/freecad-test.py"), "1.1.4"],
                 capture_output=True,
