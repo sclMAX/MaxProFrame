@@ -57,6 +57,7 @@ class TestCustomProfileLinkScope(LengthRestoreFixture):
     def saved_with_local_link(self, obj, read_only=True):
         """``obj`` as a document saved before the global link has it: a local link to the same section."""
         section = obj.CustomProfile
+        obj.CustomProfile = None
         obj.removeProperty("CustomProfile")
         obj.addProperty("App::PropertyLink", "CustomProfile", "Profile", "Target profile")
         obj.CustomProfile = section
@@ -98,6 +99,21 @@ class TestCustomProfileLinkScope(LengthRestoreFixture):
         self.saved_with_local_link(trim)
         report = self.recompute_report([trim])
         self.assertTrue(out_of_scope(report, trim), report)
+
+    def test_pieces_opened_with_a_global_link_can_be_deleted(self):
+        section, (trim, cutout) = self.pieces_with_section()
+        profile = trim.TrimmedBody
+        self.saved_with_local_link(profile, read_only=False)
+        self.saved_with_local_link(trim)
+        self.saved_with_local_link(cutout)
+        opened = self.reopen()
+        opened_section = opened.getObject(section.Name)
+        self.assertEqual(
+            sorted(obj.Name for obj in opened_section.InList), sorted([profile.Name, trim.Name, cutout.Name])
+        )
+        for name in (cutout.Name, trim.Name, profile.Name):
+            opened.removeObject(name)
+        self.assertEqual(opened_section.InList, [])
 
     def test_new_pieces_link_the_section_globally(self):
         section, pieces = self.pieces_with_section()

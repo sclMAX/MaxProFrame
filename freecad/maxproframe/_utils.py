@@ -376,6 +376,9 @@ def restore_custom_profile_link(obj, read_only=True):
             section = obj.CustomProfile
         touched = "Touched" in obj.State
         if "CustomProfile" in obj.PropertiesList:
+            # Unlinked first: a property removed while linking leaves the section listing ``obj`` twice, and
+            # deleting ``obj`` then crashes FreeCAD.
+            obj.CustomProfile = None
             obj.removeProperty("CustomProfile")
         add_custom_profile_link(obj, read_only)
         obj.CustomProfile = section
