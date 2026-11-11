@@ -27,7 +27,7 @@ python3 ci/run_tests.py \
   --reports /path/to/reports \
   --timeout 180
 
-# Run offscreen suite inside the pinned FreeCAD weekly-2026.11.04 Linux AppImage (--target weekly)
+# Run offscreen suite inside the pinned FreeCAD weekly-2026.11.11 Linux AppImage (--target weekly)
 python3 ci/run_tests.py \
   --freecad-bin /path/to/weekly-squashfs-root/AppRun \
   --reports /path/to/reports \
@@ -58,7 +58,7 @@ not evidence that the full suite passes; CI continues to run full discovery.
 
 | Spec | Area | Accepted Policy Rule |
 |------|------|----------------------|
-| **S1** | Compatibility | Minimum supported: **FreeCAD 1.1.4**. Pinned matrix targets: **stable FreeCAD 1.1.4** (Python 3.11) and **weekly FreeCAD weekly-2026.11.04** (reports Version 27.1.0, Python 3.13), plus **windows FreeCAD 1.1.4** (portable archive, Python 3.11). Never `latest`. Versions validated strictly per-target. The weekly and Windows jobs are informative only; stable is blocking. |
+| **S1** | Compatibility | Minimum supported: **FreeCAD 1.1.4**. Pinned matrix targets: **stable FreeCAD 1.1.4** (Python 3.11) and **weekly FreeCAD weekly-2026.11.11** (reports Version 27.1.0, Python 3.13), plus **windows FreeCAD 1.1.4** (portable archive, Python 3.11). Never `latest`. Versions validated strictly per-target. The weekly and Windows jobs are informative only; stable is blocking. |
 | **S2** | Formatting | **Black + isort**, 120-column limit, pinned tool versions. Enforced strictly on **new or modified Python files** (no retroactive repository reformatting). |
 | **S3** | Tests | Full test suite executed on changes to code, tests, runtime resources, or execution configs. Native tests are skipped for purely documentation changes. |
 | **S4** | Failure | Formatting and native test targets run in **independent matrix jobs** (`fail-fast: false`), each target split into parallel shards. Any test failure, error, or timeout fails CI immediately without automatic retries. |
@@ -79,7 +79,7 @@ not evidence that the full suite passes; CI continues to run full discovery.
 
 ## Native runner and offscreen execution
 
-Official FreeCAD AppImages (such as 1.1.4 and weekly-2026.11.04) ship an `AppRun` script that unconditionally exports `QT_QPA_PLATFORM=xcb` (or falls back to it). In headless environments without X11 or Wayland, this causes Qt initialization failure (exit code 134). Furthermore, FreeCAD's CLI argument parser (Boost Program Options) rejects unrecognized Qt options such as `-platform`, prompting an invisible `QMessageBox` modal dialog in `MainGui.cpp` that blocks headless execution until timeout (exit code 124).
+Official FreeCAD AppImages (such as 1.1.4 and weekly-2026.11.11) ship an `AppRun` script that unconditionally exports `QT_QPA_PLATFORM=xcb` (or falls back to it). In headless environments without X11 or Wayland, this causes Qt initialization failure (exit code 134). Furthermore, FreeCAD's CLI argument parser (Boost Program Options) rejects unrecognized Qt options such as `-platform`, prompting an invisible `QMessageBox` modal dialog in `MainGui.cpp` that blocks headless execution until timeout (exit code 124).
 
 To resolve both issues without patching vendor AppImages:
 1. When `--freecad-bin` points to `AppRun` (e.g. `--freecad-bin /path/to/squashfs-root/AppRun`), `ci/run_tests.py` automatically resolves to the native binary (`usr/bin/freecad`), bypassing the vendor `AppRun` script to prevent `QT_QPA_PLATFORM=xcb` from overriding the headless environment.
@@ -88,7 +88,7 @@ To resolve both issues without patching vendor AppImages:
 4. Execution occurs inside isolated temporary directories for `HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `TMPDIR`, and `FREECAD_USER_HOME` (which suppresses the version migration prompt).
 5. Target validation (`--target stable` or `--target weekly`):
    - Default is `--target stable`, requiring FreeCAD 1.1.4 and Python 3.11.
-   - When `--target weekly` is selected, the macro strictly verifies FreeCAD 27.1.0 (`FreeCAD.Version()[:3] == ('27', '1', '0')`) and embedded Python 3.13. Packaging labels (e.g. `weekly-2026.11.04`) are distinguished from the runtime's internal Version tuple (`27.1.0`).
+   - When `--target weekly` is selected, the macro strictly verifies FreeCAD 27.1.0 (`FreeCAD.Version()[:3] == ('27', '1', '0')`) and embedded Python 3.13. Packaging labels (e.g. `weekly-2026.11.11`) are distinguished from the runtime's internal Version tuple (`27.1.0`).
    - Any runtime or Python version mismatch terminates execution immediately with exit code 1 and writes no `summary.json`.
 6. Process-group timeouts are enforced (exit code 124 on timeout), and `ci/run-tests.FCMacro` emits structured diagnostic checkpoints (`macro-entry`, `validated-version`, `discovery-start`, `completed-summary`) to `startup.log`.
 7. Test outcomes require fresh, strictly validated `summary.json` containing positive test counts, zero failures/errors, and consistent non-negative counts. Previous execution artifacts are cleared before launch to avoid stale false-green results.
@@ -390,7 +390,7 @@ GitHub Actions JavaScript actions execute on the runner's internal Node.js runti
 - **Host validation:** CI policy tests (`ci/tests/test_policy.py`) verify planner logic, formatting wrappers, runner process isolation, AppRun binary resolution, `--target` parameter routing, summary validation contracts, and exact pinned action SHAs. Host tests are fully green.
 - **Native execution:** CI pins the following official Linux x86_64 AppImage SHA-256 checksums; local native suites used the already-extracted runtimes:
   - Stable: FreeCAD 1.1.4 py311 (`f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434`).
-  - Weekly: FreeCAD weekly-2026.11.04 (`0d71e05114f1ec10f7cc7e63a0903faf8637d183adcdfbe6dea75a4b98d832d7`).
+  - Weekly: FreeCAD weekly-2026.11.11 (`1f5fca167f60e97d2a1d6caf7c688b60b17cdece8ceab1409528baa14fe6283c`).
   - Historical RC evidence (superseded target): FreeCAD 26.3rc2 (`2cf4212d5a348574e786da7d5a8faeeb3e83dd4245c23898dede92ce82ce4908`).
   Local results:
   - Stable: **355/355 passed** offscreen (exit code 0, 0 failures, 0 errors, 0 skips).
