@@ -141,6 +141,27 @@ class TestParametricLine(unittest.TestCase):
         ParametricLine.onDocumentRestored(None, line)
         self.assertEqual(line.Vertex1, (box, ["Vertex1"]))
 
+    def test_migrated_line_is_listed_once_by_its_vertices_and_can_be_deleted(self):
+        a = self.doc.addObject("Part::Box", "A")
+        b = self.doc.addObject("Part::Box", "B")
+        line = self.doc.addObject("Part::FeaturePython", "ParametricLine")
+        line.addProperty("App::PropertyLinkSub", "Vertex1", "ParametricLine", "First Vertex")
+        line.addProperty("App::PropertyLinkSub", "Vertex2", "ParametricLine", "Second Vertex")
+        line.Vertex1 = (a, "Vertex1")
+        line.Vertex2 = (b, "Vertex2")
+        ParametricLine.onDocumentRestored(None, line)
+        self.assertEqual(line.Vertex1, (a, ["Vertex1"]))
+        self.assertEqual(line.Vertex2, (b, ["Vertex2"]))
+        self.assertEqual(a.InList.count(line), 1)
+        self.assertEqual(b.InList.count(line), 1)
+        self.doc.removeObject(line.Name)
+        self.assertIsNone(self.doc.getObject("ParametricLine"))
+        self.assertEqual(a.InList, [])
+        self.assertEqual(b.InList, [])
+        self.doc.removeObject("A")
+        self.doc.removeObject("B")
+        self.assertEqual(self.doc.Objects, [])
+
     def test_restored_line_of_an_earlier_version_still_joins_its_two_vertices(self):
         line = self.doc.addObject("Part::FeaturePython", "ParametricLine")
         line.addProperty(GLOBAL, "Vertex1", "ParametricLine", "First Vertex")

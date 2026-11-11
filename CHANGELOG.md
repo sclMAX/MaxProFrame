@@ -10,6 +10,7 @@
 
   **Fixes**
   - **Trimmed profiles** and **cutouts** of a custom profile inside a Part no longer make FreeCAD report "links are out of scope" on every recompute: they link the library section from anywhere, as the profile does. Documents saved before, profiles included, open with the new link; a link that cannot be turned is named in the Report view.
+  - **Parametric lines** saved by older versions can be deleted after opening without crashing FreeCAD.
   - **Create Balloons** and **Refresh Balloons** are enabled whenever a document is open. Select a TechDraw view, or click the button and then a view; Esc cancels. Before, Create Balloons stayed disabled until a view and pieces were both selected, without telling why.
   - **Create Balloons** marks every piece of the view, or only the pieces selected with it, and skips the pieces that already have a balloon in that view: running it again creates no duplicates.
   - **Create Balloons** accepts a standalone TechDraw view, not only a view of a projection group.
