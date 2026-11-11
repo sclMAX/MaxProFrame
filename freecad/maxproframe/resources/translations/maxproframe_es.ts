@@ -1106,6 +1106,9 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Extend / Cut: the target plane is parallel to the profile axis.</source><translation>Extender / cortar: el plano destino es paralelo al eje del perfil.</translation></message>
     <message><source>Extend / Cut: the profile axis crosses no face of {}.</source><translation>Extender / cortar: el eje del perfil no atraviesa ninguna cara de {}.</translation></message>
     <message><source>Notch: the gap of {} mm cannot be applied to {}. {}</source><translation>Encastrar: la separación de {} mm no se puede aplicar a {}. {}</translation></message>
+    <message><source>{}: its CustomProfile link could not be turned into a global one.
+</source><translation>{}: su vínculo CustomProfile no se pudo convertir en global.
+</translation></message>
     <message><source>Notch</source><translation>Encastrar</translation></message>
     <message><source>Edit Notch</source><translation>Editar encastre</translation></message>
     <message><source>Click the profiles to notch. Ctrl+click drops one.</source><translation>Hacé clic en los perfiles a encastrar. Ctrl+clic quita uno.</translation></message>
