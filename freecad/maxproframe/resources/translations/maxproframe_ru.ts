@@ -2758,4 +2758,377 @@ All files and sketches on disk will be kept intact.</source>
         <translation>Экспортировать все страницы TechDraw в формат PDF</translation>
     </message>
 </context>
+<context>
+    <name>MaxProFrame</name>
+    <message>
+        <source>{} has no path to fold.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} follows a curved path: only straight profiles can be folded.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} is a {} profile: only Square Hollow and Rectangular Hollow tubes can be folded.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} is not the same tube as {}: {} instead of {}.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>More than two of the selected profiles meet at one point.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The selected profiles do not form one chain: {} meets none of the others.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} and {} are in line: there is nothing to fold.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{1} turns back on {0}: a corner can fold less than 180 degrees.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The corner between {} and {} bends across a corner of the tube: its walls must be parallel to the bend.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{1} does not continue {0} across the fold: give both the same anchor, offsets and rotation.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} cuts {} at its folded corner with {}: delete it or make that corner the open one.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} cuts {} at its folded corner with {}: delete it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} is not a profile.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} is selected more than once.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select at least two profiles that meet end to end.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Only a closed frame has an open corner: these profiles already have two free ends.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select first a profile at one end of the chain: {} is in its middle.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} and {} do not meet at a corner.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The open corner must be at one end of the first selected profile ({}).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The selected profiles do not form one chain.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{config} is for {a:g} mm walls; {tube} has {b:g} mm walls.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The inside bend radius must be between {min:g} and {max:g} mm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The corner between {} and {} bends {:g} degrees: without the relief it bends up to {:g} degrees. Turn the relief on.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The key does not fit in the notch between {} and {}: make it smaller.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{}: its developed length ({:.1f} mm) is longer than the stock length of the cut list ({:.1f} mm).
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} does not fold into one solid: change its bend settings.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} does not unfold into one solid: change its bend settings.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Folded Bar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tube pieces, from the start of the bar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bend</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Manage configurations</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Configuration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Inside bend radius of every folded corner</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Inside radius</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Corners</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open corner</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Where the closed frame stays open: the bar starts there, at the first piece</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Inside radius of each folded corner:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Notch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Gap between the notch flanks and around the key, half on each side</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clearance</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Interlocking key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bulb diameter of the key; Default: a quarter of the tube depth across the bent wall</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Key diameter</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Neck width of the key; Default: 60 % of the bulb diameter</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Neck width</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Relief next to the bent wall</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Radius of the relief; Default: the inside bend radius of the corner</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Relief radius</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Update automatically</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} (copy in the document)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{}: {:g} mm walls, inside radius {:g} mm, K-factor {:g}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Between {} and {}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bar radius</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} to {}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add a bend configuration: press Manage configurations.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pending changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Preview updated</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No preview</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bend Configurations</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Where the neutral axis sits in the wall: 0 inside face, 1 outside face</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Material</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Wall thickness</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Inside bend radius</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>K-factor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>There is already a configuration called {}.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete the bend configuration {}? The bars made with it keep their copy.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The configuration name must not be empty.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The material must not be empty.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The wall thickness must be greater than 0 mm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The inside bend radius must be at least the wall thickness ({} mm).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The K-factor must be between 0 and 1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bend configuration "{}" does not exist.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>'configurations' must be a list.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bend configurations file '{}' has version {}; this MaxProFrame reads version {}.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>each configuration must be an object.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Corrupt bend configurations file '{}': {}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Folded Miters</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MaxProFrame_FoldedBar</name>
+    <message>
+        <source>Folded Bar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Folded Bar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select two or more tube profiles (or pieces made from them) that meet end to end, the first one where the bar starts: their corners fold, with a V notch, a key and a relief cut by the laser and the outer wall bent. A closed frame stays open at one corner. Double-click the bar to edit it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MaxProFrame_UnfoldBar</name>
+    <message>
+        <source>Unfold Bar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Unfold Bar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a Folded Bar: its straight bar with every cut is made from X = 0 along X, to export with File &gt; Export (STEP, IGES, BREP) for a tube laser.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MaxProFrame_BendConfigurations</name>
+    <message>
+        <source>Bend Configurations</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Bend Configurations&lt;/b&gt;&lt;br&gt;&lt;br&gt;Add, edit and delete the saved bend configurations of folded bars: material, wall thickness, inside bend radius and K-factor.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
 </TS>

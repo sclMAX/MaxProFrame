@@ -192,7 +192,7 @@ class ApplyBumpTests(RepoCopyMixin, unittest.TestCase):
         bump_weekly.apply_bump(root, NEW_TAG, NEW_URL, NEW_SHA, ("27", "2", "0"), (3, 14))
         after = json.loads((root / "ci/targets.json").read_text(encoding="utf-8"))
         self.assertEqual(after["stable"], before["stable"])
-        self.assertEqual((after["weekly"]["timeout"], after["weekly"]["blocking"]), (480, False))
+        self.assertEqual((after["weekly"]["timeout"], after["weekly"]["blocking"]), (540, False))
         self.assertEqual(after["weekly"]["label"], f"FreeCAD {NEW_TAG}")
         self.assertEqual(after["weekly"]["expected_freecad"], ["27", "2", "0"])
         self.assertEqual(after["weekly"]["expected_python"], [3, 14])

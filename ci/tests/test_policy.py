@@ -996,7 +996,7 @@ class TestTargetsFilePolicy(unittest.TestCase):
             "https://github.com/FreeCAD/FreeCAD/releases/download/1.1.4/FreeCAD_1.1.4-Linux-x86_64-py311.AppImage",
         )
         self.assertEqual(stable["sha256"], "f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b43434")
-        self.assertEqual((stable["timeout"], stable["blocking"], stable["shards"]), (420, True, 2))
+        self.assertEqual((stable["timeout"], stable["blocking"], stable["shards"]), (480, True, 2))
         self.assertEqual((stable["expected_freecad"], stable["expected_python"]), (["1", "1", "4"], [3, 11]))
         self.assertEqual((stable["platform"], stable["pull_request"]), ("linux", True))
 
@@ -1008,7 +1008,7 @@ class TestTargetsFilePolicy(unittest.TestCase):
             weekly["url"],
             f"https://github.com/FreeCAD/FreeCAD/releases/download/{tag}/FreeCAD_{tag}-Linux-x86_64.AppImage",
         )
-        self.assertEqual((weekly["timeout"], weekly["blocking"], weekly["shards"]), (480, False, 2))
+        self.assertEqual((weekly["timeout"], weekly["blocking"], weekly["shards"]), (540, False, 2))
         self.assertEqual((weekly["platform"], weekly["pull_request"]), ("linux", True))
 
     def test_windows_pin_is_the_portable_1_1_4_archive(self):

@@ -36,6 +36,9 @@ class MaxProFrame(Gui.Workbench):
         "MaxProFrame_ProfilePattern",
     ]
 
+    # Folded miters: one tube folded at its corners, its straight bar, and the bend configurations.
+    toolbox_folded = ["MaxProFrame_FoldedBar", "MaxProFrame_UnfoldBar", "MaxProFrame_BendConfigurations"]
+
     toolbox_group = ["Std_Group", "Std_Part"]
 
     toolbox_part = ["MaxProFrame_Link", "Part_Fuse", "Part_Cut", "PartDesign_Body"]
@@ -69,12 +72,14 @@ class MaxProFrame(Gui.Workbench):
                 # Without it only its borrowed commands are missing: the workbench still opens.
                 App.Console.PrintWarning(f"MaxProFrame: {module} is not available: {error}\n")
         from freecad.maxproframe import (
+            bend_config_dialog,
             create_bom_tool,
             create_drill_hole_tool,
             create_edit_balloons_tool,
             create_end_miter_tool,
             create_extend_cut_tool,
             create_extruded_cutout_tool,
+            create_folded_bar_tool,
             create_link,
             create_notch_tool,
             create_piece_table_tool,
@@ -95,6 +100,9 @@ class MaxProFrame(Gui.Workbench):
 
         self.appendToolbar(translate("frameforge", "MaxProFrame"), self.toolbox_maxproframe)
         self.appendMenu(translate("frameforge", "MaxProFrame"), self.toolbox_maxproframe)
+
+        self.appendToolbar(translate("MaxProFrame", "Folded Miters"), self.toolbox_folded)
+        self.appendMenu(translate("MaxProFrame", "Folded Miters"), self.toolbox_folded)
 
         self.appendToolbar(translate("frameforge", "Profiles Group"), self.toolbox_group)
         self.appendMenu(translate("frameforge", "Profiles Group"), self.toolbox_group)

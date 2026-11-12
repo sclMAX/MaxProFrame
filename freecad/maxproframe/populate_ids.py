@@ -10,6 +10,7 @@ from freecad.maxproframe._utils import (
     get_profile_from_extrudedcutout,
     get_profile_from_trimmedbody,
     is_extrudedcutout,
+    is_foldedbar,
     is_pattern_link,
     is_trimmedbody,
 )
@@ -256,7 +257,10 @@ def group_identical_profiles(profiles):
     groups = []
     for obj in profiles:
         measures = shape_measures(obj)
-        if measures is None:
+        if measures is None and is_foldedbar(obj):
+            # A Folded Bar has no cutting angles: its developed length tells it apart.
+            key = (profile_family(obj), round(float(obj.DevelopedLength.Value), 1), obj.Material, obj.SizeName)
+        elif measures is None:
             key = (
                 profile_family(obj), round(float(obj.Length.Value), 1), obj.Material, obj.SizeName,
                 obj.CuttingAngleA, obj.CuttingAngleB, obj.Cutout,

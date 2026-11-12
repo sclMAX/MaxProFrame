@@ -38,6 +38,7 @@ from freecad.maxproframe._utils import (
     get_profiles_and_links_from_document,
     get_profiles_and_links_from_object,
     is_extrudedcutout,
+    is_foldedbar,
     is_fusion,
     is_group,
     is_link,
@@ -288,6 +289,7 @@ class PopulateIDsCommand:
                         or is_profile(sel)
                         or is_trimmedbody(sel)
                         or is_extrudedcutout(sel)
+                        or is_foldedbar(sel)
                         or is_link(sel)
                         for sel in Gui.Selection.getSelection()
                     ]
@@ -322,6 +324,7 @@ class ResetIDsCommand:
                         or is_profile(sel)
                         or is_trimmedbody(sel)
                         or is_extrudedcutout(sel)
+                        or is_foldedbar(sel)
                         or is_link(sel)
                         for sel in Gui.Selection.getSelection()
                     ]
@@ -340,6 +343,7 @@ class ResetIDsCommand:
                 or is_profile(sel)
                 or is_trimmedbody(sel)
                 or is_extrudedcutout(sel)
+                or is_foldedbar(sel)
                 or is_link(sel)
                 for sel in Gui.Selection.getSelection()
             ]

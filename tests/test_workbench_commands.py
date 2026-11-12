@@ -11,6 +11,7 @@ from freecad.maxproframe.InitGui import MaxProFrame
 TOOLBARS = (
     "toolbox_drawing",
     "toolbox_maxproframe",
+    "toolbox_folded",
     "toolbox_group",
     "toolbox_part",
     "toolbox_output",

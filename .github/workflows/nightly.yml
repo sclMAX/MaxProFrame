@@ -21,10 +21,10 @@ jobs:
   flakiness:
     name: Native FreeCAD 1.1.4 repeated runs
     runs-on: ubuntu-24.04
-    # A run is the suite in ci.yml's shards, each stopped at the per-shard timeout of the stable target (2 x 420 s).
-    # The budget covers every shard of the maximum 20 repetitions plus the shuffled run timing out (294 minutes),
+    # A run is the suite in ci.yml's shards, each stopped at the per-shard timeout of the stable target (2 x 480 s).
+    # The budget covers every shard of the maximum 20 repetitions plus the shuffled run timing out (336 minutes),
     # plus setup and summary, within GitHub's 360-minute limit.
-    timeout-minutes: 330
+    timeout-minutes: 355
 
     steps:
       - name: Checkout code
