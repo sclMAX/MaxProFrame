@@ -520,6 +520,10 @@ The number fields of the panels that edit one object take FreeCAD expressions, a
 
 **OK** keeps the expressions with the other values in one Undo step; **Cancel** removes the expressions set in the panel, even with Undo turned off. An expression set before, from the property editor, is shown and kept unless you change or clear it in the panel. The panels that make several objects at once (**Create Profile**, **End Miter**, and **Extend / Cut** and **Notch** while creating) and the **BOM** and **Populate IDs** options have plain fields: set an expression on the created objects from the property editor.
 
+## Decimal separator in number fields
+
+The number fields take the decimal separator of the FreeCAD language: a comma in Spanish (`0,2 mm`). There, the period is the thousands separator, so typing `0.2` in a field gives **2 mm**, not 0.2 mm. To type decimals with the period of the numeric keypad, turn on **Edit > Preferences > General > Substitute decimal separator**: FreeCAD then types the decimal separator of the language when you press the keypad period, in every field (MaxProFrame's and FreeCAD's). It does not change the period of the main keyboard, nor the Python console and the macro editor, where a period is always a period.
+
 
 ## Add Other elements to your design
 
