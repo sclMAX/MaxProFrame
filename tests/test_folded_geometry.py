@@ -204,6 +204,25 @@ class KeyFoldTest(FoldFixture):
                 self.assertFalse(self.inside(loose, point + corner.axis * w))
             self.assertRoundCorner(loose, corner)
 
+    def test_clearance_leaves_a_gap_along_the_relief_arcs(self):
+        # S8 (L26): folded, the side walls of both segments stop the whole clearance short of the bent wall along
+        # their relief arcs (the default relief radius: the arcs are centered on the bend axis).
+        chain = self.default.chain
+        tight = self.solid(self.default.folded)
+        loose = self.solid(fold(chain, STEEL, clearance=1.0, key=False))
+
+        for corner in chain.corners:
+            center = self.center(corner)
+            turn = corner.bend_angle / 8
+            # Toward the bent wall, between it and the flank of the segment before and of the segment after.
+            for angle in (turn, corner.bend_angle - turn):
+                outward = App.Rotation(corner.axis, angle).multVec(corner.outer_normal)
+                for distance, kept in ((R - 1.5, True), (R - 0.5, False), (R - 0.1, False), (R + T / 2, True)):
+                    for w in (SIDE_WALL, -SIDE_WALL):
+                        point = center + outward * distance + corner.axis * w
+                        self.assertTrue(self.inside(tight, point), (angle, distance, w))
+                        self.assertEqual(kept, self.inside(loose, point), (angle, distance, w))
+
 
 class CornerRadiusFoldTest(FoldFixture):
     reads_default = True

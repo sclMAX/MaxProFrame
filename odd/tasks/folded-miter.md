@@ -29,7 +29,8 @@ Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T9 reopened by L26 on br
   inglete), llave y alivio activado y desactivables." -> one clearance value, like the End Miter `MiterGap`
   (`trimmed_profile.py:502`: half of it on each side of the cut), applied to the notch flanks, the key and (L26 "La
   olgura debe aplicarce tambien al corte delcirculo de la esquina.") the round relief cut at the corner: its arcs move
-  back half the clearance on each side like the flanks, so the folded corner keeps the clearance there too; the key
+  back the whole clearance (kept disc radius rho - g, concentric with the bend axis; the bent wall face they meet
+  does not move), so the folded corner shows the same gap g along the arc as between the flanks (L27); the key
   and the relief are on by default and each one can be turned off.
 - S9 Corner radius (L5.1): "El radio de la esquina tambien debe ser configurable, con limites minimos (teniendo en
   cuenta el espesor) y maximos (teniendo en cuenta el perfil)." -> the inside bend radius can be set; values below a
@@ -171,7 +172,7 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   configurations); panel tests. [x] 68817bd
 - T7 S1-S19 inline: Spanish translations, Russian strings left unfinished for the contributor, tutorial, changelog. [x] 5e2172f
 - T8 S8 S15 S20 worker: clearance on the relief arcs; half-circle key centered on the miter line, no neck (geometry,
-  FoldedBar property, panel field, translations, tutorial, changelog); tests. [ ]
+  FoldedBar property, panel field, translations, tutorial, changelog); tests. [x] (see L29)
 - T9 S22 worker: select-as-you-go Folded Bar command and panel like End Miter; tests, tutorial, changelog. [ ]
 
 ## Log
@@ -285,3 +286,20 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   - La llave debe ubicarce al centro de la linea del bisel y debe ser solo un medio circulo (sin cuello).
   - Me gustaria que el comando se comporte como el de corte en bicel, aprieto el boton y voy seleccionado perfiles."
   -> S8, S20 rewritten, S22 added, T8-T9 opened.
+- L27 T8 decision (parent, from the worker's question): with the default relief radius = r the kept relief disc is
+  concentric with the bend axis and its arc folds onto the inner face of the bent wall, which has no cut face and does
+  not move; moving the arc back only g/2 would leave g/2 there. Chosen: kept disc radius rho - g, so the clearance seen
+  along the arc equals the clearance between the flanks (S8 reworded).
+- L28 T8 decision (parent, from the worker's question): with the key at the middle of the miter line, large inside
+  radii push that middle into the bend/relief zone (90 degrees, 50x50x2: the key fits up to about r = 19.5 while S15
+  allows 33.5). S15 stays as is; check_key refuses the key, with a distinct message when the radius is the cause:
+  "The key does not fit in the notch between {} and {} with this inside radius: make the radius smaller or turn the
+  key off."
+- L29 T8 evidence (worker): `unfolded_geometry.py` (relief discs rho - g; half-circle key by `_cut_disc`, center at
+  `_key_along`, tab d/2 - g/2 from x >= -g/2, socket d/2 + g/2 from x >= 0; check_key: tab size, no room (new message),
+  socket band, tab in V; neck removed), `folded_bar.py` (NeckWidth gone), `create_folded_bar_tool.py` (Neck width field
+  gone), es/ru catalogs + 16 Spanish .qm recompiled with compile_translations.py, tutorial, changelog. RED: 4 in
+  test_unfolded_geometry, 1 test_folded_geometry, 1 test_folded_bar, 2 test_folded_bar_panel. GREEN:
+  test_unfolded_geometry 22, test_folded_geometry 11, test_folded_bar 22, test_folded_bar_panel 32,
+  test_russian_translation 6, test_toolbar_translations 4, test_workbench_commands 2, test_folded_bar_translations 5,
+  test_compile_translations 3. Known: largest radius taking the key at 90 degrees on 50x50x2 is about 19.97 mm.

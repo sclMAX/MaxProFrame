@@ -476,8 +476,8 @@ The length of the bar is its **developed length**: the straight lengths plus, fo
 2. Click **Folded Bar**. The panel lists the tube pieces from the start of the bar and shows a preview.
 3. **Bend**: choose the **Configuration**. **Inside radius** is the radius of every folded corner, the one of the configuration by default. Under **Corners**, each folded corner has its own field; **Bar radius** uses the inside radius, another value bends only that corner with it. In a closed frame, **Open corner** chooses where the frame stays open.
 4. **Notch**:
-   - **Clearance**: the gap between the two flanks of the V and around the key, half on each side, as the **Gap** of **End Miter**. 0 by default.
-   - **Interlocking key**: a round bulb on one flank of the V, at the middle of its height, and its socket on the other flank, so the folded corner locks in place. **Key diameter** is the bulb (by default a quarter of the tube size across the bent wall) and **Neck width** the neck that holds it (by default 60 % of the bulb).
+   - **Clearance**: the gap between the two flanks of the V and around the key, half on each side, as the **Gap** of **End Miter**. The round cuts of the relief move back the whole clearance, so the folded corner keeps that gap between the side walls and the bent wall too. 0 by default.
+   - **Interlocking key**: a half circle centered on the miter line (where the two flanks meet when the corner folds), at the middle of that line as seen on the side of the folded bar, from the rounded outside of the corner to its inside corner. It stands out of one flank of the V and fits a half-circle socket cut into the other flank, so the folded corner locks in place. **Key diameter** is its diameter, by default a quarter of the tube size across the bent wall.
    - **Relief next to the bent wall**: a round relief at the bottom of the V, next to the wall that bends, so the walls do not collide while bending. **Relief radius** is the inside bend radius of the corner by default.
    - The key and the relief are on by default; uncheck them to cut a plain V. A size field showing **Default** uses the default size; type a value to change it on this bar.
 5. With **Update automatically** checked (remembered) the preview follows the panel; unchecked, the panel says **Pending changes** and the bar waits for **OK**.
@@ -487,7 +487,7 @@ What keeps the bar from folding is shown at the bottom of the panel, and **OK** 
 
 - **Radius limits**: the inside radius is at least the wall thickness and at most the tube size across the bent wall minus two wall thicknesses, minus the key diameter when the key is on. Outside them, the panel shows the allowed range, for example "The inside bend radius must be between 2 and 33.5 mm." for a 50x50x2 tube.
 - **Without the relief**, a corner can bend only up to 2 × acos(r / (r + t)), r being the inside radius and t the wall thickness: past that, the side walls next to the bent wall stick out of the rounded corner. A wider corner is refused with its limit, for example "The corner between Profile001 and Profile002 bends 135 degrees: without the relief it bends up to 106.3 degrees. Turn the relief on." The limit is 106.3 degrees for r = 3 mm and t = 2 mm, and 88.8 degrees for r = 5 mm.
-- **The key does not fit** in the notch: make it smaller, or turn it off.
+- **The key does not fit** in the notch: make it smaller, or turn it off. With a large inside radius the middle of the miter line falls in the relief, where no key fits: the panel says so, for example "The key does not fit in the notch between Profile and Profile001 with this inside radius: make the radius smaller or turn the key off." (a 50x50x2 tube with a 33.5 mm radius).
 - The tubes do not form one chain, are not the same tube, or do not continue each other: the panel names them.
 
 ### Edit the bar

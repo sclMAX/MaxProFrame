@@ -43,17 +43,38 @@ def developed(lengths, angles, radii=None, k=K):
     return total
 
 
-def key_centers(corner, r=R, rho=R, diameter=DEPTH / 4):
-    """(u, v) of the bulb center of the tab (segment before) and of the socket (segment after), by the design."""
+def key_along(corner, r=R):
+    """Where the key center sits on the miter line, from the bend axis point (0, r + t) inward (S20).
+
+    The middle of the miter line seen on the side wall of the folded bar: from the outer contour of the bend (r + t
+    outward from the bend axis) to the inner corner ((depth - r - t) / cos(theta / 2) inward).
+    """
     h = math.radians(corner.bend_angle) / 2
-    v_k = (T + rho + DEPTH - T) / 2
-    s = (v_k - r - T) / math.cos(h)
-    tab = (-s * math.sin(h) + diameter * math.cos(h), r + T + s * math.cos(h) + diameter * math.sin(h))
-    socket = (
-        corner.bend_allowance + s * math.sin(h) + diameter * math.cos(h),
-        r + T + s * math.cos(h) - diameter * math.sin(h),
-    )
-    return tab, socket
+    return ((DEPTH - r - T) / math.cos(h) - (r + T)) / 2
+
+
+def key_point(corner, x, y, after=False, r=R):
+    """(u, v) of the point (x, y) of the key frame of the segment before (or ``after``) of ``corner``.
+
+    The key frame has its origin at the key center, on the miter line (the flank without clearance); x goes across
+    the flank into the V for the segment before and into the material for the segment after; y goes along the flank.
+    """
+    h = math.radians(corner.bend_angle) / 2
+    s = key_along(corner, r) + y
+    if after:
+        return (
+            corner.bend_allowance + s * math.sin(h) + x * math.cos(h),
+            r + T + s * math.cos(h) - x * math.sin(h),
+        )
+    return (-s * math.sin(h) + x * math.cos(h), r + T + s * math.cos(h) + x * math.sin(h))
+
+
+def key_centers(corner, r=R, diameter=DEPTH / 4):
+    """(u, v) of a point in the middle of the tab (segment before) and of the socket (segment after).
+
+    Both are a quarter of the diameter off the miter line, so they meet when the corner folds.
+    """
+    return key_point(corner, diameter / 4, 0.0, r=r), key_point(corner, diameter / 4, 0.0, after=True, r=r)
 
 
 class UnfoldFixture(ChainFixture):
@@ -216,6 +237,62 @@ class RectangleUnfoldTest(UnfoldFixture):
                 self.assertFalse(self.filled(unkeyed, unkeyed_corner, *tab, w))
                 self.assertTrue(self.filled(unkeyed, unkeyed_corner, *socket, w))
 
+    def test_clearance_moves_the_relief_arcs_back_by_all_of_it(self):
+        # S8 (L26): the arcs of the relief (centered on the bend axis points with the default radius) move back the
+        # whole clearance: folded, they face the bent wall, whose face does not move.
+        chain = self.rectangle()
+        tight = unfold(chain, STEEL, key=False)
+        loose = unfold(chain, STEEL, clearance=1.0, key=False)
+
+        self.solid(loose)
+        a = math.radians(45) / 4
+        for tight_corner, loose_corner in zip(tight.corners, loose.corners):
+            # From the bend axis point of each segment, between the bent wall and its flank.
+            sides = (
+                ((0.0, R + T), (math.sin(a), -math.cos(a))),
+                ((loose_corner.bend_allowance, R + T), (-math.sin(a), -math.cos(a))),
+            )
+            for (u0, v0), (du, dv) in sides:
+                for distance, kept in ((R - 1.5, True), (R - 0.5, False), (R - 0.1, False)):
+                    u, v = u0 + du * distance, v0 + dv * distance
+                    for w in (SIDE_WALL, -SIDE_WALL):
+                        self.assertTrue(self.filled(tight, tight_corner, u, v, w), (u, v, w))
+                        self.assertEqual(kept, self.filled(loose, loose_corner, u, v, w), (u, v, w, distance))
+
+    def test_key_is_a_half_circle_centered_on_the_miter_line(self):
+        # S20 (L26): the tab (radius d/2 - g/2) stands out of the flank of the segment before, on the flank moved back
+        # half the clearance; the socket (radius d/2 + g/2) is cut into the flank of the segment after; both centered
+        # on the miter line at the middle of the miter line of the folded bar, without a neck.
+        g, d = 1.0, DEPTH / 4
+        bar = unfold(self.rectangle(), STEEL, clearance=g)
+
+        self.solid(bar)
+        tab, socket = d / 2 - g / 2, d / 2 + g / 2
+        for corner in bar.corners:
+            for w in (SIDE_WALL, -SIDE_WALL):
+
+                def filled(x, y, after=False):
+                    return self.filled(bar, corner, *key_point(corner, x, y, after), w)
+
+                for angle in (0, 45, 80, -45, -80):
+                    cos, sin = math.cos(math.radians(angle)), math.sin(math.radians(angle))
+                    for radius, kept in ((tab - 0.2, True), (tab + 0.2, False)):
+                        self.assertEqual(kept, filled(radius * cos, radius * sin), (angle, radius, w))
+                    for radius, kept in ((socket - 0.2, False), (socket + 0.2, True)):
+                        self.assertEqual(kept, filled(radius * cos, radius * sin, after=True), (angle, radius, w))
+                # The tab sits on its flank, moved back half the clearance, with no gap in between.
+                self.assertTrue(filled(-g / 4, 0))
+                # Past the key, along the flanks, the clearance stays open.
+                for y in (tab + 0.5, -(tab + 0.5)):
+                    self.assertFalse(filled(-g / 4, y), y)
+                    self.assertTrue(filled(-3 * g / 4, y), y)
+                for y in (socket + 0.5, -(socket + 0.5)):
+                    self.assertFalse(filled(g / 4, y, after=True), y)
+                    self.assertTrue(filled(3 * g / 4, y, after=True), y)
+                # No neck: nothing stands out a diameter past the flank, and the socket is not cut that deep.
+                self.assertFalse(filled(d, 0))
+                self.assertTrue(filled(d, 0, after=True))
+
     def test_radius_outside_its_limits_is_refused(self):
         chain = self.rectangle()
         # min = t; max = depth - 2t - key diameter (depth / 4) with the key, depth - 2t without it.
@@ -228,7 +305,8 @@ class RectangleUnfoldTest(UnfoldFixture):
 
     def test_radius_at_its_limits_is_accepted(self):
         chain = self.rectangle()
-        for radius, options in ((2.0, {}), (33.5, {}), (46.0, dict(key=False))):
+        # At 33.5 mm the key has no room on the miter line (test_key_the_radius_leaves_no_room_for_is_refused).
+        for radius, options in ((2.0, {}), (33.5, dict(key=False)), (46.0, dict(key=False))):
             with self.subTest(radius=radius, options=options):
                 bar = unfold(chain, STEEL, radius=radius, **options)
                 self.solid(bar)
@@ -309,13 +387,34 @@ class ArbitraryAnglesUnfoldTest(UnfoldFixture):
         self.solid(bar)
         self.assertEqual([106.0], [round(corner.bend_angle, 6) for corner in bar.corners])
 
-    def test_key_that_does_not_fit_in_the_notch_is_refused(self):
-        # At 60 degrees a 36 mm bulb reaches past the other flank of the V.
+    def test_key_that_does_not_fit_on_its_flank_is_refused(self):
+        # At 60 degrees a 42 mm key, centered 25.3 mm in, reaches into the relief (5 mm in) on its flank.
         self.assertRefused(
             "The key does not fit in the notch between Profile and Profile001: make it smaller.",
             self.chain(),
-            key_diameter=36.0,
+            key_diameter=42.0,
         )
+
+
+class KeyRoomUnfoldTest(UnfoldFixture):
+    def test_key_over_the_relief_is_refused(self):
+        # A 20 mm relief reaches 22 mm in: the default key (12.5 mm centered 25.7 mm in) would cut into it.
+        self.assertRefused(
+            "The key does not fit in the notch between Profile and Profile001: make it smaller.",
+            self.rectangle(),
+            relief_radius=20.0,
+        )
+
+    def test_key_the_radius_leaves_no_room_for_is_refused(self):
+        # S15 accepts r = 33.5 with the key, but then the middle of the miter line (7.5 mm outside the bend axis)
+        # falls in the relief: no key fits there, whatever its size.
+        message = (
+            "The key does not fit in the notch between Profile and Profile001 with this inside radius: make the "
+            "radius smaller or turn the key off."
+        )
+        chain = self.rectangle()
+        self.assertRefused(message, chain, radius=33.5)
+        self.assertRefused(message, chain, radius=33.5, key_diameter=1.0)
 
 
 class FeatureTransferTest(UnfoldFixture):

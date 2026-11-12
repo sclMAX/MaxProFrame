@@ -45,7 +45,7 @@ class TestFoldedBarPanelSpanish(FoldedPanelFixture):
         self.assertEqual("Llave de encastre", form.cb_key.text())
         self.assertEqual("Diámetro de la llave", field_label(form.groupBox_notch, form.spin_key_diameter))
         self.assertEqual("Predeterminado", form.spin_key_diameter.specialValueText())
-        self.assertEqual("Ancho del cuello", field_label(form.groupBox_notch, form.spin_neck_width))
+        self.assertFalse(hasattr(form, "spin_neck_width"))
         self.assertEqual("Alivio junto a la pared doblada", form.cb_relief.text())
         self.assertEqual("Radio del alivio", field_label(form.groupBox_notch, form.spin_relief_radius))
         self.assertEqual("Previsualización", form.groupBox_preview.title())

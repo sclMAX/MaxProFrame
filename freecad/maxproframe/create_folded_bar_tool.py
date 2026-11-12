@@ -49,7 +49,6 @@ PROPERTIES = (
     "Key",
     "Relief",
     "KeyDiameter",
-    "NeckWidth",
     "ReliefRadius",
     "OpenCorner",
 )
@@ -186,14 +185,12 @@ class FoldedBarTaskPanel:
         notch.addRow(form.cb_key)
         form.spin_key_diameter = self._default_field(
             translate(
-                "MaxProFrame", "Bulb diameter of the key; Default: a quarter of the tube depth across the bent wall"
+                "MaxProFrame",
+                "Diameter of the key, a half circle on the miter line; Default: a quarter of the tube depth across "
+                "the bent wall",
             )
         )
         notch.addRow(translate("MaxProFrame", "Key diameter"), form.spin_key_diameter)
-        form.spin_neck_width = self._default_field(
-            translate("MaxProFrame", "Neck width of the key; Default: 60 % of the bulb diameter")
-        )
-        notch.addRow(translate("MaxProFrame", "Neck width"), form.spin_neck_width)
         form.cb_relief = QtGui.QCheckBox(translate("MaxProFrame", "Relief next to the bent wall"))
         notch.addRow(form.cb_relief)
         form.spin_relief_radius = self._default_field(
@@ -243,7 +240,6 @@ class FoldedBarTaskPanel:
             form.cb_key.setChecked(obj.Key)
             form.cb_relief.setChecked(obj.Relief)
             form.spin_key_diameter.setValue(obj.KeyDiameter.Value)
-            form.spin_neck_width.setValue(obj.NeckWidth.Value)
             form.spin_relief_radius.setValue(obj.ReliefRadius.Value)
         self._fill_open_corners()
         if obj is not None:
@@ -337,7 +333,6 @@ class FoldedBarTaskPanel:
             form.spin_radius,
             form.spin_clearance,
             form.spin_key_diameter,
-            form.spin_neck_width,
             form.spin_relief_radius,
         ):
             spin.valueChanged.connect(self._changed)
@@ -346,7 +341,6 @@ class FoldedBarTaskPanel:
     def _enable_sizes(self):
         form = self.form
         form.spin_key_diameter.setEnabled(form.cb_key.isChecked())
-        form.spin_neck_width.setEnabled(form.cb_key.isChecked())
         form.spin_relief_radius.setEnabled(form.cb_relief.isChecked())
 
     # Corner radii.
@@ -415,7 +409,6 @@ class FoldedBarTaskPanel:
             key=form.cb_key.isChecked(),
             relief=form.cb_relief.isChecked(),
             key_diameter=size(form.spin_key_diameter),
-            neck_width=size(form.spin_neck_width),
             relief_radius=size(form.spin_relief_radius),
         )
 
@@ -539,7 +532,6 @@ class FoldedBarTaskPanel:
             "Key": form.cb_key.isChecked(),
             "Relief": form.cb_relief.isChecked(),
             "KeyDiameter": form.spin_key_diameter.value(),
-            "NeckWidth": form.spin_neck_width.value(),
             "ReliefRadius": form.spin_relief_radius.value(),
             "OpenCorner": self._open_corner_property(),
         }

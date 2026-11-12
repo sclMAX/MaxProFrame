@@ -44,6 +44,11 @@ FOLDED_MITER_TEXTS = (
     ("MaxProFrame", "The key does not fit in the notch between {} and {}: make it smaller."),
     (
         "MaxProFrame",
+        "The key does not fit in the notch between {} and {} with this inside radius: make the radius smaller or "
+        "turn the key off.",
+    ),
+    (
+        "MaxProFrame",
         "{}: its developed length ({:.1f} mm) is longer than the stock length of the cut list ({:.1f} mm).\n",
     ),
     ("MaxProFrame", "{} does not fold into one solid: change its bend settings."),
@@ -63,10 +68,12 @@ FOLDED_MITER_TEXTS = (
     ("MaxProFrame", "Gap between the notch flanks and around the key, half on each side"),
     ("MaxProFrame", "Clearance"),
     ("MaxProFrame", "Interlocking key"),
-    ("MaxProFrame", "Bulb diameter of the key; Default: a quarter of the tube depth across the bent wall"),
+    (
+        "MaxProFrame",
+        "Diameter of the key, a half circle on the miter line; Default: a quarter of the tube depth across the bent "
+        "wall",
+    ),
     ("MaxProFrame", "Key diameter"),
-    ("MaxProFrame", "Neck width of the key; Default: 60 % of the bulb diameter"),
-    ("MaxProFrame", "Neck width"),
     ("MaxProFrame", "Relief next to the bent wall"),
     ("MaxProFrame", "Radius of the relief; Default: the inside bend radius of the corner"),
     ("MaxProFrame", "Relief radius"),

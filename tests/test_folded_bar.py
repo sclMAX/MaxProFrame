@@ -76,19 +76,23 @@ class FoldedBarObjectTest(FoldedBarFixture):
         )
         self.assertEqual([0.0, 0.0, 0.0], list(bar.CornerRadii))
         self.assertEqual(
-            (0.0, True, True, 0.0, 0.0, 0.0),
-            (
-                bar.Clearance.Value,
-                bar.Key,
-                bar.Relief,
-                bar.KeyDiameter.Value,
-                bar.NeckWidth.Value,
-                bar.ReliefRadius.Value,
-            ),
+            (0.0, True, True, 0.0, 0.0),
+            (bar.Clearance.Value, bar.Key, bar.Relief, bar.KeyDiameter.Value, bar.ReliefRadius.Value),
         )
         self.assertEqual(1, bar.getEditorMode("DevelopedLength").count("ReadOnly"))
         # Like a profile, for the BOM and the cut list.
         self.assertEqual(("Square Hollow", "50x50x2", "Steel", ""), (bar.Family, bar.SizeName, bar.Material, bar.PID))
+
+    def test_the_key_has_no_neck_setting(self):
+        # S20 (L26): the key is a half circle, sized by its diameter only.
+        profiles, bar = self.make_bar(key=False)
+
+        self.assertNotIn("NeckWidth", bar.PropertiesList)
+        with self.assertRaises(TypeError) as raised:
+            make_folded_bar(profiles, STEEL, neck_width=5.0)
+        self.assertEqual("Unknown folded bar options: neck_width", str(raised.exception))
+        with self.assertRaises(TypeError):
+            unfold(build_chain(profiles), STEEL, neck_width=5.0)
 
     def test_open_corner_given_sets_the_start_of_the_bar(self):
         bottom, right, top, left = self.frame()

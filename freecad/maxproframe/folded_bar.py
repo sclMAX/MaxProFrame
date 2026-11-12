@@ -32,7 +32,6 @@ OPTION_PROPERTIES = {
     "key": "Key",
     "relief": "Relief",
     "key_diameter": "KeyDiameter",
-    "neck_width": "NeckWidth",
     "relief_radius": "ReliefRadius",
 }
 
@@ -68,13 +67,12 @@ def unfold_options(obj):
         key=obj.Key,
         relief=obj.Relief,
         key_diameter=size(obj.KeyDiameter),
-        neck_width=size(obj.NeckWidth),
         relief_radius=size(obj.ReliefRadius),
     )
 
 
 def check_settings(chain, configuration, radius=None, corner_radii=None, clearance=0.0, key=True, relief=True,
-                   key_diameter=None, neck_width=None, relief_radius=None):  # fmt: skip
+                   key_diameter=None, relief_radius=None):  # fmt: skip
     """Raise the UnfoldError ``unfold`` would raise for these settings, without building any shape."""
     _check_thickness(chain, configuration)
     _bends(
@@ -86,7 +84,6 @@ def check_settings(chain, configuration, radius=None, corner_radii=None, clearan
         key=key,
         relief=relief,
         key_diameter=key_diameter,
-        neck_width=neck_width,
         relief_radius=relief_radius,
     )
 
@@ -170,11 +167,11 @@ class FoldedBar:
         )  # fmt: skip
         _add(
             obj, "App::PropertyLength", "KeyDiameter", "Notch",
-            translate("App::Property", "Bulb diameter of the key; 0: a quarter of the tube depth across the bent wall"),
-        )  # fmt: skip
-        _add(
-            obj, "App::PropertyLength", "NeckWidth", "Notch",
-            translate("App::Property", "Neck width of the key; 0: 60 % of the bulb diameter"),
+            translate(
+                "App::Property",
+                "Diameter of the key, a half circle on the miter line; 0: a quarter of the tube depth across the "
+                "bent wall",
+            ),
         )  # fmt: skip
         _add(
             obj, "App::PropertyLength", "ReliefRadius", "Notch",
@@ -373,7 +370,7 @@ def make_folded_bar(selection, configuration, open_corner=None, **options):
 
     ``open_corner``: the pair of pieces meeting where a closed frame opens (``build_chain``). ``options`` are the
     sizes of ``unfold`` (radius, corner_radii as {corner index: radius}, clearance, key, relief, key_diameter,
-    neck_width, relief_radius). The bar joins the folder or Part holding the first piece and is recomputed: a
+    relief_radius). The bar joins the folder or Part holding the first piece and is recomputed: a
     selection that does not fold leaves it in error with the reason.
     """
     unknown = set(options) - set(OPTION_PROPERTIES)

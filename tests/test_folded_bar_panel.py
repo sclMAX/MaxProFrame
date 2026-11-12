@@ -49,6 +49,10 @@ COMMANDS = ("MaxProFrame_FoldedBar", "MaxProFrame_UnfoldBar", "MaxProFrame_BendC
 NOT_A_CHAIN = "The selected profiles do not form one chain: Profile meets none of the others."
 # 50 mm deep tube, 2 mm walls, key of a quarter of the depth: 2 <= r <= 50 - 4 - 12.5.
 RADIUS_RANGE = "The inside bend radius must be between 2 and 33.5 mm."
+KEY_WITHOUT_ROOM = (
+    "The key does not fit in the notch between Profile and Profile001 with this inside radius: make the radius "
+    "smaller or turn the key off."
+)
 WIDE_WITHOUT_RELIEF = (
     "The corner between Profile001 and Profile002 bends 135 degrees: without the relief it bends up to "
     "106.3 degrees. Turn the relief on."
@@ -271,15 +275,25 @@ class CreatePanelTest(FoldedPanelFixture):
         self.assertEqual(0, form.combo_open_corner.currentIndex())
         self.assertEqual([0.0, 0.0, 0.0], [spin.value() for spin in panel.corner_spins()])
         self.assertEqual(
-            (0.0, True, True, 0.0, 0.0, 0.0),
+            (0.0, True, True, 0.0, 0.0),
             (
                 form.spin_clearance.value(),
                 form.cb_key.isChecked(),
                 form.cb_relief.isChecked(),
                 form.spin_key_diameter.value(),
-                form.spin_neck_width.value(),
                 form.spin_relief_radius.value(),
             ),
+        )
+        # S20 (L26): the key is a half circle, sized by its diameter only: no neck field.
+        self.assertFalse(hasattr(form, "spin_neck_width"))
+        notch = form.groupBox_notch.layout()
+        self.assertEqual(
+            ["Clearance", "Key diameter", "Relief radius"],
+            [
+                notch.itemAt(row, QtWidgets.QFormLayout.LabelRole).widget().text()
+                for row in range(notch.rowCount())
+                if notch.itemAt(row, QtWidgets.QFormLayout.LabelRole) is not None
+            ],
         )
         self.assertTrue(form.cb_auto_update.isChecked())
         self.assertAccepts(panel)
@@ -335,15 +349,8 @@ class CreatePanelTest(FoldedPanelFixture):
         )
         self.assertEqual([0.0, 5.0, 0.0], list(bar.CornerRadii))
         self.assertEqual(
-            (0.2, False, True, 0.0, 0.0, 3.5),
-            (
-                round(bar.Clearance.Value, 9),
-                bar.Key,
-                bar.Relief,
-                bar.KeyDiameter.Value,
-                bar.NeckWidth.Value,
-                bar.ReliefRadius.Value,
-            ),
+            (0.2, False, True, 0.0, 3.5),
+            (round(bar.Clearance.Value, 9), bar.Key, bar.Relief, bar.KeyDiameter.Value, bar.ReliefRadius.Value),
         )
         self.assertEqual([bottom, right, top, left], list(bar.Segments))
         self.assertEqual([bottom, left], list(bar.OpenCorner))
@@ -409,7 +416,10 @@ class CreatePanelTest(FoldedPanelFixture):
         panel.form.spin_radius.setValue(1.0)
 
         self.assertRefused(panel, RADIUS_RANGE)
+        # At the largest radius the key has no room left on the miter line.
         panel.form.spin_radius.setValue(33.5)
+        self.assertRefused(panel, KEY_WITHOUT_ROOM)
+        panel.form.cb_key.setChecked(False)
         self.assertAccepts(panel)
 
     def test_relief_off_at_a_wide_corner_shows_why_and_disables_ok(self):

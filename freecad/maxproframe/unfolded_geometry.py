@@ -3,8 +3,9 @@
 Every segment of the chain (``folded_chain.build_chain``) is moved rigidly onto the X axis, one after the other,
 so that the outside of the frame keeps its size (outside mold line): between two segments the outer wall of the bend
 (the one that stays whole) develops its bend allowance theta * (r + K t). At each folded corner the other walls get
-a V notch whose flanks meet when the corner folds, with an interlocking key (a round bulb tab on one flank, its
-socket on the other) and a curved relief next to the bent wall; the clearance moves the flanks and the key apart.
+a V notch whose flanks meet when the corner folds, with an interlocking key (a half circle centered on the miter line,
+standing out of one flank as the tab, its socket cut into the other) and a curved relief next to the bent wall; the
+clearance moves the flanks, the key and the relief arcs apart.
 The cuts made on each segment (its trims, cutouts and drill holes) move with it. The bar starts at X = 0 at the
 open-corner end of the first segment. See odd/tasks/folded-miter.md, section "T3 design".
 """
@@ -19,9 +20,8 @@ from freecad.maxproframe.ff_tools import translate
 from freecad.maxproframe.folded_chain import section_offset
 from freecad.maxproframe.profile_pattern import container_placement, placed
 
-# Default key: bulb diameter as a part of the depth across the bent wall, neck width as a part of the bulb (S20).
+# Default key: its diameter as a part of the depth across the bent wall (S20).
 KEY_DIAMETER_RATIO = 0.25
-NECK_RATIO = 0.6
 SIZE_TOLERANCE = 1e-6
 AREA_TOLERANCE = 1e-6
 VOLUME_TOLERANCE = 1e-6
@@ -84,6 +84,16 @@ def _disc(center, radius):
     return Part.Face(Part.Wire(Part.makeCircle(radius, App.Vector(center[0], center[1], 0))))
 
 
+def _cut_disc(center, radius, x_min):
+    """The part of the disc at ``center`` with x >= ``x_min`` (the chord at ``x_min`` crosses the disc)."""
+    reach = math.degrees(math.acos((x_min - center[0]) / radius))
+    point = App.Vector(center[0], center[1], 0)
+    arc = Part.makeCircle(radius, point, App.Vector(0, 0, 1), -reach, reach)
+    ends = arc.Vertexes
+    chord = Part.makeLine(ends[-1].Point, ends[0].Point)
+    return Part.Face(Part.Wire([arc, chord]))
+
+
 def _prism(face, reach):
     """``face`` of the (u, v) plane extruded through ``reach`` on both sides along w."""
     face = face.copy()
@@ -115,7 +125,6 @@ class _Bend:
     key: bool
     relief: bool
     diameter: float
-    neck: float
     relief_radius: float
 
     @property
@@ -176,33 +185,49 @@ class _Bend:
         return _polygon([(bottom_before, t), (bottom_after, t), (top_after, top), (top_before, top)])
 
     def relief_region(self):
+        """The rectangle next to the bent wall and the discs it keeps, each one centered on the bend axis point of
+        its segment (with the default radius). The clearance moves their arcs back by all of it: folded, they face
+        the bent wall, which has no cut face there."""
         t, ba, rho = self.thickness, self.allowance, self.relief_radius
         rectangle = _polygon([(0, t), (ba, t), (ba, t + rho), (0, t + rho)])
-        return rectangle, _disc((0, t + rho), rho), _disc((ba, t + rho), rho)
+        kept = rho - self.clearance
+        if kept <= SIZE_TOLERANCE:
+            return (rectangle,)
+        return rectangle, _disc((0, t + rho), kept), _disc((ba, t + rho), kept)
 
     def _key_height(self):
+        """The heights v the key must stay between: past the relief, before the inside of the inner wall."""
         low = self.thickness + (self.relief_radius if self.relief else 0.0)
         return low, self.depth - self.thickness
 
-    def _key_shape(self, after, grow):
-        """Bulb and neck on the flank of the segment before (tab) or after (socket), grown by ``grow`` each side."""
-        h, t, r, g, d = self.half, self.thickness, self.radius, self.clearance, self.diameter
-        low, high = self._key_height()
-        along = ((low + high) / 2 - r - t) / math.cos(h)
-        neck = self.neck / 2 + grow
-        bulb = _disc((d, along), d / 2 + grow)
-        stem = _polygon([(-g, along - neck), (d, along - neck), (d, along + neck), (-g, along + neck)])
-        shape = bulb.fuse(stem).removeSplitter()
+    def _key_along(self):
+        """Where the key center sits on the miter line, from the bend axis point (0, r + t) inward.
+
+        The middle of the miter line seen on the side wall of the folded bar: from the outer contour of the bend
+        (r + t outward from the bend axis) to the inner corner ((depth - r - t) / cos(theta / 2) inward).
+        """
+        h, t, r = self.half, self.thickness, self.radius
+        return ((self.depth - r - t) / math.cos(h) - (r + t)) / 2
+
+    def _key_shape(self, after, radius, x_min):
+        """The key on the flank of the segment before (tab) or after (socket): the disc of ``radius`` centered on
+        the miter line, kept where x >= ``x_min``; x goes across the flank, into the V for the segment before and
+        into the material for the segment after."""
+        h, t, r = self.half, self.thickness, self.radius
+        shape = _cut_disc((0.0, self._key_along()), radius, x_min)
         origin = App.Vector(self.allowance if after else 0.0, r + t, 0)
         turn = -math.degrees(h) if after else math.degrees(h)
         shape.Placement = App.Placement(origin, App.Rotation(App.Vector(0, 0, 1), turn))
         return shape
 
     def tab(self):
-        return self._key_shape(False, -self.clearance / 2)
+        """Half circle standing out of the flank of the segment before, on that flank moved back half the clearance."""
+        g = self.clearance
+        return self._key_shape(False, self.diameter / 2 - g / 2, -g / 2)
 
     def socket(self):
-        return self._key_shape(True, self.clearance / 2)
+        """Half circle cut into the flank of the segment after, only into that segment."""
+        return self._key_shape(True, self.diameter / 2 + self.clearance / 2, 0.0)
 
     def check_key(self):
         refused = UnfoldError(
@@ -211,11 +236,24 @@ class _Bend:
             )
         )
         g, d = self.clearance, self.diameter
-        if d - g <= SIZE_TOLERANCE or self.neck - g <= SIZE_TOLERANCE:
+        # The tab must reach out of its flank, moved back half the clearance.
+        if d / 2 - g / 2 <= g / 2 + SIZE_TOLERANCE:
             raise refused
         low, high = self._key_height()
-        middle = (low + high) / 2
-        if middle - d / 2 < low - SIZE_TOLERANCE or middle + d / 2 > high + SIZE_TOLERANCE:
+        middle = self.radius + self.thickness + self._key_along() * math.cos(self.half)
+        # Not even the smallest key (its socket 3/2 of the clearance in radius) fits there: the radius leaves no room.
+        smallest = 1.5 * g
+        if middle - smallest < low + SIZE_TOLERANCE or middle + smallest > high - SIZE_TOLERANCE:
+            raise UnfoldError(
+                translate(
+                    "MaxProFrame",
+                    "The key does not fit in the notch between {} and {} with this inside radius: make the radius "
+                    "smaller or turn the key off.",
+                ).format(*self.names)
+            )
+        # The socket, the larger half circle, stays clear of the relief and of the inner wall.
+        room = d / 2 + g / 2
+        if middle - room < low - SIZE_TOLERANCE or middle + room > high + SIZE_TOLERANCE:
             raise refused
         tab = self.tab()
         reach = 10 * (self.depth + d + self.allowance + tab.BoundBox.DiagonalLength)
@@ -247,14 +285,17 @@ class _Bend:
         solids = [_prism(face, reach) for face in cuts]
         if self.relief:
             rectangle, *discs = self.relief_region()
-            solids.append(_prism(rectangle, reach).cut([_prism(disc, reach) for disc in discs]))
+            relief = _prism(rectangle, reach)
+            if discs:
+                relief = relief.cut([_prism(disc, reach) for disc in discs])
+            solids.append(relief)
         removed = solids[0]
         for solid in solids[1:]:
             removed = removed.fuse(solid)
         return removed
 
 
-def _bends(chain, configuration, radius, corner_radii, clearance, key, relief, key_diameter, neck_width, relief_radius):
+def _bends(chain, configuration, radius, corner_radii, clearance, key, relief, key_diameter, relief_radius):
     radius = float(configuration.inside_radius) if radius is None else float(radius)
     corner_radii = corner_radii or {}
     bends = []
@@ -272,7 +313,6 @@ def _bends(chain, configuration, radius, corner_radii, clearance, key, relief, k
             key=key,
             relief=relief,
             diameter=diameter,
-            neck=diameter * NECK_RATIO if neck_width is None else float(neck_width),
             relief_radius=r if relief_radius is None else float(relief_radius),
         )
         bend.check_radius()
@@ -358,21 +398,19 @@ def unfold(
     key=True,
     relief=True,
     key_diameter=None,
-    neck_width=None,
     relief_radius=None,
 ):
     """The unfolded bar of ``chain`` (``folded_chain.build_chain``) bent with ``configuration``.
 
     ``radius`` is the inside bend radius of the bar (the configuration's when None); ``corner_radii`` maps a corner
-    index to its own radius. ``clearance`` goes half on each side of the notch flanks and of the key. The key (bulb
-    ``key_diameter`` with a ``neck_width`` neck; a quarter of the depth across the bent wall and 60 % of it by
-    default) and the relief (``relief_radius``, the inside radius by default) can be turned off.
+    index to its own radius. ``clearance`` goes half on each side of the notch flanks and of the key, and all of it on
+    the relief arcs (they face the bent wall). The key (a half circle of ``key_diameter`` centered on the miter line,
+    a quarter of the depth across the bent wall by default) and the relief (``relief_radius``, the inside radius by
+    default) can be turned off.
     Raises UnfoldError when the configuration, the radius or the key do not suit the tube.
     """
     _check_thickness(chain, configuration)
-    bends = _bends(
-        chain, configuration, radius, corner_radii, clearance, key, relief, key_diameter, neck_width, relief_radius
-    )
+    bends = _bends(chain, configuration, radius, corner_radii, clearance, key, relief, key_diameter, relief_radius)
     placements, corners = _straight_placements(chain, bends)
     section = _section(chain, placements[0])
     x_min = _box(placed(_global_shape(chain.segments[0].tip), placements[0])).XMin

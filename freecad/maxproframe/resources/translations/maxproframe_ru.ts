@@ -2857,6 +2857,10 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>The key does not fit in the notch between {} and {} with this inside radius: make the radius smaller or turn the key off.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>{}: its developed length ({:.1f} mm) is longer than the stock length of the cut list ({:.1f} mm).
 </source>
         <translation type="unfinished"></translation>
@@ -2930,19 +2934,11 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Bulb diameter of the key; Default: a quarter of the tube depth across the bent wall</source>
+        <source>Diameter of the key, a half circle on the miter line; Default: a quarter of the tube depth across the bent wall</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Key diameter</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Neck width of the key; Default: 60 % of the bulb diameter</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Neck width</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
