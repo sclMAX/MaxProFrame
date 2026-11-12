@@ -1,7 +1,7 @@
 # Folded miters (V-notch tube folding) and unfolded bar
 A chain of tube profiles is joined by folded corners (laser V-notch with key and relief, outer wall bent with a real
 radius) and unfolded into one straight solid with every cut, exported with FreeCAD's own formats for a CNC tube laser.
-Status: implementing (T1-T4 done). Branch: `feat/folded-miter`.
+Status: implementing (T1-T5 done; T6, T7 left). Branch: `feat/folded-miter`.
 
 ## Specs
 - S1 Folded corner (L1): "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte
@@ -62,6 +62,9 @@ Accepted design proposals (L6 "deacuerdo" to Q1-Q6):
   radius; key = round bulb on one flank at mid height of the V with its socket on the other flank, bulb diameter =
   1/4 of the depth across the bent wall, neck width = 60 % of the bulb; the clearance goes half on the tab, half on
   the socket; the bulb diameter is the key room of S15.
+- S21 Relief off at wide angles (L21 "Rechazar la esquina"): without the relief, a corner bending more than
+  2 acos(r / (r + t)) is refused: "The corner between {} and {} bends {} degrees: without the relief it bends up to {}
+  degrees. Turn the relief on." (106.3 degrees for r = 3, t = 2; 88.8 degrees for r = 5, t = 2).
 
 ## Design notes (from exploration, see Log L3)
 - Segments are the visible tips of each profile stack (Profile -> trims -> cutouts/holes); `_utils.py:174-228`.
@@ -130,6 +133,19 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
 - Checks: folded volume = unfolded volume + sum over corners of theta * (t/2 - K t) * area of the strip section
   (Pappus: the revolved strip has its centroid at r + t/2 from the axis, the flat one is BA long).
 
+## T5 design (objects; parent, L18)
+- `FoldedBar` (Part::FeaturePython, module `folded_bar.py`): `Segments` (LinkList, the selected objects in chain order,
+  first = first selected), `OpenCorner` (LinkList of 0 or 2, the pair of S17), a copy of the bend configuration
+  (`BendConfiguration` name, `Material`, `WallThickness`, `InsideRadius`, `KFactor`) so the document does not depend on
+  the configurations file of the computer that opens it, `CornerRadii` (FloatList per corner in chain order, 0 = the bar
+  radius, S14), `Clearance`, `Key`, `Relief`, `KeyDiameter`, `NeckWidth`, `ReliefRadius` (0 = the S20 default),
+  read-only `DevelopedLength`; `execute` = `fold(...)` and refuses (error status with the ChainError / UnfoldError
+  message) a result that is not one solid; it hides the segment tips and carries one PID, Family, SizeName, Material
+  like a profile so the BOM and the cut list count it as one piece of `DevelopedLength` (S13).
+- `UnfoldedBar` (Part::FeaturePython, same module): `FoldedBar` link; shape = the unfolded straight solid at the
+  origin along +X (S4, S13); exported with FreeCAD's own export (STEP round trip test).
+- S19: warn (console and BOM/cut list) when `DevelopedLength` exceeds the stock length configured for the cut list.
+
 ## Tasks
 - T1 S6 S11 inline: bend configuration store (JSON, versioned, atomic save, validation) + API; tests. [x] c53e8b5
 - T2 S2 S5 S17 S18 inline: chain builder from selected tips: order, corner angles, plane/wall checks, same section and
@@ -138,7 +154,7 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   tests (90 degree rectangle, arbitrary angles, holes moved, length per configuration). [x] 08711dc
 - T4 S7 S14 S16 worker: folded geometry with real radius matching the skeleton; tests. [x] b267940
 - T5 S2 S3 S4 S13 S19 inline: `FoldedBar` / `UnfoldedBar` objects: recompute, restore, hides tips, one PID, BOM and cut list as
-  one piece; STEP export round trip test. [ ]
+  one piece; STEP export round trip test. [x] 47f071c
 - T6 S1 S2 S6 S8 S9 S12 inline: commands and task panels (create folded bar with live preview, unfold, manage
   configurations); panel tests. [ ]
 - T7 S1-S19 inline: Spanish translations, Russian strings left unfinished for the contributor, tutorial, changelog. [ ]
@@ -212,3 +228,22 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   strip) and subtracts the overlap of the plain tips at the open corner. Open: with the relief off, past
   acos(r / (r + t)) (about 53 degrees of half angle, 106 degrees of bend for r=3 t=2) those side walls stick out of the
   round outer corner: decision asked to the user. Commit b267940.
+- L18 T5 design written by the parent (section "T5 design"); T5 delegated to a worker. Decision: the bar keeps a copy
+  of its bend configuration (portable documents).
+- L19 T5 worker questions answered by the parent (design additions): `Material` = the tube's profile material, the
+  configuration's material in `BendMaterial`; BOM row: angles and Ends "", Drill/Cutout "Yes", weight and price =
+  first profile's LinearWeight / UnitPrice x DevelopedLength / 1000; UnfoldedBar and the pieces folded into a bar are
+  not counted (also outside App::Part); `Segments` stores the tips; S19 = console warning on recompute and on the BOM
+  row (param "Stock Length", default 6000, read from create_bom_tool's param). Pre-existing: best_fit raises
+  "Can't fit" for any piece longer than the stock.
+- L20 T5 evidence (worker): `freecad/maxproframe/folded_bar.py` (FoldedBar, UnfoldedBar, make_folded_bar,
+  make_unfolded_bar), `_utils.py` (is_foldedbar, is_unfoldedbar, piece_stack, folded_into_bar), `create_bom.py`
+  (FoldedBar row), `populate_ids.py` (DevelopedLength key), icons. RED (module missing; then 3 failures: moved Part
+  117 mm off, tips visible after reopen), GREEN test_folded_bar 20; 13 BOM / cut list / PID modules OK. Open for T6:
+  Create BOM / Populate IDs do not accept a FoldedBar selected directly; relink Segments when a cutout or trim is added
+  to a segment later; balloons with a FoldedBar untested; folded_into_bar walks InListRecursive per object.
+- L21 (2026-11-12) "apagado", then to the clarification "Con "apagado" no me queda claro..." the choice "Rechazar la
+  esquina" (refuse the corner past the widest bend without relief), now S21. Evidence: `_Bend.check_relief` in
+  `unfolded_geometry.py`; RED (UnfoldError not raised), GREEN test_unfolded_geometry 18, test_folded_geometry 10
+  (its 135 degree test keeps the relief on now), test_folded_bar 20 (its relief-off step goes back to a 4 mm radius).
+- L22 Full suite on FreeCAD 1.1.4 with T5 (before S21): 1773 tests OK (job-3). Commits: T5 47f071c, S21 2e2f872.
