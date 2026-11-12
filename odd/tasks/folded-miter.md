@@ -1,7 +1,7 @@
 # Folded miters (V-notch tube folding) and unfolded bar
 A chain of tube profiles is joined by folded corners (laser V-notch with key and relief, outer wall bent with a real
 radius) and unfolded into one straight solid with every cut, exported with FreeCAD's own formats for a CNC tube laser.
-Status: implementing (T1, T2, T3 done). Branch: `feat/folded-miter`.
+Status: implementing (T1-T4 done). Branch: `feat/folded-miter`.
 
 ## Specs
 - S1 Folded corner (L1): "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte
@@ -114,13 +114,29 @@ to its path) . outer_normal + depth/2; OSSB = (r + t) tan h (outside setback); B
   must be between {min:g} and {max:g} mm."; the configuration thickness must equal the tube wall thickness
   ("{config} is for {a:g} mm walls; {tube} has {b:g} mm walls.").
 
+## T4 design (folded bar; parent derivation, L16)
+The folded bar is rebuilt from the unfolded bar of T3, so both always hold the same cuts.
+- `unfold` also returns, per segment, its rigid placement global -> straight (including the final shift to X = 0).
+- Bend strip of corner c: the straight bar inside u in [0, BA], v in [0, t] of the corner frame (the bent wall in the
+  bend zone, with the start of the side walls under it). It is replaced by its section at u = 0 (the bar cut by the
+  plane u = 0, kept at v <= t), mapped to global by the inverse placement of segment i and revolved by +theta around
+  the line through the bend center O (v = r + t, w = 0, at u = 0) with direction corner.axis (rotating d_i to d_i+1).
+- The rest of the straight bar (minus every bend strip) is split per segment: at each corner c, segment i+1 owns the
+  half space behind its nominal flank ((p - O_i+1).m' <= 0) clipped to u >= 0 (L17: past about 120 degrees, when
+  BA < OSSB, that half space would reach back into segment i), and segment i everything else (its key tab included).
+  Each part is mapped to global by the inverse placement of its segment.
+- The folded solid is the fusion of the segment parts and the revolved strips, one valid solid where the skeleton was
+  drawn (S16: the outside of the frame keeps its size; the outer corners are round, radius r + t).
+- Checks: folded volume = unfolded volume + sum over corners of theta * (t/2 - K t) * area of the strip section
+  (Pappus: the revolved strip has its centroid at r + t/2 from the axis, the flat one is BA long).
+
 ## Tasks
 - T1 S6 S11 inline: bend configuration store (JSON, versioned, atomic save, validation) + API; tests. [x] c53e8b5
 - T2 S2 S5 S17 S18 inline: chain builder from selected tips: order, corner angles, plane/wall checks, same section and
   material, folded/open per corner, clear error messages; tests. [x] f5f916c
 - T3 S1 S3 S5 S6 S8 S9 S14 S15 S16 S20 worker: unfolded geometry: developed length, V notch at any angle, key, relief, feature transfer;
   tests (90 degree rectangle, arbitrary angles, holes moved, length per configuration). [x] 08711dc
-- T4 S7 S14 S16 inline: folded geometry with real radius matching the skeleton; tests. [ ]
+- T4 S7 S14 S16 worker: folded geometry with real radius matching the skeleton; tests. [x] b267940
 - T5 S2 S3 S4 S13 S19 inline: `FoldedBar` / `UnfoldedBar` objects: recompute, restore, hides tips, one PID, BOM and cut list as
   one piece; STEP export round trip test. [ ]
 - T6 S1 S2 S6 S8 S9 S12 inline: commands and task panels (create folded bar with live preview, unfold, manage
@@ -187,3 +203,12 @@ to its path) . outer_normal + depth/2; OSSB = (r + t) tan h (outside setback); B
   than one solid returns the compound (check it in the object); base-profile bevels only set the bar extent; no 3D chain
   or Part container test yet.
 - L15 Full suite on FreeCAD 1.1.4 at f5f916c (T2): 1727 tests OK (job-2, 22 min).
+- L16 T4 design derived by the parent (section "T4 design"); T4 delegated to a worker (context backstop).
+- L17 T4 evidence (worker, re-run by the parent): `freecad/maxproframe/folded_geometry.py` `fold(chain, configuration,
+  **unfold options)` and `fold_bar(chain, unfolded)`; `UnfoldedBar.placements` (global -> straight per segment).
+  RED (module missing; placements attribute missing), GREEN test_folded_geometry 10, test_unfolded_geometry 16,
+  test_folded_chain 23 (parent re-run: 10 and 16 OK). Deviations: the split half space is clipped to u >= 0; the Pappus
+  volume test runs with the relief on (with it off, the rigid side walls next to the bent wall overlap the revolved
+  strip) and subtracts the overlap of the plain tips at the open corner. Open: with the relief off, past
+  acos(r / (r + t)) (about 53 degrees of half angle, 106 degrees of bend for r=3 t=2) those side walls stick out of the
+  round outer corner: decision asked to the user. Commit b267940.
