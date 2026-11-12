@@ -1,7 +1,7 @@
 # Folded miters (V-notch tube folding) and unfolded bar
 A chain of tube profiles is joined by folded corners (laser V-notch with key and relief, outer wall bent with a real
 radius) and unfolded into one straight solid with every cut, exported with FreeCAD's own formats for a CNC tube laser.
-Status: implementing (T1-T6 done; T7 left). Branch: `feat/folded-miter`.
+Status: implemented (T1-T7 done); push and PR are the user's decision. Branch: `feat/folded-miter`.
 
 ## Specs
 - S1 Folded corner (L1): "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte
@@ -157,7 +157,7 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   one piece; STEP export round trip test. [x] 47f071c
 - T6 S1 S2 S6 S8 S9 S12 inline: commands and task panels (create folded bar with live preview, unfold, manage
   configurations); panel tests. [x] 68817bd
-- T7 S1-S19 inline: Spanish translations, Russian strings left unfinished for the contributor, tutorial, changelog. [ ]
+- T7 S1-S19 inline: Spanish translations, Russian strings left unfinished for the contributor, tutorial, changelog. [x] 5e2172f
 
 ## Log
 - L1 (2026-11-11) "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte laser)
@@ -258,3 +258,9 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   bend_config validation messages; Reset IDs does not accept a FoldedBar; S12 is checked in the panel only.
 - L24 Full suite with T6: 1 failure, test_shortcuts (the 3 new commands were not in its scheme); added them to
   WITHOUT_SHORTCUT (no shortcut requested), test_shortcuts 5 OK. T6 commit 68817bd.
+- L25 T7 evidence (worker): 90 entries per catalog (Spanish translated in maxproframe_es.ts / frameforge_es.ts, .qm
+  recompiled; Russian unfinished in maxproframe_ru.ts), bend_config.py messages through translate() (English
+  unchanged), Reset IDs accepts a FoldedBar, docs/tutorial.md "Folded miters", README bullet, CHANGELOG Unreleased.
+  Approved deviation: tests/test_russian_translation.py lists the unfinished folded-miter texts explicitly and checks
+  they show in English with FreeCAD in Russian. Property tooltips (App::Property) and undo names stay English like the
+  rest of the repo. Full suite with T7: 1826 tests OK. Commit 5e2172f.
