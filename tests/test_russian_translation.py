@@ -36,11 +36,6 @@ FOLDED_MITER_TEXTS = (
     ("MaxProFrame", "The selected profiles do not form one chain."),
     ("MaxProFrame", "{config} is for {a:g} mm walls; {tube} has {b:g} mm walls."),
     ("MaxProFrame", "The inside bend radius must be between {min:g} and {max:g} mm."),
-    (
-        "MaxProFrame",
-        "The corner between {} and {} bends {:g} degrees: without the relief it bends up to {:g} degrees. Turn the "
-        "relief on.",
-    ),
     ("MaxProFrame", "The key does not fit in the notch between {} and {}: make it smaller."),
     (
         "MaxProFrame",
@@ -74,9 +69,6 @@ FOLDED_MITER_TEXTS = (
         "wall",
     ),
     ("MaxProFrame", "Key diameter"),
-    ("MaxProFrame", "Relief next to the bent wall"),
-    ("MaxProFrame", "Radius of the relief; Default: the inside bend radius of the corner"),
-    ("MaxProFrame", "Relief radius"),
     ("MaxProFrame", "Preview"),
     ("MaxProFrame", "Update automatically"),
     ("MaxProFrame", "Default"),

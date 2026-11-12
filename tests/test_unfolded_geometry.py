@@ -25,7 +25,8 @@ R, T, K = 3.0, 2.0, 0.4
 DEPTH = 50.0
 # w of the middle of a side wall: the walls across the bend axis.
 SIDE_WALL = DEPTH / 2 - T / 2
-PLAIN = dict(key=False, relief=False)
+# A simple bar: no key (the relief is always on, S8 L36).
+PLAIN = dict(key=False)
 TOLERANCE = 1e-6
 LENGTH_TOLERANCE = 1e-4
 
@@ -48,7 +49,7 @@ def miter_line(corner, r=R, g=0.0, depth=DEPTH, t=T):
     point (0, r + t) inward (S20, L33).
 
     The edge of the flank of the segment before, moved back g/2: from where it leaves the disc the relief keeps
-    (radius r - g around the bend axis point, with the default relief radius) to the inner corner (v = depth).
+    (radius r - g around the bend axis point) to the inner corner (v = depth).
     """
     h = math.radians(corner.bend_angle) / 2
     return -math.sqrt((r - g) ** 2 - (g / 2) ** 2), (depth - r - t + (g / 2) * math.sin(h)) / math.cos(h)
@@ -194,21 +195,49 @@ class RectangleUnfoldTest(UnfoldFixture):
                     self.assertFalse(self.filled(bar, corner, ba / 2, DEPTH / 2, -SIDE_WALL))
 
     def test_relief_removes_the_side_walls_next_to_the_bent_wall(self):
-        chain = self.rectangle()
-        relieved = unfold(chain, STEEL, key=False)
-        plain = unfold(chain, STEEL, **PLAIN)
+        relieved = unfold(self.rectangle(), STEEL, key=False)
 
         self.solid(relieved)
-        self.assertAlmostEqual(plain.length, relieved.length, places=9)
-        self.assertLess(relieved.shape.Volume, plain.shape.Volume)
-        for corner, plain_corner in zip(relieved.corners, plain.corners):
+        for corner in relieved.corners:
             ba = corner.bend_allowance
-            # Outside the V (its flanks are at u = 2.7 and 3.27 at v = 2.3) and between the relief discs.
-            for u in (2.0, ba - 2.0):
-                for w in (SIDE_WALL, -SIDE_WALL):
+            for w in (SIDE_WALL, -SIDE_WALL):
+                # Outside the V (its flanks are at u = 2.7 and 3.27 at v = 2.3) and between the relief discs.
+                for u in (2.0, ba - 2.0):
                     self.assertFalse(self.filled(relieved, corner, u, 2.3, w), (u, w))
-                    self.assertTrue(self.filled(plain, plain_corner, u, 2.3, w), (u, w))
                     self.assertTrue(self.filled(relieved, corner, u, T / 2, w), (u, w))
+                # Before and after the bend zone the side walls stay.
+                for u in (-2.0, ba + 2.0):
+                    self.assertTrue(self.filled(relieved, corner, u, 2.3, w), (u, w))
+
+    def test_relief_follows_the_inside_radius_of_each_corner(self):
+        # S8, S20 (L36): the relief radius is the inside radius of each corner, the one given to a single corner
+        # included, so the disc it keeps is concentric with the bend axis: it keeps the side walls up to r from the
+        # bend axis point of each segment and removes them from there to the bent wall.
+        bar = unfold(self.rectangle(), STEEL, corner_radii={1: 6.0})
+
+        self.solid(bar)
+        a = math.radians(30)
+        for corner, r in zip(bar.corners, (R, 6.0, R)):
+            self.assertAlmostEqual(r, corner.inside_radius, places=9)
+            # From the bend axis point of each segment toward the bent wall, 30 degrees off it, clear of the V.
+            sides = (
+                ((0.0, r + T), (math.sin(a), -math.cos(a))),
+                ((corner.bend_allowance, r + T), (-math.sin(a), -math.cos(a))),
+            )
+            for (u0, v0), (du, dv) in sides:
+                # r + 0.2 still stays above the bent wall (v > t): r / cos(30 degrees) reaches it.
+                for distance, kept in ((r - 0.5, True), (r - 0.1, True), (r + 0.2, False)):
+                    u, v = u0 + du * distance, v0 + dv * distance
+                    for w in (SIDE_WALL, -SIDE_WALL):
+                        self.assertEqual(kept, self.filled(bar, corner, u, v, w), (r, u, v, w, distance))
+
+    def test_relief_has_no_setting(self):
+        # S8 (L36): the relief is always on and its radius is the inside radius of each corner.
+        chain = self.rectangle()
+        for options in (dict(relief=False), dict(relief=True), dict(relief_radius=2.0)):
+            with self.subTest(options=options):
+                with self.assertRaises(TypeError):
+                    unfold(chain, STEEL, **options)
 
     def test_clearance_moves_each_flank_back_half_of_it(self):
         chain = self.rectangle()
@@ -376,26 +405,6 @@ class ArbitraryAnglesUnfoldTest(UnfoldFixture):
             self.assertFalse(self.filled(bar, corner, *socket, SIDE_WALL))
         tangent = math.tan(math.radians(30))
         self.assertAlmostEqual(200 + 25 * tangent - 5 * tangent, bar.corners[0].start, places=6)
-
-    def test_corner_past_the_widest_bend_without_relief_is_refused(self):
-        # Without the relief the side walls by the bent wall stay flat: past 2 acos(r / (r + t)) they stick out of the
-        # round outer corner (106.3 degrees for r = 3, t = 2), so the 135 degree corner needs the relief.
-        self.assertRefused(
-            "The corner between Profile001 and Profile002 bends 135 degrees: without the relief it bends up to "
-            "106.3 degrees. Turn the relief on.",
-            self.chain(),
-            relief=False,
-        )
-
-    def test_corner_within_the_widest_bend_without_relief_is_accepted(self):
-        sketch_edges = (
-            ((0, 0, 0), (200, 0, 0)),
-            ((200, 0, 0), tuple(p + q for p, q in zip((200, 0, 0), polar(150, 106)))),
-        )
-        bar = unfold(build_chain(self.frame(edges=sketch_edges)), STEEL, relief=False)
-
-        self.solid(bar)
-        self.assertEqual([106.0], [round(corner.bend_angle, 6) for corner in bar.corners])
 
 
 class KeyRoomUnfoldTest(UnfoldFixture):

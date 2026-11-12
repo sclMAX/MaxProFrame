@@ -5,7 +5,8 @@ so that the outside of the frame keeps its size (outside mold line): between two
 (the one that stays whole) develops its bend allowance theta * (r + K t). At each folded corner the other walls get
 a V notch whose flanks meet when the corner folds, with an interlocking key (a half circle centered on the miter line,
 at its middle or slid along it to the nearest place where it fits, standing out of one flank as the tab, its socket cut
-into the other) and a curved relief next to the bent wall; the clearance moves the flanks, the key and the relief arcs
+into the other) and a curved relief next to the bent wall, always cut, whose radius is the inside radius of the corner
+(so the disc it keeps is concentric with the bend axis); the clearance moves the flanks, the key and the relief arcs
 apart.
 The cuts made on each segment (its trims, cutouts and drill holes) move with it. The bar starts at X = 0 at the
 open-corner end of the first segment. See odd/tasks/folded-miter.md, section "T3 design".
@@ -127,9 +128,7 @@ class _Bend:
     depth: float
     clearance: float
     key: bool
-    relief: bool
     diameter: float
-    relief_radius: float
 
     @property
     def half(self):
@@ -158,18 +157,6 @@ class _Bend:
                 )
             )
 
-    def check_relief(self):
-        """Without the relief the side walls by the bent wall stay flat: past this angle they stick out of the corner."""
-        widest = math.degrees(2 * math.acos(self.radius / (self.radius + self.thickness)))
-        if not self.relief and self.angle > widest + 1e-9:
-            raise UnfoldError(
-                translate(
-                    "MaxProFrame",
-                    "The corner between {} and {} bends {:g} degrees: without the relief it bends up to {:g} degrees. "
-                    "Turn the relief on.",
-                ).format(*self.names, round(self.angle, 1), round(widest, 1))
-            )
-
     def _flank_heights(self, v):
         """u of the flank of the segment before and of the one after at height ``v`` (clearance included)."""
         h, t, r, g = self.half, self.thickness, self.radius, self.clearance
@@ -194,21 +181,19 @@ class _Bend:
         return _polygon([(bottom_before, t), (bottom_after, t), (top_after, top), (top_before, top)])
 
     def relief_region(self):
-        """The rectangle next to the bent wall and the discs it keeps, each one centered on the bend axis point of
-        its segment (with the default radius). The clearance moves their arcs back by all of it: folded, they face
-        the bent wall, which has no cut face there."""
-        t, ba, rho = self.thickness, self.allowance, self.relief_radius
-        rectangle = _polygon([(0, t), (ba, t), (ba, t + rho), (0, t + rho)])
-        kept = rho - self.clearance
+        """The rectangle next to the bent wall, as high as the inside radius, and the discs it keeps, each one
+        centered on the bend axis point of its segment: folded, the disc kept is concentric with the bend axis. The
+        clearance moves their arcs back by all of it: folded, they face the bent wall, which has no cut face there."""
+        t, ba, r = self.thickness, self.allowance, self.radius
+        rectangle = _polygon([(0, t), (ba, t), (ba, t + r), (0, t + r)])
+        kept = r - self.clearance
         if kept <= SIZE_TOLERANCE:
             return (rectangle,)
-        return rectangle, _disc((0, t + rho), kept), _disc((ba, t + rho), kept)
+        return rectangle, _disc((0, t + r), kept), _disc((ba, t + r), kept)
 
     @cached_property
     def _relief_cut(self):
-        """The face the relief removes from the side walls: its rectangle minus the discs it keeps (None without it)."""
-        if not self.relief:
-            return None
+        """The face the relief removes from the side walls: its rectangle minus the discs it keeps."""
         rectangle, *discs = self.relief_region()
         return rectangle.cut(discs) if discs else rectangle
 
@@ -225,13 +210,13 @@ class _Bend:
     def miter_line(self):
         """(start, end) of the miter line seen on the side wall of the folded bar, as distances along the flanks from
         their bend axis points inward: the edge of the flank of the segment before (moved back half the clearance),
-        from where it leaves the relief (the gap around the disc the relief keeps; without the relief, the bottom of
-        the V) to the inner corner of the bar (v = depth)."""
+        from where it leaves the relief (the gap around the disc the relief keeps) to the inner corner of the bar
+        (v = depth)."""
         h, t = self.half, self.thickness
         base = self._flank_point(0.0)[1]
         start = (max(self._apex(), t) - base) / math.cos(h)
         end = (self.depth - base) / math.cos(h)
-        if self._relief_cut is not None and end > start:
+        if end > start:
             origin = App.Vector(*self._flank_point(0.0), 0)
             line = Part.makeLine(*(App.Vector(*self._flank_point(along), 0) for along in (start, end)))
             direction = App.Vector(-math.sin(h), math.cos(h), 0)
@@ -289,7 +274,7 @@ class _Bend:
         if below:
             notch, behind = self._behind_flank
             below = tab.cut(notch).cut(behind).Area <= AREA_TOLERANCE
-        if below and self._relief_cut is not None:
+        if below:
             below = all(shape.common(self._relief_cut).Area <= AREA_TOLERANCE for shape in (tab, socket))
         return below, above
 
@@ -364,19 +349,18 @@ class _Bend:
             cuts[0] = cuts[0].cut(self.tab())
             cuts.append(self.socket())
         solids = [_prism(face, reach) for face in cuts]
-        if self.relief:
-            rectangle, *discs = self.relief_region()
-            relief = _prism(rectangle, reach)
-            if discs:
-                relief = relief.cut([_prism(disc, reach) for disc in discs])
-            solids.append(relief)
+        rectangle, *discs = self.relief_region()
+        relief = _prism(rectangle, reach)
+        if discs:
+            relief = relief.cut([_prism(disc, reach) for disc in discs])
+        solids.append(relief)
         removed = solids[0]
         for solid in solids[1:]:
             removed = removed.fuse(solid)
         return removed
 
 
-def _bends(chain, configuration, radius, corner_radii, clearance, key, relief, key_diameter, relief_radius):
+def _bends(chain, configuration, radius, corner_radii, clearance, key, key_diameter):
     radius = float(configuration.inside_radius) if radius is None else float(radius)
     corner_radii = corner_radii or {}
     bends = []
@@ -392,12 +376,9 @@ def _bends(chain, configuration, radius, corner_radii, clearance, key, relief, k
             depth=corner.depth,
             clearance=float(clearance),
             key=key,
-            relief=relief,
             diameter=diameter,
-            relief_radius=r if relief_radius is None else float(relief_radius),
         )
         bend.check_radius()
-        bend.check_relief()
         if key:
             bend.check_key()
         bends.append(bend)
@@ -470,28 +451,19 @@ def _segment_changes(chain, placements, section, x_min, x_max):
     return removed, added
 
 
-def unfold(
-    chain,
-    configuration,
-    radius=None,
-    corner_radii=None,
-    clearance=0.0,
-    key=True,
-    relief=True,
-    key_diameter=None,
-    relief_radius=None,
-):
+def unfold(chain, configuration, radius=None, corner_radii=None, clearance=0.0, key=True, key_diameter=None):
     """The unfolded bar of ``chain`` (``folded_chain.build_chain``) bent with ``configuration``.
 
     ``radius`` is the inside bend radius of the bar (the configuration's when None); ``corner_radii`` maps a corner
     index to its own radius. ``clearance`` goes half on each side of the notch flanks and of the key, and all of it on
     the relief arcs (they face the bent wall). The key (a half circle of ``key_diameter`` centered on the miter line,
-    at its middle or where it fits nearest to it, a quarter of the depth across the bent wall by default) and the
-    relief (``relief_radius``, the inside radius by default) can be turned off.
+    at its middle or where it fits nearest to it, a quarter of the depth across the bent wall by default) can be
+    turned off. The relief is always cut, its radius the inside radius of each corner: the disc it keeps is then
+    concentric with the bend axis (any other radius leaves a void or a collision at the folded corner).
     Raises UnfoldError when the configuration, the radius or the key do not suit the tube.
     """
     _check_thickness(chain, configuration)
-    bends = _bends(chain, configuration, radius, corner_radii, clearance, key, relief, key_diameter, relief_radius)
+    bends = _bends(chain, configuration, radius, corner_radii, clearance, key, key_diameter)
     placements, corners = _straight_placements(chain, bends)
     section = _section(chain, placements[0])
     x_min = _box(placed(_global_shape(chain.segments[0].tip), placements[0])).XMin

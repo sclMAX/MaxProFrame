@@ -1,7 +1,7 @@
 # Folded miters (V-notch tube folding) and unfolded bar
 A chain of tube profiles is joined by folded corners (laser V-notch with key and relief, outer wall bent with a real
 radius) and unfolded into one straight solid with every cut, exported with FreeCAD's own formats for a CNC tube laser.
-Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T10 (L26, L32, L33) done, T11 (L36) open on branch `feat/folded-miter-refine`; push and PR are the user's decision.
+Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T10 (L26, L32, L33) done, T11 (L36) done on branch `feat/folded-miter-refine`; push and PR are the user's decision.
 
 ## Specs
 - S1 Folded corner (L1): "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte
@@ -181,7 +181,7 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   nearest place where it fits; tests, tutorial, changelog. [x] af47317
 - T11 S8 S20 S21 worker: relief always on with radius = inside radius of each corner: remove the Relief checkbox,
   the Relief radius field, the ReliefRadius / Relief properties and options, S21's check and message; tests, i18n,
-  tutorial, changelog. [ ]
+  tutorial, changelog. [x] (see L38)
 - T9 S22 worker: select-as-you-go Folded Bar command and panel like End Miter; tests, tutorial, changelog. [x] 383c696
 
 ## Log
@@ -351,3 +351,12 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   Explained: only relief radius = inside radius keeps the kept disc concentric with the bend axis. To the proposal to
   remove the field: "sacalo y la casilla tambien, no le veo sentido a desactivar el alivio" -> S8, S20 updated, S21
   dropped, T11 opened.
+- L37 (2026-11-12) "no corras la suite (para no perder tiempo esperando), lo pruebo y vemos si tenemos que ajsutar
+  algo" -> after T11 only the worker's focused modules run; the full suite is skipped until the user's manual test.
+- L38 T11 evidence (worker): relief always cut, rho = corner radius in `_Bend.relief_region`; removed relief /
+  relief_radius (unfolded_geometry, folded_bar options and properties, panel checkbox and field), S21 check and
+  message, 4 catalog texts (es/ru, .qm recompiled), tutorial, changelog. RED: test_unfolded_geometry 3, test_folded_bar
+  1, test_folded_bar_panel 2, test_folded_bar_translations 1, test_russian_translation 1. GREEN: test_unfolded_geometry
+  24, test_folded_geometry 11, test_folded_bar 23, test_folded_bar_panel 43, test_folded_bar_translations 6,
+  test_russian_translation 6, test_compile_translations 3, test_toolbar_translations 4. Differential vs 3a53d20:
+  8 default cases, 16 solids identical (symmetric difference 0). Full suite skipped (L37).

@@ -1,9 +1,9 @@
 """Folded miter commands: Folded Bar (create and edit, previewed live) and Unfold Bar.
 
 See odd/tasks/folded-miter.md, T6. The panel folds the selected tube pieces with a bend configuration of the store
-(S6), with its inside radius (S9, S14), the open corner of a closed frame (S17), the clearance, key and relief
-(S8, S20). Whatever keeps the chain from folding is shown and keeps OK disabled: the chain messages, an own miter at a
-folded corner (S12) and the unfold messages (S9, S15, S21).
+(S6), with its inside radius (S9, S14), the open corner of a closed frame (S17), the clearance and the key (S8, S20;
+the relief is always cut, its radius the inside radius of each corner). Whatever keeps the chain from folding is shown
+and keeps OK disabled: the chain messages, an own miter at a folded corner (S12) and the unfold messages (S9, S15).
 
 Like Create Miter Ends (S22, T9), the command opens the panel at once, with the selected pieces if any, and the panel
 takes the pieces clicked while it is open: a click adds one at the end of the list, Ctrl+click or deselecting drops it.
@@ -58,9 +58,7 @@ PROPERTIES = (
     "CornerRadii",
     "Clearance",
     "Key",
-    "Relief",
     "KeyDiameter",
-    "ReliefRadius",
     "OpenCorner",
 )
 
@@ -204,12 +202,6 @@ class FoldedBarTaskPanel:
             )
         )
         notch.addRow(translate("MaxProFrame", "Key diameter"), form.spin_key_diameter)
-        form.cb_relief = QtGui.QCheckBox(translate("MaxProFrame", "Relief next to the bent wall"))
-        notch.addRow(form.cb_relief)
-        form.spin_relief_radius = self._default_field(
-            translate("MaxProFrame", "Radius of the relief; Default: the inside bend radius of the corner")
-        )
-        notch.addRow(translate("MaxProFrame", "Relief radius"), form.spin_relief_radius)
         layout.addWidget(form.groupBox_notch)
 
         form.groupBox_preview = QtGui.QGroupBox(translate("MaxProFrame", "Preview"))
@@ -245,15 +237,12 @@ class FoldedBarTaskPanel:
             configuration = self._configuration()
             form.spin_radius.setValue(configuration.inside_radius if configuration is not None else 0.0)
             form.cb_key.setChecked(True)
-            form.cb_relief.setChecked(True)
         else:
             self._load_configurations(obj.BendConfiguration)
             form.spin_radius.setValue(obj.InsideRadius.Value)
             form.spin_clearance.setValue(obj.Clearance.Value)
             form.cb_key.setChecked(obj.Key)
-            form.cb_relief.setChecked(obj.Relief)
             form.spin_key_diameter.setValue(obj.KeyDiameter.Value)
-            form.spin_relief_radius.setValue(obj.ReliefRadius.Value)
         self._fill_open_corners()
         if obj is not None:
             try:
@@ -349,12 +338,10 @@ class FoldedBarTaskPanel:
         form.button_manage.clicked.connect(self.manage_configurations)
         form.combo_open_corner.currentIndexChanged.connect(self._changed)
         form.cb_key.toggled.connect(self._changed)
-        form.cb_relief.toggled.connect(self._changed)
         for spin in (
             form.spin_radius,
             form.spin_clearance,
             form.spin_key_diameter,
-            form.spin_relief_radius,
         ):
             spin.valueChanged.connect(self._changed)
         form.cb_auto_update.toggled.connect(self._on_auto_update_toggled)
@@ -362,7 +349,6 @@ class FoldedBarTaskPanel:
     def _enable_sizes(self):
         form = self.form
         form.spin_key_diameter.setEnabled(form.cb_key.isChecked())
-        form.spin_relief_radius.setEnabled(form.cb_relief.isChecked())
 
     # Corner radii.
 
@@ -431,9 +417,7 @@ class FoldedBarTaskPanel:
             corner_radii={index: radius for index, radius in enumerate(self._corner_radii(chain)) if radius > 0},
             clearance=form.spin_clearance.value(),
             key=form.cb_key.isChecked(),
-            relief=form.cb_relief.isChecked(),
             key_diameter=size(form.spin_key_diameter),
-            relief_radius=size(form.spin_relief_radius),
         )
 
     def _check(self):
@@ -555,9 +539,7 @@ class FoldedBarTaskPanel:
             "CornerRadii": self._corner_radii(chain),
             "Clearance": form.spin_clearance.value(),
             "Key": form.cb_key.isChecked(),
-            "Relief": form.cb_relief.isChecked(),
             "KeyDiameter": form.spin_key_diameter.value(),
-            "ReliefRadius": form.spin_relief_radius.value(),
             "OpenCorner": self._open_corner_property(),
         }
 

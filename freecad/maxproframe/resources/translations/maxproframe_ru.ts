@@ -2849,10 +2849,6 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>The corner between {} and {} bends {:g} degrees: without the relief it bends up to {:g} degrees. Turn the relief on.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>The key does not fit in the notch between {} and {}: make it smaller.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2939,18 +2935,6 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>Key diameter</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Relief next to the bent wall</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Radius of the relief; Default: the inside bend radius of the corner</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Relief radius</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

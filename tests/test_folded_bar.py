@@ -22,7 +22,7 @@ from freecad.maxproframe.best_fit import CutPart, best_fit_decreasing
 from freecad.maxproframe.create_bom import make_cut_list, traverse_assembly
 from freecad.maxproframe.drill_hole import make_drill_hole
 from freecad.maxproframe.ff_tools import get_param_group
-from freecad.maxproframe.folded_bar import make_folded_bar, make_unfolded_bar
+from freecad.maxproframe.folded_bar import check_settings, make_folded_bar, make_unfolded_bar
 from freecad.maxproframe.folded_chain import ChainError, build_chain
 from freecad.maxproframe.folded_geometry import fold, fold_bar
 from freecad.maxproframe.populate_ids import populate_ids
@@ -75,10 +75,7 @@ class FoldedBarObjectTest(FoldedBarFixture):
             (bar.BendConfiguration, bar.BendMaterial, bar.WallThickness.Value, bar.InsideRadius.Value, bar.KFactor),
         )
         self.assertEqual([0.0, 0.0, 0.0], list(bar.CornerRadii))
-        self.assertEqual(
-            (0.0, True, True, 0.0, 0.0),
-            (bar.Clearance.Value, bar.Key, bar.Relief, bar.KeyDiameter.Value, bar.ReliefRadius.Value),
-        )
+        self.assertEqual((0.0, True, 0.0), (bar.Clearance.Value, bar.Key, bar.KeyDiameter.Value))
         self.assertEqual(1, bar.getEditorMode("DevelopedLength").count("ReadOnly"))
         # Like a profile, for the BOM and the cut list.
         self.assertEqual(("Square Hollow", "50x50x2", "Steel", ""), (bar.Family, bar.SizeName, bar.Material, bar.PID))
@@ -93,6 +90,28 @@ class FoldedBarObjectTest(FoldedBarFixture):
         self.assertEqual("Unknown folded bar options: neck_width", str(raised.exception))
         with self.assertRaises(TypeError):
             unfold(build_chain(profiles), STEEL, neck_width=5.0)
+
+    def test_the_relief_has_no_setting(self):
+        # S8, S20 (L36): the relief is always on, its radius the inside radius of each corner.
+        profiles, bar = self.make_bar(key=False)
+
+        self.assertNotIn("Relief", bar.PropertiesList)
+        self.assertNotIn("ReliefRadius", bar.PropertiesList)
+        count = len(self.doc.Objects)
+        for options, message in (
+            (dict(relief=False), "Unknown folded bar options: relief"),
+            (dict(relief_radius=2.0), "Unknown folded bar options: relief_radius"),
+            (dict(relief=True, relief_radius=2.0), "Unknown folded bar options: relief, relief_radius"),
+        ):
+            with self.subTest(options=options):
+                with self.assertRaises(TypeError) as raised:
+                    make_folded_bar(profiles, STEEL, **options)
+                self.assertEqual(message, str(raised.exception))
+                self.assertEqual(count, len(self.doc.Objects))
+                with self.assertRaises(TypeError):
+                    unfold(build_chain(profiles), STEEL, **options)
+                with self.assertRaises(TypeError):
+                    check_settings(build_chain(profiles), STEEL, **options)
 
     def test_open_corner_given_sets_the_start_of_the_bar(self):
         bottom, right, top, left = self.frame()
@@ -131,9 +150,6 @@ class FoldedBarObjectTest(FoldedBarFixture):
             ("Key", False, dict(key=False)),
             ("InsideRadius", 4.0, dict(radius=4.0, key=False)),
             ("CornerRadii", [0.0, 5.0, 0.0], dict(radius=4.0, corner_radii={1: 5.0}, key=False)),
-            # Without the relief a 5 mm radius bends 88.8 degrees at most: the 90 degree corner goes back to 4 mm first.
-            ("CornerRadii", [0.0, 0.0, 0.0], dict(radius=4.0, key=False)),
-            ("Relief", False, dict(radius=4.0, **PLAIN)),
         ):
             with self.subTest(prop=prop):
                 setattr(bar, prop, value)

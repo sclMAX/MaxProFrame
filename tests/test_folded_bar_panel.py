@@ -1,5 +1,5 @@
 """Folded miter commands and the Folded Bar panel (odd/tasks/folded-miter.md, T6: S1 S2 S6 S8 S9 S12, with the
-S14 S17 S20 S21 settings the panel shows).
+S14 S17 S20 settings the panel shows; the relief has none, L36).
 
 Folded Bar folds the selected tubes with a bend configuration of the store, previewed live like End Miter; every
 reason the chain does not fold, and an own miter at a folded corner, is shown and keeps OK disabled. Double-click
@@ -54,10 +54,6 @@ NOT_A_CHAIN = "The selected profiles do not form one chain: Profile meets none o
 RADIUS_RANGE = "The inside bend radius must be between 2 and 33.5 mm."
 # The tab of the default key (12.5 mm) stands out of its flank only with less clearance than half of it.
 KEY_TOO_BIG = "The key does not fit in the notch between Profile and Profile001: make it smaller."
-WIDE_WITHOUT_RELIEF = (
-    "The corner between Profile001 and Profile002 bends 135 degrees: without the relief it bends up to "
-    "106.3 degrees. Turn the relief on."
-)
 OWN_MITER = "Profile_Mt cuts Profile at its folded corner with Profile001: delete it or make that corner the open one."
 OWN_MITER_OPEN_CHAIN = "Profile_Mt cuts Profile at its folded corner with Profile001: delete it."
 NO_CONFIGURATION = "Add a bend configuration: press Manage configurations."
@@ -283,20 +279,19 @@ class CreatePanelTest(FoldedPanelFixture):
         self.assertEqual(0, form.combo_open_corner.currentIndex())
         self.assertEqual([0.0, 0.0, 0.0], [spin.value() for spin in panel.corner_spins()])
         self.assertEqual(
-            (0.0, True, True, 0.0, 0.0),
-            (
-                form.spin_clearance.value(),
-                form.cb_key.isChecked(),
-                form.cb_relief.isChecked(),
-                form.spin_key_diameter.value(),
-                form.spin_relief_radius.value(),
-            ),
+            (0.0, True, 0.0),
+            (form.spin_clearance.value(), form.cb_key.isChecked(), form.spin_key_diameter.value()),
         )
         # S20 (L26): the key is a half circle, sized by its diameter only: no neck field.
         self.assertFalse(hasattr(form, "spin_neck_width"))
+        # S8, S20 (L36): the relief is always on, its radius the inside radius of each corner: no check box, no field.
+        self.assertFalse(hasattr(form, "cb_relief"))
+        self.assertFalse(hasattr(form, "spin_relief_radius"))
         notch = form.groupBox_notch.layout()
+        boxes = form.groupBox_notch.findChildren(QtWidgets.QCheckBox)
+        self.assertEqual(["Interlocking key"], [box.text() for box in boxes])
         self.assertEqual(
-            ["Clearance", "Key diameter", "Relief radius"],
+            ["Clearance", "Key diameter"],
             [
                 notch.itemAt(row, QtWidgets.QFormLayout.LabelRole).widget().text()
                 for row in range(notch.rowCount())
@@ -344,7 +339,6 @@ class CreatePanelTest(FoldedPanelFixture):
         panel.corner_spins()[1].setValue(5.0)
         form.spin_clearance.setValue(0.2)
         form.cb_key.setChecked(False)
-        form.spin_relief_radius.setValue(3.5)
 
         self.assertTrue(panel.accept())
         self.close_dialog()
@@ -356,10 +350,9 @@ class CreatePanelTest(FoldedPanelFixture):
             (bar.BendConfiguration, bar.BendMaterial, bar.WallThickness.Value, bar.InsideRadius.Value, bar.KFactor),
         )
         self.assertEqual([0.0, 5.0, 0.0], list(bar.CornerRadii))
-        self.assertEqual(
-            (0.2, False, True, 0.0, 3.5),
-            (round(bar.Clearance.Value, 9), bar.Key, bar.Relief, bar.KeyDiameter.Value, bar.ReliefRadius.Value),
-        )
+        self.assertEqual((0.2, False, 0.0), (round(bar.Clearance.Value, 9), bar.Key, bar.KeyDiameter.Value))
+        self.assertNotIn("Relief", bar.PropertiesList)
+        self.assertNotIn("ReliefRadius", bar.PropertiesList)
         self.assertEqual([bottom, right, top, left], list(bar.Segments))
         self.assertEqual([bottom, left], list(bar.OpenCorner))
         self.assertEqual(STEEL.name, get_last_used_configuration())
@@ -432,16 +425,12 @@ class CreatePanelTest(FoldedPanelFixture):
         panel.form.cb_key.setChecked(False)
         self.assertAccepts(panel)
 
-    def test_relief_off_at_a_wide_corner_shows_why_and_disables_ok(self):
+    def test_a_wide_corner_folds_with_the_relief(self):
+        # The relief is always on (L36): a 135 degree corner folds.
         set_last_used_configuration(STEEL.name)
         panel = self.run_command(*self.wide_chain())
+
         self.assertFalse(panel.form.combo_open_corner.isVisibleTo(panel.form))
-        self.assertAccepts(panel)
-
-        panel.form.cb_relief.setChecked(False)
-
-        self.assertRefused(panel, WIDE_WITHOUT_RELIEF)
-        panel.form.cb_relief.setChecked(True)
         self.assertAccepts(panel)
 
     def test_own_miter_at_a_folded_corner_is_reported_until_that_corner_opens(self):

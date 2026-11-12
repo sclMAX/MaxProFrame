@@ -1433,7 +1433,6 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>The selected profiles do not form one chain.</source><translation>Los perfiles seleccionados no forman una sola cadena.</translation></message>
     <message><source>{config} is for {a:g} mm walls; {tube} has {b:g} mm walls.</source><translation>{config} es para paredes de {a:g} mm; {tube} tiene paredes de {b:g} mm.</translation></message>
     <message><source>The inside bend radius must be between {min:g} and {max:g} mm.</source><translation>El radio interior de plegado tiene que estar entre {min:g} y {max:g} mm.</translation></message>
-    <message><source>The corner between {} and {} bends {:g} degrees: without the relief it bends up to {:g} degrees. Turn the relief on.</source><translation>La esquina entre {} y {} se pliega {:g} grados: sin el alivio se pliega hasta {:g} grados. Activá el alivio.</translation></message>
     <message><source>The key does not fit in the notch between {} and {}: make it smaller.</source><translation>La llave no entra en la muesca entre {} y {}: achicala.</translation></message>
     <message><source>The key does not fit in the notch between {} and {} with this inside radius: make the radius smaller or turn the key off.</source><translation>La llave no entra en la muesca entre {} y {} con este radio interior: achicá el radio o desactivá la llave.</translation></message>
     <message><source>{}: its developed length ({:.1f} mm) is longer than the stock length of the cut list ({:.1f} mm).
@@ -1458,9 +1457,6 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Interlocking key</source><translation>Llave de encastre</translation></message>
     <message><source>Diameter of the key, a half circle on the miter line; Default: a quarter of the tube depth across the bent wall</source><translation>Diámetro de la llave, un medio círculo sobre la línea del inglete; Predeterminado: un cuarto de la medida del tubo perpendicular a la pared doblada</translation></message>
     <message><source>Key diameter</source><translation>Diámetro de la llave</translation></message>
-    <message><source>Relief next to the bent wall</source><translation>Alivio junto a la pared doblada</translation></message>
-    <message><source>Radius of the relief; Default: the inside bend radius of the corner</source><translation>Radio del alivio; Predeterminado: el radio interior de plegado de la esquina</translation></message>
-    <message><source>Relief radius</source><translation>Radio del alivio</translation></message>
     <message><source>Preview</source><translation>Previsualización</translation></message>
     <message><source>Update automatically</source><translation>Actualizar automáticamente</translation></message>
     <message><source>Default</source><translation>Predeterminado</translation></message>

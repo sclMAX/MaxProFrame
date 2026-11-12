@@ -206,7 +206,7 @@ class KeyFoldTest(FoldFixture):
 
     def test_clearance_leaves_a_gap_along_the_relief_arcs(self):
         # S8 (L26): folded, the side walls of both segments stop the whole clearance short of the bent wall along
-        # their relief arcs (the default relief radius: the arcs are centered on the bend axis).
+        # their relief arcs (the relief radius is the inside radius: the arcs are centered on the bend axis).
         chain = self.default.chain
         tight = self.solid(self.default.folded)
         loose = self.solid(fold(chain, STEEL, clearance=1.0, key=False))
@@ -256,7 +256,6 @@ class ArbitraryAnglesFoldTest(FoldFixture):
 
     def test_any_angle_folds_into_one_solid_matching_the_tips(self):
         chain = self.chain()
-        # Without the relief the 135 degree corner is refused (see test_unfolded_geometry): the relief stays on.
         for options in (dict(key=False), {}):
             with self.subTest(options=options):
                 shape = self.solid(fold(chain, STEEL, **options))
