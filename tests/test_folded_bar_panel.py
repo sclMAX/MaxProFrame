@@ -52,10 +52,8 @@ COMMANDS = ("MaxProFrame_FoldedBar", "MaxProFrame_UnfoldBar", "MaxProFrame_BendC
 NOT_A_CHAIN = "The selected profiles do not form one chain: Profile meets none of the others."
 # 50 mm deep tube, 2 mm walls, key of a quarter of the depth: 2 <= r <= 50 - 4 - 12.5.
 RADIUS_RANGE = "The inside bend radius must be between 2 and 33.5 mm."
-KEY_WITHOUT_ROOM = (
-    "The key does not fit in the notch between Profile and Profile001 with this inside radius: make the radius "
-    "smaller or turn the key off."
-)
+# The tab of the default key (12.5 mm) stands out of its flank only with less clearance than half of it.
+KEY_TOO_BIG = "The key does not fit in the notch between Profile and Profile001: make it smaller."
 WIDE_WITHOUT_RELIEF = (
     "The corner between Profile001 and Profile002 bends 135 degrees: without the relief it bends up to "
     "106.3 degrees. Turn the relief on."
@@ -426,9 +424,11 @@ class CreatePanelTest(FoldedPanelFixture):
         panel.form.spin_radius.setValue(1.0)
 
         self.assertRefused(panel, RADIUS_RANGE)
-        # At the largest radius the key has no room left on the miter line.
+        # At the largest radius the key fits below the bend axis point; with 6.5 mm of clearance it does not fit.
         panel.form.spin_radius.setValue(33.5)
-        self.assertRefused(panel, KEY_WITHOUT_ROOM)
+        self.assertAccepts(panel)
+        panel.form.spin_clearance.setValue(6.5)
+        self.assertRefused(panel, KEY_TOO_BIG)
         panel.form.cb_key.setChecked(False)
         self.assertAccepts(panel)
 

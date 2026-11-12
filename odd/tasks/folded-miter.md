@@ -1,7 +1,7 @@
 # Folded miters (V-notch tube folding) and unfolded bar
 A chain of tube profiles is joined by folded corners (laser V-notch with key and relief, outer wall bent with a real
 radius) and unfolded into one straight solid with every cut, exported with FreeCAD's own formats for a CNC tube laser.
-Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T9 (L26) done on branch `feat/folded-miter-refine`; push and PR are the user's decision.
+Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T10 (L26, L32) on branch `feat/folded-miter-refine`; push and PR are the user's decision.
 
 ## Specs
 - S1 Folded corner (L1): "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte
@@ -64,7 +64,9 @@ Accepted design proposals (L6 "deacuerdo" to Q1-Q6):
   on each bar (not in the bend configuration): V flanks moved back half the clearance each; relief radius = inside bend
   radius; key (rewritten by L26 "La llave debe ubicarce al centro de la linea del bisel y debe ser solo un medio
   circulo (sin cuello).") = a half circle centered on the miter line, at the middle of the miter line seen on the
-  side wall of the folded bar (from the outer contour of the bend to the inner corner), standing out of one flank as
+  side wall of the folded bar (from the outer contour of the bend to the inner corner); when that middle leaves no
+  room (it falls in the bend or the relief, or too close to the inner wall), the key slides along the miter line to the
+  nearest place where it fits (L32 "Correrla al lugar más cercano donde entre"), standing out of one flank as
   the tab with its half-circle socket in the other flank, no neck (the Neck Width setting and property are removed;
   the feature is unreleased), diameter = 1/4 of the depth across the bent wall; the clearance goes half on the tab,
   half on the socket; the diameter is the key room of S15; a key that does not fit is refused as before.
@@ -173,6 +175,8 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
 - T7 S1-S19 inline: Spanish translations, Russian strings left unfinished for the contributor, tutorial, changelog. [x] 5e2172f
 - T8 S8 S15 S20 worker: clearance on the relief arcs; half-circle key centered on the miter line, no neck (geometry,
   FoldedBar property, panel field, translations, tutorial, changelog); tests. [x] 42c94aa
+- T10 S15 S20 worker: the key at the middle of the miter line (relief arc to inner corner, L33), sliding to the
+  nearest place where it fits; tests, tutorial, changelog. [x] (see L34)
 - T9 S22 worker: select-as-you-go Folded Bar command and panel like End Miter; tests, tutorial, changelog. [x] 383c696
 
 ## Log
@@ -316,3 +320,23 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   Spanish tooltip expectation. Slice note: T9 (~600 lines, mostly tests) is its own commit past the ~400 slice.
 - L31 Full suite on FreeCAD 1.1.4 with T8-T9: 1844 tests OK in 1170 s (`ci/run_tests.py --timeout 2400`; the default
   180 s timeout is too short for the whole suite locally).
+- L32 (2026-11-12, screenshot: TC80x40x1.5 bent across its 40 mm side, r = 25, key 8 mm, clearance 0.5, refused
+  with the no-room message) "porque dice que la llave no entra ? si el tubo tiene 40mm ?" Explained: the middle of the
+  miter line (outer contour of the bend to the inner corner) is 3.7 mm outside the bend axis, inside the bend; the
+  straight flank is only 40 - 1.5 - 25 - 1.5 = 12 mm deep; with the middle rule the 8 mm key fits only up to
+  r = 16.5. To the question "Donde va la llave cuando el medio del bisel cae dentro del doblez (radios grandes)?" the
+  user chose "Correrla al lugar más cercano donde entre (Recomendado)" -> S20 updated, T10 opened.
+- L33 (2026-11-12, screenshot of the folded 80x40x1.5 corner with the miter line measured: 43.84 mm from the relief
+  arc gap to the inner corner) The side wall goes on below the bend axis inside the kept relief disc, so the miter line
+  runs from the relief arc to the inner corner (about 43.6 mm by formula for r = 25, g = 0.5), not from the outer
+  contour; the key goes at the middle of THAT line (about 21.9 mm from each end) and fits there in the user's case; it
+  slides (L32) only when it does not fit at that middle. T10 worker steered with this correction.
+- L34 T10 evidence (worker): `unfolded_geometry.py` (`miter_line`: before flank moved back g/2 from where it leaves
+  the relief, or the bottom of the V without relief, to v = depth; key at its middle; `_key_fits` with real 2D shapes
+  (below the inner wall, above the bent wall, tab in the V, clear of the relief cut); `_fitting_along` bisection slides
+  it; refusals unchanged in wording). User's case 80x40x1.5, r 25, d 8, g 0.5: line 43.840 mm (user measured 43.84),
+  middle 2.58 mm below the axis point, no slide. S15 max 33.5 accepts the key again. Removed tests that asserted old
+  refusals (key over a 20 mm relief; 60/135 degree 42 mm key). RED (base code): test_unfolded_geometry 1 failure +
+  4 errors, panel 1; GREEN: test_unfolded_geometry 24, test_folded_geometry 11, test_folded_bar 22,
+  test_folded_bar_panel 43, test_folded_bar_translations 6, test_russian_translation 6. Known: the no-room message is
+  now reached only with extreme clearances.
