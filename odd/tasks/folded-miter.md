@@ -1,7 +1,7 @@
 # Folded miters (V-notch tube folding) and unfolded bar
 A chain of tube profiles is joined by folded corners (laser V-notch with key and relief, outer wall bent with a real
 radius) and unfolded into one straight solid with every cut, exported with FreeCAD's own formats for a CNC tube laser.
-Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T10 (L26, L32, L33) done on branch `feat/folded-miter-refine`; push and PR are the user's decision.
+Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T10 (L26, L32, L33) done, T11 (L36) open on branch `feat/folded-miter-refine`; push and PR are the user's decision.
 
 ## Specs
 - S1 Folded corner (L1): "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte
@@ -31,7 +31,8 @@ Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T10 (L26, L32, L33) done
   olgura debe aplicarce tambien al corte delcirculo de la esquina.") the round relief cut at the corner: its arcs move
   back the whole clearance (kept disc radius rho - g, concentric with the bend axis; the bent wall face they meet
   does not move), so the folded corner shows the same gap g along the arc as between the flanks (L27); the key
-  and the relief are on by default and each one can be turned off.
+  is on by default and can be turned off; the relief is always on (L36 "sacalo y la casilla tambien, no le veo
+  sentido a desactivar el alivio").
 - S9 Corner radius (L5.1): "El radio de la esquina tambien debe ser configurable, con limites minimos (teniendo en
   cuenta el espesor) y maximos (teniendo en cuenta el perfil)." -> the inside bend radius can be set; values below a
   minimum derived from the wall thickness or above a maximum derived from the profile section are rejected with a
@@ -61,7 +62,8 @@ Accepted design proposals (L6 "deacuerdo" to Q1-Q6):
   fold; in a 3D chain each bend axis must be parallel to a wall pair of the tube; otherwise the panel explains why.
 - S19 Stock: warn when the developed length exceeds the stock length configured for the cut list.
 - S20 Key and relief sizes (L11 "editables", answer to the proposal in L11): defaults relative to the tube, editable
-  on each bar (not in the bend configuration): V flanks moved back half the clearance each; relief radius = inside bend
+  on each bar (not in the bend configuration): V flanks moved back half the clearance each; relief radius = inside bend radius of each corner, computed, not a setting (L36; any other value leaves a gap or
+  a collision at the folded corner); was: relief radius = inside bend
   radius; key (rewritten by L26 "La llave debe ubicarce al centro de la linea del bisel y debe ser solo un medio
   circulo (sin cuello).") = a half circle centered on the miter line, at the middle of the miter line seen on the
   side wall of the folded bar (from the outer contour of the bend to the inner corner); when that middle leaves no
@@ -70,7 +72,7 @@ Accepted design proposals (L6 "deacuerdo" to Q1-Q6):
   the tab with its half-circle socket in the other flank, no neck (the Neck Width setting and property are removed;
   the feature is unreleased), diameter = 1/4 of the depth across the bent wall; the clearance goes half on the tab,
   half on the socket; the diameter is the key room of S15; a key that does not fit is refused as before.
-- S21 Relief off at wide angles (L21 "Rechazar la esquina"): without the relief, a corner bending more than
+- S21 (dropped by L36: the relief can no longer be turned off) Relief off at wide angles (L21 "Rechazar la esquina"): without the relief, a corner bending more than
   2 acos(r / (r + t)) is refused: "The corner between {} and {} bends {} degrees: without the relief it bends up to {}
   degrees. Turn the relief on." (106.3 degrees for r = 3, t = 2; 88.8 degrees for r = 5, t = 2).
 
@@ -177,6 +179,9 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   FoldedBar property, panel field, translations, tutorial, changelog); tests. [x] 42c94aa
 - T10 S15 S20 worker: the key at the middle of the miter line (relief arc to inner corner, L33), sliding to the
   nearest place where it fits; tests, tutorial, changelog. [x] af47317
+- T11 S8 S20 S21 worker: relief always on with radius = inside radius of each corner: remove the Relief checkbox,
+  the Relief radius field, the ReliefRadius / Relief properties and options, S21's check and message; tests, i18n,
+  tutorial, changelog. [ ]
 - T9 S22 worker: select-as-you-go Folded Bar command and panel like End Miter; tests, tutorial, changelog. [x] 383c696
 
 ## Log
@@ -341,3 +346,8 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   test_folded_bar_panel 43, test_folded_bar_translations 6, test_russian_translation 6. Known: the no-room message is
   now reached only with extreme clearances.
 - L35 Full suite on FreeCAD 1.1.4 with T10: 1846 tests OK in 1179 s.
+- L36 (2026-11-12, screenshot: inside radius 20, relief radius 10 leaves a crescent void at the folded corner) "no
+  entiendo cual es la funcion de esa configuracion, eso no deberia ser un calculo interno en base al radio seteado?"
+  Explained: only relief radius = inside radius keeps the kept disc concentric with the bend axis. To the proposal to
+  remove the field: "sacalo y la casilla tambien, no le veo sentido a desactivar el alivio" -> S8, S20 updated, S21
+  dropped, T11 opened.
