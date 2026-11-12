@@ -50,8 +50,9 @@ ALU_3 = BendConfiguration("Alu 3", "Aluminium", 3.0, 4.0, 0.33)
 AUTO_PREVIEW = SimpleNamespace(auto_preview_param="Folded Bar Auto Preview")
 COMMANDS = ("MaxProFrame_FoldedBar", "MaxProFrame_UnfoldBar", "MaxProFrame_BendConfigurations")
 NOT_A_CHAIN = "The selected profiles do not form one chain: Profile meets none of the others."
-# 50 mm deep tube, 2 mm walls, key of a quarter of the depth: 2 <= r <= 50 - 4 - 12.5.
-RADIUS_RANGE = "The inside bend radius must be between 2 and 33.5 mm."
+# 50 mm deep tube, 2 mm walls, 90 degree corners: 2 <= r <= 48 / (1 - cos 45) - 4 = 159.88, rounded down to 0.1 mm,
+# with or without the key (S15, L40).
+RADIUS_RANGE = "The inside bend radius must be between 2 and 159.8 mm."
 # The tab of the default key (12.5 mm) stands out of its flank only with less clearance than half of it.
 KEY_TOO_BIG = "The key does not fit in the notch between Profile and Profile001: make it smaller."
 OWN_MITER = "Profile_Mt cuts Profile at its folded corner with Profile001: delete it or make that corner the open one."
@@ -417,8 +418,11 @@ class CreatePanelTest(FoldedPanelFixture):
         panel.form.spin_radius.setValue(1.0)
 
         self.assertRefused(panel, RADIUS_RANGE)
-        # At the largest radius the key fits below the bend axis point; with 6.5 mm of clearance it does not fit.
-        panel.form.spin_radius.setValue(33.5)
+        panel.form.spin_radius.setValue(160.0)
+        self.assertRefused(panel, RADIUS_RANGE)
+        # Past the old limit (33.5 mm with the key) the key fits below the bend axis point; with 6.5 mm of clearance
+        # it does not fit.
+        panel.form.spin_radius.setValue(46.0)
         self.assertAccepts(panel)
         panel.form.spin_clearance.setValue(6.5)
         self.assertRefused(panel, KEY_TOO_BIG)

@@ -66,7 +66,7 @@ class TestFoldedBarPanelSpanish(FoldedPanelFixture):
 
         panel = self.run_command(bottom, right, top, left)
         panel.form.spin_radius.setValue(1.0)
-        self.assertRefused(panel, "El radio interior de plegado tiene que estar entre 2 y 33.5 mm.")
+        self.assertRefused(panel, "El radio interior de plegado tiene que estar entre 2 y 159.8 mm.")
 
     def test_without_a_configuration_the_panel_says_how_to_add_one_in_spanish(self):
         use_language(self, "Spanish", "es_ES")

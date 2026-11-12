@@ -334,23 +334,47 @@ class RectangleUnfoldTest(UnfoldFixture):
 
     def test_radius_outside_its_limits_is_refused(self):
         chain = self.rectangle()
-        # min = t; max = depth - 2t - key diameter (depth / 4) with the key, depth - 2t without it.
-        self.assertRefused("The inside bend radius must be between 2 and 33.5 mm.", chain, radius=1.9)
-        self.assertRefused("The inside bend radius must be between 2 and 33.5 mm.", chain, radius=33.6)
-        self.assertRefused("The inside bend radius must be between 2 and 46 mm.", chain, radius=46.1, key=False)
-        self.assertRefused("The inside bend radius must be between 2 and 33.5 mm.", chain, corner_radii={1: 33.6})
-        refused = BendConfiguration("Steel big radius", "Steel", 2.0, 40.0, 0.4)
-        self.assertRefused("The inside bend radius must be between 2 and 33.5 mm.", chain, configuration=refused)
+        # S15 (L40): min = t; max = (depth - t) / (1 - cos(theta / 2)) - 2t, the largest radius whose inside of the bend
+        # still passes outside the inner corner, less two walls; 48 / 0.29289 - 4 = 159.88 at 90 degrees, rounded
+        # down to 0.1 mm. With or without the key: the key takes no room from the radius.
+        message = "The inside bend radius must be between 2 and 159.8 mm."
+        self.assertRefused(message, chain, radius=1.9)
+        self.assertRefused(message, chain, radius=159.9)
+        self.assertRefused(message, chain, radius=159.9, key=False)
+        self.assertRefused(message, chain, corner_radii={1: 159.9})
+        refused = BendConfiguration("Steel big radius", "Steel", 2.0, 160.0, 0.4)
+        self.assertRefused(message, chain, configuration=refused)
 
     def test_radius_at_its_limits_is_accepted(self):
-        chain = self.rectangle()
-        # At 33.5 mm the key sits below the bend axis point, in the disc the relief keeps (L33).
-        for radius, options in ((2.0, {}), (33.5, {}), (46.0, dict(key=False))):
+        # Legs long enough for the outer arc of the largest radius (r + t = 161.8 mm from both outer walls).
+        chain = build_chain(self.frame(edges=(((0, 0, 0), (600, 0, 0)), ((600, 0, 0), (600, 600, 0)))))
+        for radius, options in ((2.0, {}), (159.8, dict(key=False))):
             with self.subTest(radius=radius, options=options):
                 bar = unfold(chain, STEEL, radius=radius, **options)
                 self.solid(bar)
-                self.assertLength(developed([300, 200, 300, 200], [90] * 3, [radius] * 3), bar)
-                self.assertEqual([radius] * 3, [corner.inside_radius for corner in bar.corners])
+                self.assertLength(developed([600, 600], [90], [radius]), bar)
+                self.assertEqual([radius], [corner.inside_radius for corner in bar.corners])
+        # With the key at that radius the miter line is 1.7 mm long, below the inner wall: no key fits on it.
+        self.assertRefused(
+            "The key does not fit in the notch between Profile and Profile001 with this inside radius: make the "
+            "radius smaller or turn the key off.",
+            chain,
+            radius=159.8,
+        )
+
+    def test_largest_radius_follows_the_angle_of_each_corner(self):
+        # S15 (L40): 48 / (1 - cos 30) - 4 = 354.28 at 60 degrees, 48 / (1 - cos 67.5) - 4 = 73.76 at 135 degrees; each
+        # corner is checked with its own angle and radius, and the message gives its own range.
+        a, b = (0, 0, 0), (200, 0, 0)
+        c = tuple(p + q for p, q in zip(b, polar(150, 60)))
+        d = tuple(p + q for p, q in zip(c, polar(120, 195)))
+        chain = build_chain(self.frame(edges=((a, b), (b, c), (c, d))))
+        self.assertEqual([60.0, 135.0], [round(corner.bend_angle, 6) for corner in chain.corners])
+
+        self.assertRefused("The inside bend radius must be between 2 and 73.7 mm.", chain, radius=73.8, key=False)
+        self.assertRefused(
+            "The inside bend radius must be between 2 and 354.2 mm.", chain, corner_radii={0: 354.3}, key=False
+        )
 
     def test_one_corner_can_override_the_bar_radius(self):
         bar = unfold(self.rectangle(), STEEL, corner_radii={1: 6.0})
@@ -450,6 +474,55 @@ class KeyRoomUnfoldTest(UnfoldFixture):
         self.assertAlmostEqual(-2.58, (start + end) / 2, places=2)
         self.assertKeyAt(bar, d=8.0, side_wall=40.0 - 1.5 / 2, **line)
 
+    def test_radius_above_the_old_key_room_unfolds_with_the_key(self):
+        # S15 (L39, L40): the key no longer takes its diameter from the largest radius (was depth - 2t - d = 33.5 mm).
+        chain = self.rectangle()
+        bar = unfold(chain, STEEL, radius=40.0)
+
+        self.solid(bar)
+        self.assertLength(developed([300, 200, 300, 200], [90] * 3, [40.0] * 3), bar)
+        self.assertKeyAt(bar, r=40.0)
+
+    def test_users_radius_30_on_the_80x40_tube_unfolds_with_the_key(self):
+        # L39: an 80x40x1.5 tube bent across its 40 mm side with r = 30, the default key (10 mm) and 1 mm of clearance
+        # was refused with "between 1.5 and 27 mm"; at 90 degrees the largest radius is now
+        # 38.5 / (1 - cos 45) - 3 = 128.45 mm (L40), rounded down to 0.1 mm.
+        tubes = self.frame(family="Rectangular Hollow", width=40.0, height=80.0, thickness=1.5)
+        chain = build_chain(tubes)
+        configuration = BendConfiguration("Steel 80x40x1.5", "Steel", 1.5, 30.0, 0.4)
+
+        bar = unfold(chain, configuration, clearance=1.0)
+
+        self.solid(bar)
+        self.assertEqual([30.0] * 3, [corner.inside_radius for corner in bar.corners])
+        self.assertKeyAt(bar, d=10.0, g=1.0, r=30.0, depth=40.0, t=1.5, side_wall=40.0 - 1.5 / 2)
+        self.assertRefused(
+            "The inside bend radius must be between 1.5 and 128.4 mm.", chain, configuration=configuration, radius=128.5
+        )
+
+    def test_users_40x40_tube_folds_with_an_outer_radius_of_130(self):
+        # L40: two 40x40x1.5 tubes at 90 degrees bent with an outer radius of about 130 mm (r = 128.4, the largest):
+        # the bend axis is past the inner wall, the inside of the bend passes 1.3 mm outside the inner corner. The
+        # bar unfolds into one solid of the developed length; with the key on, the miter line (1.3 mm) has no room.
+        r, t, depth = 128.4, 1.5, 40.0
+        tubes = self.frame(
+            edges=(((0, 0, 0), (600, 0, 0)), ((600, 0, 0), (600, 600, 0))), width=depth, height=depth, thickness=t
+        )
+        chain = build_chain(tubes)
+        configuration = BendConfiguration("Steel 40x40x1.5", "Steel", t, r, 0.4)
+
+        bar = unfold(chain, configuration, key=False)
+
+        self.solid(bar)
+        h = math.radians(45)
+        self.assertLength(1200 + 2 * (depth / 2 - r - t) * math.tan(h) + math.radians(90) * (r + 0.4 * t), bar)
+        self.assertRefused(
+            "The key does not fit in the notch between Profile and Profile001 with this inside radius: make the "
+            "radius smaller or turn the key off.",
+            chain,
+            configuration=configuration,
+        )
+
     def test_key_slides_inward_out_of_a_narrow_v(self):
         # At 30 degrees the V is narrow near the bent wall: centered at the middle of the miter line (21.8 mm in), a
         # 30 mm tab would cross the other flank. It slides inward until it touches it: (d/2) / sin(theta) mm from where
@@ -464,8 +537,8 @@ class KeyRoomUnfoldTest(UnfoldFixture):
         self.assertKeyAt(bar, d=30.0, along=15.0 / math.sin(2 * h) - corner.bend_allowance / (2 * math.sin(h)))
 
     def test_key_slides_outward_off_the_inner_wall(self):
-        # r = 2 leaves room for a 44 mm key (S15), but centered at the middle of the miter line (v = 26.3) its tab
-        # would reach into the inner wall (v = 48): it slides outward until its tab touches it, at v = 48 - 22.
+        # With r = 2, centered at the middle of the miter line (v = 26.3), the tab of a 44 mm key would reach into
+        # the inner wall (v = 48): it slides outward until its tab touches it, at v = 48 - 22.
         bar = unfold(self.rectangle(), STEEL, radius=2.0, key_diameter=44.0)
 
         self.solid(bar)
@@ -474,8 +547,8 @@ class KeyRoomUnfoldTest(UnfoldFixture):
         self.assertKeyAt(bar, d=44.0, r=2.0, along=(26.0 - 2.0 - T) / math.cos(math.radians(45)))
 
     def test_key_that_fits_nowhere_on_the_miter_line_is_refused(self):
-        # At 30 degrees a 43 mm key (the largest S15 allows with r = 3) is too wide for the V wherever its tab stays
-        # below the inner wall; a smaller one fits.
+        # At 30 degrees a 43 mm key is too wide for the V wherever its tab stays below the inner wall; a smaller one
+        # fits.
         self.assertRefused(
             "The key does not fit in the notch between Profile and Profile001: make it smaller.",
             self.narrow_chain(),

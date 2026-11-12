@@ -18,6 +18,7 @@ import Part
 from test_unfolded_geometry import PLAIN, STEEL, UnfoldFixture
 
 from freecad.maxproframe._utils import get_profiles_and_links_from_document, get_profiles_and_links_from_object
+from freecad.maxproframe.bend_config import BendConfiguration
 from freecad.maxproframe.best_fit import CutPart, best_fit_decreasing
 from freecad.maxproframe.create_bom import make_cut_list, traverse_assembly
 from freecad.maxproframe.drill_hole import make_drill_hole
@@ -198,6 +199,53 @@ class FoldedBarObjectTest(FoldedBarFixture):
         self.assertSameVolume(expected, found)
         self.assertLess((expected.BoundBox.Center - found.BoundBox.Center).Length, LENGTH_TOLERANCE)
         self.assertAlmostEqual(expected.BoundBox.DiagonalLength, found.BoundBox.DiagonalLength, delta=LENGTH_TOLERANCE)
+
+    def test_users_40x40_tube_folds_with_an_outer_radius_of_130(self):
+        # S15 (L40): two 40x40x1.5 tubes at 90 degrees bent with the largest inside radius, 38.5 / (1 - cos 45) - 3 =
+        # 128.45 mm rounded down to 128.4 (outer radius 129.9): the bend axis lies past the inner wall and the inside
+        # of the bend passes 1.3 mm outside the inner corner. Folded and unfolded, the bar is one valid solid; the
+        # outer corner is round with radius r + t, the inner corner stays sharp with both inner walls whole.
+        r, t, e = 128.4, 1.5, 20.0
+        profiles = self.frame(
+            edges=(((0, 0, 0), (600, 0, 0)), ((600, 0, 0), (600, 600, 0))), width=2 * e, height=2 * e, thickness=t
+        )
+        configuration = BendConfiguration("Steel 40x40x1.5", "Steel", t, r, 0.4)
+
+        bar = make_folded_bar(profiles, configuration, key=False)
+        unfolded = make_unfolded_bar(bar)
+        self.doc.recompute()
+
+        self.assertOneSolid(bar)
+        self.assertOneSolid(unfolded)
+        developed = 1200 + 2 * (e - r - t) + math.radians(90) * (r + 0.4 * t)
+        self.assertAlmostEqual(developed, bar.DevelopedLength.Value, places=6)
+        self.assertAlmostEqual(developed, unfolded.Shape.BoundBox.XLength, delta=LENGTH_TOLERANCE)
+        shape = bar.Shape
+        box = shape.BoundBox
+        for value, expected in ((box.XMin, 0), (box.XMax, 600 + e), (box.YMin, -e), (box.YMax, 600)):
+            self.assertAlmostEqual(expected, value, delta=LENGTH_TOLERANCE)
+        cylinders = [face.Surface.Radius for face in shape.Faces if isinstance(face.Surface, Part.Cylinder)]
+        self.assertTrue(any(abs(radius - (r + t)) < LENGTH_TOLERANCE for radius in cylinders), cylinders)
+        self.assertTrue(any(abs(radius - r) < LENGTH_TOLERANCE for radius in cylinders), cylinders)
+
+        def inside(x, y, z=0.0):
+            return shape.isInside(App.Vector(x, y, z), 1e-6, True)
+
+        # The bend axis: r + t inside both outer faces (x = 620, y = -20); the bent wall on the bisector.
+        center = App.Vector(600 + e - r - t, -e + r + t, 0)
+        bisector = App.Vector(1, -1, 0).normalize()
+        for w in (0.0, e - t / 2, -(e - t / 2)):
+            middle = center + bisector * (r + t / 2)
+            self.assertTrue(inside(middle.x, middle.y, w), w)
+            past = center + bisector * (r + t + 0.1)
+            self.assertFalse(inside(past.x, past.y, w), w)
+        self.assertFalse(inside(600 + e - 0.1, -e + 0.1))
+        # The inner corner (580, 20): material on both inner walls up to it, on both sides of the miter line
+        # (x + y = 600), and none past it.
+        for w in (0.0, 10.0, -10.0):
+            for x, y in ((579.9, 19.9), (580.5, 19.0), (581.0, 19.5), (580.1, 20.1), (560.0, 19.25), (580.75, 40.0)):
+                self.assertTrue(inside(x, y, w), (x, y, w))
+            self.assertFalse(inside(579.9, 20.1, w), w)
 
 
 class SegmentsRefreshTest(FoldedBarFixture):

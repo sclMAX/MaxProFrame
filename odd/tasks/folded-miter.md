@@ -1,7 +1,7 @@
 # Folded miters (V-notch tube folding) and unfolded bar
 A chain of tube profiles is joined by folded corners (laser V-notch with key and relief, outer wall bent with a real
 radius) and unfolded into one straight solid with every cut, exported with FreeCAD's own formats for a CNC tube laser.
-Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T10 (L26, L32, L33) done, T11 (L36) done on branch `feat/folded-miter-refine`; push and PR are the user's decision.
+Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T11 done, T12 (L39-L40) done on branch `feat/folded-miter-refine`; push and PR are the user's decision.
 
 ## Specs
 - S1 Folded corner (L1): "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte
@@ -51,8 +51,12 @@ Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T10 (L26, L32, L33) done
 Accepted design proposals (L6 "deacuerdo" to Q1-Q6):
 - S14 Radius scope: one radius per bar, defaulting to the configuration's radius, with an optional override on a
   single corner.
-- S15 Radius limits (S9): min = t (wall thickness); max = depth of the tube across the bent wall - 2t - room for the
-  key (the relief and the bend zone eat the side walls from the bent wall inward).
+- S15 Radius limits (S9; rewritten by L39-L40 "el limite deberia ser el radio maximo tangente a las paredes - 2
+  espesores aproximadamente", "son 2 tubos de 40x40 a 90º y el radio es de 130mm porque no podria crear un corte
+  asi?"): min = t (wall thickness); max per corner = r_lim - 2t, where r_lim = (depth - t) / (1 - cos(theta/2)) is
+  the inside radius whose inside face of the bent wall passes through the inner corner (theta = bend angle, depth
+  across the bent wall). 40x40x1.5 at 90 degrees: r_lim 131.45, max 128.45 (outer 129.95, the user's 130). The key
+  takes no room from the radius: whether it fits on the miter line is check_key's job (S20). Was: depth - 2t - key.
 - S16 Reference: profiles stay where drawn; the fold rounds the outside corner inside the virtual sharp, so the outer
   dimensions of the frame do not change (outside mold line, like sheet metal).
 - S17 Open corner and start: a closed loop needs at least one open corner; its ends keep their own End Miter (part of
@@ -181,7 +185,9 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   nearest place where it fits; tests, tutorial, changelog. [x] af47317
 - T11 S8 S20 S21 worker: relief always on with radius = inside radius of each corner: remove the Relief checkbox,
   the Relief radius field, the ReliefRadius / Relief properties and options, S21's check and message; tests, i18n,
-  tutorial, changelog. [x] (see L38)
+  tutorial, changelog. [x] 4b19bbd
+- T12 S15 worker: radius max per corner = (depth - t)/(1 - cos(theta/2)) - 2t, key not subtracted; large radii
+  (bend axis outside the tube) verified to unfold and fold; tests, tutorial, changelog. [x] (see L41)
 - T9 S22 worker: select-as-you-go Folded Bar command and panel like End Miter; tests, tutorial, changelog. [x] 383c696
 
 ## Log
@@ -360,3 +366,22 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   24, test_folded_geometry 11, test_folded_bar 23, test_folded_bar_panel 43, test_folded_bar_translations 6,
   test_russian_translation 6, test_compile_translations 3, test_toolbar_translations 4. Differential vs 3a53d20:
   8 default cases, 16 solids identical (symmetric difference 0). Full suite skipped (L37).
+- L39 (2026-11-12, screenshot: TC80x40x1.5 across 40, radius 30 refused "between 1.5 and 27 mm" while the key fits
+  in the preview) "Porque dice que el radio maximo es 27?" Explained: 40 - 2*1.5 - 10 (default key), an S15 rule from
+  before the key could sit in the relief disc; proposed max = depth - 2t (37). User, with a screenshot of a bent tube
+  with its outer arc R 130 tangent to the walls: "El calculo esta mal ... el limite deberia ser el radio maximo
+  tangente a las paredes - 2 espesores aproximadamente" -> outer arc tangent at most where the inner walls start
+  (outer radius = depth), inside radius max = depth - 2t = 37 for this tube; S15 rewritten, T12 opened. Full suite
+  still skipped (L37).
+- L40 (2026-11-12) "espera esa imagen que te mande son 2 tubos de 40x40 a 90º y el radio es de 130mm porque no
+  podria crear un corte asi?" -> the limit is not depth - 2t: the bend can be much larger than the tube as long as
+  the inside of the bent wall passes outside the inner corner; S15 rewritten (L40 formula), T12 worker steered.
+- L41 T12 evidence (worker): `_Bend.check_radius` max = (depth - t)/(1 - cos(theta/2)) - 2t per corner, rounded
+  down to 0.1 mm (RADIUS_STEP); 50x50x2 90 deg 159.8, 40x40x1.5 90 deg 128.4, 80x40x1.5 across 40 accepts r = 30
+  with the default key. r + t > depth unfolds and folds (one valid solid each, outer arc r + t, sharp inner corner,
+  inner walls whole) with no other code change. At the max radius check_key refuses the key ("with this inside
+  radius"). RED: test_unfolded_geometry 3 F + 4 E, test_folded_bar 1, panel 1, translations 1. GREEN:
+  test_unfolded_geometry 28, test_folded_bar 24, test_folded_bar_panel 43, test_folded_bar_translations 6,
+  test_folded_geometry 11, test_russian_translation 6. Full suite skipped (L37). OPEN: two bends overlapping on a
+  short tube (2(r + t) longer than the tube) are not refused: the unfolded bar comes out as 2 solids and the folded
+  one is wrong (50x50x2 rectangle with 200 mm sides from r = 130); pre-existing check gap, reachable now.

@@ -32,6 +32,8 @@ VOLUME_TOLERANCE = 1e-6
 END_MARGIN = 1.0
 # How close the key slides to whatever keeps it from the middle of the miter line (mm).
 KEY_STEP = 1e-3
+# The largest inside radius is rounded down to it, so the range in the message is accepted whole (mm).
+RADIUS_STEP = 0.1
 X_AXIS = App.Vector(1, 0, 0)
 
 
@@ -148,8 +150,15 @@ class _Bend:
         return (self.radius + self.thickness) * math.tan(self.half)
 
     def check_radius(self):
-        minimum = self.thickness
-        maximum = self.depth - 2 * self.thickness - (self.diameter if self.key else 0.0)
+        """At least the wall thickness; at most the largest radius whose inside of the bend (radius r around the bend
+        axis) still passes outside the inner corner, less two wall thicknesses (S15, L40). The inner corner is on the
+        flank at v = depth, (r + t - depth) / cos(theta / 2) from the bend axis point: that equals r at
+        (depth - t) / (1 - cos(theta / 2)). It depends on the angle of the corner; the key takes no room from it
+        (whether the key fits on the miter line is ``check_key``'s job)."""
+        t = self.thickness
+        minimum = t
+        largest = (self.depth - t) / (1 - math.cos(self.half)) - 2 * t
+        maximum = round(math.floor(largest / RADIUS_STEP + SIZE_TOLERANCE) * RADIUS_STEP, 6)
         if self.radius < minimum - SIZE_TOLERANCE or self.radius > maximum + SIZE_TOLERANCE:
             raise UnfoldError(
                 translate("MaxProFrame", "The inside bend radius must be between {min:g} and {max:g} mm.").format(
