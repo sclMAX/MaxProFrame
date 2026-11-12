@@ -29,6 +29,13 @@ class BendConfiguration:
     k_factor: float
 
 
+def translate(context, text):
+    """FreeCAD's translate, imported when a message is shown: this module loads without the GUI."""
+    from freecad.maxproframe.ff_tools import translate as qt_translate
+
+    return qt_translate(context, text)
+
+
 def _number(value):
     """``value`` as a finite float, or None."""
     if isinstance(value, bool):
@@ -48,19 +55,23 @@ def validated(configuration):
     """``configuration`` with trimmed texts and float values; raises ValueError naming the first invalid field."""
     name = configuration.name.strip() if isinstance(configuration.name, str) else ""
     if not name:
-        raise ValueError("The configuration name must not be empty.")
+        raise ValueError(translate("MaxProFrame", "The configuration name must not be empty."))
     material = configuration.material.strip() if isinstance(configuration.material, str) else ""
     if not material:
-        raise ValueError("The material must not be empty.")
+        raise ValueError(translate("MaxProFrame", "The material must not be empty."))
     thickness = _number(configuration.thickness)
     if thickness is None or thickness <= 0:
-        raise ValueError("The wall thickness must be greater than 0 mm.")
+        raise ValueError(translate("MaxProFrame", "The wall thickness must be greater than 0 mm."))
     radius = _number(configuration.inside_radius)
     if radius is None or radius < thickness:
-        raise ValueError(f"The inside bend radius must be at least the wall thickness ({_format_mm(thickness)} mm).")
+        raise ValueError(
+            translate("MaxProFrame", "The inside bend radius must be at least the wall thickness ({} mm).").format(
+                _format_mm(thickness)
+            )
+        )
     k_factor = _number(configuration.k_factor)
     if k_factor is None or not 0 <= k_factor <= 1:
-        raise ValueError("The K-factor must be between 0 and 1.")
+        raise ValueError(translate("MaxProFrame", "The K-factor must be between 0 and 1."))
     return BendConfiguration(name, material, thickness, radius, k_factor)
 
 
@@ -89,7 +100,7 @@ class BendConfigurationStore:
     def delete(self, name):
         stored = self._load()
         if name not in stored:
-            raise KeyError(f'Bend configuration "{name}" does not exist.')
+            raise KeyError(translate("MaxProFrame", 'Bend configuration "{}" does not exist.').format(name))
         del stored[name]
         self._write(stored)
 
@@ -100,14 +111,15 @@ class BendConfigurationStore:
             with open(self.path, encoding="utf-8") as handle:
                 data = json.load(handle)
         except (json.JSONDecodeError, UnicodeDecodeError) as err:
-            raise ValueError(f"Corrupt bend configurations file '{self.path}': {err}") from err
+            raise ValueError(self._corrupt(err)) from err
         if not isinstance(data, dict) or not isinstance(data.get("configurations"), list):
-            raise ValueError(f"Corrupt bend configurations file '{self.path}': 'configurations' must be a list.")
+            raise ValueError(self._corrupt(translate("MaxProFrame", "'configurations' must be a list.")))
         version = data.get("version")
         if version != FILE_VERSION:
             raise ValueError(
-                f"Bend configurations file '{self.path}' has version {version}; "
-                f"this MaxProFrame reads version {FILE_VERSION}."
+                translate(
+                    "MaxProFrame", "Bend configurations file '{}' has version {}; this MaxProFrame reads version {}."
+                ).format(self.path, version, FILE_VERSION)
             )
         stored = {}
         for entry in data["configurations"]:
@@ -122,10 +134,17 @@ class BendConfigurationStore:
                     )
                 )
             except (AttributeError, ValueError) as err:
-                message = str(err) if isinstance(err, ValueError) else "each configuration must be an object."
-                raise ValueError(f"Corrupt bend configurations file '{self.path}': {message}") from err
+                message = (
+                    str(err)
+                    if isinstance(err, ValueError)
+                    else translate("MaxProFrame", "each configuration must be an object.")
+                )
+                raise ValueError(self._corrupt(message)) from err
             stored[configuration.name] = configuration
         return stored
+
+    def _corrupt(self, detail):
+        return translate("MaxProFrame", "Corrupt bend configurations file '{}': {}").format(self.path, detail)
 
     def _write(self, stored):
         folder = os.path.dirname(self.path)

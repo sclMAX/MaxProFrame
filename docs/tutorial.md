@@ -438,6 +438,75 @@ A trim, cutout or drill hole made from the piece after the pattern shows on ever
 **Populate IDs** gives the copies the ID of the piece they copy, never one of their own: selecting the copies numbers the piece. With **Include Part count in PID**, the count includes the copies. **Reset IDs** on a copy clears the ID of the piece, of its profile and of every copy, and its confirmation counts them all.
 
 
+## Folded miters
+
+A **folded corner** joins two tubes without cutting them apart: the tube is one bar, the laser cuts a V notch through the walls on the inside of the corner, and the wall on the outside of the corner stays whole and is bent. Folding the bar closes the V. MaxProFrame draws the folded bar with its real bend radius and unfolds it into one straight solid with every cut, which you export for a CNC tube laser.
+
+The commands are on the **Folded Miters** toolbar and menu (Spanish *Ingletes plegados*): **Folded Bar** (*Barra plegada*), **Unfold Bar** (*Desplegar barra*) and **Bend Configurations** (*Configuraciones de plegado*).
+
+### Draw the frame
+
+Draw the frame as usual: a sketch with its lines and **Create Profiles** on them, for example a rectangle of four 50x50x2 tubes. The tubes must be **Square Hollow** or **Rectangular Hollow**, straight, the same size and material, and continue each other across every fold: give them the same anchor, offsets and rotation. A square tube may be turned a quarter turn. Corners at any angle fold, from almost straight to almost turning back (less than 180 degrees), and each corner can bend over its own wall, so a zig-zag chain folds too. A corner must bend over a wall of the tube, not across one of its edges.
+
+Holes and cutouts made on the profiles (**Cutout / Hole**, **Drill Hole**) and the **End Miter** of the open corner and of the free ends are part of the bar: they are carried to the unfolded bar. A corner that folds must have no miter or trim of its own: the panel says which one cuts there, to delete it or to make that corner the open one.
+
+### Folded and open corners
+
+Every corner where two of the selected tubes meet folds, except one: a closed frame (the rectangle) has to stay open at one corner, where the bar starts and ends. So a rectangle of four tubes has three folded corners and one open corner. An open chain (an L, a U) folds at every corner and has its two free ends.
+
+The first tube you select is where the bar starts. In a closed frame the bar opens, at first, where the first and the last selected tubes meet; the panel offers the two corners of the first tube. In an open chain, the first selected tube must be at one end of the chain.
+
+### Bend configurations
+
+How much length a bend takes depends on the tube and on how your shop bends it. That is kept in **bend configurations**, saved on your computer next to your profile libraries, so you set them up once. Open **Bend Configurations**, or press **Manage configurations** in the Folded Bar panel:
+
+- **Name**: what the configuration is called, for example `Steel 50x50x2`.
+- **Material**: the material it is for.
+- **Wall thickness**: the wall thickness of the tubes it bends. A configuration only folds tubes with that wall thickness; otherwise the panel says so.
+- **Inside bend radius**: the radius inside the bent wall. It is at least the wall thickness.
+- **K-factor**: where the neutral axis of the wall sits, from 0 (the inside face) to 1 (the outside face). A test bend on your tube gives the right value.
+
+**New** starts a configuration from the values shown, without a name; **Save** adds it, or saves the changes of the configuration shown (renaming it if you changed its name); **Delete** asks first. The Folded Bar panel opens with the last configuration you used. A bar keeps a copy of its configuration, so a document opens with the same bar on another computer, and deleting or changing a configuration does not change the bars made with it.
+
+The length of the bar is its **developed length**: the straight lengths plus, for each folded corner, the bend allowance, angle × (inside radius + K-factor × wall thickness). The outer size of the frame does not change: the fold rounds the outside of the corner inside the frame you drew.
+
+### Create the Folded Bar
+
+1. Select the tubes in order around the frame, the first one where the bar starts. Trimmed profiles, cutouts and drill holes made from them can be selected instead of their profile.
+2. Click **Folded Bar**. The panel lists the tube pieces from the start of the bar and shows a preview.
+3. **Bend**: choose the **Configuration**. **Inside radius** is the radius of every folded corner, the one of the configuration by default. Under **Corners**, each folded corner has its own field; **Bar radius** uses the inside radius, another value bends only that corner with it. In a closed frame, **Open corner** chooses where the frame stays open.
+4. **Notch**:
+   - **Clearance**: the gap between the two flanks of the V and around the key, half on each side, as the **Gap** of **End Miter**. 0 by default.
+   - **Interlocking key**: a round bulb on one flank of the V, at the middle of its height, and its socket on the other flank, so the folded corner locks in place. **Key diameter** is the bulb (by default a quarter of the tube size across the bent wall) and **Neck width** the neck that holds it (by default 60 % of the bulb).
+   - **Relief next to the bent wall**: a round relief at the bottom of the V, next to the wall that bends, so the walls do not collide while bending. **Relief radius** is the inside bend radius of the corner by default.
+   - The key and the relief are on by default; uncheck them to cut a plain V. A size field showing **Default** uses the default size; type a value to change it on this bar.
+5. With **Update automatically** checked (remembered) the preview follows the panel; unchecked, the panel says **Pending changes** and the bar waits for **OK**.
+6. **OK** creates the Folded Bar in one Undo step, in the same Part or folder as the first tube; **Cancel** leaves the document unchanged. The tubes are hidden and shown under the bar in the tree: the bar replaces them.
+
+What keeps the bar from folding is shown at the bottom of the panel, and **OK** stays disabled until it is fixed:
+
+- **Radius limits**: the inside radius is at least the wall thickness and at most the tube size across the bent wall minus two wall thicknesses, minus the key diameter when the key is on. Outside them, the panel shows the allowed range, for example "The inside bend radius must be between 2 and 33.5 mm." for a 50x50x2 tube.
+- **Without the relief**, a corner can bend only up to 2 × acos(r / (r + t)), r being the inside radius and t the wall thickness: past that, the side walls next to the bent wall stick out of the rounded corner. A wider corner is refused with its limit, for example "The corner between Profile001 and Profile002 bends 135 degrees: without the relief it bends up to 106.3 degrees. Turn the relief on." The limit is 106.3 degrees for r = 3 mm and t = 2 mm, and 88.8 degrees for r = 5 mm.
+- **The key does not fit** in the notch: make it smaller, or turn it off.
+- The tubes do not form one chain, are not the same tube, or do not continue each other: the panel names them.
+
+### Edit the bar
+
+Double-click the Folded Bar: the same panel opens with its values. **OK** keeps the changes in one Undo step, or none when nothing changed; **Cancel** puts the bar back. The values are also properties of the bar in the property editor. A cutout, drill hole or trim made on one of its tubes after the bar is folded into it at the next recompute. Deleting the bar shows its tubes again.
+
+### Unfold and export
+
+Select the Folded Bar and click **Unfold Bar**. It creates the Unfolded Bar: one straight solid with every cut (the V notches with their keys and reliefs, the holes and cutouts of the tubes and the end miters), at the document origin, from X = 0 along X, starting at the open corner (or the free end) of the first tube. It follows the Folded Bar when you change it.
+
+To send it to the tube laser, select the Unfolded Bar and use FreeCAD's **File > Export**, choosing STEP, IGES or BREP (or another format your CAM reads). MaxProFrame does not write a machine format of its own.
+
+### BOM, cut list and IDs
+
+The BOM and the Cut List count a Folded Bar as one piece of its developed length, with its family, size and material, and no cutting angles: its notches are laser cuts. The tubes folded into it and its Unfolded Bar are not counted again. **Populate IDs** gives it one ID, and **Reset IDs** clears it; both take a Folded Bar selected directly.
+
+When the developed length is longer than the **Stock Length** of the cut list (set in the **Create BOM** panel, 6000 mm by default), the Report view warns at each recompute of the bar and when the BOM is made, for example "FoldedBar: its developed length (6120.0 mm) is longer than the stock length of the cut list (6000.0 mm)." Use longer stock, or split the frame into two bars.
+
+
 ## Expressions in panel fields
 
 The number fields of the panels that edit one object take FreeCAD expressions, as in the Part Design panels: click the **Fx** icon at the right of the field, or type `=`, and enter a formula such as `VarSet.HoleDiameter`, `Spreadsheet.Pitch * 2` or `20 mm + 5 mm`. The field then shows the value of the expression and the object keeps the expression, so changing the VarSet or the spreadsheet updates the object.

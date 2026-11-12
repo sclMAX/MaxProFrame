@@ -324,6 +324,7 @@ class ResetIDsCommand:
                         or is_profile(sel)
                         or is_trimmedbody(sel)
                         or is_extrudedcutout(sel)
+                        or is_foldedbar(sel)
                         or is_link(sel)
                         for sel in Gui.Selection.getSelection()
                     ]
@@ -342,6 +343,7 @@ class ResetIDsCommand:
                 or is_profile(sel)
                 or is_trimmedbody(sel)
                 or is_extrudedcutout(sel)
+                or is_foldedbar(sel)
                 or is_link(sel)
                 for sel in Gui.Selection.getSelection()
             ]

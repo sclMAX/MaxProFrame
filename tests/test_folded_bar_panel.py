@@ -38,7 +38,7 @@ from freecad.maxproframe.create_folded_bar_tool import FoldedBarCommand, UnfoldB
 from freecad.maxproframe.ff_tools import get_param_group
 from freecad.maxproframe.folded_bar import make_folded_bar
 from freecad.maxproframe.InitGui import MaxProFrame
-from freecad.maxproframe.populate_ids_tool import PopulateIDsCommand, PopulateIDsTaskPanel
+from freecad.maxproframe.populate_ids_tool import PopulateIDsCommand, PopulateIDsTaskPanel, QtGui, ResetIDsCommand
 
 STEEL = BendConfiguration("Steel 50x50x2", "Steel", 2.0, 3.0, 0.4)
 STEEL_R4 = BendConfiguration("Steel r4", "Steel", 2.0, 4.0, 0.4)
@@ -611,6 +611,19 @@ class OutputCommandsTest(FoldedPanelFixture):
         self.assertTrue(PopulateIDsCommand().IsActive())
         self.select(profiles[0].AttachmentSupport[0][0])
         self.assertFalse(PopulateIDsCommand().IsActive())
+
+    def test_reset_ids_takes_a_selected_folded_bar(self):
+        profiles, bar = self.make_bar()
+        bar.PID = "7"
+        self.select(bar)
+        self.assertTrue(ResetIDsCommand().IsActive())
+
+        with patch.object(QtGui.QMessageBox, "question", return_value=QtGui.QMessageBox.Yes):
+            ResetIDsCommand().Activated()
+
+        self.assertEqual("", bar.PID)
+        self.select(profiles[0].AttachmentSupport[0][0])
+        self.assertFalse(ResetIDsCommand().IsActive())
 
 
 if __name__ == "__main__":

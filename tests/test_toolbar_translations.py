@@ -7,12 +7,14 @@ from miter_helpers import use_language
 from PySide import QtWidgets
 
 from freecad.maxproframe import (  # noqa: F401  (importing registers the commands)
+    bend_config_dialog,
     create_bom_tool,
     create_drill_hole_tool,
     create_edit_balloons_tool,
     create_end_miter_tool,
     create_extend_cut_tool,
     create_extruded_cutout_tool,
+    create_folded_bar_tool,
     create_link,
     create_notch_tool,
     create_piece_table_tool,
@@ -72,6 +74,21 @@ EXPECTED = {
         "Patrón de perfiles",
         "las copias son enlaces ubicados por cantidad y paso",
     ),
+    "MaxProFrame_FoldedBar": (
+        "Folded Bar",
+        "Barra plegada",
+        "Seleccioná dos o más perfiles de tubo (o piezas hechas con ellos) que se unan extremo con extremo",
+    ),
+    "MaxProFrame_UnfoldBar": (
+        "Unfold Bar",
+        "Desplegar barra",
+        "para exportarla con Archivo > Exportar (STEP, IGES, BREP) a un láser de tubos",
+    ),
+    "MaxProFrame_BendConfigurations": (
+        "Bend Configurations",
+        "Configuraciones de plegado",
+        "Agregá, editá y eliminá las configuraciones de plegado guardadas de las barras plegadas",
+    ),
     "MaxProFrame_Link": (
         "Attached Link",
         "Enlace anclado",
@@ -125,6 +142,7 @@ def toolbar_commands():
     toolboxes = (
         MaxProFrame.toolbox_drawing
         + MaxProFrame.toolbox_maxproframe
+        + MaxProFrame.toolbox_folded
         + MaxProFrame.toolbox_group
         + MaxProFrame.toolbox_part
         + MaxProFrame.toolbox_output
