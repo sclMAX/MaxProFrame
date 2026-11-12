@@ -115,7 +115,7 @@ FOLDED_MITER_TEXTS = (
     ("MaxProFrame_FoldedBar", "Folded Bar"),
     (
         "MaxProFrame_FoldedBar",
-        "<b>Folded Bar</b><br><br>Select two or more tube profiles (or pieces made from them) that meet end to end, "
+        "<b>Folded Bar</b><br><br>Click two or more tube profiles (or pieces made from them) that meet end to end, "
         "the first one where the bar starts: their corners fold, with a V notch, a key and a relief cut by the laser "
         "and the outer wall bent. A closed frame stays open at one corner. Double-click the bar to edit it.",
     ),

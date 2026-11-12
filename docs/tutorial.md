@@ -472,8 +472,8 @@ The length of the bar is its **developed length**: the straight lengths plus, fo
 
 ### Create the Folded Bar
 
-1. Select the tubes in order around the frame, the first one where the bar starts. Trimmed profiles, cutouts and drill holes made from them can be selected instead of their profile.
-2. Click **Folded Bar**. The panel lists the tube pieces from the start of the bar and shows a preview.
+1. Click **Folded Bar**: the panel opens at once, as in **Create Miter Ends**.
+2. Click the tubes in the 3D view in order around the frame, the first one where the bar starts. Each one clicked joins the end of the list of tube pieces, and the corners, the messages and the preview follow; a trimmed profile, cutout or drill hole made from a listed tube takes its place in the list. **Ctrl+click** a listed tube (or the preview over it), or deselect it, to drop it. Clicking anything that is not a tube does nothing. Until two tubes meet end to end the panel says "Select at least two profiles that meet end to end." and **OK** stays disabled. Tubes selected before clicking **Folded Bar** are listed already, in the order they were selected.
 3. **Bend**: choose the **Configuration**. **Inside radius** is the radius of every folded corner, the one of the configuration by default. Under **Corners**, each folded corner has its own field; **Bar radius** uses the inside radius, another value bends only that corner with it. In a closed frame, **Open corner** chooses where the frame stays open.
 4. **Notch**:
    - **Clearance**: the gap between the two flanks of the V and around the key, half on each side, as the **Gap** of **End Miter**. The round cuts of the relief move back the whole clearance, so the folded corner keeps that gap between the side walls and the bent wall too. 0 by default.
@@ -492,7 +492,7 @@ What keeps the bar from folding is shown at the bottom of the panel, and **OK** 
 
 ### Edit the bar
 
-Double-click the Folded Bar: the same panel opens with its values. **OK** keeps the changes in one Undo step, or none when nothing changed; **Cancel** puts the bar back. The values are also properties of the bar in the property editor. A cutout, drill hole or trim made on one of its tubes after the bar is folded into it at the next recompute. Deleting the bar shows its tubes again.
+Double-click the Folded Bar: the same panel opens with its values. Its tubes stay as they are: clicking tubes does not change them, as when editing an End Miter. **OK** keeps the changes in one Undo step, or none when nothing changed; **Cancel** puts the bar back. The values are also properties of the bar in the property editor. A cutout, drill hole or trim made on one of its tubes after the bar is folded into it at the next recompute. Deleting the bar shows its tubes again.
 
 ### Unfold and export
 

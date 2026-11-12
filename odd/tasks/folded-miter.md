@@ -172,8 +172,8 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   configurations); panel tests. [x] 68817bd
 - T7 S1-S19 inline: Spanish translations, Russian strings left unfinished for the contributor, tutorial, changelog. [x] 5e2172f
 - T8 S8 S15 S20 worker: clearance on the relief arcs; half-circle key centered on the miter line, no neck (geometry,
-  FoldedBar property, panel field, translations, tutorial, changelog); tests. [x] (see L29)
-- T9 S22 worker: select-as-you-go Folded Bar command and panel like End Miter; tests, tutorial, changelog. [ ]
+  FoldedBar property, panel field, translations, tutorial, changelog); tests. [x] 42c94aa
+- T9 S22 worker: select-as-you-go Folded Bar command and panel like End Miter; tests, tutorial, changelog. [x] (see L30)
 
 ## Log
 - L1 (2026-11-11) "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte laser)
@@ -303,3 +303,14 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   test_unfolded_geometry 22, test_folded_geometry 11, test_folded_bar 22, test_folded_bar_panel 32,
   test_russian_translation 6, test_toolbar_translations 4, test_workbench_commands 2, test_folded_bar_translations 5,
   test_compile_translations 3. Known: largest radius taking the key at 90 degrees on 50x50x2 is about 19.97 mm.
+- L30 T9 evidence (worker): `create_folded_bar_tool.py` (IsActive needs only a document; panel opens at once with the
+  preselection and observes the selection; click adds at the end, Ctrl+click / deselect removes; non-tube and other
+  document ignored; a trim/cutout of a listed profile takes its place; click on the preview maps to the nearest listed
+  piece; preview dropped and tubes shown when the pieces no longer fold; observer removed in clean() from accept,
+  reject, closed and form-destroyed; edit mode like End Miter: selection does not change the segments). Tooltip
+  "Click two or more ..." (es "Hacé clic en dos o más ...", ru unfinished, .qm recompiled), tutorial, changelog.
+  Deviations from End Miter: a replacing piece keeps its list position; duplicate preselection silently de-duplicated.
+  RED: test_folded_bar_panel 11 failures + 3 errors in the new tests. GREEN: test_folded_bar_panel 43,
+  test_folded_bar 22, test_folded_bar_translations 6, test_russian_translation 6, test_compile_translations 3,
+  test_workbench_commands 2, test_end_miter_panel 14; test_toolbar_translations 4 after the parent updated its
+  Spanish tooltip expectation. Slice note: T9 (~600 lines, mostly tests) is its own commit past the ~400 slice.

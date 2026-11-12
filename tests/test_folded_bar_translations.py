@@ -13,6 +13,7 @@ from test_folded_bar_panel import STEEL, FoldedPanelFixture
 
 from freecad.maxproframe.bend_config import BendConfiguration, BendConfigurationStore, set_last_used_configuration
 from freecad.maxproframe.bend_config_dialog import BendConfigurationsDialog
+from freecad.maxproframe.ff_tools import translate
 
 ALU = BendConfiguration("Alu 3", "Aluminium", 3.0, 4.0, 0.33)
 
@@ -75,6 +76,25 @@ class TestFoldedBarPanelSpanish(FoldedPanelFixture):
         panel = self.run_command(*self.frame())
 
         self.assertRefused(panel, "Agregá una configuración de plegado: presioná Gestionar configuraciones.")
+
+    def test_the_command_tooltip_says_to_click_the_tubes_in_spanish(self):
+        # S22: the panel opens at once and takes the tubes clicked.
+        use_language(self, "Spanish", "es_ES")
+
+        tooltip = translate(
+            "MaxProFrame_FoldedBar",
+            "<b>Folded Bar</b><br><br>Click two or more tube profiles (or pieces made from them) that meet end to end, "
+            "the first one where the bar starts: their corners fold, with a V notch, a key and a relief cut by the "
+            "laser and the outer wall bent. A closed frame stays open at one corner. Double-click the bar to edit it.",
+        )
+
+        self.assertEqual(
+            "<b>Barra plegada</b><br><br>Hacé clic en dos o más perfiles de tubo (o piezas hechas con ellos) que se "
+            "unan extremo con extremo, primero en aquel donde empieza la barra: sus esquinas se pliegan, con una "
+            "muesca en V, una llave y un alivio cortados con láser y la pared exterior doblada. Un marco cerrado "
+            "queda abierto en una esquina. Doble clic en la barra para editarla.",
+            tooltip,
+        )
 
 
 class TestBendConfigurationsDialogSpanish(unittest.TestCase):

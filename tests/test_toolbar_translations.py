@@ -77,7 +77,7 @@ EXPECTED = {
     "MaxProFrame_FoldedBar": (
         "Folded Bar",
         "Barra plegada",
-        "Seleccioná dos o más perfiles de tubo (o piezas hechas con ellos) que se unan extremo con extremo",
+        "Hacé clic en dos o más perfiles de tubo (o piezas hechas con ellos) que se unan extremo con extremo",
     ),
     "MaxProFrame_UnfoldBar": (
         "Unfold Bar",

@@ -4,12 +4,16 @@ See odd/tasks/folded-miter.md, T6. The panel folds the selected tube pieces with
 (S6), with its inside radius (S9, S14), the open corner of a closed frame (S17), the clearance, key and relief
 (S8, S20). Whatever keeps the chain from folding is shown and keeps OK disabled: the chain messages, an own miter at a
 folded corner (S12) and the unfold messages (S9, S15, S21).
+
+Like Create Miter Ends (S22, T9), the command opens the panel at once, with the selected pieces if any, and the panel
+takes the pieces clicked while it is open: a click adds one at the end of the list, Ctrl+click or deselecting drops it.
 """
 
 import os
 
 import FreeCAD as App
 import FreeCADGui as Gui
+import Part
 from PySide import QtCore, QtGui
 
 from freecad.maxproframe._utils import is_foldedbar
@@ -18,7 +22,14 @@ from freecad.maxproframe.bend_config import (
     get_last_used_configuration,
     set_last_used_configuration,
 )
-from freecad.maxproframe.create_end_miter_tool import GAP_DELAY_MS, _alive, _alive_document, _failures
+from freecad.maxproframe.create_end_miter_tool import (
+    GAP_DELAY_MS,
+    _alive,
+    _alive_document,
+    _built_on,
+    _ctrl_held,
+    _failures,
+)
 from freecad.maxproframe.expression_fields import length_field
 from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, get_param_group, translate
 from freecad.maxproframe.folded_bar import bend_configuration, check_settings, make_folded_bar, make_unfolded_bar
@@ -29,7 +40,7 @@ from freecad.maxproframe.folded_chain import (
     cut_at_fold_message,
     cuts_at_folds,
 )
-from freecad.maxproframe.profile_pattern import newest_piece
+from freecad.maxproframe.profile_pattern import container_placement, newest_piece, placed
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
 from freecad.maxproframe.unfolded_geometry import UnfoldError
 
@@ -81,6 +92,9 @@ class FoldedBarTaskPanel:
     starts the bar) inside one transaction that Cancel aborts. With ``edited`` the bar itself is the preview: OK keeps
     the changes in one Undo step, or none when nothing changed; Cancel puts it back. ``store`` holds the bend
     configurations (the user's by default).
+
+    As a selection observer (added by the command, as End Miter's) the new bar takes the pieces clicked while the
+    panel is open; an edited bar keeps its pieces, as an edited End Miter does.
     """
 
     auto_preview_param = AUTO_PREVIEW_PARAM
@@ -90,11 +104,18 @@ class FoldedBarTaskPanel:
         self.edited = edited
         self.obj = edited
         self.store = store or BendConfigurationStore()
-        self.selection = list(edited.Segments) if edited is not None else list(selection)
+        # (piece, Visibility) of what the preview hides: Cancel shows it again, undo or not.
+        self._visibility = []
+        self.selection = list(edited.Segments) if edited is not None else []
+        if edited is None:
+            for obj in selection:
+                self.add_member(obj)
         self.doc = edited.Document if edited is not None else (
             self.selection[0].Document if self.selection else App.ActiveDocument
         )  # fmt: skip
         self._closed = False
+        # Selection changes the panel makes itself are not the user's clicks.
+        self._syncing = False
         self._transaction_open = False
         self._recomputing = False
         self._deferred = None
@@ -110,15 +131,7 @@ class FoldedBarTaskPanel:
         self._overrides = {}
         self._row_keys = []
         self._corner_rows = []
-        # (piece, Visibility) of what the preview hides: Cancel shows it again, undo or not.
-        self._visibility = []
-        if edited is None:
-            for obj in self.selection:
-                profile = base_profile(obj)
-                for piece in (obj, newest_piece(profile) if profile is not None else obj):
-                    if all(piece.Name != seen.Name for seen, _ in self._visibility):
-                        self._visibility.append((piece, piece.Visibility))
-        else:
+        if edited is not None:
             self._before = {prop: getattr(edited, prop) for prop in ("Segments",) + PROPERTIES}
         # The configuration the edited bar keeps a copy of: offered even when the store lacks it or differs.
         self._document_copy = bend_configuration(edited) if edited is not None else None
@@ -300,8 +313,13 @@ class FoldedBarTaskPanel:
         return self._configurations.get(self.form.combo_configuration.currentData())
 
     def _fill_open_corners(self):
-        """The two corners of the first piece, of a closed frame: where it meets the last piece first (S17)."""
+        """The two corners of the first piece, of a closed frame: where it meets the last piece first (S17).
+
+        The choice made is kept while the list offers it.
+        """
         combo = self.form.combo_open_corner
+        chosen = [obj.Name for obj in self._open_corner() or ()]
+        combo.blockSignals(True)
         combo.clear()
         try:
             chain = build_chain(self.selection)
@@ -314,6 +332,9 @@ class FoldedBarTaskPanel:
                 other = by_profile[segment.profile.Name]
                 text = translate("MaxProFrame", "Between {} and {}").format(first.Label, other.Label)
                 combo.addItem(text, [first, other])
+                if [first.Name, other.Name] == chosen:
+                    combo.setCurrentIndex(combo.count() - 1)
+        combo.blockSignals(False)
         visible = combo.count() > 0
         self.form.label_open_corner.setVisible(visible)
         combo.setVisible(visible)
@@ -347,22 +368,25 @@ class FoldedBarTaskPanel:
 
     def corner_spins(self):
         """The radius field of each folded corner, in chain order (0: the bar's inside radius)."""
-        return [spin for _, spin in self._corner_rows]
+        return [spin for _, spin in self._corner_rows[: len(self._row_keys)]]
 
     def _show_corner_rows(self, chain):
-        """One radius field per folded corner of ``chain``, showing its override; the rows follow the chain."""
+        """One radius field per folded corner of ``chain``, showing its override; the rows follow the chain.
+
+        Rows are added as the chain grows and hidden when it shrinks.
+        """
         layout = self.form.corners_layout
         count = len(chain.corners) if chain is not None else 0
-        if count and not self._corner_rows:
-            for index in range(count):
-                label = QtGui.QLabel()
-                spin = length_field(0.0, MAX_SIZE, 0.0)
-                spin.setSpecialValueText(translate("MaxProFrame", "Bar radius"))
-                for widget in (label, spin):
-                    invalidate_wrapper_on_destroy(widget)
-                spin.valueChanged.connect(lambda value, index=index: self._corner_radius_changed(index, value))
-                layout.addRow(label, spin)
-                self._corner_rows.append((label, spin))
+        while len(self._corner_rows) < count:
+            index = len(self._corner_rows)
+            label = QtGui.QLabel()
+            spin = length_field(0.0, MAX_SIZE, 0.0)
+            spin.setSpecialValueText(translate("MaxProFrame", "Bar radius"))
+            for widget in (label, spin):
+                invalidate_wrapper_on_destroy(widget)
+            spin.valueChanged.connect(lambda value, index=index: self._corner_radius_changed(index, value))
+            layout.addRow(label, spin)
+            self._corner_rows.append((label, spin))
         self._row_keys = [_corner_key(chain, corner) for corner in chain.corners] if count else []
         for index, (label, spin) in enumerate(self._corner_rows):
             if index >= count:
@@ -373,11 +397,11 @@ class FoldedBarTaskPanel:
             spin.blockSignals(True)
             spin.setValue(self._overrides.get(self._row_keys[index], 0.0))
             spin.blockSignals(False)
-        shown = bool(count) and len(self._corner_rows) == count
+        shown = bool(count)
         self.form.label_corner_radii.setVisible(shown)
-        for label, spin in self._corner_rows:
-            label.setVisible(shown)
-            spin.setVisible(shown)
+        for index, (label, spin) in enumerate(self._corner_rows):
+            label.setVisible(index < count)
+            spin.setVisible(index < count)
         self.form.groupBox_corners.setVisible(shown or self.form.combo_open_corner.count() > 0)
 
     def _corner_radius_changed(self, index, value):
@@ -516,7 +540,8 @@ class FoldedBarTaskPanel:
         if self._problems or self._chain is None:
             return None
         values = self._properties(self._chain)
-        return tuple((prop, _plain(values[prop])) for prop in PROPERTIES)
+        tips = tuple(segment.tip.Name for segment in self._chain.segments)
+        return (("Segments", tips),) + tuple((prop, _plain(values[prop])) for prop in PROPERTIES)
 
     def _properties(self, chain):
         form = self.form
@@ -564,11 +589,15 @@ class FoldedBarTaskPanel:
     def _preview(self, force):
         wanted = self._wanted()
         if wanted is None:
+            if self.edited is None and self._preview_of_other_pieces():
+                self._drop_preview()
             return
         if not force and wanted == self._previewed and _alive(self.obj):
             return
         self._error = ""
         self._open_transaction()
+        # A selected preview changed or remade is no click of the user.
+        self._syncing = True
         try:
             if self.obj is None or not _alive(self.obj):
                 options = self._options(self._chain)
@@ -576,12 +605,191 @@ class FoldedBarTaskPanel:
                     self.selection, self._configuration(), open_corner=self._open_corner(), **options
                 )
             else:
-                self._apply(self.obj, self._properties(self._chain))
+                values = self._properties(self._chain)
+                if self.edited is None:
+                    # The pieces clicked since: the bar follows the chain of the list.
+                    values = dict(Segments=[segment.tip for segment in self._chain.segments], **values)
+                self._apply(self.obj, values)
                 self.doc.recompute()
             self._error = _failures([self.obj])
         except Exception as error:
             self._error = str(error)
+        finally:
+            self._syncing = False
         self._previewed = wanted
+        if self.edited is None:
+            self._show_unlisted()
+
+    def _preview_bar(self):
+        """The previewed new bar, or None (none yet, or editing)."""
+        if self.edited is None and self.obj is not None and _alive(self.obj):
+            return self.obj
+        return None
+
+    def _profiles_in_bar(self):
+        """Names of the profiles the preview folds now."""
+        bar = self._preview_bar()
+        if bar is None:
+            return set()
+        profiles = (base_profile(segment) for segment in bar.Segments if segment is not None)
+        return {profile.Name for profile in profiles if profile is not None}
+
+    def _preview_of_other_pieces(self):
+        """Whether a preview shows pieces other than the listed ones."""
+        if self._preview_bar() is None:
+            return False
+        return self._profiles_in_bar() != {base_profile(obj).Name for obj in self.selection}
+
+    def _drop_preview(self):
+        """Remove the preview of pieces that no longer fold: the pieces show again."""
+        self._syncing = True
+        try:
+            self.doc.removeObject(self.obj.Name)
+        finally:
+            self._syncing = False
+        self.obj = None
+        self._error = ""
+        self._previewed = None
+        self._show_unlisted()
+
+    def _show_unlisted(self):
+        """Show the pieces the preview hid as they were, but the ones it still folds."""
+        folded = self._profiles_in_bar()
+        for piece, visible in self._visibility:
+            if not _alive(piece) or piece.Visibility == visible:
+                continue
+            profile = base_profile(piece)
+            if profile is None or profile.Name not in folded:
+                piece.Visibility = visible
+
+    # Pieces clicked while the panel is open (S22), as in End Miter.
+
+    def add_member(self, obj):
+        """List ``obj`` at the end; one entry per profile: a piece made from a listed one takes its place."""
+        if obj is None or not _alive(obj) or base_profile(obj) is None or obj in self.selection:
+            return False
+        if any(obj in _built_on(member) for member in self.selection):
+            return False
+        replaced = [index for index, member in enumerate(self.selection) if member in _built_on(obj)]
+        if replaced:
+            # The start of the bar stays where it was.
+            self.selection[replaced[0]] = obj
+            self.selection = [member for index, member in enumerate(self.selection) if index not in replaced[1:]]
+        else:
+            self.selection.append(obj)
+        profile = base_profile(obj)
+        for piece in (obj, newest_piece(profile)):
+            if all(piece.Name != seen.Name for seen, _ in self._visibility):
+                self._visibility.append((piece, piece.Visibility))
+        return True
+
+    def _members_changed(self):
+        """Show the new list: its chain, open corner, corner rows and messages; the preview follows later."""
+        form = self.form
+        form.members_list.clear()
+        for obj in self.selection:
+            form.members_list.addItem(obj.Label)
+        self._fill_open_corners()
+        self._refresh()
+
+    def _clicked(self, doc, obj, sub, point):
+        """The piece a selection change stands for: a click on the preview stands for the piece under it."""
+        document = App.getDocument(doc) if doc in App.listDocuments() else None
+        if document is None or self.doc is None or document.Name != self.doc.Name:
+            return None
+        source = document.getObject(getattr(obj, "Name", obj))
+        bar = self._preview_bar()
+        if source is not None and bar is not None and source.Name == bar.Name:
+            return self._member_at(bar, sub, point)
+        return source
+
+    def _member_at(self, bar, sub, point):
+        """The listed piece nearest to the clicked point of the preview (else to the clicked sub-element)."""
+        target = None
+        try:
+            if point is not None and App.Vector(*point).Length > 0:
+                target = App.Vector(*point)
+            elif sub:
+                element = bar.Shape.getElement(sub)
+                center = element.Point if hasattr(element, "Point") else element.CenterOfMass
+                target = container_placement(bar).multVec(center)
+        except Exception:
+            target = None
+        if target is None or not self.selection:
+            return None
+        vertex = Part.Vertex(target)
+
+        def distance(member):
+            try:
+                return vertex.distToShape(placed(member.Shape, container_placement(member)))[0]
+            except Exception:
+                return float("inf")
+
+        return min(self.selection, key=distance)
+
+    def _still_selected(self, member):
+        """Whether ``member`` keeps an entry in the selection."""
+        return any(selection.Object == member for selection in Gui.Selection.getSelectionEx("*"))
+
+    def addSelection(self, doc, obj, sub, point=None):
+        if self._syncing or not self._active() or self.edited is not None:
+            return
+        source = self._clicked(doc, obj, sub, point)
+        if source is None or base_profile(source) is None:
+            return
+        if _ctrl_held() and source in self.selection:
+            # Ctrl+click toggles: a listed piece leaves the list.
+            self.selection.remove(source)
+            self._members_changed()
+        elif self.add_member(source):
+            self._members_changed()
+        # Never change the selection, the document or the 3D view during FreeCAD's observer dispatch.
+        QtCore.QTimer.singleShot(0, self._after_selection)
+
+    def removeSelection(self, doc, obj, sub):
+        # A piece leaves the list once it has nothing selected; a face of the preview stands for the piece under it.
+        if self._syncing or not self._active() or self.edited is not None:
+            return
+        bar = self._preview_bar()
+        on_preview = bar is not None and getattr(obj, "Name", obj) == bar.Name
+        source = self._clicked(doc, obj, sub, None)
+        if source in self.selection and (on_preview or not self._still_selected(source)):
+            self.selection.remove(source)
+            self._members_changed()
+            QtCore.QTimer.singleShot(0, self._after_selection)
+
+    def clearSelection(self, other):
+        pass
+
+    def _after_selection(self):
+        if not self._active():
+            return
+        self.update_preview()
+        self._highlight_members()
+
+    def _highlight_members(self):
+        """Show every listed piece selected as a whole object; the ones the preview folds as the preview."""
+        if not self._active() or self.edited is not None:
+            return
+        bar = self._preview_bar()
+        folded = self._profiles_in_bar()
+        shown = []
+        for member in self.selection:
+            obj = bar if base_profile(member).Name in folded else member
+            if obj is not None and _alive(obj) and all(obj.Name != seen.Name for seen in shown):
+                shown.append(obj)
+        self._syncing = True
+        try:
+            Gui.Selection.clearSelection()
+            for obj in shown:
+                parents = obj.Parents
+                if parents:
+                    top, path = parents[0]
+                    Gui.Selection.addSelection(obj.Document.Name, top.Name, path)
+                else:
+                    Gui.Selection.addSelection(obj.Document.Name, obj.Name)
+        finally:
+            self._syncing = False
 
     @staticmethod
     def _apply(obj, values):
@@ -612,6 +820,11 @@ class FoldedBarTaskPanel:
     def clean(self):
         self._closed = True
         self._timer.stop()
+        # OK, Cancel or any other close: the panel stops taking the clicks (added by the command only).
+        try:
+            Gui.Selection.removeObserver(self)
+        except Exception:
+            pass
 
     def _discard(self):
         """Abort the transaction; with undo disabled, remove the new bar or put the edited one back by hand."""
@@ -660,6 +873,9 @@ class FoldedBarTaskPanel:
         self._deferred = button
         return True
 
+    def open(self):
+        self._highlight_members()
+
     def getStandardButtons(self):
         return QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel
 
@@ -684,6 +900,9 @@ class FoldedBarTaskPanel:
         self.clean()
         self._discard()
         self._close_edit()
+        if self.edited is None:
+            # The pieces were selected to show the panel's list: closed, nothing stays selected.
+            Gui.Selection.clearSelection()
         return True
 
     def accept(self):
@@ -724,7 +943,7 @@ class FoldedBarCommand:
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_FoldedBar", "Folded Bar"),
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_FoldedBar",
-                "<b>Folded Bar</b><br><br>Select two or more tube profiles (or pieces made from them) that meet end to "
+                "<b>Folded Bar</b><br><br>Click two or more tube profiles (or pieces made from them) that meet end to "
                 "end, the first one where the bar starts: their corners fold, with a V notch, a key and a relief cut "
                 "by the laser and the outer wall bent. A closed frame stays open at one corner. Double-click the bar "
                 "to edit it.",
@@ -732,14 +951,12 @@ class FoldedBarCommand:
         }
 
     def IsActive(self):
-        if App.ActiveDocument is None:
-            return False
-        selection = Gui.Selection.getSelection()
-        return len(selection) >= 2 and all(base_profile(obj) is not None for obj in selection)
+        return App.ActiveDocument is not None
 
     def Activated(self):
-        selection = [item.Object for item in Gui.Selection.getSelectionEx()]
-        show_panel(FoldedBarTaskPanel(selection))
+        panel = FoldedBarTaskPanel([item.Object for item in Gui.Selection.getSelectionEx()])
+        show_panel(panel)
+        Gui.Selection.addObserver(panel)
 
 
 class UnfoldBarCommand:
