@@ -1,7 +1,7 @@
 # Folded miters (V-notch tube folding) and unfolded bar
 A chain of tube profiles is joined by folded corners (laser V-notch with key and relief, outer wall bent with a real
 radius) and unfolded into one straight solid with every cut, exported with FreeCAD's own formats for a CNC tube laser.
-Status: implemented (T1-T7 done); push and PR are the user's decision. Branch: `feat/folded-miter`.
+Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T9 reopened by L26 on branch `feat/folded-miter-refine`.
 
 ## Specs
 - S1 Folded corner (L1): "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte
@@ -27,8 +27,10 @@ Status: implemented (T1-T7 done); push and PR are the user's decision. Branch: `
 
 - S8 Clearance, key and relief (L5.1): "Olgura manejemos una solo configurable (como hacemos con el corte en
   inglete), llave y alivio activado y desactivables." -> one clearance value, like the End Miter `MiterGap`
-  (`trimmed_profile.py:502`: half of it on each side of the cut), applied to the notch flanks and the key; the key and
-  the relief are on by default and each one can be turned off.
+  (`trimmed_profile.py:502`: half of it on each side of the cut), applied to the notch flanks, the key and (L26 "La
+  olgura debe aplicarce tambien al corte delcirculo de la esquina.") the round relief cut at the corner: its arcs move
+  back half the clearance on each side like the flanks, so the folded corner keeps the clearance there too; the key
+  and the relief are on by default and each one can be turned off.
 - S9 Corner radius (L5.1): "El radio de la esquina tambien debe ser configurable, con limites minimos (teniendo en
   cuenta el espesor) y maximos (teniendo en cuenta el perfil)." -> the inside bend radius can be set; values below a
   minimum derived from the wall thickness or above a maximum derived from the profile section are rejected with a
@@ -59,12 +61,22 @@ Accepted design proposals (L6 "deacuerdo" to Q1-Q6):
 - S19 Stock: warn when the developed length exceeds the stock length configured for the cut list.
 - S20 Key and relief sizes (L11 "editables", answer to the proposal in L11): defaults relative to the tube, editable
   on each bar (not in the bend configuration): V flanks moved back half the clearance each; relief radius = inside bend
-  radius; key = round bulb on one flank at mid height of the V with its socket on the other flank, bulb diameter =
-  1/4 of the depth across the bent wall, neck width = 60 % of the bulb; the clearance goes half on the tab, half on
-  the socket; the bulb diameter is the key room of S15.
+  radius; key (rewritten by L26 "La llave debe ubicarce al centro de la linea del bisel y debe ser solo un medio
+  circulo (sin cuello).") = a half circle centered on the miter line, at the middle of the miter line seen on the
+  side wall of the folded bar (from the outer contour of the bend to the inner corner), standing out of one flank as
+  the tab with its half-circle socket in the other flank, no neck (the Neck Width setting and property are removed;
+  the feature is unreleased), diameter = 1/4 of the depth across the bent wall; the clearance goes half on the tab,
+  half on the socket; the diameter is the key room of S15; a key that does not fit is refused as before.
 - S21 Relief off at wide angles (L21 "Rechazar la esquina"): without the relief, a corner bending more than
   2 acos(r / (r + t)) is refused: "The corner between {} and {} bends {} degrees: without the relief it bends up to {}
   degrees. Turn the relief on." (106.3 degrees for r = 3, t = 2; 88.8 degrees for r = 5, t = 2).
+
+- S22 Command flow (L26 "Me gustaria que el comando se comporte como el de corte en bicel, aprieto el boton y voy
+  seleccionado perfiles."): Folded Bar works like Create Miter Ends (`create_end_miter_tool.py` CreateEndMiterCommand
+  / EndMiterTaskPanel): the command is active with a document and nothing selected, opens the panel at once (with the
+  preselected profiles, if any), and each profile clicked in the 3D view while the panel is open is added to the list
+  (clicking it again or deselecting removes it), updating the chain, its messages and the preview; editing an existing
+  bar keeps working.
 
 ## Design notes (from exploration, see Log L3)
 - Segments are the visible tips of each profile stack (Profile -> trims -> cutouts/holes); `_utils.py:174-228`.
@@ -158,6 +170,9 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
 - T6 S1 S2 S6 S8 S9 S12 inline: commands and task panels (create folded bar with live preview, unfold, manage
   configurations); panel tests. [x] 68817bd
 - T7 S1-S19 inline: Spanish translations, Russian strings left unfinished for the contributor, tutorial, changelog. [x] 5e2172f
+- T8 S8 S15 S20 worker: clearance on the relief arcs; half-circle key centered on the miter line, no neck (geometry,
+  FoldedBar property, panel field, translations, tutorial, changelog); tests. [ ]
+- T9 S22 worker: select-as-you-go Folded Bar command and panel like End Miter; tests, tutorial, changelog. [ ]
 
 ## Log
 - L1 (2026-11-11) "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte laser)
@@ -264,3 +279,9 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   Approved deviation: tests/test_russian_translation.py lists the unfinished folded-miter texts explicitly and checks
   they show in English with FreeCAD in Russian. Property tooltips (App::Property) and undo names stay English like the
   rest of the repo. Full suite with T7: 1826 tests OK. Commit 5e2172f.
+- L26 (2026-11-12, after PR #145 merged, with two screenshots of the Folded Bar panel: key off / relief on, and key
+  10 mm / relief on with the key near the inner corner) "temas a mejorar:
+  - La olgura debe aplicarce tambien al corte delcirculo de la esquina.
+  - La llave debe ubicarce al centro de la linea del bisel y debe ser solo un medio circulo (sin cuello).
+  - Me gustaria que el comando se comporte como el de corte en bicel, aprieto el boton y voy seleccionado perfiles."
+  -> S8, S20 rewritten, S22 added, T8-T9 opened.
