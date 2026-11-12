@@ -289,6 +289,26 @@ class ArbitraryAnglesUnfoldTest(UnfoldFixture):
         tangent = math.tan(math.radians(30))
         self.assertAlmostEqual(200 + 25 * tangent - 5 * tangent, bar.corners[0].start, places=6)
 
+    def test_corner_past_the_widest_bend_without_relief_is_refused(self):
+        # Without the relief the side walls by the bent wall stay flat: past 2 acos(r / (r + t)) they stick out of the
+        # round outer corner (106.3 degrees for r = 3, t = 2), so the 135 degree corner needs the relief.
+        self.assertRefused(
+            "The corner between Profile001 and Profile002 bends 135 degrees: without the relief it bends up to "
+            "106.3 degrees. Turn the relief on.",
+            self.chain(),
+            relief=False,
+        )
+
+    def test_corner_within_the_widest_bend_without_relief_is_accepted(self):
+        sketch_edges = (
+            ((0, 0, 0), (200, 0, 0)),
+            ((200, 0, 0), tuple(p + q for p, q in zip((200, 0, 0), polar(150, 106)))),
+        )
+        bar = unfold(build_chain(self.frame(edges=sketch_edges)), STEEL, relief=False)
+
+        self.solid(bar)
+        self.assertEqual([106.0], [round(corner.bend_angle, 6) for corner in bar.corners])
+
     def test_key_that_does_not_fit_in_the_notch_is_refused(self):
         # At 60 degrees a 36 mm bulb reaches past the other flank of the V.
         self.assertRefused(

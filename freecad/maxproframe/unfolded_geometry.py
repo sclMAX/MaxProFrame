@@ -141,6 +141,18 @@ class _Bend:
                 )
             )
 
+    def check_relief(self):
+        """Without the relief the side walls by the bent wall stay flat: past this angle they stick out of the corner."""
+        widest = math.degrees(2 * math.acos(self.radius / (self.radius + self.thickness)))
+        if not self.relief and self.angle > widest + 1e-9:
+            raise UnfoldError(
+                translate(
+                    "MaxProFrame",
+                    "The corner between {} and {} bends {:g} degrees: without the relief it bends up to {:g} degrees. "
+                    "Turn the relief on.",
+                ).format(*self.names, round(self.angle, 1), round(widest, 1))
+            )
+
     def _flank_heights(self, v):
         """u of the flank of the segment before and of the one after at height ``v`` (clearance included)."""
         h, t, r, g = self.half, self.thickness, self.radius, self.clearance
@@ -260,6 +272,7 @@ def _bends(chain, configuration, radius, corner_radii, clearance, key, relief, k
             relief_radius=r if relief_radius is None else float(relief_radius),
         )
         bend.check_radius()
+        bend.check_relief()
         if key:
             bend.check_key()
         bends.append(bend)

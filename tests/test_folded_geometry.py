@@ -203,7 +203,8 @@ class ArbitraryAnglesFoldTest(FoldFixture):
 
     def test_any_angle_folds_into_one_solid_matching_the_tips(self):
         chain = self.chain()
-        for options in (PLAIN, {}):
+        # Without the relief the 135 degree corner is refused (see test_unfolded_geometry): the relief stays on.
+        for options in (dict(key=False), {}):
             with self.subTest(options=options):
                 shape = self.solid(fold(chain, STEEL, **options))
 
@@ -223,11 +224,8 @@ class ArbitraryAnglesFoldTest(FoldFixture):
                     self.assertAlmostEqual(
                         self.common(segment.tip.Shape, region), self.common(shape, region), delta=VOLUME_TOLERANCE
                     )
-                # Without the relief the side walls next to the bent wall do not bend: past 106 degrees
-                # (r / cos h > r + t) they stick out of the round corner, so only the bent wall (w = 0) is checked.
-                walls = (0.0,) if options else (0.0, SIDE_WALL, -SIDE_WALL)
                 for corner in chain.corners:
-                    self.assertRoundCorner(shape, corner, walls=walls)
+                    self.assertRoundCorner(shape, corner, walls=(0.0, SIDE_WALL, -SIDE_WALL))
 
 
 class FeatureFoldTest(FoldFixture):
