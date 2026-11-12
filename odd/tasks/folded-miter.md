@@ -1,7 +1,7 @@
 # Folded miters (V-notch tube folding) and unfolded bar
 A chain of tube profiles is joined by folded corners (laser V-notch with key and relief, outer wall bent with a real
 radius) and unfolded into one straight solid with every cut, exported with FreeCAD's own formats for a CNC tube laser.
-Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T9 reopened by L26 on branch `feat/folded-miter-refine`.
+Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T9 (L26) done on branch `feat/folded-miter-refine`; push and PR are the user's decision.
 
 ## Specs
 - S1 Folded corner (L1): "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte
@@ -173,7 +173,7 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
 - T7 S1-S19 inline: Spanish translations, Russian strings left unfinished for the contributor, tutorial, changelog. [x] 5e2172f
 - T8 S8 S15 S20 worker: clearance on the relief arcs; half-circle key centered on the miter line, no neck (geometry,
   FoldedBar property, panel field, translations, tutorial, changelog); tests. [x] 42c94aa
-- T9 S22 worker: select-as-you-go Folded Bar command and panel like End Miter; tests, tutorial, changelog. [x] (see L30)
+- T9 S22 worker: select-as-you-go Folded Bar command and panel like End Miter; tests, tutorial, changelog. [x] 383c696
 
 ## Log
 - L1 (2026-11-11) "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte laser)
@@ -314,3 +314,5 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   test_folded_bar 22, test_folded_bar_translations 6, test_russian_translation 6, test_compile_translations 3,
   test_workbench_commands 2, test_end_miter_panel 14; test_toolbar_translations 4 after the parent updated its
   Spanish tooltip expectation. Slice note: T9 (~600 lines, mostly tests) is its own commit past the ~400 slice.
+- L31 Full suite on FreeCAD 1.1.4 with T8-T9: 1844 tests OK in 1170 s (`ci/run_tests.py --timeout 2400`; the default
+  180 s timeout is too short for the whole suite locally).
