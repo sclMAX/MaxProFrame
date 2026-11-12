@@ -10,7 +10,9 @@ import Part
 from PySide import QtCore
 
 from freecad.maxproframe._utils import (
+    folded_into_bar,
     is_extrudedcutout,
+    is_foldedbar,
     is_fusion,
     is_group,
     is_link,
@@ -19,6 +21,7 @@ from freecad.maxproframe._utils import (
     is_pattern_link,
     is_profile,
     is_trimmedbody,
+    is_unfoldedbar,
 )
 from freecad.maxproframe.cut_ends import ONE_SQUARE, PARALLELOGRAM, TRAPEZOID, cut_ends
 from freecad.maxproframe.ff_tools import QT_TRANSLATE_NOOP, translate
@@ -102,6 +105,31 @@ def traverse_assembly(profiles_data, links_data, obj, parent="", full_parent_pat
             traverse_assembly(profiles_data, links_data, obj.LinkedObject, parent, full_parent_path)
             for row in profiles_data[start:]:
                 row["label"] = obj.Label
+
+    elif is_unfoldedbar(obj) or folded_into_bar(obj):
+        # The straight bar and the pieces folded into a bar are that bar.
+        pass
+
+    elif is_foldedbar(obj):
+        # One piece of its developed length, laser cut: no saw angles, its notches are its cutouts.
+        from freecad.maxproframe.folded_bar import warn_if_longer_than_stock
+
+        warn_if_longer_than_stock(obj)
+        cat_fam = getattr(obj, "CatalogFamily", None)
+        p["parent"] = parent
+        p["ID"] = obj.PID
+        p["label"] = obj.Label
+        p["family"] = cat_fam if cat_fam else obj.Family
+        p["size_name"] = obj.SizeName
+        p["material"] = obj.Material
+        p["length"] = f"{obj.DevelopedLength.Value:.1f}"
+        p["cut_angle_1"], p["cut_angle_2"], p["ends"] = "", "", ""
+        p["cutout"] = translate("frameforge", "Yes")
+        p["approx_weight"] = str(obj.ApproxWeight)
+        p["price"] = str(obj.Price)
+        p["quantity"] = "1"
+
+        profiles_data.append(p)
 
     elif is_profile(obj) or is_trimmedbody(obj) or is_extrudedcutout(obj):
         p["parent"] = parent

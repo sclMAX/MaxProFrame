@@ -118,6 +118,38 @@ def is_link(obj):
     return obj.TypeId == "App::Link" and hasattr(obj, "AttachmentOffset")
 
 
+def is_foldedbar(obj):
+    """A Folded Bar: tubes joined by folded corners, one piece of its developed length."""
+    return obj.TypeId == "Part::FeaturePython" and hasattr(obj, "Segments") and hasattr(obj, "DevelopedLength")
+
+
+def is_unfoldedbar(obj):
+    """An Unfolded Bar: the straight bar of a Folded Bar, the same piece."""
+    return obj.TypeId == "Part::FeaturePython" and hasattr(obj, "FoldedBar")
+
+
+def piece_stack(obj):
+    """``obj`` and what it is made from, down to its profile: the trims and cutouts under it."""
+    seen = set()
+    while obj is not None and obj.Name not in seen:
+        seen.add(obj.Name)
+        yield obj
+        if is_trimmedbody(obj):
+            obj = obj.TrimmedBody
+        elif is_extrudedcutout(obj) and obj.baseObject:
+            obj = obj.baseObject[0]
+        else:
+            obj = None
+
+
+def folded_into_bar(obj):
+    """Whether ``obj`` is a segment of a Folded Bar or a piece under one: the bar counts it."""
+    return any(
+        is_foldedbar(parent) and any(obj in piece_stack(segment) for segment in parent.Segments)
+        for parent in getattr(obj, "InListRecursive", ())
+    )
+
+
 def is_part_or_part_design(obj):
     return obj.TypeId.startswith(("Part::", "PartDesign::"))
 
@@ -151,7 +183,11 @@ def get_profiles_and_links_from_object(profiles, links, obj):
             if child.getParentGroup() in (obj, None) and child.Visibility:
                 get_profiles_and_links_from_object(profiles, links, child)
 
-    elif is_profile(obj) or is_trimmedbody(obj) or is_extrudedcutout(obj) or is_pattern_link(obj):
+    elif is_unfoldedbar(obj) or folded_into_bar(obj):
+        # The straight bar and the pieces folded into a bar are that bar.
+        pass
+
+    elif is_profile(obj) or is_trimmedbody(obj) or is_extrudedcutout(obj) or is_pattern_link(obj) or is_foldedbar(obj):
         # A Profile Pattern copy is one more piece of what it copies, not a link of its own.
         profiles.append(obj)
 
@@ -160,12 +196,16 @@ def get_profiles_and_links_from_object(profiles, links, obj):
 
 
 def get_profiles_and_links_from_document():
-    """(profiles and Profile Pattern copies, other links) of the active document."""
+    """(profiles, Profile Pattern copies and Folded Bars, other links) of the active document.
+
+    The profiles folded into a bar are left out: the bar is the piece.
+    """
     doc = FreeCAD.ActiveDocument
     copies = [o for o in doc.Objects if is_pattern_link(o)]
     names = {o.Name for o in copies}
+    bars = [o for o in doc.Objects if is_foldedbar(o)]
     return (
-        [o for o in doc.Objects if is_profile(o)] + copies,
+        [o for o in doc.Objects if is_profile(o) and not (bars and folded_into_bar(o))] + copies + bars,
         [o for o in doc.Objects if is_link(o) and o.Name not in names],
     )
 
