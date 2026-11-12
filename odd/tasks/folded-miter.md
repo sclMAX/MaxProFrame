@@ -1,7 +1,7 @@
 # Folded miters (V-notch tube folding) and unfolded bar
 A chain of tube profiles is joined by folded corners (laser V-notch with key and relief, outer wall bent with a real
 radius) and unfolded into one straight solid with every cut, exported with FreeCAD's own formats for a CNC tube laser.
-Status: implementing (T1 done). Branch: `feat/folded-miter`.
+Status: implementing (T1, T2, T3 done). Branch: `feat/folded-miter`.
 
 ## Specs
 - S1 Folded corner (L1): "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte
@@ -57,6 +57,11 @@ Accepted design proposals (L6 "deacuerdo" to Q1-Q6):
 - S18 Continuity: consecutive segments must be the same tube with the same section orientation and anchor across each
   fold; in a 3D chain each bend axis must be parallel to a wall pair of the tube; otherwise the panel explains why.
 - S19 Stock: warn when the developed length exceeds the stock length configured for the cut list.
+- S20 Key and relief sizes (L11 "editables", answer to the proposal in L11): defaults relative to the tube, editable
+  on each bar (not in the bend configuration): V flanks moved back half the clearance each; relief radius = inside bend
+  radius; key = round bulb on one flank at mid height of the V with its socket on the other flank, bulb diameter =
+  1/4 of the depth across the bent wall, neck width = 60 % of the bulb; the clearance goes half on the tab, half on
+  the socket; the bulb diameter is the key room of S15.
 
 ## Design notes (from exploration, see Log L3)
 - Segments are the visible tips of each profile stack (Profile -> trims -> cutouts/holes); `_utils.py:174-228`.
@@ -72,12 +77,49 @@ Accepted design proposals (L6 "deacuerdo" to Q1-Q6):
   that depends on N tips; BOM counts visible objects only (`create_bom.py:84-97`), tips must be hidden; `cut_ends`
   assumes one straight solid, the folded bar needs its own length/angles.
 
+## T3 design (unfolded bar; parent derivation, L12)
+Inputs: `folded_chain.Chain` (T2), a `BendConfiguration` (T1), inside radius per corner (S14: bar radius, optional
+per-corner override), clearance g, key on/off, relief on/off, key diameter D, neck width N, relief radius rho (S20).
+Per folded corner c between segments i, i+1: h = theta/2; t = tube wall thickness; r = inside radius;
+e = signed distance from the path to the OUTSIDE face of the bent wall = (section center offset of segment i, perpendicular
+to its path) . outer_normal + depth/2; OSSB = (r + t) tan h (outside setback); BA = theta_rad (r + K t).
+- Straight frame: X along the bar, path of every segment on the X axis. Segment i maps rigidly with rotation R_i:
+  R_0 takes direction_0 -> +X, x_axis_0 -> +Y, y_axis_0 -> +Z; R_{i+1} = R_i * inverse(Rotation(direction_i,
+  direction_{i+1})). Path start of segment i at X_i: X_0 = 0; X_{i+1} = X_i + L_i + 2 e tan h - 2 OSSB + BA (outside
+  mold line kept, S16). Bend zone of c on the outer wall: X in [T_c, T_c + BA], T_c = X_i + L_i + e tan h - OSSB.
+- Corner frame (returned for each corner): origin at X = T_c on the outside face of the bent wall, w = 0 at the
+  section center; u = +X, v = inward (= -R_i outer_normal), w = R_i axis. Cuts are 2D regions in (u, v) extruded
+  through the whole tube along w; they never touch the bent wall (v < t).
+- V notch: O_i = (0, r + t), O_{i+1} = (BA, r + t), m = (cos h, sin h), m' = (-cos h, sin h). Removed V = the region
+  v >= t (up to past the inner wall) with (p - O_i).m >= -g/2 and (p - O_{i+1}).m' >= -g/2 (beyond both flanks;
+  convex: clip a rectangle by two half planes). Flank i at height v is at u = -(v - r - t) tan h - (g/2)/cos h.
+- Relief (on by default): remove the rectangle u in [0, BA], v in [t, t + rho] minus the discs of radius rho centered
+  (0, t + rho) and (BA, t + rho): the curved relief next to the bent wall. Off: nothing more (pure V).
+- Key (on by default): flank frame of segment i: origin O_i, x = m (into the V), y = (-sin h, cos h) (along the flank,
+  inward); of segment i+1: origin O_{i+1}, x = (cos h, -sin h) (into its material), y = (sin h, cos h). Both get the
+  same local key at flank coordinate s_k = (v_k - r - t)/cos h, v_k = middle of [t + rho (t without relief), depth - t]:
+  bulb disc centered at x = D, neck rectangle from x = -g to x = D. Tab (kept on segment i) = bulb radius D/2 - g/2,
+  neck N - g; socket (cut from segment i+1) = bulb radius D/2 + g/2, neck N + g. Removed = (V - tab) + socket + relief.
+  A tab that would not fit inside the V of the flat bar, or a key room band v_k +- D/2 outside [t + rho, depth - t]
+  (L13), is refused: "The key does not fit in the notch between {} and {}: make it smaller." (profiles in chain order).
+- Bar body: a plane slice (normal to the path, mid length of segment 0) of the first segment's base profile, mapped,
+  extruded from X_min to X_max: X_min of the mapped TIP of the first segment, X_max of the mapped TIP of the last one
+  (L13: an End Miter with MiterExtend reaches past its base profile).
+- Feature transfer: removed volume of each segment = base profile shape - tip shape (global), mapped by its rigid
+  placement and cut from the bar; added volume = tip - base, mapped and fused (L13); the bar stays one solid:
+  holes, cutouts and the end miters at the open corner and the free ends follow.
+- Finally the bar is moved so that its X_min is 0 (S17: the bar starts at X = 0 at the open-corner end of the first
+  segment). Developed length = X length of the bar.
+- Checks: radius limits S15 (min t, max depth - 2t - D when the key is on, else depth - 2t): "The inside bend radius
+  must be between {min:g} and {max:g} mm."; the configuration thickness must equal the tube wall thickness
+  ("{config} is for {a:g} mm walls; {tube} has {b:g} mm walls.").
+
 ## Tasks
 - T1 S6 S11 inline: bend configuration store (JSON, versioned, atomic save, validation) + API; tests. [x] c53e8b5
 - T2 S2 S5 S17 S18 inline: chain builder from selected tips: order, corner angles, plane/wall checks, same section and
-  material, folded/open per corner, clear error messages; tests. [ ]
-- T3 S1 S3 S5 S6 S8 S9 S14 S15 S16 inline: unfolded geometry: developed length, V notch at any angle, key, relief, feature transfer;
-  tests (90 degree rectangle, arbitrary angles, holes moved, length per configuration). [ ]
+  material, folded/open per corner, clear error messages; tests. [x] f5f916c
+- T3 S1 S3 S5 S6 S8 S9 S14 S15 S16 S20 worker: unfolded geometry: developed length, V notch at any angle, key, relief, feature transfer;
+  tests (90 degree rectangle, arbitrary angles, holes moved, length per configuration). [x] 08711dc
 - T4 S7 S14 S16 inline: folded geometry with real radius matching the skeleton; tests. [ ]
 - T5 S2 S3 S4 S13 S19 inline: `FoldedBar` / `UnfoldedBar` objects: recompute, restore, hides tips, one PID, BOM and cut list as
   one piece; STEP export round trip test. [ ]
@@ -119,3 +161,29 @@ Accepted design proposals (L6 "deacuerdo" to Q1-Q6):
   `<user profiles dir>/.bend/configurations.json` (hidden folder, so the library list never shows it), version 1,
   atomic replace; radius >= thickness, 0 <= K <= 1; last used in param `LastBendConfiguration`.
   `tests/test_bend_config.py`: RED (module missing, exit 1), GREEN 16 tests on FreeCAD 1.1.4.
+- L9 T2 evidence: `freecad/maxproframe/folded_chain.py` `build_chain(selection, open_corner=None)` -> `Chain`
+  (segments with path start/end, direction, section axes, size; corners with bend angle = path turn, axis, outer
+  wall normal, depth across the bent wall). Decisions within S17: a closed frame opens where the first and the last
+  selected profiles meet, else at the path start of the first one; an open chain must start at a free end of the first
+  selected profile; open corners only on closed frames (more would split the bar). S18 continuity is physical:
+  section center offset and axes rotated by the fold must match (square tubes may swap axes).
+  `tests/test_folded_chain.py`: RED (module missing), GREEN 23 tests on FreeCAD 1.1.4. S12 (own miter at a folded
+  corner) stays in T6 as planned.
+- L10 Review slices: the branch passed ~400 lines with the spec document; slices are the work-unit commits
+  (36e6ff8+c53e8b5 store, f5f916c chain). Push/PR is the user's decision.
+- L11 (2026-11-12) "editables" (to the proposal: V flanks back half the clearance, relief radius = inside radius,
+  bulb key 1/4 of the depth with 60 % neck at mid height of the V, sizes editable on each bar), now S20.
+- L12 T3 design derived by the parent (section "T3 design"); T3 is delegated to a worker (context backstop).
+- L13 T3 worker questions answered by the parent: the key room check uses the band v_k +- D/2 (the D of S15/S20),
+  plus the real tab inside the V; the bar ends come from the tips and the added volume (tip - base) is fused, so an
+  End Miter with MiterExtend reaches its miter (S17); key message "The key does not fit in the notch between {} and
+  {}: make it smaller.".
+- L14 T3 evidence (worker, re-run by the parent): `freecad/maxproframe/unfolded_geometry.py`
+  `unfold(chain, configuration, radius=None, corner_radii=None, clearance=0.0, key=True, relief=True, key_diameter=None,
+  neck_width=None, relief_radius=None)` -> `UnfoldedBar(shape, length, corners)`; `UnfoldError(ValueError)`;
+  `folded_chain.section_offset` made public. Bar ends: reference = base profile plus the bar section stretched 1 mm past
+  each end, so the tip's end cuts are exact. R_0 = Rotation(direction, x_axis, y_axis, "XYZ"). RED (module missing),
+  GREEN 15 tests (parent re-run /tmp/mpf-t3-check), test_folded_chain 23 OK. Open for T5: a boolean that yields more
+  than one solid returns the compound (check it in the object); base-profile bevels only set the bar extent; no 3D chain
+  or Part container test yet.
+- L15 Full suite on FreeCAD 1.1.4 at f5f916c (T2): 1727 tests OK (job-2, 22 min).
