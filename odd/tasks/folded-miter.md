@@ -1,7 +1,7 @@
 # Folded miters (V-notch tube folding) and unfolded bar
 A chain of tube profiles is joined by folded corners (laser V-notch with key and relief, outer wall bent with a real
 radius) and unfolded into one straight solid with every cut, exported with FreeCAD's own formats for a CNC tube laser.
-Status: specification accepted (L5); implementation starts on the next session (L5). Branch: `feat/folded-miter`.
+Status: implementing (T1 done). Branch: `feat/folded-miter`.
 
 ## Specs
 - S1 Folded corner (L1): "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte
@@ -73,7 +73,7 @@ Accepted design proposals (L6 "deacuerdo" to Q1-Q6):
   assumes one straight solid, the folded bar needs its own length/angles.
 
 ## Tasks
-- T1 S6 S11 inline: bend configuration store (JSON, versioned, atomic save, validation) + API; tests. [ ]
+- T1 S6 S11 inline: bend configuration store (JSON, versioned, atomic save, validation) + API; tests. [x] c53e8b5
 - T2 S2 S5 S17 S18 inline: chain builder from selected tips: order, corner angles, plane/wall checks, same section and
   material, folded/open per corner, clear error messages; tests. [ ]
 - T3 S1 S3 S5 S6 S8 S9 S14 S15 S16 inline: unfolded geometry: developed length, V notch at any angle, key, relief, feature transfer;
@@ -114,3 +114,8 @@ Accepted design proposals (L6 "deacuerdo" to Q1-Q6):
 - L6 (2026-11-11) "deacuerdo" (to proposals Q1-Q6, now S14-S19).
 - L4 Research: SheetMetal is an external addon (LGPL 2.1); ideas taken: K-factor bend allowance, bend relief, unfold
   as a derived parametric object. Its unfolder is not used: the bar is unbent, not flattened.
+- L7 (2026-11-12) "si" (start the implementation: branch, task document commit, T1).
+- L8 T1 evidence: `freecad/maxproframe/bend_config.py` stores configurations in
+  `<user profiles dir>/.bend/configurations.json` (hidden folder, so the library list never shows it), version 1,
+  atomic replace; radius >= thickness, 0 <= K <= 1; last used in param `LastBendConfiguration`.
+  `tests/test_bend_config.py`: RED (module missing, exit 1), GREEN 16 tests on FreeCAD 1.1.4.
