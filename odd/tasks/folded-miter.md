@@ -1,7 +1,7 @@
 # Folded miters (V-notch tube folding) and unfolded bar
 A chain of tube profiles is joined by folded corners (laser V-notch with key and relief, outer wall bent with a real
 radius) and unfolded into one straight solid with every cut, exported with FreeCAD's own formats for a CNC tube laser.
-Status: implementing (T1-T5 done; T6, T7 left). Branch: `feat/folded-miter`.
+Status: implementing (T1-T6 done; T7 left). Branch: `feat/folded-miter`.
 
 ## Specs
 - S1 Folded corner (L1): "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte
@@ -156,7 +156,7 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
 - T5 S2 S3 S4 S13 S19 inline: `FoldedBar` / `UnfoldedBar` objects: recompute, restore, hides tips, one PID, BOM and cut list as
   one piece; STEP export round trip test. [x] 47f071c
 - T6 S1 S2 S6 S8 S9 S12 inline: commands and task panels (create folded bar with live preview, unfold, manage
-  configurations); panel tests. [ ]
+  configurations); panel tests. [x] 68817bd
 - T7 S1-S19 inline: Spanish translations, Russian strings left unfinished for the contributor, tutorial, changelog. [ ]
 
 ## Log
@@ -247,3 +247,14 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   `unfolded_geometry.py`; RED (UnfoldError not raised), GREEN test_unfolded_geometry 18, test_folded_geometry 10
   (its 135 degree test keeps the relief on now), test_folded_bar 20 (its relief-off step goes back to a 4 mm radius).
 - L22 Full suite on FreeCAD 1.1.4 with T5 (before S21): 1773 tests OK (job-3). Commits: T5 47f071c, S21 2e2f872.
+- L23 T6 evidence (worker): `create_folded_bar_tool.py` (Folded Bar command and panel with live preview, edit on
+  double click, Unfold Bar), `bend_config_dialog.py` (Bend Configurations dialog), `folded_chain.cuts_at_folds` (S12:
+  "{trim} cuts {profile} at its folded corner with {other}: delete it or make that corner the open one." / "...:
+  delete it." on an open chain), `folded_bar.check_settings`, `FoldedBar._follow_tips` (Segments follow the current
+  tips; a tip not recomputed yet is recomputed first), Create BOM / Populate IDs accept a FoldedBar, new toolbar and
+  menu "Folded Miters" (toolbox_folded). RED (modules missing; bar before the new hole), GREEN test_folded_bar_panel
+  31, test_bend_config_dialog 12, test_folded_bar 21, plus 10 related modules OK. Open for T7: add the 3 commands to
+  test_toolbar_translations EXPECTED and toolbox_folded to test_workbench_commands TOOLBARS; translate() the
+  bend_config validation messages; Reset IDs does not accept a FoldedBar; S12 is checked in the panel only.
+- L24 Full suite with T6: 1 failure, test_shortcuts (the 3 new commands were not in its scheme); added them to
+  WITHOUT_SHORTCUT (no shortcut requested), test_shortcuts 5 OK. T6 commit 68817bd.
