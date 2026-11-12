@@ -1435,6 +1435,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>The inside bend radius must be between {min:g} and {max:g} mm.</source><translation>El radio interior de plegado tiene que estar entre {min:g} y {max:g} mm.</translation></message>
     <message><source>The key does not fit in the notch between {} and {}: make it smaller.</source><translation>La llave no entra en la muesca entre {} y {}: achicala.</translation></message>
     <message><source>The key does not fit in the notch between {} and {} with this inside radius: make the radius smaller or turn the key off.</source><translation>La llave no entra en la muesca entre {} y {} con este radio interior: achicá el radio o desactivá la llave.</translation></message>
+    <message><source>{} is too short for the radius of its corners.</source><translation>{} es demasiado corto para el radio de sus esquinas.</translation></message>
     <message><source>{}: its developed length ({:.1f} mm) is longer than the stock length of the cut list ({:.1f} mm).
 </source><translation>{}: su longitud desarrollada ({:.1f} mm) supera la longitud de barra de la lista de cortes ({:.1f} mm).
 </translation></message>

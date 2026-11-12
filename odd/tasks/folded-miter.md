@@ -1,7 +1,7 @@
 # Folded miters (V-notch tube folding) and unfolded bar
 A chain of tube profiles is joined by folded corners (laser V-notch with key and relief, outer wall bent with a real
 radius) and unfolded into one straight solid with every cut, exported with FreeCAD's own formats for a CNC tube laser.
-Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T11 done, T12 (L39-L40) done on branch `feat/folded-miter-refine`; push and PR are the user's decision.
+Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T11 done, T12 done, T13 (L42) done on branch `feat/folded-miter-refine`; push and PR are the user's decision.
 
 ## Specs
 - S1 Folded corner (L1): "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte
@@ -86,6 +86,12 @@ Accepted design proposals (L6 "deacuerdo" to Q1-Q6):
   preselected profiles, if any), and each profile clicked in the 3D view while the panel is open is added to the list
   (clicking it again or deselecting removes it), updating the chain, its messages and the preview; editing an existing
   bar keeps working.
+
+- S23 Short tube (L42 "si" to the proposal in L41): a tube too short for the bends at its ends is refused with
+  "{} is too short for the radius of its corners." (Spanish "{} es demasiado corto para el radio de sus esquinas.")
+  and OK disabled: along the outer wall of each tube, the setbacks of its folded corners ((r + t) tan(theta/2) each,
+  from the virtual sharp) must leave some straight outer wall on the tube (open-corner ends take no setback); with
+  none left the tube comes apart, so exactly as long is refused too (L43).
 
 ## Design notes (from exploration, see Log L3)
 - Segments are the visible tips of each profile stack (Profile -> trims -> cutouts/holes); `_utils.py:174-228`.
@@ -187,7 +193,9 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   the Relief radius field, the ReliefRadius / Relief properties and options, S21's check and message; tests, i18n,
   tutorial, changelog. [x] 4b19bbd
 - T12 S15 worker: radius max per corner = (depth - t)/(1 - cos(theta/2)) - 2t, key not subtracted; large radii
-  (bend axis outside the tube) verified to unfold and fold; tests, tutorial, changelog. [x] (see L41)
+  (bend axis outside the tube) verified to unfold and fold; tests, tutorial, changelog. [x] dd3b80a
+- T13 S23 worker: refuse a tube too short for the bends at its ends (unfold check, panel message, es/ru);
+  tests, tutorial, changelog. [x] (see L43)
 - T9 S22 worker: select-as-you-go Folded Bar command and panel like End Miter; tests, tutorial, changelog. [x] 383c696
 
 ## Log
@@ -385,3 +393,14 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   test_folded_geometry 11, test_russian_translation 6. Full suite skipped (L37). OPEN: two bends overlapping on a
   short tube (2(r + t) longer than the tube) are not refused: the unfolded bar comes out as 2 solids and the folded
   one is wrong (50x50x2 rectangle with 200 mm sides from r = 130); pre-existing check gap, reachable now.
+- L42 (2026-11-12) "si" to "Agrego que el panel rechace la barra cuando un tubo es demasiado corto para los radios
+  de sus esquinas?" (message "Profile001 es demasiado corto para el radio de sus esquinas.", OK disabled) -> S23, T13.
+- L43 T13 evidence (worker + parent): `unfolded_geometry._check_lengths` (inside `_bends`; order: radius range of
+  every corner, short tube, key), message "{} is too short for the radius of its corners." (es "... es demasiado corto
+  para el radio de sus esquinas.", ru unfinished, .qm recompiled), tutorial, changelog. The worker accepted exact
+  equality as specified but found it unfolds into 2 solids (side walls touch the outer wall only at a point); the
+  parent made the check strict (end <= start + tolerance): RED with the old condition
+  (test_tube_with_no_straight_part_left_is_refused: "UnfoldError not raised"), GREEN. Focused modules:
+  test_unfolded_geometry 33, test_folded_bar 25, test_folded_bar_panel 44, test_folded_bar_translations 6 OK; worker
+  also ran test_folded_geometry 11, test_russian_translation 6, test_compile_translations 3 OK. Full suite skipped
+  (L37).

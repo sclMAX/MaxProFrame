@@ -388,10 +388,32 @@ def _bends(chain, configuration, radius, corner_radii, clearance, key, key_diame
             diameter=diameter,
         )
         bend.check_radius()
-        if key:
-            bend.check_key()
         bends.append(bend)
+    # A tube too short for its bends makes no key fit either: say so first.
+    _check_lengths(chain, bends)
+    if key:
+        for bend in bends:
+            bend.check_key()
     return bends
+
+
+def _check_lengths(chain, bends):
+    """Each tube holds the bends at its ends (S23): on the outer wall of the unbent bar, the bend zone of the corner
+    before it ends no later than that of the corner after it starts; an open end is the end of its path. That is, the
+    setbacks of its folded corners ((r + t) tan(theta / 2) each) are at most its length from one virtual sharp (or
+    open end) to the other, with some straight wall left: with none, the side walls rest on the outer wall only at a
+    point and the tube comes apart."""
+    placements, corners = _straight_placements(chain, bends)
+    for index, (segment, placement) in enumerate(zip(chain.segments, placements)):
+        path_start = placement.multVec(segment.start).x
+        start = corners[index - 1][0] + bends[index - 1].allowance if index else path_start
+        end = corners[index][0] if index < len(corners) else path_start + segment.length
+        if end <= start + SIZE_TOLERANCE:
+            raise UnfoldError(
+                translate("MaxProFrame", "{} is too short for the radius of its corners.").format(
+                    _label(segment.profile)
+                )
+            )
 
 
 def _straight_placements(chain, bends):
@@ -469,7 +491,8 @@ def unfold(chain, configuration, radius=None, corner_radii=None, clearance=0.0, 
     at its middle or where it fits nearest to it, a quarter of the depth across the bent wall by default) can be
     turned off. The relief is always cut, its radius the inside radius of each corner: the disc it keeps is then
     concentric with the bend axis (any other radius leaves a void or a collision at the folded corner).
-    Raises UnfoldError when the configuration, the radius or the key do not suit the tube.
+    Raises UnfoldError when the configuration, the radius or the key do not suit the tube, or when a tube is too short
+    for the bends at its ends.
     """
     _check_thickness(chain, configuration)
     bends = _bends(chain, configuration, radius, corner_radii, clearance, key, key_diameter)

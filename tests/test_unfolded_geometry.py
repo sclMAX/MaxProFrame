@@ -565,6 +565,61 @@ class KeyRoomUnfoldTest(UnfoldFixture):
         self.assertRefused(message, self.rectangle(), clearance=18.0, key_diameter=37.0)
 
 
+class ShortTubeUnfoldTest(UnfoldFixture):
+    """S23 (L41, L42): along its outer wall, a tube must hold the setbacks ((r + t) tan(theta / 2)) of the folded
+    corners at its ends; an open end takes none. The rectangle's right tube (Profile001, 200 mm path) is 250 mm long
+    on its outer wall, from one virtual sharp to the other."""
+
+    SHORT = "Profile001 is too short for the radius of its corners."
+
+    def test_tube_too_short_for_the_bends_at_both_ends_is_refused(self):
+        # r = 130: 2 x 132 = 264 mm of setbacks on 250 mm. Checked after the radius range, before the key.
+        chain = self.rectangle()
+        self.assertRefused(self.SHORT, chain, radius=130.0)
+        self.assertRefused(self.SHORT, chain, radius=130.0, key=False)
+        self.assertRefused(self.SHORT, chain, configuration=BendConfiguration("Steel r130", "Steel", 2.0, 130.0, 0.4))
+        self.assertRefused("The inside bend radius must be between 2 and 159.8 mm.", chain, radius=159.9)
+
+    def test_tube_long_enough_for_its_bends_unfolds_into_one_solid(self):
+        # r = 120: 2 x 122 = 244 mm on 250, 6 mm of straight outer wall left between the bends.
+        chain = self.rectangle()
+        bar = unfold(chain, STEEL, radius=120.0, **PLAIN)
+
+        self.solid(bar)
+        self.assertLength(developed([300, 200, 300, 200], [90] * 3, [120.0] * 3), bar)
+        straight = bar.corners[1].start - (bar.corners[0].start + bar.corners[0].bend_allowance)
+        self.assertAlmostEqual(250 - 2 * (120 + T), straight, places=6)
+
+    def test_tube_with_no_straight_part_left_is_refused(self):
+        # r = 123: 2 x 125 = 250 mm, no straight outer wall left: the tube would come apart (2 solids), so S23 refuses
+        # it; with 0.1 mm of straight wall (r = 122.95) it unfolds into one solid.
+        chain = self.rectangle()
+        self.assertRefused(self.SHORT, chain, radius=123.0, key=False)
+
+        bar = unfold(chain, STEEL, radius=122.95, **PLAIN)
+        self.solid(bar)
+
+    def test_a_corner_radius_names_the_one_tube_it_makes_too_short(self):
+        # Open at bottom-right: the chain runs bottom, left (Profile003, 200 mm), top (Profile002, 300 mm), right.
+        # 130 at the corner between left and top: left holds 122 + 132 = 254 mm on 250, top 254 on 350.
+        bottom, right, top, left = self.frame()
+        chain = build_chain([bottom, right, top, left], open_corner=(bottom, right))
+        self.solid(unfold(chain, STEEL, radius=120.0, **PLAIN))
+
+        self.assertRefused(
+            "Profile003 is too short for the radius of its corners.", chain, radius=120.0, corner_radii={1: 130.0}
+        )
+
+    def test_open_end_takes_no_setback(self):
+        # Two 200 mm tubes, one corner, r = 130: each tube holds one setback (132 mm) on 225 mm, the open end none.
+        chain = build_chain(self.frame(edges=(((0, 0, 0), (200, 0, 0)), ((200, 0, 0), (200, 200, 0)))))
+
+        bar = unfold(chain, STEEL, radius=130.0, **PLAIN)
+
+        self.solid(bar)
+        self.assertLength(developed([200, 200], [90], [130.0]), bar)
+
+
 class FeatureTransferTest(UnfoldFixture):
     def mitered_rectangle(self):
         """Rectangle whose bottom and left profiles are End Mitered at the open corner (0, 0)."""

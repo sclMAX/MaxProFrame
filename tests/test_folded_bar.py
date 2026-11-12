@@ -186,6 +186,19 @@ class FoldedBarObjectTest(FoldedBarFixture):
         self.assertIn("Invalid", bar.State)
         self.assertEqual(str(raised.exception), bar.getStatusString())
 
+    def test_tube_too_short_for_its_corners_leaves_the_bar_in_error(self):
+        # S23: the right tube (Profile001) cannot hold two bends of r = 130.
+        profiles, bar = self.make_bar(**PLAIN)
+
+        bar.InsideRadius = 130.0
+        self.doc.recompute()
+
+        self.assertIn("Invalid", bar.State)
+        self.assertEqual("Profile001 is too short for the radius of its corners.", bar.getStatusString())
+        bar.InsideRadius = 120.0
+        self.doc.recompute()
+        self.assertOneSolid(bar)
+
     def test_bar_in_a_moved_part_stays_where_the_frame_is(self):
         part = self.doc.addObject("App::Part", "Part")
         part.Placement = App.Placement(App.Vector(100, 50, 20), App.Rotation(App.Vector(0, 0, 1), 30))

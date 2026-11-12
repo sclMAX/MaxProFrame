@@ -42,6 +42,7 @@ FOLDED_MITER_TEXTS = (
         "The key does not fit in the notch between {} and {} with this inside radius: make the radius smaller or "
         "turn the key off.",
     ),
+    ("MaxProFrame", "{} is too short for the radius of its corners."),
     (
         "MaxProFrame",
         "{}: its developed length ({:.1f} mm) is longer than the stock length of the cut list ({:.1f} mm).\n",

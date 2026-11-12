@@ -2857,6 +2857,10 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>{} is too short for the radius of its corners.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>{}: its developed length ({:.1f} mm) is longer than the stock length of the cut list ({:.1f} mm).
 </source>
         <translation type="unfinished"></translation>

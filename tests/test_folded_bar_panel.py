@@ -57,6 +57,8 @@ RADIUS_RANGE = "The inside bend radius must be between 2 and 159.8 mm."
 KEY_TOO_BIG = "The key does not fit in the notch between Profile and Profile001: make it smaller."
 OWN_MITER = "Profile_Mt cuts Profile at its folded corner with Profile001: delete it or make that corner the open one."
 OWN_MITER_OPEN_CHAIN = "Profile_Mt cuts Profile at its folded corner with Profile001: delete it."
+# S23: the right tube of the rectangle (200 mm, 250 on its outer wall) holds two bends of r = 120, not of r = 130.
+TOO_SHORT = "Profile001 is too short for the radius of its corners."
 NO_CONFIGURATION = "Add a bend configuration: press Manage configurations."
 TOO_FEW = "Select at least two profiles that meet end to end."
 BOM_PARAMS = (
@@ -427,6 +429,17 @@ class CreatePanelTest(FoldedPanelFixture):
         panel.form.spin_clearance.setValue(6.5)
         self.assertRefused(panel, KEY_TOO_BIG)
         panel.form.cb_key.setChecked(False)
+        self.assertAccepts(panel)
+
+    def test_tube_too_short_for_its_corners_is_named_and_disables_ok(self):
+        set_last_used_configuration(STEEL.name)
+        panel = self.run_command(*self.frame())
+        panel.form.cb_key.setChecked(False)
+
+        panel.form.spin_radius.setValue(130.0)
+
+        self.assertRefused(panel, TOO_SHORT)
+        panel.form.spin_radius.setValue(120.0)
         self.assertAccepts(panel)
 
     def test_a_wide_corner_folds_with_the_relief(self):
