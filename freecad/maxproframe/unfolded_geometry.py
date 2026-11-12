@@ -10,7 +10,7 @@ open-corner end of the first segment. See odd/tasks/folded-miter.md, section "T3
 """
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 
 import FreeCAD as App
 import Part
@@ -121,6 +121,10 @@ class _Bend:
     @property
     def half(self):
         return math.radians(self.angle) / 2
+
+    def sizes(self):
+        """Everything but the names: two corners of the same sizes remove the same solid."""
+        return tuple(getattr(self, item.name) for item in fields(self) if item.name != "names")
 
     @property
     def allowance(self):
@@ -381,8 +385,13 @@ def unfold(
     for solid in added:
         bar = bar.fuse(solid)
     reach = chain.segments[0].width + chain.segments[0].height
+    # The solid a corner removes is built once for all the corners of the same sizes.
+    removed_by_sizes = {}
     for bend, (_, frame) in zip(bends, corners):
-        bar = bar.cut(placed(bend.removed(reach), frame))
+        sizes = bend.sizes()
+        if sizes not in removed_by_sizes:
+            removed_by_sizes[sizes] = bend.removed(reach)
+        bar = bar.cut(placed(removed_by_sizes[sizes], frame))
     bar = bar.removeSplitter()
     if len(bar.Solids) == 1:
         bar = bar.Solids[0]

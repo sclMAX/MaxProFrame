@@ -24,7 +24,7 @@ from freecad.maxproframe.drill_hole import make_drill_hole
 from freecad.maxproframe.ff_tools import get_param_group
 from freecad.maxproframe.folded_bar import make_folded_bar, make_unfolded_bar
 from freecad.maxproframe.folded_chain import ChainError, build_chain
-from freecad.maxproframe.folded_geometry import fold
+from freecad.maxproframe.folded_geometry import fold, fold_bar
 from freecad.maxproframe.populate_ids import populate_ids
 from freecad.maxproframe.profile_pattern import container_placement, placed
 from freecad.maxproframe.unfolded_geometry import UnfoldError, unfold
@@ -59,9 +59,11 @@ class FoldedBarObjectTest(FoldedBarFixture):
         profiles, bar = self.make_bar()
 
         chain = build_chain(profiles)
+        # fold(chain, STEEL) is fold_bar of this unfold.
+        expected = unfold(chain, STEEL)
         self.assertOneSolid(bar)
-        self.assertSameVolume(fold(chain, STEEL), bar.Shape)
-        self.assertAlmostEqual(unfold(chain, STEEL).length, bar.DevelopedLength.Value, places=6)
+        self.assertSameVolume(fold_bar(chain, expected), bar.Shape)
+        self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
         self.assertEqual(profiles, list(bar.Segments))
         self.assertEqual([], list(bar.OpenCorner))
         for tip in profiles:
@@ -91,14 +93,15 @@ class FoldedBarObjectTest(FoldedBarFixture):
     def test_open_corner_given_sets_the_start_of_the_bar(self):
         bottom, right, top, left = self.frame()
 
-        bar = make_folded_bar([bottom, right, top, left], STEEL, open_corner=(bottom, right))
+        bar = make_folded_bar([bottom, right, top, left], STEEL, open_corner=(bottom, right), **PLAIN)
 
         chain = build_chain([bottom, right, top, left], open_corner=(bottom, right))
+        expected = unfold(chain, STEEL, **PLAIN)
         self.assertOneSolid(bar)
         self.assertEqual([bottom, right], list(bar.OpenCorner))
         self.assertEqual([segment.tip for segment in chain.segments], list(bar.Segments))
-        self.assertSameVolume(fold(chain, STEEL), bar.Shape)
-        self.assertAlmostEqual(unfold(chain, STEEL).length, bar.DevelopedLength.Value, places=6)
+        self.assertSameVolume(fold_bar(chain, expected), bar.Shape)
+        self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
 
     def test_options_set_the_bar_properties(self):
         profiles, bar = self.make_bar(radius=4.0, corner_radii={1: 5.0}, clearance=0.2, key=False)
@@ -110,18 +113,20 @@ class FoldedBarObjectTest(FoldedBarFixture):
         self.assertAlmostEqual(0.2, bar.Clearance.Value, places=9)
         self.assertFalse(bar.Key)
         options = dict(radius=4.0, corner_radii={1: 5.0}, clearance=0.2, key=False)
-        self.assertSameVolume(fold(chain, STEEL, **options), bar.Shape)
-        self.assertAlmostEqual(unfold(chain, STEEL, **options).length, bar.DevelopedLength.Value, places=6)
+        expected = unfold(chain, STEEL, **options)
+        self.assertSameVolume(fold_bar(chain, expected), bar.Shape)
+        self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
 
     def test_changing_a_bend_property_recomputes_the_bar(self):
         profiles, bar = self.make_bar()
         unfolded = make_unfolded_bar(bar)
         chain = build_chain(profiles)
 
+        # The key goes first: the bars without it fold faster.
         for prop, value, options in (
-            ("InsideRadius", 4.0, dict(radius=4.0)),
-            ("CornerRadii", [0.0, 5.0, 0.0], dict(radius=4.0, corner_radii={1: 5.0})),
-            ("Key", False, dict(radius=4.0, corner_radii={1: 5.0}, key=False)),
+            ("Key", False, dict(key=False)),
+            ("InsideRadius", 4.0, dict(radius=4.0, key=False)),
+            ("CornerRadii", [0.0, 5.0, 0.0], dict(radius=4.0, corner_radii={1: 5.0}, key=False)),
             # Without the relief a 5 mm radius bends 88.8 degrees at most: the 90 degree corner goes back to 4 mm first.
             ("CornerRadii", [0.0, 0.0, 0.0], dict(radius=4.0, key=False)),
             ("Relief", False, dict(radius=4.0, **PLAIN)),
@@ -130,8 +135,9 @@ class FoldedBarObjectTest(FoldedBarFixture):
                 setattr(bar, prop, value)
                 self.doc.recompute()
                 self.assertOneSolid(bar)
-                self.assertSameVolume(fold(chain, STEEL, **options), bar.Shape)
+                # fold(chain, STEEL, **options) is fold_bar of this unfold.
                 expected = unfold(chain, STEEL, **options)
+                self.assertSameVolume(fold_bar(chain, expected), bar.Shape)
                 self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
                 self.assertOneSolid(unfolded)
                 self.assertSameVolume(expected.shape, unfolded.Shape)
@@ -149,9 +155,9 @@ class FoldedBarObjectTest(FoldedBarFixture):
         self.assertTrue(all(tip.Visibility for tip in (bottom, right, top, left)))
 
     def test_settings_that_cannot_unfold_leave_the_bar_in_error_with_the_unfold_message(self):
-        profiles, bar = self.make_bar()
+        profiles, bar = self.make_bar(**PLAIN)
         with self.assertRaises(UnfoldError) as raised:
-            unfold(build_chain(profiles), STEEL, radius=1.0)
+            unfold(build_chain(profiles), STEEL, radius=1.0, **PLAIN)
 
         bar.InsideRadius = 1.0
         self.doc.recompute()
@@ -164,10 +170,10 @@ class FoldedBarObjectTest(FoldedBarFixture):
         part.Placement = App.Placement(App.Vector(100, 50, 20), App.Rotation(App.Vector(0, 0, 1), 30))
         self.doc.recompute()
 
-        profiles, bar = self.make_bar(container=part)
+        profiles, bar = self.make_bar(container=part, **PLAIN)
 
         self.assertIn(bar, part.Group)
-        expected = fold(build_chain(profiles), STEEL)
+        expected = fold(build_chain(profiles), STEEL, **PLAIN)
         found = placed(bar.Shape, container_placement(bar))
         self.assertSameVolume(expected, found)
         self.assertLess((expected.BoundBox.Center - found.BoundBox.Center).Length, LENGTH_TOLERANCE)
@@ -195,7 +201,7 @@ class SegmentsRefreshTest(FoldedBarFixture):
         return hole
 
     def test_hole_drilled_in_a_segment_after_the_bar_is_carried_into_it(self):
-        profiles, bar = self.make_bar()
+        profiles, bar = self.make_bar(**PLAIN)
         volume, length = bar.Shape.Volume, bar.DevelopedLength.Value
         bottom, right, top, left = profiles
 
@@ -211,16 +217,16 @@ class SegmentsRefreshTest(FoldedBarFixture):
         self.assertFalse(hole.Visibility)
         self.assertAlmostEqual(length, bar.DevelopedLength.Value, places=9)
         self.assertAlmostEqual(volume - math.pi * 5**2 * 2.0, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
-        self.assertSameVolume(fold(build_chain([bottom, hole, top, left]), STEEL), bar.Shape)
+        self.assertSameVolume(fold(build_chain([bottom, hole, top, left]), STEEL, **PLAIN), bar.Shape)
 
 
 class UnfoldedBarObjectTest(FoldedBarFixture):
     def test_unfolded_bar_is_the_straight_bar_from_x_zero(self):
-        profiles, bar = self.make_bar()
+        profiles, bar = self.make_bar(**PLAIN)
 
         unfolded = make_unfolded_bar(bar)
 
-        expected = unfold(build_chain(profiles), STEEL)
+        expected = unfold(build_chain(profiles), STEEL, **PLAIN)
         self.assertOneSolid(unfolded)
         self.assertEqual(bar, unfolded.FoldedBar)
         self.assertSameVolume(expected.shape, unfolded.Shape)
@@ -233,7 +239,7 @@ class UnfoldedBarObjectTest(FoldedBarFixture):
     def test_step_export_reads_back_one_solid_of_the_same_volume_and_length(self):
         import Import
 
-        _, bar = self.make_bar()
+        _, bar = self.make_bar(**PLAIN)
         unfolded = make_unfolded_bar(bar)
         folder = tempfile.mkdtemp(prefix="mpf_folded_bar_")
         self.addCleanup(shutil.rmtree, folder, True)
@@ -252,7 +258,7 @@ class UnfoldedBarObjectTest(FoldedBarFixture):
 
 class RestoreTest(FoldedBarFixture):
     def test_saved_document_opens_with_both_bars_valid_and_the_same_shapes(self):
-        profiles, bar = self.make_bar(clearance=0.2)
+        profiles, bar = self.make_bar(clearance=0.2, **PLAIN)
         unfolded = make_unfolded_bar(bar)
         saved = {obj.Name: (obj.Shape.Volume, obj.Shape.BoundBox.DiagonalLength) for obj in (bar, unfolded)}
         developed = bar.DevelopedLength.Value
@@ -285,7 +291,7 @@ class RestoreTest(FoldedBarFixture):
                     self.assertAlmostEqual(diagonal, obj.Shape.BoundBox.DiagonalLength, delta=LENGTH_TOLERANCE)
 
     def test_unfolded_bar_recomputes_alone_after_opening(self):
-        _, bar = self.make_bar()
+        _, bar = self.make_bar(**PLAIN)
         unfolded = make_unfolded_bar(bar)
         volume = unfolded.Shape.Volume
         folder = tempfile.mkdtemp(prefix="mpf_folded_bar_")
@@ -331,7 +337,7 @@ class BomTest(FoldedBarFixture):
 
     def test_folded_bar_is_one_piece_of_its_developed_length_in_a_part(self):
         part = self.doc.addObject("App::Part", "Part")
-        profiles, bar = self.make_bar(container=part)
+        profiles, bar = self.make_bar(container=part, **PLAIN)
         make_unfolded_bar(bar)
 
         rows, links = self.rows(part)
@@ -344,7 +350,7 @@ class BomTest(FoldedBarFixture):
 
     def test_folded_bar_is_one_piece_outside_a_part_too(self):
         group = self.doc.addObject("App::DocumentObjectGroup", "Group")
-        profiles, bar = self.make_bar(container=group)
+        profiles, bar = self.make_bar(container=group, **PLAIN)
         unfolded = make_unfolded_bar(bar)
         group.addObject(unfolded)
 
@@ -356,7 +362,7 @@ class BomTest(FoldedBarFixture):
 
     def test_populate_ids_numbers_the_bar_as_one_piece(self):
         part = self.doc.addObject("App::Part", "Part")
-        profiles, bar = self.make_bar(container=part)
+        profiles, bar = self.make_bar(container=part, **PLAIN)
 
         self.assertEqual([bar], self.number(part))
 
@@ -380,14 +386,15 @@ class BomTest(FoldedBarFixture):
 
     def test_cut_list_lists_the_bar_once_with_its_id_and_developed_length(self):
         part = self.doc.addObject("App::Part", "Part")
-        _, bar = self.make_bar(container=part)
+        _, bar = self.make_bar(container=part, **PLAIN)
         self.number(part)
         rows, _ = self.rows(part)
         sheet = self.doc.addObject("Spreadsheet::Sheet", "CutList")
 
         parts = [CutPart(row["label"], float(row["length"]), KERF, row) for row in rows]
         make_cut_list({"Steel_Square Hollow_50x50x2": best_fit_decreasing(6000.0, parts)}, spreadsheet=sheet)
-        self.doc.recompute()
+        # The sheet alone: numbering touched the bar, whose recompute changes nothing here.
+        sheet.recompute()
 
         self.assertEqual(
             ["0", "1", f"{bar.DevelopedLength.Value:.1f}", "1"],
@@ -448,7 +455,7 @@ class StockWarningTest(FoldedBarFixture):
         return found
 
     def test_bar_longer_than_the_stock_warns_on_recompute_and_in_the_bom(self):
-        _, bar = self.make_bar()
+        _, bar = self.make_bar(**PLAIN)
         get_param_group().SetFloat(STOCK_PARAM, 500.0)
         message = (
             f"{bar.Label}: its developed length ({bar.DevelopedLength.Value:.1f} mm) is longer than the stock "
@@ -463,7 +470,7 @@ class StockWarningTest(FoldedBarFixture):
         self.assertEqual([message], self.warnings(lambda: traverse_assembly([], [], bar)))
 
     def test_bar_that_fits_the_stock_does_not_warn(self):
-        _, bar = self.make_bar()
+        _, bar = self.make_bar(**PLAIN)
         get_param_group().SetFloat(STOCK_PARAM, 6000.0)
 
         def recompute():

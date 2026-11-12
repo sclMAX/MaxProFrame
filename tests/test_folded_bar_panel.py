@@ -22,6 +22,7 @@ from PySide import QtWidgets
 from test_end_miter_geometry import polar
 from test_extend_cut_preview import keep_auto_preview
 from test_folded_bar import FoldedBarFixture
+from test_unfolded_geometry import PLAIN
 
 from freecad.maxproframe import bend_config_dialog, create_folded_bar_tool
 from freecad.maxproframe._utils import is_foldedbar, is_unfoldedbar
@@ -224,7 +225,7 @@ class CommandTest(FoldedPanelFixture):
                 self.assertEqual(active, FoldedBarCommand().IsActive())
 
     def test_unfold_bar_needs_one_folded_bar(self):
-        profiles, bar = self.make_bar()
+        profiles, bar = self.make_bar(**PLAIN)
         for selection, active in (((), False), ((bar,), True), ((bar, profiles[0]), False), ((profiles[0],), False)):
             with self.subTest(selection=[obj.Label for obj in selection]):
                 self.select(*selection)
@@ -235,7 +236,7 @@ class CommandTest(FoldedPanelFixture):
         self.assertTrue(bend_config_dialog.BendConfigurationsCommand().IsActive())
 
     def test_unfold_bar_makes_the_unfolded_bar_in_one_undo_step(self):
-        _, bar = self.make_bar()
+        _, bar = self.make_bar(**PLAIN)
         undos = len(self.doc.UndoNames)
         self.select(bar)
 
@@ -525,7 +526,7 @@ class EditPanelTest(FoldedPanelFixture):
         self.assertEqual((0.0, True), (bar.Clearance.Value, bar.Key))
 
     def test_ok_without_changes_adds_no_undo_step(self):
-        _, bar = self.make_bar()
+        _, bar = self.make_bar(**PLAIN)
         undos = len(self.doc.UndoNames)
         panel = self.edit(bar)
 
@@ -536,7 +537,7 @@ class EditPanelTest(FoldedPanelFixture):
 
     def test_edit_opens_the_other_corner_of_the_first_piece(self):
         bottom, right, top, left = self.frame()
-        bar = make_folded_bar([bottom, right, top, left], STEEL)
+        bar = make_folded_bar([bottom, right, top, left], STEEL, **PLAIN)
         panel = self.edit(bar)
 
         panel.form.combo_open_corner.setCurrentIndex(1)
@@ -547,7 +548,7 @@ class EditPanelTest(FoldedPanelFixture):
         self.assertEqual([bottom, left, top, right], list(bar.Segments))
 
     def test_cancel_puts_the_edited_bar_back(self):
-        _, bar = self.make_bar()
+        _, bar = self.make_bar(**PLAIN)
         volume = bar.Shape.Volume
         panel = self.edit(bar)
         panel.form.spin_clearance.setValue(0.3)
@@ -562,7 +563,7 @@ class EditPanelTest(FoldedPanelFixture):
         self.assertAlmostEqual(volume, bar.Shape.Volume, delta=1e-3)
 
     def test_bar_whose_configuration_is_not_stored_keeps_its_copy(self):
-        _, bar = self.make_bar()
+        _, bar = self.make_bar(**PLAIN)
         self.store.delete(STEEL.name)
 
         panel = self.edit(bar)
@@ -576,7 +577,7 @@ class EditPanelTest(FoldedPanelFixture):
 class OutputCommandsTest(FoldedPanelFixture):
     def test_create_bom_takes_a_selected_folded_bar(self):
         keep_params(self, BOM_PARAMS)
-        _, bar = self.make_bar()
+        _, bar = self.make_bar(**PLAIN)
         self.select(bar)
         self.assertTrue(CreateBOMCommand().IsActive())
         panel = CreateBOMTaskPanel()
@@ -597,7 +598,7 @@ class OutputCommandsTest(FoldedPanelFixture):
         self.assertFalse(CreateBOMCommand().IsActive())
 
     def test_populate_ids_takes_a_selected_folded_bar(self):
-        _, bar = self.make_bar()
+        _, bar = self.make_bar(**PLAIN)
         self.select(bar)
         self.assertTrue(PopulateIDsCommand().IsActive())
 
@@ -613,7 +614,7 @@ class OutputCommandsTest(FoldedPanelFixture):
         self.assertFalse(PopulateIDsCommand().IsActive())
 
     def test_reset_ids_takes_a_selected_folded_bar(self):
-        profiles, bar = self.make_bar()
+        profiles, bar = self.make_bar(**PLAIN)
         bar.PID = "7"
         self.select(bar)
         self.assertTrue(ResetIDsCommand().IsActive())

@@ -8,6 +8,7 @@ segments stay where they were drawn.
 
 import math
 import unittest
+from types import SimpleNamespace
 
 import FreeCAD as App
 import Part
@@ -16,7 +17,7 @@ from test_unfolded_geometry import DEPTH, PLAIN, STEEL, K, R, T, UnfoldFixture, 
 
 from freecad.maxproframe.drill_hole import make_drill_hole
 from freecad.maxproframe.folded_chain import build_chain
-from freecad.maxproframe.folded_geometry import fold
+from freecad.maxproframe.folded_geometry import fold, fold_bar
 from freecad.maxproframe.unfolded_geometry import unfold
 
 E = DEPTH / 2
@@ -25,6 +26,8 @@ SIDE_WALL = DEPTH / 2 - T / 2
 TOLERANCE = 1e-6
 LENGTH_TOLERANCE = 1e-4
 VOLUME_TOLERANCE = 1e-3
+# The rectangle unfolded and folded with the default settings, shared by the tests that only read it (FoldFixture).
+DEFAULT = {}
 
 
 def box(center, size, rotation=None):
@@ -37,7 +40,32 @@ def box(center, size, rotation=None):
     return shape
 
 
+def forget_default(name):
+    DEFAULT.clear()
+    App.closeDocument(name)
+
+
 class FoldFixture(UnfoldFixture):
+    # Whether the tests of the class read ``self.default``: the rectangle with the default settings as (chain, unfolded,
+    # folded), built once per test module in a document of its own that closes when the module ends.
+    reads_default = False
+
+    def setUp(self):
+        if self.reads_default:
+            # Built before the test's own document, which stays the active one.
+            self.default = self.default_rectangle()
+        super().setUp()
+
+    def default_rectangle(self):
+        if not DEFAULT:
+            self.doc = App.newDocument("DefaultRectangle")
+            unittest.addModuleCleanup(forget_default, self.doc.Name)
+            chain = self.rectangle()
+            unfolded = unfold(chain, STEEL)
+            # What fold(chain, STEEL) computes.
+            DEFAULT.update(chain=chain, unfolded=unfolded, folded=fold_bar(chain, unfolded))
+        return SimpleNamespace(**DEFAULT)
+
     def solid(self, shape):
         self.assertIsInstance(shape, Part.Solid)
         self.assertTrue(shape.isValid())
@@ -78,12 +106,14 @@ class FoldFixture(UnfoldFixture):
 
 
 class RectangleFoldTest(FoldFixture):
+    reads_default = True
+
     def test_rectangle_folds_into_one_solid_with_the_outside_of_the_frame(self):
-        chain = self.rectangle()
+        chain = self.default.chain
 
         for options in (PLAIN, {}):
             with self.subTest(options=options):
-                shape = self.solid(fold(chain, STEEL, **options))
+                shape = self.solid(fold(chain, STEEL, **options) if options else self.default.folded)
                 box_ = shape.BoundBox
                 for value, expected in (
                     (box_.XMin, -E),
@@ -96,15 +126,15 @@ class RectangleFoldTest(FoldFixture):
                     self.assertAlmostEqual(expected, value, delta=LENGTH_TOLERANCE)
 
     def test_folded_corners_are_round_with_the_real_radius(self):
-        chain = self.rectangle()
-        shape = self.solid(fold(chain, STEEL))
+        chain = self.default.chain
+        shape = self.solid(self.default.folded)
 
         for corner in chain.corners:
             self.assertRoundCorner(shape, corner)
 
     def test_open_corner_keeps_the_tips(self):
-        chain = self.rectangle()
-        shape = self.solid(fold(chain, STEEL))
+        chain = self.default.chain
+        shape = self.solid(self.default.folded)
 
         region = box((0, 0, 0), (80, 80, 60))
         tips = chain.segments[0].tip.Shape.fuse(chain.segments[-1].tip.Shape)
@@ -114,12 +144,13 @@ class RectangleFoldTest(FoldFixture):
         self.assertFalse(self.inside(shape, (-E / 2, -E / 2, 0)))
 
     def test_volume_adds_the_revolved_outer_wall_by_pappus(self):
-        chain = self.rectangle()
+        chain = self.default.chain
         # The relief takes the side walls out of the bend zone, so the folded pieces do not overlap the bent wall.
         options = dict(key=False)
         unfolded = unfold(chain, STEEL, **options)
 
-        shape = self.solid(fold(chain, STEEL, **options))
+        # What fold(chain, STEEL, **options) computes.
+        shape = self.solid(fold_bar(chain, unfolded))
 
         # The outer wall section (50 x 2) revolves with its centroid at r + t/2 from the axis instead of BA long flat.
         area = DEPTH * T
@@ -130,8 +161,8 @@ class RectangleFoldTest(FoldFixture):
         self.assertAlmostEqual(unfolded.shape.Volume + added - shared, shape.Volume, delta=VOLUME_TOLERANCE)
 
     def test_segments_far_from_the_corners_match_their_tips(self):
-        chain = self.rectangle()
-        shape = self.solid(fold(chain, STEEL))
+        chain = self.default.chain
+        shape = self.solid(self.default.folded)
 
         for segment in chain.segments:
             middle = (segment.start + segment.end) * 0.5
@@ -142,10 +173,11 @@ class RectangleFoldTest(FoldFixture):
 
 
 class KeyFoldTest(FoldFixture):
+    reads_default = True
+
     def test_tab_of_each_segment_fills_the_socket_of_the_next(self):
-        chain = self.rectangle()
-        unfolded = unfold(chain, STEEL)
-        shape = self.solid(fold(chain, STEEL))
+        unfolded = self.default.unfolded
+        shape = self.solid(self.default.folded)
 
         for index, corner in enumerate(unfolded.corners):
             tab, socket = key_centers(corner)
@@ -158,8 +190,8 @@ class KeyFoldTest(FoldFixture):
                 self.assertTrue(self.inside(shape, folded_tab), (index, w))
 
     def test_clearance_leaves_a_gap_between_the_flanks(self):
-        chain = self.rectangle()
-        tight = self.solid(fold(chain, STEEL))
+        chain = self.default.chain
+        tight = self.solid(self.default.folded)
         loose = self.solid(fold(chain, STEEL, clearance=1.0))
 
         v = 12.0
@@ -174,9 +206,11 @@ class KeyFoldTest(FoldFixture):
 
 
 class CornerRadiusFoldTest(FoldFixture):
+    reads_default = True
+
     def test_one_corner_radius_changes_only_its_arc(self):
-        chain = self.rectangle()
-        plain = self.solid(fold(chain, STEEL))
+        chain = self.default.chain
+        plain = self.solid(self.default.folded)
 
         shape = self.solid(fold(chain, STEEL, corner_radii={1: 6.0}))
 
@@ -229,6 +263,8 @@ class ArbitraryAnglesFoldTest(FoldFixture):
 
 
 class FeatureFoldTest(FoldFixture):
+    reads_default = True
+
     def test_hole_drilled_in_a_segment_stays_where_it_was_drawn(self):
         bottom, right, top, left = self.frame()
         faces = [
@@ -242,7 +278,8 @@ class FeatureFoldTest(FoldFixture):
             for index, found in enumerate(right.Shape.Vertexes, 1)
             if found.Point.isEqual(App.Vector(275, 0, 25), 1e-6)
         )
-        plain = fold(build_chain([bottom, right, top, left]), STEEL)
+        # The same rectangle before the hole.
+        plain = self.default.folded
         hole = make_drill_hole((right, (f"Face{top_face}",)), vertex)
         hole.OffsetAlong = 100.0
         hole.OffsetAcross = 25.0
