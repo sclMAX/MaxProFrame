@@ -1,0 +1,782 @@
+"""Folded miter commands: Folded Bar (create and edit, previewed live) and Unfold Bar.
+
+See odd/tasks/folded-miter.md, T6. The panel folds the selected tube pieces with a bend configuration of the store
+(S6), with its inside radius (S9, S14), the open corner of a closed frame (S17), the clearance, key and relief
+(S8, S20). Whatever keeps the chain from folding is shown and keeps OK disabled: the chain messages, an own miter at a
+folded corner (S12) and the unfold messages (S9, S15, S21).
+"""
+
+import os
+
+import FreeCAD as App
+import FreeCADGui as Gui
+from PySide import QtCore, QtGui
+
+from freecad.maxproframe._utils import is_foldedbar
+from freecad.maxproframe.bend_config import (
+    BendConfigurationStore,
+    get_last_used_configuration,
+    set_last_used_configuration,
+)
+from freecad.maxproframe.create_end_miter_tool import GAP_DELAY_MS, _alive, _alive_document, _failures
+from freecad.maxproframe.expression_fields import length_field
+from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, get_param_group, translate
+from freecad.maxproframe.folded_bar import bend_configuration, check_settings, make_folded_bar, make_unfolded_bar
+from freecad.maxproframe.folded_chain import (
+    ChainError,
+    base_profile,
+    build_chain,
+    cut_at_fold_message,
+    cuts_at_folds,
+)
+from freecad.maxproframe.profile_pattern import newest_piece
+from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
+from freecad.maxproframe.unfolded_geometry import UnfoldError
+
+# Remembered state of the panel's "Update automatically" check box.
+AUTO_PREVIEW_PARAM = "Folded Bar Auto Preview"
+# Largest radius, clearance or key size the fields take (mm).
+MAX_SIZE = 1000.0
+# Bar properties the panel sets, besides Segments.
+PROPERTIES = (
+    "BendConfiguration",
+    "BendMaterial",
+    "WallThickness",
+    "KFactor",
+    "InsideRadius",
+    "CornerRadii",
+    "Clearance",
+    "Key",
+    "Relief",
+    "KeyDiameter",
+    "NeckWidth",
+    "ReliefRadius",
+    "OpenCorner",
+)
+
+
+def _plain(value):
+    """A property value as the panel compares it."""
+    if hasattr(value, "Value"):
+        return round(value.Value, 9)
+    if isinstance(value, float):
+        return round(value, 9)
+    if isinstance(value, (list, tuple)):
+        return tuple(item.Name if hasattr(item, "Name") else _plain(item) for item in value)
+    return value
+
+
+def _corner_key(chain, corner):
+    """A corner by the two profiles meeting there, whatever the order of the chain."""
+    return frozenset(chain.segments[index].profile.Name for index in (corner.before, corner.after))
+
+
+def show_panel(panel):
+    Gui.Control.showDialog(panel)
+
+
+class FoldedBarTaskPanel:
+    """The bend configuration, the radii, the open corner and the notch of a Folded Bar, previewed.
+
+    Without ``edited`` the preview is the Folded Bar OK keeps, made from the pieces ``selection`` (the first one
+    starts the bar) inside one transaction that Cancel aborts. With ``edited`` the bar itself is the preview: OK keeps
+    the changes in one Undo step, or none when nothing changed; Cancel puts it back. ``store`` holds the bend
+    configurations (the user's by default).
+    """
+
+    auto_preview_param = AUTO_PREVIEW_PARAM
+    auto_preview_default = True
+
+    def __init__(self, selection=(), edited=None, store=None):
+        self.edited = edited
+        self.obj = edited
+        self.store = store or BendConfigurationStore()
+        self.selection = list(edited.Segments) if edited is not None else list(selection)
+        self.doc = edited.Document if edited is not None else (
+            self.selection[0].Document if self.selection else App.ActiveDocument
+        )  # fmt: skip
+        self._closed = False
+        self._transaction_open = False
+        self._recomputing = False
+        self._deferred = None
+        self._previewed = None
+        self._problems = []
+        self._error = ""
+        self._chain = None
+        self._ok_button = None
+        self._configurations = {}
+        self._store_names = set()
+        self._store_error = ""
+        # Inside radius of the corners given their own, by the pair of profiles meeting there (S14).
+        self._overrides = {}
+        self._row_keys = []
+        self._corner_rows = []
+        # (piece, Visibility) of what the preview hides: Cancel shows it again, undo or not.
+        self._visibility = []
+        if edited is None:
+            for obj in self.selection:
+                profile = base_profile(obj)
+                for piece in (obj, newest_piece(profile) if profile is not None else obj):
+                    if all(piece.Name != seen.Name for seen, _ in self._visibility):
+                        self._visibility.append((piece, piece.Visibility))
+        else:
+            self._before = {prop: getattr(edited, prop) for prop in ("Segments",) + PROPERTIES}
+        # The configuration the edited bar keeps a copy of: offered even when the store lacks it or differs.
+        self._document_copy = bend_configuration(edited) if edited is not None else None
+        self._timer = QtCore.QTimer()
+        self._timer.setSingleShot(True)
+        self._timer.setInterval(GAP_DELAY_MS)
+        self._timer.timeout.connect(self.update_preview)
+        self.form = keep_alive_until_destroyed(self._build_form())
+        self.form.destroyed.connect(self._form_gone)
+        self._fill()
+        self._connect()
+        self._refresh()
+        if edited is not None:
+            self._previewed = self._wanted()
+        self.update_preview()
+
+    # Form.
+
+    def _build_form(self):
+        form = QtGui.QWidget()
+        form.setWindowTitle(translate("MaxProFrame", "Folded Bar"))
+        layout = QtGui.QVBoxLayout(form)
+
+        form.groupBox_members = QtGui.QGroupBox(translate("MaxProFrame", "Tube pieces, from the start of the bar"))
+        members = QtGui.QVBoxLayout(form.groupBox_members)
+        form.members_list = QtGui.QListWidget()
+        form.members_list.setMaximumHeight(90)
+        members.addWidget(form.members_list)
+        layout.addWidget(form.groupBox_members)
+
+        form.groupBox_bend = QtGui.QGroupBox(translate("MaxProFrame", "Bend"))
+        bend = QtGui.QFormLayout(form.groupBox_bend)
+        form.combo_configuration = QtGui.QComboBox()
+        form.button_manage = QtGui.QPushButton(translate("MaxProFrame", "Manage configurations"))
+        row = QtGui.QHBoxLayout()
+        row.addWidget(form.combo_configuration, 1)
+        row.addWidget(form.button_manage)
+        bend.addRow(translate("MaxProFrame", "Configuration"), row)
+        form.spin_radius = length_field(0.0, MAX_SIZE, 0.0)
+        form.spin_radius.setToolTip(translate("MaxProFrame", "Inside bend radius of every folded corner"))
+        bend.addRow(translate("MaxProFrame", "Inside radius"), form.spin_radius)
+        layout.addWidget(form.groupBox_bend)
+
+        form.groupBox_corners = QtGui.QGroupBox(translate("MaxProFrame", "Corners"))
+        form.corners_layout = QtGui.QFormLayout(form.groupBox_corners)
+        form.label_open_corner = QtGui.QLabel(translate("MaxProFrame", "Open corner"))
+        form.combo_open_corner = QtGui.QComboBox()
+        form.combo_open_corner.setToolTip(
+            translate("MaxProFrame", "Where the closed frame stays open: the bar starts there, at the first piece")
+        )
+        form.corners_layout.addRow(form.label_open_corner, form.combo_open_corner)
+        form.label_corner_radii = QtGui.QLabel(translate("MaxProFrame", "Inside radius of each folded corner:"))
+        form.corners_layout.addRow(form.label_corner_radii)
+        layout.addWidget(form.groupBox_corners)
+
+        form.groupBox_notch = QtGui.QGroupBox(translate("MaxProFrame", "Notch"))
+        notch = QtGui.QFormLayout(form.groupBox_notch)
+        form.spin_clearance = length_field(0.0, MAX_SIZE, 0.0)
+        form.spin_clearance.setToolTip(
+            translate("MaxProFrame", "Gap between the notch flanks and around the key, half on each side")
+        )
+        notch.addRow(translate("MaxProFrame", "Clearance"), form.spin_clearance)
+        form.cb_key = QtGui.QCheckBox(translate("MaxProFrame", "Interlocking key"))
+        notch.addRow(form.cb_key)
+        form.spin_key_diameter = self._default_field(
+            translate(
+                "MaxProFrame", "Bulb diameter of the key; Default: a quarter of the tube depth across the bent wall"
+            )
+        )
+        notch.addRow(translate("MaxProFrame", "Key diameter"), form.spin_key_diameter)
+        form.spin_neck_width = self._default_field(
+            translate("MaxProFrame", "Neck width of the key; Default: 60 % of the bulb diameter")
+        )
+        notch.addRow(translate("MaxProFrame", "Neck width"), form.spin_neck_width)
+        form.cb_relief = QtGui.QCheckBox(translate("MaxProFrame", "Relief next to the bent wall"))
+        notch.addRow(form.cb_relief)
+        form.spin_relief_radius = self._default_field(
+            translate("MaxProFrame", "Radius of the relief; Default: the inside bend radius of the corner")
+        )
+        notch.addRow(translate("MaxProFrame", "Relief radius"), form.spin_relief_radius)
+        layout.addWidget(form.groupBox_notch)
+
+        form.groupBox_preview = QtGui.QGroupBox(translate("MaxProFrame", "Preview"))
+        preview = QtGui.QVBoxLayout(form.groupBox_preview)
+        form.cb_auto_update = QtGui.QCheckBox(translate("MaxProFrame", "Update automatically"))
+        form.cb_auto_update.setChecked(get_param_group().GetBool(self.auto_preview_param, self.auto_preview_default))
+        form.status_label = QtGui.QLabel()
+        preview.addWidget(form.cb_auto_update)
+        preview.addWidget(form.status_label)
+        layout.addWidget(form.groupBox_preview)
+
+        form.message_label = QtGui.QLabel()
+        form.message_label.setWordWrap(True)
+        layout.addWidget(form.message_label)
+        return form
+
+    @staticmethod
+    def _default_field(tooltip):
+        """A size field whose 0 is the default size, shown as Default."""
+        spin = length_field(0.0, MAX_SIZE, 0.0)
+        spin.setSpecialValueText(translate("MaxProFrame", "Default"))
+        spin.setToolTip(tooltip)
+        return spin
+
+    def _fill(self):
+        """Show the pieces, the configurations and the values of the edited bar, or the defaults."""
+        form = self.form
+        for obj in self.selection:
+            form.members_list.addItem(obj.Label)
+        obj = self.edited
+        if obj is None:
+            self._load_configurations(get_last_used_configuration())
+            configuration = self._configuration()
+            form.spin_radius.setValue(configuration.inside_radius if configuration is not None else 0.0)
+            form.cb_key.setChecked(True)
+            form.cb_relief.setChecked(True)
+        else:
+            self._load_configurations(obj.BendConfiguration)
+            form.spin_radius.setValue(obj.InsideRadius.Value)
+            form.spin_clearance.setValue(obj.Clearance.Value)
+            form.cb_key.setChecked(obj.Key)
+            form.cb_relief.setChecked(obj.Relief)
+            form.spin_key_diameter.setValue(obj.KeyDiameter.Value)
+            form.spin_neck_width.setValue(obj.NeckWidth.Value)
+            form.spin_relief_radius.setValue(obj.ReliefRadius.Value)
+        self._fill_open_corners()
+        if obj is not None:
+            try:
+                chain = build_chain(self.selection, open_corner=list(obj.OpenCorner) or None)
+            except ChainError:
+                chain = None
+            if chain is not None:
+                for corner, radius in zip(chain.corners, obj.CornerRadii):
+                    if radius > 0:
+                        self._overrides[_corner_key(chain, corner)] = radius
+        self._enable_sizes()
+
+    def _load_configurations(self, selected):
+        """List the stored configurations (and the edited bar's own copy), ``selected`` chosen."""
+        combo = self.form.combo_configuration
+        self._configurations, self._store_error = {}, ""
+        try:
+            stored = self.store.configurations()
+        except ValueError as error:
+            stored, self._store_error = [], str(error)
+        self._store_names = {configuration.name for configuration in stored}
+        combo.blockSignals(True)
+        combo.clear()
+        for configuration in stored:
+            self._configurations[configuration.name] = configuration
+            combo.addItem(configuration.name, configuration.name)
+        copy = self._document_copy
+        if copy is not None and self._configurations.get(copy.name) != copy:
+            # The bar keeps its own values: the stored configuration of that name is not the one it was made with.
+            text = translate("MaxProFrame", "{} (copy in the document)").format(copy.name)
+            index = combo.findData(copy.name)
+            if index < 0:
+                combo.addItem(text, copy.name)
+            else:
+                combo.setItemText(index, text)
+            self._configurations[copy.name] = copy
+        for index in range(combo.count()):
+            configuration = self._configurations[combo.itemData(index)]
+            combo.setItemData(
+                index,
+                translate("MaxProFrame", "{}: {:g} mm walls, inside radius {:g} mm, K-factor {:g}").format(
+                    configuration.material, configuration.thickness, configuration.inside_radius,
+                    configuration.k_factor,
+                ),
+                QtCore.Qt.ToolTipRole,
+            )  # fmt: skip
+        index = combo.findData(selected)
+        combo.setCurrentIndex(index if index >= 0 else 0)
+        combo.blockSignals(False)
+
+    def configuration_names(self):
+        """The names the configuration list offers, in its order."""
+        combo = self.form.combo_configuration
+        return [combo.itemData(index) for index in range(combo.count())]
+
+    def _configuration(self):
+        return self._configurations.get(self.form.combo_configuration.currentData())
+
+    def _fill_open_corners(self):
+        """The two corners of the first piece, of a closed frame: where it meets the last piece first (S17)."""
+        combo = self.form.combo_open_corner
+        combo.clear()
+        try:
+            chain = build_chain(self.selection)
+        except ChainError:
+            chain = None
+        if chain is not None and chain.closed:
+            by_profile = {base_profile(obj).Name: obj for obj in self.selection}
+            first = self.selection[0]
+            for segment in (chain.segments[-1], chain.segments[1]):
+                other = by_profile[segment.profile.Name]
+                text = translate("MaxProFrame", "Between {} and {}").format(first.Label, other.Label)
+                combo.addItem(text, [first, other])
+        visible = combo.count() > 0
+        self.form.label_open_corner.setVisible(visible)
+        combo.setVisible(visible)
+
+    def _open_corner(self):
+        data = self.form.combo_open_corner.currentData() if self.form.combo_open_corner.count() else None
+        return list(data) if data else None
+
+    def _connect(self):
+        form = self.form
+        form.combo_configuration.currentIndexChanged.connect(self._configuration_changed)
+        form.button_manage.clicked.connect(self.manage_configurations)
+        form.combo_open_corner.currentIndexChanged.connect(self._changed)
+        form.cb_key.toggled.connect(self._changed)
+        form.cb_relief.toggled.connect(self._changed)
+        for spin in (
+            form.spin_radius,
+            form.spin_clearance,
+            form.spin_key_diameter,
+            form.spin_neck_width,
+            form.spin_relief_radius,
+        ):
+            spin.valueChanged.connect(self._changed)
+        form.cb_auto_update.toggled.connect(self._on_auto_update_toggled)
+
+    def _enable_sizes(self):
+        form = self.form
+        form.spin_key_diameter.setEnabled(form.cb_key.isChecked())
+        form.spin_neck_width.setEnabled(form.cb_key.isChecked())
+        form.spin_relief_radius.setEnabled(form.cb_relief.isChecked())
+
+    # Corner radii.
+
+    def corner_spins(self):
+        """The radius field of each folded corner, in chain order (0: the bar's inside radius)."""
+        return [spin for _, spin in self._corner_rows]
+
+    def _show_corner_rows(self, chain):
+        """One radius field per folded corner of ``chain``, showing its override; the rows follow the chain."""
+        layout = self.form.corners_layout
+        count = len(chain.corners) if chain is not None else 0
+        if count and not self._corner_rows:
+            for index in range(count):
+                label = QtGui.QLabel()
+                spin = length_field(0.0, MAX_SIZE, 0.0)
+                spin.setSpecialValueText(translate("MaxProFrame", "Bar radius"))
+                for widget in (label, spin):
+                    invalidate_wrapper_on_destroy(widget)
+                spin.valueChanged.connect(lambda value, index=index: self._corner_radius_changed(index, value))
+                layout.addRow(label, spin)
+                self._corner_rows.append((label, spin))
+        self._row_keys = [_corner_key(chain, corner) for corner in chain.corners] if count else []
+        for index, (label, spin) in enumerate(self._corner_rows):
+            if index >= count:
+                continue
+            corner = chain.corners[index]
+            names = (chain.segments[corner.before].profile.Label, chain.segments[corner.after].profile.Label)
+            label.setText(translate("MaxProFrame", "{} to {}").format(*names))
+            spin.blockSignals(True)
+            spin.setValue(self._overrides.get(self._row_keys[index], 0.0))
+            spin.blockSignals(False)
+        shown = bool(count) and len(self._corner_rows) == count
+        self.form.label_corner_radii.setVisible(shown)
+        for label, spin in self._corner_rows:
+            label.setVisible(shown)
+            spin.setVisible(shown)
+        self.form.groupBox_corners.setVisible(shown or self.form.combo_open_corner.count() > 0)
+
+    def _corner_radius_changed(self, index, value):
+        if not self._active() or index >= len(self._row_keys):
+            return
+        key = self._row_keys[index]
+        if value > 0:
+            self._overrides[key] = value
+        else:
+            self._overrides.pop(key, None)
+        self._changed()
+
+    def _corner_radii(self, chain):
+        return [self._overrides.get(_corner_key(chain, corner), 0.0) for corner in chain.corners]
+
+    # Checks.
+
+    def _options(self, chain):
+        """The ``unfold`` options of the panel values for ``chain``."""
+        form = self.form
+
+        def size(spin):
+            return spin.value() or None
+
+        return dict(
+            radius=form.spin_radius.value(),
+            corner_radii={index: radius for index, radius in enumerate(self._corner_radii(chain)) if radius > 0},
+            clearance=form.spin_clearance.value(),
+            key=form.cb_key.isChecked(),
+            relief=form.cb_relief.isChecked(),
+            key_diameter=size(form.spin_key_diameter),
+            neck_width=size(form.spin_neck_width),
+            relief_radius=size(form.spin_relief_radius),
+        )
+
+    def _check(self):
+        """(messages of what keeps the bar from folding, chain or None)."""
+        problems = []
+        try:
+            chain = build_chain(self.selection, open_corner=self._open_corner())
+        except ChainError as error:
+            return [str(error)], None
+        configuration = self._configuration()
+        if self._store_error:
+            problems.append(self._store_error)
+        if configuration is None:
+            problems.append(translate("MaxProFrame", "Add a bend configuration: press Manage configurations."))
+        problems += [cut_at_fold_message(chain, cut) for cut in cuts_at_folds(chain)]
+        if configuration is not None:
+            try:
+                check_settings(chain, configuration, **self._options(chain))
+            except UnfoldError as error:
+                problems.append(str(error))
+        return problems, chain
+
+    def problems(self):
+        """What keeps OK disabled now."""
+        return list(self._problems) + ([self._error] if self._error and not self._pending() else [])
+
+    def _refresh(self):
+        """Check the panel values; show the messages, the corner rows, the status and OK."""
+        self._problems, self._chain = self._check()
+        self._show_corner_rows(self._chain)
+        self._show_messages()
+
+    def _show_messages(self):
+        error = [self._error] if self._error and not self._pending() else []
+        self.form.message_label.setText("\n".join(self._problems + error))
+        if self._pending():
+            status = translate("MaxProFrame", "Pending changes")
+        elif self.obj is not None and _alive(self.obj):
+            status = translate("MaxProFrame", "Preview updated")
+        else:
+            status = translate("MaxProFrame", "No preview")
+        self.form.status_label.setText(status)
+        self._enable_ok()
+
+    def _pending(self):
+        return self._previewed != self._wanted()
+
+    def can_accept(self):
+        return not self._closed and not self.problems()
+
+    def ok_button_enabled(self):
+        """Whether OK can be pressed: the dialog's button when it is shown."""
+        if self._ok_button is not None:
+            return self._ok_button.isEnabled()
+        return self.can_accept()
+
+    def _enable_ok(self):
+        if self._ok_button is not None:
+            self._ok_button.setEnabled(self.can_accept())
+
+    # Changes.
+
+    def _configuration_changed(self, *args):
+        if not self._active():
+            return
+        configuration = self._configuration()
+        if configuration is not None:
+            self.form.spin_radius.blockSignals(True)
+            self.form.spin_radius.setValue(configuration.inside_radius)
+            self.form.spin_radius.blockSignals(False)
+        self._changed()
+
+    def _changed(self, *args):
+        if not self._active():
+            return
+        self._enable_sizes()
+        self._refresh()
+        self._timer.start()
+
+    def _on_auto_update_toggled(self, checked):
+        get_param_group(writable=True).SetBool(self.auto_preview_param, checked)
+        self.update_preview()
+
+    def manage_configurations(self):
+        """The Bend Configurations dialog; the list is read again when it closes, the choice kept when it can be."""
+        from freecad.maxproframe.bend_config_dialog import BendConfigurationsDialog
+
+        current = self.form.combo_configuration.currentData()
+        dialog = BendConfigurationsDialog(store=self.store, parent=self.form, selected=current)
+        dialog.exec_()
+        dialog.deleteLater()
+        if not self._active():
+            return
+        self._load_configurations(current)
+        if self.form.combo_configuration.currentData() != current:
+            self._configuration_changed()
+        else:
+            self._changed()
+
+    # Preview.
+
+    def _wanted(self):
+        """What the bar must be: None while something keeps it from folding."""
+        if self._problems or self._chain is None:
+            return None
+        values = self._properties(self._chain)
+        return tuple((prop, _plain(values[prop])) for prop in PROPERTIES)
+
+    def _properties(self, chain):
+        form = self.form
+        configuration = self._configuration()
+        return {
+            "BendConfiguration": configuration.name,
+            "BendMaterial": configuration.material,
+            "WallThickness": float(configuration.thickness),
+            "KFactor": float(configuration.k_factor),
+            "InsideRadius": form.spin_radius.value(),
+            "CornerRadii": self._corner_radii(chain),
+            "Clearance": form.spin_clearance.value(),
+            "Key": form.cb_key.isChecked(),
+            "Relief": form.cb_relief.isChecked(),
+            "KeyDiameter": form.spin_key_diameter.value(),
+            "NeckWidth": form.spin_neck_width.value(),
+            "ReliefRadius": form.spin_relief_radius.value(),
+            "OpenCorner": self._open_corner_property(),
+        }
+
+    def _open_corner_property(self):
+        """OpenCorner for the panel's choice; an edited bar keeps its own when it still opens there."""
+        if self.edited is not None and self.form.combo_open_corner.currentIndex() <= 0:
+            # The first choice is where the bar's segments open: its first and last one meet there.
+            return list(self._before["OpenCorner"])
+        return self._open_corner() or []
+
+    def update_preview(self, *args, force=False):
+        """Make the bar match the panel when Update automatically is checked (or ``force``)."""
+        if not self._active():
+            return
+        if self._recomputing:
+            return
+        self._recomputing = True
+        try:
+            if force or self.form.cb_auto_update.isChecked():
+                self._preview(force)
+        finally:
+            self._recomputing = False
+        if self._active():
+            self._show_messages()
+        deferred, self._deferred = self._deferred, None
+        if deferred is not None and self._active() and deferred():
+            self._close_dialog()
+
+    def _preview(self, force):
+        wanted = self._wanted()
+        if wanted is None:
+            return
+        if not force and wanted == self._previewed and _alive(self.obj):
+            return
+        self._error = ""
+        self._open_transaction()
+        try:
+            if self.obj is None or not _alive(self.obj):
+                options = self._options(self._chain)
+                self.obj = make_folded_bar(
+                    self.selection, self._configuration(), open_corner=self._open_corner(), **options
+                )
+            else:
+                self._apply(self.obj, self._properties(self._chain))
+                self.doc.recompute()
+            self._error = _failures([self.obj])
+        except Exception as error:
+            self._error = str(error)
+        self._previewed = wanted
+
+    @staticmethod
+    def _apply(obj, values):
+        for prop, value in values.items():
+            if _plain(getattr(obj, prop)) != _plain(value):
+                setattr(obj, prop, value)
+
+    def _open_transaction(self):
+        if not self._transaction_open:
+            self.doc.openTransaction("Edit Folded Bar" if self.edited is not None else "Create Folded Bar")
+            self._transaction_open = True
+
+    # Dialog.
+
+    def _active(self):
+        return not self._closed
+
+    def _form_gone(self, *args):
+        if not self._closed:
+            self.closed()
+
+    def closed(self):
+        """FreeCAD closed the dialog without OK or Cancel (document closed, another dialog shown)."""
+        if not self._closed:
+            self.clean()
+            self._discard()
+
+    def clean(self):
+        self._closed = True
+        self._timer.stop()
+
+    def _discard(self):
+        """Abort the transaction; with undo disabled, remove the new bar or put the edited one back by hand."""
+        if not _alive_document(self.doc):
+            return
+        if self._transaction_open:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+        self._transaction_open = False
+        changed = False
+        if self.edited is None:
+            if self.obj is not None and _alive(self.obj):
+                self.doc.removeObject(self.obj.Name)
+                changed = True
+            for piece, visible in self._visibility:
+                if _alive(piece) and piece.Visibility != visible:
+                    piece.Visibility = visible
+        elif _alive(self.edited):
+            for prop, value in self._before.items():
+                if _plain(getattr(self.edited, prop)) != _plain(value):
+                    setattr(self.edited, prop, value)
+                    changed = True
+        if changed:
+            self.doc.recompute()
+
+    def _unchanged(self):
+        return all(_plain(getattr(self.edited, prop)) == _plain(value) for prop, value in self._before.items())
+
+    def _close_edit(self):
+        if self.edited is None or not _alive_document(self.doc):
+            return
+        gui_doc = Gui.getDocument(self.doc.Name)
+        if gui_doc is not None and gui_doc.getInEdit() is not None:
+            gui_doc.resetEdit()
+
+    def _close_dialog(self):
+        if Gui.Control.activeDialog():
+            Gui.Control.closeDialog()
+
+    def _defer(self, button):
+        """A recompute pumps Qt events: OK or Cancel pressed during it waits for it to end."""
+        if not self._recomputing:
+            return False
+        self._deferred = button
+        return True
+
+    def getStandardButtons(self):
+        return QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel
+
+    def modifyStandardButtons(self, box):
+        """Keep the OK button: it is disabled while something keeps the bar from folding."""
+        # The task view deletes the row when the dialog closes: no wrapper may outlive it.
+        invalidate_wrapper_on_destroy(box)
+        button = box.button(QtGui.QDialogButtonBox.Ok)
+        if button is None:
+            return
+        invalidate_wrapper_on_destroy(button)
+        button.destroyed.connect(self._ok_button_gone)
+        self._ok_button = button
+        self._enable_ok()
+
+    def _ok_button_gone(self, *args):
+        self._ok_button = None
+
+    def reject(self):
+        if self._defer(self.reject):
+            return False
+        self.clean()
+        self._discard()
+        self._close_edit()
+        return True
+
+    def accept(self):
+        if self._defer(self.accept):
+            return False
+        if self._closed:
+            return False
+        # OK keeps the current values even when the preview is out of date.
+        self._timer.stop()
+        self._refresh()
+        if self._problems:
+            return False
+        self.update_preview(force=True)
+        if self._error:
+            # The panel stays open with the error, to change the values.
+            return False
+        configuration = self._configuration()
+        if configuration.name in self._store_names:
+            set_last_used_configuration(configuration.name)
+        if self.edited is not None and self._unchanged():
+            # Nothing changed in the end: no Undo step.
+            self._discard()
+        else:
+            self.doc.commitTransaction()
+        self._transaction_open = False
+        self.clean()
+        self._close_edit()
+        Gui.Selection.clearSelection()
+        return True
+
+
+class FoldedBarCommand:
+    """Folded Bar: fold the selected tube pieces into one bar with folded corners."""
+
+    def GetResources(self):
+        return {
+            "Pixmap": os.path.join(ICONPATH, "FoldedBar.svg"),
+            "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_FoldedBar", "Folded Bar"),
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_FoldedBar",
+                "<b>Folded Bar</b><br><br>Select two or more tube profiles (or pieces made from them) that meet end to "
+                "end, the first one where the bar starts: their corners fold, with a V notch, a key and a relief cut "
+                "by the laser and the outer wall bent. A closed frame stays open at one corner. Double-click the bar "
+                "to edit it.",
+            ),
+        }
+
+    def IsActive(self):
+        if App.ActiveDocument is None:
+            return False
+        selection = Gui.Selection.getSelection()
+        return len(selection) >= 2 and all(base_profile(obj) is not None for obj in selection)
+
+    def Activated(self):
+        selection = [item.Object for item in Gui.Selection.getSelectionEx()]
+        show_panel(FoldedBarTaskPanel(selection))
+
+
+class UnfoldBarCommand:
+    """Unfold Bar: the straight bar of the selected Folded Bar, to export for a tube laser."""
+
+    def GetResources(self):
+        return {
+            "Pixmap": os.path.join(ICONPATH, "UnfoldedBar.svg"),
+            "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_UnfoldBar", "Unfold Bar"),
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "MaxProFrame_UnfoldBar",
+                "<b>Unfold Bar</b><br><br>Select a Folded Bar: its straight bar with every cut is made from X = 0 "
+                "along X, to export with File > Export (STEP, IGES, BREP) for a tube laser.",
+            ),
+        }
+
+    def IsActive(self):
+        if App.ActiveDocument is None:
+            return False
+        selection = Gui.Selection.getSelection()
+        return len(selection) == 1 and is_foldedbar(selection[0])
+
+    def Activated(self):
+        bar = Gui.Selection.getSelection()[0]
+        doc = bar.Document
+        doc.openTransaction("Unfold Bar")
+        make_unfolded_bar(bar)
+        doc.commitTransaction()
+
+
+add_command("MaxProFrame_FoldedBar", FoldedBarCommand())
+add_command("MaxProFrame_UnfoldBar", UnfoldBarCommand())

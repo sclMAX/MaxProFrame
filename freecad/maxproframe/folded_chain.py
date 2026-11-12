@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import FreeCAD as App
 import Part
 
-from freecad.maxproframe._utils import is_extrudedcutout, is_profile, is_trimmedbody
+from freecad.maxproframe._utils import is_extrudedcutout, is_profile, is_trimmedbody, piece_stack
 from freecad.maxproframe.ff_tools import translate
 from freecad.maxproframe.profile import section_shift
 from freecad.maxproframe.profile_pattern import container_placement, newest_piece
@@ -254,6 +254,33 @@ def _corner(index, first, second):
     depth = first.width if _parallel(outer, first.x_axis) else first.height
     bend_angle = math.degrees(math.acos(max(-1.0, min(1.0, d1.dot(d2)))))
     return Corner(index, index + 1, App.Vector(first.end), bend_angle, axis, outer, depth)
+
+
+def cuts_at_folds(chain):
+    """(trim, segment profile, other profile) of each trim of a segment against the other segment of one of its
+    folded corners: an End Miter, an Extend / Cut or a Notch there would cut what the fold keeps (S12)."""
+    found = []
+    for corner in chain.corners:
+        for mine, other in ((corner.before, corner.after), (corner.after, corner.before)):
+            segment, partner = chain.segments[mine], chain.segments[other].profile
+            for piece in piece_stack(segment.tip):
+                if is_trimmedbody(piece) and any(
+                    base_profile(link[0]) == partner for link in piece.TrimmingBoundary if link[0] is not None
+                ):
+                    found.append((piece, segment.profile, partner))
+    return found
+
+
+def cut_at_fold_message(chain, cut):
+    """What the panel says about one entry of ``cuts_at_folds``."""
+    trim, profile, partner = cut
+    if chain.closed:
+        text = translate(
+            "MaxProFrame", "{} cuts {} at its folded corner with {}: delete it or make that corner the open one."
+        )
+    else:
+        text = translate("MaxProFrame", "{} cuts {} at its folded corner with {}: delete it.")
+    return text.format(_label(trim), _label(profile), _label(partner))
 
 
 def build_chain(selection, open_corner=None):

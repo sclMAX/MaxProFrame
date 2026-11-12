@@ -18,7 +18,7 @@ from freecad.maxproframe.ff_tools import ICONPATH, get_param_group, place_in_con
 from freecad.maxproframe.folded_chain import ChainError, base_profile, build_chain
 from freecad.maxproframe.folded_geometry import fold_bar
 from freecad.maxproframe.profile_pattern import container_placement
-from freecad.maxproframe.unfolded_geometry import UnfoldError, unfold
+from freecad.maxproframe.unfolded_geometry import UnfoldError, _bends, _check_thickness, unfold
 from freecad.maxproframe.version import __version__ as ff_version
 
 # Where the Create BOM panel keeps the stock length of the cut list, and its default (mm).
@@ -70,6 +70,24 @@ def unfold_options(obj):
         key_diameter=size(obj.KeyDiameter),
         neck_width=size(obj.NeckWidth),
         relief_radius=size(obj.ReliefRadius),
+    )
+
+
+def check_settings(chain, configuration, radius=None, corner_radii=None, clearance=0.0, key=True, relief=True,
+                   key_diameter=None, neck_width=None, relief_radius=None):  # fmt: skip
+    """Raise the UnfoldError ``unfold`` would raise for these settings, without building any shape."""
+    _check_thickness(chain, configuration)
+    _bends(
+        chain,
+        configuration,
+        radius=radius,
+        corner_radii=corner_radii,
+        clearance=clearance,
+        key=key,
+        relief=relief,
+        key_diameter=key_diameter,
+        neck_width=neck_width,
+        relief_radius=relief_radius,
     )
 
 
@@ -178,6 +196,7 @@ class FoldedBar:
     def execute(self, obj):
         self.unfolded = None
         chain = build_chain(list(obj.Segments), open_corner=list(obj.OpenCorner) or None)
+        self._follow_tips(obj, chain)
         unfolded = unfold(chain, bend_configuration(obj), **unfold_options(obj))
         folded = fold_bar(chain, unfolded) if _one_solid(unfolded.shape) else None
         if not _one_solid(folded):
@@ -196,6 +215,21 @@ class FoldedBar:
                 segment.tip.Visibility = False
         self.unfolded = unfolded
         warn_if_longer_than_stock(obj)
+
+    @staticmethod
+    def _follow_tips(obj, chain):
+        """Link the current tips of the segments: a trim, cutout or drill hole made on one after the bar.
+
+        From then on the bar recomputes after it; this time a tip the recompute has not reached yet is computed
+        first, so the bar folds its cut.
+        """
+        tips = [segment.tip for segment in chain.segments]
+        if [tip.Name for tip in tips] == [segment.Name for segment in obj.Segments if segment is not None]:
+            return
+        obj.Segments = tips
+        for tip in tips:
+            if "Touched" in tip.State or tip.Shape.isNull():
+                tip.recompute()
 
     @staticmethod
     def _copy_profile(obj, profile, length):
@@ -273,6 +307,35 @@ class ViewProviderFoldedBar:
 
     def claimChildren(self):
         return list(self.Object.Segments)
+
+    def doubleClicked(self, vobj):
+        """Edit the bar: unhandled, the tree starts renaming it instead."""
+        import FreeCADGui as Gui
+
+        Gui.getDocument(vobj.Object.Document.Name).setEdit(vobj.Object.Name, 0)
+        return True
+
+    def setEdit(self, vobj, mode):
+        """Double-click or Edit: the Folded Bar panel on this bar."""
+        if mode != 0:
+            return None
+        import FreeCADGui as Gui
+
+        if Gui.Control.activeDialog():
+            App.Console.PrintMessage("MaxProFrame: close the active task dialog before editing a folded bar.\n")
+            return False
+        from freecad.maxproframe import create_folded_bar_tool
+
+        create_folded_bar_tool.show_panel(create_folded_bar_tool.FoldedBarTaskPanel(edited=vobj.Object))
+        return True
+
+    def unsetEdit(self, vobj, mode):
+        if mode != 0:
+            return None
+        import FreeCADGui as Gui
+
+        Gui.Control.closeDialog()
+        return True
 
     def onDelete(self, vobj, sub):
         """The pieces of a deleted bar show again."""

@@ -6,6 +6,7 @@ hides the segment tips and is one piece for the BOM, the cut list and the IDs, o
 UnfoldedBar is the straight bar from X = 0 that FreeCAD's own STEP export writes.
 """
 
+import math
 import os
 import shutil
 import tempfile
@@ -19,6 +20,7 @@ from test_unfolded_geometry import PLAIN, STEEL, UnfoldFixture
 from freecad.maxproframe._utils import get_profiles_and_links_from_document, get_profiles_and_links_from_object
 from freecad.maxproframe.best_fit import CutPart, best_fit_decreasing
 from freecad.maxproframe.create_bom import make_cut_list, traverse_assembly
+from freecad.maxproframe.drill_hole import make_drill_hole
 from freecad.maxproframe.ff_tools import get_param_group
 from freecad.maxproframe.folded_bar import make_folded_bar, make_unfolded_bar
 from freecad.maxproframe.folded_chain import ChainError, build_chain
@@ -170,6 +172,46 @@ class FoldedBarObjectTest(FoldedBarFixture):
         self.assertSameVolume(expected, found)
         self.assertLess((expected.BoundBox.Center - found.BoundBox.Center).Length, LENGTH_TOLERANCE)
         self.assertAlmostEqual(expected.BoundBox.DiagonalLength, found.BoundBox.DiagonalLength, delta=LENGTH_TOLERANCE)
+
+
+class SegmentsRefreshTest(FoldedBarFixture):
+    def drill_right(self, right):
+        """A 10 mm hole in the top wall of ``right``, 100 mm along it (as in test_unfolded_geometry)."""
+        faces = [
+            (index, face)
+            for index, face in enumerate(right.Shape.Faces, 1)
+            if isinstance(face.Surface, Part.Plane) and face.normalAt(0, 0).z > 1 - 1e-9
+        ]
+        top_face, _ = max(faces, key=lambda item: item[1].CenterOfMass.z)
+        vertex = next(
+            f"Vertex{index}"
+            for index, found in enumerate(right.Shape.Vertexes, 1)
+            if found.Point.isEqual(App.Vector(275, 0, 25), 1e-6)
+        )
+        hole = make_drill_hole((right, (f"Face{top_face}",)), vertex)
+        hole.OffsetAlong = 100.0
+        hole.OffsetAcross = 25.0
+        hole.Diameter = 10.0
+        return hole
+
+    def test_hole_drilled_in_a_segment_after_the_bar_is_carried_into_it(self):
+        profiles, bar = self.make_bar()
+        volume, length = bar.Shape.Volume, bar.DevelopedLength.Value
+        bottom, right, top, left = profiles
+
+        hole = self.drill_right(right)
+        bar.touch()
+        self.doc.recompute()
+
+        self.assertEqual("Valid", hole.getStatusString())
+        self.assertOneSolid(bar)
+        # The bar follows the new tip, so it recomputes after it from now on.
+        self.assertEqual([bottom, hole, top, left], list(bar.Segments))
+        self.assertIn(hole, bar.OutList)
+        self.assertFalse(hole.Visibility)
+        self.assertAlmostEqual(length, bar.DevelopedLength.Value, places=9)
+        self.assertAlmostEqual(volume - math.pi * 5**2 * 2.0, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
+        self.assertSameVolume(fold(build_chain([bottom, hole, top, left]), STEEL), bar.Shape)
 
 
 class UnfoldedBarObjectTest(FoldedBarFixture):

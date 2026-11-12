@@ -6,6 +6,7 @@ import FreeCADGui as Gui
 
 from freecad.maxproframe._utils import (
     is_extrudedcutout,
+    is_foldedbar,
     is_fusion,
     is_group,
     is_link,
@@ -106,6 +107,7 @@ class CreateBOMTaskPanel:
                     or is_profile(s)
                     or is_trimmedbody(s)
                     or is_extrudedcutout(s)
+                    or is_foldedbar(s)
                     or is_link(s)
                 )
                 for s in sel
@@ -198,6 +200,7 @@ class CreateBOMCommand:
                         or is_profile(sel)
                         or is_trimmedbody(sel)
                         or is_extrudedcutout(sel)
+                        or is_foldedbar(sel)
                         or is_link(sel)
                         or sel.TypeId == "Spreadsheet::Sheet"
                         for sel in Gui.Selection.getSelection()

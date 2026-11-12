@@ -48,6 +48,9 @@ WITHOUT_SHORTCUT = (
     "MaxProFrame_RefreshBalloons",
     "MaxProFrame_CreatePieceTable",
     "MaxProFrame_ProfilePattern",
+    "MaxProFrame_FoldedBar",
+    "MaxProFrame_UnfoldBar",
+    "MaxProFrame_BendConfigurations",
 )
 
 
