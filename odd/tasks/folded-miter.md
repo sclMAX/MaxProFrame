@@ -1,7 +1,7 @@
 # Folded miters (V-notch tube folding) and unfolded bar
 A chain of tube profiles is joined by folded corners (laser V-notch with key and relief, outer wall bent with a real
 radius) and unfolded into one straight solid with every cut, exported with FreeCAD's own formats for a CNC tube laser.
-Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T10 (L26, L32) on branch `feat/folded-miter-refine`; push and PR are the user's decision.
+Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T10 (L26, L32, L33) done on branch `feat/folded-miter-refine`; push and PR are the user's decision.
 
 ## Specs
 - S1 Folded corner (L1): "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte
@@ -176,7 +176,7 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
 - T8 S8 S15 S20 worker: clearance on the relief arcs; half-circle key centered on the miter line, no neck (geometry,
   FoldedBar property, panel field, translations, tutorial, changelog); tests. [x] 42c94aa
 - T10 S15 S20 worker: the key at the middle of the miter line (relief arc to inner corner, L33), sliding to the
-  nearest place where it fits; tests, tutorial, changelog. [x] (see L34)
+  nearest place where it fits; tests, tutorial, changelog. [x] af47317
 - T9 S22 worker: select-as-you-go Folded Bar command and panel like End Miter; tests, tutorial, changelog. [x] 383c696
 
 ## Log
@@ -340,3 +340,4 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   4 errors, panel 1; GREEN: test_unfolded_geometry 24, test_folded_geometry 11, test_folded_bar 22,
   test_folded_bar_panel 43, test_folded_bar_translations 6, test_russian_translation 6. Known: the no-room message is
   now reached only with extreme clearances.
+- L35 Full suite on FreeCAD 1.1.4 with T10: 1846 tests OK in 1179 s.
