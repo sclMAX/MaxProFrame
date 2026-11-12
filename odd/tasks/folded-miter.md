@@ -1,7 +1,7 @@
 # Folded miters (V-notch tube folding) and unfolded bar
 A chain of tube profiles is joined by folded corners (laser V-notch with key and relief, outer wall bent with a real
 radius) and unfolded into one straight solid with every cut, exported with FreeCAD's own formats for a CNC tube laser.
-Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T11 done, T12 done, T13 (L42) done on branch `feat/folded-miter-refine`; push and PR are the user's decision.
+Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T11 done, T12 done, T13 merged as PR #146 (fd8b84b); not released yet.
 
 ## Specs
 - S1 Folded corner (L1): "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte
@@ -404,3 +404,5 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   test_unfolded_geometry 33, test_folded_bar 25, test_folded_bar_panel 44, test_folded_bar_translations 6 OK; worker
   also ran test_folded_geometry 11, test_russian_translation 6, test_compile_translations 3 OK. Full suite skipped
   (L37).
+- L44 (2026-11-12) "merge y push", "pr" -> pushed feat/folded-miter-refine, PR #146; CI green (formatting, native
+  FreeCAD stable and weekly, 2 shards each, full suite); merged into main as fd8b84b.
