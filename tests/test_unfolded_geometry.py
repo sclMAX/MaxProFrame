@@ -115,6 +115,24 @@ class RectangleUnfoldTest(UnfoldFixture):
             ):
                 self.assertEqual(kept, self.filled(bar, corner, -60, v, w), (v, w))
 
+    def test_placements_move_each_segment_path_onto_the_bar(self):
+        chain = self.rectangle()
+
+        bar = unfold(chain, STEEL, **PLAIN)
+
+        ba = allowance(90)
+        starts = [0.0, 340.0 + ba, 580.0 + 2 * ba, 920.0 + 3 * ba]
+        self.assertEqual(4, len(bar.placements))
+        for segment, placement, start in zip(chain.segments, bar.placements, starts):
+            self.assertVector((start, 0, 0), placement.multVec(segment.start))
+            self.assertVector((start + segment.length, 0, 0), placement.multVec(segment.end))
+        for index, (corner, unfolded) in enumerate(zip(chain.corners, bar.corners)):
+            # The outer wall of the corner faces -v in its frame on the segments before and after the bend.
+            outward = unfolded.frame.Rotation.multVec(App.Vector(0, -1, 0))
+            self.assertVector(outward, bar.placements[index].Rotation.multVec(corner.outer_normal))
+            after = App.Rotation(corner.axis, corner.bend_angle).multVec(corner.outer_normal)
+            self.assertVector(outward, bar.placements[index + 1].Rotation.multVec(after))
+
     def test_bar_starts_at_the_open_corner_end_of_the_first_segment(self):
         bottom, right, top, left = self.frame()
         chain = build_chain([bottom, right, top, left], open_corner=(bottom, right))

@@ -10,7 +10,7 @@ open-corner end of the first segment. See odd/tasks/folded-miter.md, section "T3
 """
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import FreeCAD as App
 import Part
@@ -52,9 +52,12 @@ class UnfoldedCorner:
 
 @dataclass
 class UnfoldedBar:
+    """The straight bar; ``placements`` move each segment of the chain from where it was drawn onto the bar."""
+
     shape: Part.Shape
     length: float
     corners: list
+    placements: list = field(default_factory=list)
 
 
 def _label(obj):
@@ -383,4 +386,5 @@ def unfold(
         )
         for bend, (start, frame) in zip(bends, corners)
     ]
-    return UnfoldedBar(bar, x_max - x_min, unfolded)
+    moved = [App.Placement(placement.Base + shift, placement.Rotation) for placement in placements]
+    return UnfoldedBar(bar, x_max - x_min, unfolded, moved)
