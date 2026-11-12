@@ -208,7 +208,7 @@ def _parallel(a, b):
     return a.cross(b).Length ** 2 < PARALLEL_TOLERANCE
 
 
-def _section_offset(segment):
+def section_offset(segment):
     """Center of the section of ``segment`` seen from its path: the anchor, offsets and rotation together."""
     profile = segment.profile
     local = section_shift(profile) + App.Vector(segment.width / 2, segment.height / 2, 0)
@@ -241,7 +241,7 @@ def _corner(index, first, second):
     same_axes = _parallel(turned_x, second.x_axis) or (
         abs(first.width - first.height) <= SIZE_TOLERANCE and _parallel(turned_x, second.y_axis)
     )
-    moved = (fold.multVec(_section_offset(first)) - _section_offset(second)).Length
+    moved = (fold.multVec(section_offset(first)) - section_offset(second)).Length
     if not same_axes or moved > CONTINUITY_TOLERANCE:
         raise ChainError(
             translate(
