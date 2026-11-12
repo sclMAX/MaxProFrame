@@ -1,7 +1,7 @@
 # Folded miters (V-notch tube folding) and unfolded bar
 A chain of tube profiles is joined by folded corners (laser V-notch with key and relief, outer wall bent with a real
 radius) and unfolded into one straight solid with every cut, exported with FreeCAD's own formats for a CNC tube laser.
-Status: implemented (T1-T7 done); push and PR are the user's decision. Branch: `feat/folded-miter`.
+Status: T1-T7 merged (PR #145, 75e69ca); refinements T8-T11 done, T12 done, T13 (L42) done on branch `feat/folded-miter-refine`; push and PR are the user's decision.
 
 ## Specs
 - S1 Folded corner (L1): "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte
@@ -27,8 +27,12 @@ Status: implemented (T1-T7 done); push and PR are the user's decision. Branch: `
 
 - S8 Clearance, key and relief (L5.1): "Olgura manejemos una solo configurable (como hacemos con el corte en
   inglete), llave y alivio activado y desactivables." -> one clearance value, like the End Miter `MiterGap`
-  (`trimmed_profile.py:502`: half of it on each side of the cut), applied to the notch flanks and the key; the key and
-  the relief are on by default and each one can be turned off.
+  (`trimmed_profile.py:502`: half of it on each side of the cut), applied to the notch flanks, the key and (L26 "La
+  olgura debe aplicarce tambien al corte delcirculo de la esquina.") the round relief cut at the corner: its arcs move
+  back the whole clearance (kept disc radius rho - g, concentric with the bend axis; the bent wall face they meet
+  does not move), so the folded corner shows the same gap g along the arc as between the flanks (L27); the key
+  is on by default and can be turned off; the relief is always on (L36 "sacalo y la casilla tambien, no le veo
+  sentido a desactivar el alivio").
 - S9 Corner radius (L5.1): "El radio de la esquina tambien debe ser configurable, con limites minimos (teniendo en
   cuenta el espesor) y maximos (teniendo en cuenta el perfil)." -> the inside bend radius can be set; values below a
   minimum derived from the wall thickness or above a maximum derived from the profile section are rejected with a
@@ -47,8 +51,12 @@ Status: implemented (T1-T7 done); push and PR are the user's decision. Branch: `
 Accepted design proposals (L6 "deacuerdo" to Q1-Q6):
 - S14 Radius scope: one radius per bar, defaulting to the configuration's radius, with an optional override on a
   single corner.
-- S15 Radius limits (S9): min = t (wall thickness); max = depth of the tube across the bent wall - 2t - room for the
-  key (the relief and the bend zone eat the side walls from the bent wall inward).
+- S15 Radius limits (S9; rewritten by L39-L40 "el limite deberia ser el radio maximo tangente a las paredes - 2
+  espesores aproximadamente", "son 2 tubos de 40x40 a 90º y el radio es de 130mm porque no podria crear un corte
+  asi?"): min = t (wall thickness); max per corner = r_lim - 2t, where r_lim = (depth - t) / (1 - cos(theta/2)) is
+  the inside radius whose inside face of the bent wall passes through the inner corner (theta = bend angle, depth
+  across the bent wall). 40x40x1.5 at 90 degrees: r_lim 131.45, max 128.45 (outer 129.95, the user's 130). The key
+  takes no room from the radius: whether it fits on the miter line is check_key's job (S20). Was: depth - 2t - key.
 - S16 Reference: profiles stay where drawn; the fold rounds the outside corner inside the virtual sharp, so the outer
   dimensions of the frame do not change (outside mold line, like sheet metal).
 - S17 Open corner and start: a closed loop needs at least one open corner; its ends keep their own End Miter (part of
@@ -58,13 +66,32 @@ Accepted design proposals (L6 "deacuerdo" to Q1-Q6):
   fold; in a 3D chain each bend axis must be parallel to a wall pair of the tube; otherwise the panel explains why.
 - S19 Stock: warn when the developed length exceeds the stock length configured for the cut list.
 - S20 Key and relief sizes (L11 "editables", answer to the proposal in L11): defaults relative to the tube, editable
-  on each bar (not in the bend configuration): V flanks moved back half the clearance each; relief radius = inside bend
-  radius; key = round bulb on one flank at mid height of the V with its socket on the other flank, bulb diameter =
-  1/4 of the depth across the bent wall, neck width = 60 % of the bulb; the clearance goes half on the tab, half on
-  the socket; the bulb diameter is the key room of S15.
-- S21 Relief off at wide angles (L21 "Rechazar la esquina"): without the relief, a corner bending more than
+  on each bar (not in the bend configuration): V flanks moved back half the clearance each; relief radius = inside bend radius of each corner, computed, not a setting (L36; any other value leaves a gap or
+  a collision at the folded corner); was: relief radius = inside bend
+  radius; key (rewritten by L26 "La llave debe ubicarce al centro de la linea del bisel y debe ser solo un medio
+  circulo (sin cuello).") = a half circle centered on the miter line, at the middle of the miter line seen on the
+  side wall of the folded bar (from the outer contour of the bend to the inner corner); when that middle leaves no
+  room (it falls in the bend or the relief, or too close to the inner wall), the key slides along the miter line to the
+  nearest place where it fits (L32 "Correrla al lugar más cercano donde entre"), standing out of one flank as
+  the tab with its half-circle socket in the other flank, no neck (the Neck Width setting and property are removed;
+  the feature is unreleased), diameter = 1/4 of the depth across the bent wall; the clearance goes half on the tab,
+  half on the socket; the diameter is the key room of S15; a key that does not fit is refused as before.
+- S21 (dropped by L36: the relief can no longer be turned off) Relief off at wide angles (L21 "Rechazar la esquina"): without the relief, a corner bending more than
   2 acos(r / (r + t)) is refused: "The corner between {} and {} bends {} degrees: without the relief it bends up to {}
   degrees. Turn the relief on." (106.3 degrees for r = 3, t = 2; 88.8 degrees for r = 5, t = 2).
+
+- S22 Command flow (L26 "Me gustaria que el comando se comporte como el de corte en bicel, aprieto el boton y voy
+  seleccionado perfiles."): Folded Bar works like Create Miter Ends (`create_end_miter_tool.py` CreateEndMiterCommand
+  / EndMiterTaskPanel): the command is active with a document and nothing selected, opens the panel at once (with the
+  preselected profiles, if any), and each profile clicked in the 3D view while the panel is open is added to the list
+  (clicking it again or deselecting removes it), updating the chain, its messages and the preview; editing an existing
+  bar keeps working.
+
+- S23 Short tube (L42 "si" to the proposal in L41): a tube too short for the bends at its ends is refused with
+  "{} is too short for the radius of its corners." (Spanish "{} es demasiado corto para el radio de sus esquinas.")
+  and OK disabled: along the outer wall of each tube, the setbacks of its folded corners ((r + t) tan(theta/2) each,
+  from the virtual sharp) must leave some straight outer wall on the tube (open-corner ends take no setback); with
+  none left the tube comes apart, so exactly as long is refused too (L43).
 
 ## Design notes (from exploration, see Log L3)
 - Segments are the visible tips of each profile stack (Profile -> trims -> cutouts/holes); `_utils.py:174-228`.
@@ -158,6 +185,18 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
 - T6 S1 S2 S6 S8 S9 S12 inline: commands and task panels (create folded bar with live preview, unfold, manage
   configurations); panel tests. [x] 68817bd
 - T7 S1-S19 inline: Spanish translations, Russian strings left unfinished for the contributor, tutorial, changelog. [x] 5e2172f
+- T8 S8 S15 S20 worker: clearance on the relief arcs; half-circle key centered on the miter line, no neck (geometry,
+  FoldedBar property, panel field, translations, tutorial, changelog); tests. [x] 42c94aa
+- T10 S15 S20 worker: the key at the middle of the miter line (relief arc to inner corner, L33), sliding to the
+  nearest place where it fits; tests, tutorial, changelog. [x] af47317
+- T11 S8 S20 S21 worker: relief always on with radius = inside radius of each corner: remove the Relief checkbox,
+  the Relief radius field, the ReliefRadius / Relief properties and options, S21's check and message; tests, i18n,
+  tutorial, changelog. [x] 4b19bbd
+- T12 S15 worker: radius max per corner = (depth - t)/(1 - cos(theta/2)) - 2t, key not subtracted; large radii
+  (bend axis outside the tube) verified to unfold and fold; tests, tutorial, changelog. [x] dd3b80a
+- T13 S23 worker: refuse a tube too short for the bends at its ends (unfold check, panel message, es/ru);
+  tests, tutorial, changelog. [x] (see L43)
+- T9 S22 worker: select-as-you-go Folded Bar command and panel like End Miter; tests, tutorial, changelog. [x] 383c696
 
 ## Log
 - L1 (2026-11-11) "quiero analizar tener una feature que permita crear ingletes plegados (realizados con corte laser)
@@ -264,3 +303,104 @@ The folded bar is rebuilt from the unfolded bar of T3, so both always hold the s
   Approved deviation: tests/test_russian_translation.py lists the unfinished folded-miter texts explicitly and checks
   they show in English with FreeCAD in Russian. Property tooltips (App::Property) and undo names stay English like the
   rest of the repo. Full suite with T7: 1826 tests OK. Commit 5e2172f.
+- L26 (2026-11-12, after PR #145 merged, with two screenshots of the Folded Bar panel: key off / relief on, and key
+  10 mm / relief on with the key near the inner corner) "temas a mejorar:
+  - La olgura debe aplicarce tambien al corte delcirculo de la esquina.
+  - La llave debe ubicarce al centro de la linea del bisel y debe ser solo un medio circulo (sin cuello).
+  - Me gustaria que el comando se comporte como el de corte en bicel, aprieto el boton y voy seleccionado perfiles."
+  -> S8, S20 rewritten, S22 added, T8-T9 opened.
+- L27 T8 decision (parent, from the worker's question): with the default relief radius = r the kept relief disc is
+  concentric with the bend axis and its arc folds onto the inner face of the bent wall, which has no cut face and does
+  not move; moving the arc back only g/2 would leave g/2 there. Chosen: kept disc radius rho - g, so the clearance seen
+  along the arc equals the clearance between the flanks (S8 reworded).
+- L28 T8 decision (parent, from the worker's question): with the key at the middle of the miter line, large inside
+  radii push that middle into the bend/relief zone (90 degrees, 50x50x2: the key fits up to about r = 19.5 while S15
+  allows 33.5). S15 stays as is; check_key refuses the key, with a distinct message when the radius is the cause:
+  "The key does not fit in the notch between {} and {} with this inside radius: make the radius smaller or turn the
+  key off."
+- L29 T8 evidence (worker): `unfolded_geometry.py` (relief discs rho - g; half-circle key by `_cut_disc`, center at
+  `_key_along`, tab d/2 - g/2 from x >= -g/2, socket d/2 + g/2 from x >= 0; check_key: tab size, no room (new message),
+  socket band, tab in V; neck removed), `folded_bar.py` (NeckWidth gone), `create_folded_bar_tool.py` (Neck width field
+  gone), es/ru catalogs + 16 Spanish .qm recompiled with compile_translations.py, tutorial, changelog. RED: 4 in
+  test_unfolded_geometry, 1 test_folded_geometry, 1 test_folded_bar, 2 test_folded_bar_panel. GREEN:
+  test_unfolded_geometry 22, test_folded_geometry 11, test_folded_bar 22, test_folded_bar_panel 32,
+  test_russian_translation 6, test_toolbar_translations 4, test_workbench_commands 2, test_folded_bar_translations 5,
+  test_compile_translations 3. Known: largest radius taking the key at 90 degrees on 50x50x2 is about 19.97 mm.
+- L30 T9 evidence (worker): `create_folded_bar_tool.py` (IsActive needs only a document; panel opens at once with the
+  preselection and observes the selection; click adds at the end, Ctrl+click / deselect removes; non-tube and other
+  document ignored; a trim/cutout of a listed profile takes its place; click on the preview maps to the nearest listed
+  piece; preview dropped and tubes shown when the pieces no longer fold; observer removed in clean() from accept,
+  reject, closed and form-destroyed; edit mode like End Miter: selection does not change the segments). Tooltip
+  "Click two or more ..." (es "Hacé clic en dos o más ...", ru unfinished, .qm recompiled), tutorial, changelog.
+  Deviations from End Miter: a replacing piece keeps its list position; duplicate preselection silently de-duplicated.
+  RED: test_folded_bar_panel 11 failures + 3 errors in the new tests. GREEN: test_folded_bar_panel 43,
+  test_folded_bar 22, test_folded_bar_translations 6, test_russian_translation 6, test_compile_translations 3,
+  test_workbench_commands 2, test_end_miter_panel 14; test_toolbar_translations 4 after the parent updated its
+  Spanish tooltip expectation. Slice note: T9 (~600 lines, mostly tests) is its own commit past the ~400 slice.
+- L31 Full suite on FreeCAD 1.1.4 with T8-T9: 1844 tests OK in 1170 s (`ci/run_tests.py --timeout 2400`; the default
+  180 s timeout is too short for the whole suite locally).
+- L32 (2026-11-12, screenshot: TC80x40x1.5 bent across its 40 mm side, r = 25, key 8 mm, clearance 0.5, refused
+  with the no-room message) "porque dice que la llave no entra ? si el tubo tiene 40mm ?" Explained: the middle of the
+  miter line (outer contour of the bend to the inner corner) is 3.7 mm outside the bend axis, inside the bend; the
+  straight flank is only 40 - 1.5 - 25 - 1.5 = 12 mm deep; with the middle rule the 8 mm key fits only up to
+  r = 16.5. To the question "Donde va la llave cuando el medio del bisel cae dentro del doblez (radios grandes)?" the
+  user chose "Correrla al lugar más cercano donde entre (Recomendado)" -> S20 updated, T10 opened.
+- L33 (2026-11-12, screenshot of the folded 80x40x1.5 corner with the miter line measured: 43.84 mm from the relief
+  arc gap to the inner corner) The side wall goes on below the bend axis inside the kept relief disc, so the miter line
+  runs from the relief arc to the inner corner (about 43.6 mm by formula for r = 25, g = 0.5), not from the outer
+  contour; the key goes at the middle of THAT line (about 21.9 mm from each end) and fits there in the user's case; it
+  slides (L32) only when it does not fit at that middle. T10 worker steered with this correction.
+- L34 T10 evidence (worker): `unfolded_geometry.py` (`miter_line`: before flank moved back g/2 from where it leaves
+  the relief, or the bottom of the V without relief, to v = depth; key at its middle; `_key_fits` with real 2D shapes
+  (below the inner wall, above the bent wall, tab in the V, clear of the relief cut); `_fitting_along` bisection slides
+  it; refusals unchanged in wording). User's case 80x40x1.5, r 25, d 8, g 0.5: line 43.840 mm (user measured 43.84),
+  middle 2.58 mm below the axis point, no slide. S15 max 33.5 accepts the key again. Removed tests that asserted old
+  refusals (key over a 20 mm relief; 60/135 degree 42 mm key). RED (base code): test_unfolded_geometry 1 failure +
+  4 errors, panel 1; GREEN: test_unfolded_geometry 24, test_folded_geometry 11, test_folded_bar 22,
+  test_folded_bar_panel 43, test_folded_bar_translations 6, test_russian_translation 6. Known: the no-room message is
+  now reached only with extreme clearances.
+- L35 Full suite on FreeCAD 1.1.4 with T10: 1846 tests OK in 1179 s.
+- L36 (2026-11-12, screenshot: inside radius 20, relief radius 10 leaves a crescent void at the folded corner) "no
+  entiendo cual es la funcion de esa configuracion, eso no deberia ser un calculo interno en base al radio seteado?"
+  Explained: only relief radius = inside radius keeps the kept disc concentric with the bend axis. To the proposal to
+  remove the field: "sacalo y la casilla tambien, no le veo sentido a desactivar el alivio" -> S8, S20 updated, S21
+  dropped, T11 opened.
+- L37 (2026-11-12) "no corras la suite (para no perder tiempo esperando), lo pruebo y vemos si tenemos que ajsutar
+  algo" -> after T11 only the worker's focused modules run; the full suite is skipped until the user's manual test.
+- L38 T11 evidence (worker): relief always cut, rho = corner radius in `_Bend.relief_region`; removed relief /
+  relief_radius (unfolded_geometry, folded_bar options and properties, panel checkbox and field), S21 check and
+  message, 4 catalog texts (es/ru, .qm recompiled), tutorial, changelog. RED: test_unfolded_geometry 3, test_folded_bar
+  1, test_folded_bar_panel 2, test_folded_bar_translations 1, test_russian_translation 1. GREEN: test_unfolded_geometry
+  24, test_folded_geometry 11, test_folded_bar 23, test_folded_bar_panel 43, test_folded_bar_translations 6,
+  test_russian_translation 6, test_compile_translations 3, test_toolbar_translations 4. Differential vs 3a53d20:
+  8 default cases, 16 solids identical (symmetric difference 0). Full suite skipped (L37).
+- L39 (2026-11-12, screenshot: TC80x40x1.5 across 40, radius 30 refused "between 1.5 and 27 mm" while the key fits
+  in the preview) "Porque dice que el radio maximo es 27?" Explained: 40 - 2*1.5 - 10 (default key), an S15 rule from
+  before the key could sit in the relief disc; proposed max = depth - 2t (37). User, with a screenshot of a bent tube
+  with its outer arc R 130 tangent to the walls: "El calculo esta mal ... el limite deberia ser el radio maximo
+  tangente a las paredes - 2 espesores aproximadamente" -> outer arc tangent at most where the inner walls start
+  (outer radius = depth), inside radius max = depth - 2t = 37 for this tube; S15 rewritten, T12 opened. Full suite
+  still skipped (L37).
+- L40 (2026-11-12) "espera esa imagen que te mande son 2 tubos de 40x40 a 90º y el radio es de 130mm porque no
+  podria crear un corte asi?" -> the limit is not depth - 2t: the bend can be much larger than the tube as long as
+  the inside of the bent wall passes outside the inner corner; S15 rewritten (L40 formula), T12 worker steered.
+- L41 T12 evidence (worker): `_Bend.check_radius` max = (depth - t)/(1 - cos(theta/2)) - 2t per corner, rounded
+  down to 0.1 mm (RADIUS_STEP); 50x50x2 90 deg 159.8, 40x40x1.5 90 deg 128.4, 80x40x1.5 across 40 accepts r = 30
+  with the default key. r + t > depth unfolds and folds (one valid solid each, outer arc r + t, sharp inner corner,
+  inner walls whole) with no other code change. At the max radius check_key refuses the key ("with this inside
+  radius"). RED: test_unfolded_geometry 3 F + 4 E, test_folded_bar 1, panel 1, translations 1. GREEN:
+  test_unfolded_geometry 28, test_folded_bar 24, test_folded_bar_panel 43, test_folded_bar_translations 6,
+  test_folded_geometry 11, test_russian_translation 6. Full suite skipped (L37). OPEN: two bends overlapping on a
+  short tube (2(r + t) longer than the tube) are not refused: the unfolded bar comes out as 2 solids and the folded
+  one is wrong (50x50x2 rectangle with 200 mm sides from r = 130); pre-existing check gap, reachable now.
+- L42 (2026-11-12) "si" to "Agrego que el panel rechace la barra cuando un tubo es demasiado corto para los radios
+  de sus esquinas?" (message "Profile001 es demasiado corto para el radio de sus esquinas.", OK disabled) -> S23, T13.
+- L43 T13 evidence (worker + parent): `unfolded_geometry._check_lengths` (inside `_bends`; order: radius range of
+  every corner, short tube, key), message "{} is too short for the radius of its corners." (es "... es demasiado corto
+  para el radio de sus esquinas.", ru unfinished, .qm recompiled), tutorial, changelog. The worker accepted exact
+  equality as specified but found it unfolds into 2 solids (side walls touch the outer wall only at a point); the
+  parent made the check strict (end <= start + tolerance): RED with the old condition
+  (test_tube_with_no_straight_part_left_is_refused: "UnfoldError not raised"), GREEN. Focused modules:
+  test_unfolded_geometry 33, test_folded_bar 25, test_folded_bar_panel 44, test_folded_bar_translations 6 OK; worker
+  also ran test_folded_geometry 11, test_russian_translation 6, test_compile_translations 3 OK. Full suite skipped
+  (L37).

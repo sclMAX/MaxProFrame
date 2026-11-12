@@ -18,11 +18,12 @@ import Part
 from test_unfolded_geometry import PLAIN, STEEL, UnfoldFixture
 
 from freecad.maxproframe._utils import get_profiles_and_links_from_document, get_profiles_and_links_from_object
+from freecad.maxproframe.bend_config import BendConfiguration
 from freecad.maxproframe.best_fit import CutPart, best_fit_decreasing
 from freecad.maxproframe.create_bom import make_cut_list, traverse_assembly
 from freecad.maxproframe.drill_hole import make_drill_hole
 from freecad.maxproframe.ff_tools import get_param_group
-from freecad.maxproframe.folded_bar import make_folded_bar, make_unfolded_bar
+from freecad.maxproframe.folded_bar import check_settings, make_folded_bar, make_unfolded_bar
 from freecad.maxproframe.folded_chain import ChainError, build_chain
 from freecad.maxproframe.folded_geometry import fold, fold_bar
 from freecad.maxproframe.populate_ids import populate_ids
@@ -75,20 +76,43 @@ class FoldedBarObjectTest(FoldedBarFixture):
             (bar.BendConfiguration, bar.BendMaterial, bar.WallThickness.Value, bar.InsideRadius.Value, bar.KFactor),
         )
         self.assertEqual([0.0, 0.0, 0.0], list(bar.CornerRadii))
-        self.assertEqual(
-            (0.0, True, True, 0.0, 0.0, 0.0),
-            (
-                bar.Clearance.Value,
-                bar.Key,
-                bar.Relief,
-                bar.KeyDiameter.Value,
-                bar.NeckWidth.Value,
-                bar.ReliefRadius.Value,
-            ),
-        )
+        self.assertEqual((0.0, True, 0.0), (bar.Clearance.Value, bar.Key, bar.KeyDiameter.Value))
         self.assertEqual(1, bar.getEditorMode("DevelopedLength").count("ReadOnly"))
         # Like a profile, for the BOM and the cut list.
         self.assertEqual(("Square Hollow", "50x50x2", "Steel", ""), (bar.Family, bar.SizeName, bar.Material, bar.PID))
+
+    def test_the_key_has_no_neck_setting(self):
+        # S20 (L26): the key is a half circle, sized by its diameter only.
+        profiles, bar = self.make_bar(key=False)
+
+        self.assertNotIn("NeckWidth", bar.PropertiesList)
+        with self.assertRaises(TypeError) as raised:
+            make_folded_bar(profiles, STEEL, neck_width=5.0)
+        self.assertEqual("Unknown folded bar options: neck_width", str(raised.exception))
+        with self.assertRaises(TypeError):
+            unfold(build_chain(profiles), STEEL, neck_width=5.0)
+
+    def test_the_relief_has_no_setting(self):
+        # S8, S20 (L36): the relief is always on, its radius the inside radius of each corner.
+        profiles, bar = self.make_bar(key=False)
+
+        self.assertNotIn("Relief", bar.PropertiesList)
+        self.assertNotIn("ReliefRadius", bar.PropertiesList)
+        count = len(self.doc.Objects)
+        for options, message in (
+            (dict(relief=False), "Unknown folded bar options: relief"),
+            (dict(relief_radius=2.0), "Unknown folded bar options: relief_radius"),
+            (dict(relief=True, relief_radius=2.0), "Unknown folded bar options: relief, relief_radius"),
+        ):
+            with self.subTest(options=options):
+                with self.assertRaises(TypeError) as raised:
+                    make_folded_bar(profiles, STEEL, **options)
+                self.assertEqual(message, str(raised.exception))
+                self.assertEqual(count, len(self.doc.Objects))
+                with self.assertRaises(TypeError):
+                    unfold(build_chain(profiles), STEEL, **options)
+                with self.assertRaises(TypeError):
+                    check_settings(build_chain(profiles), STEEL, **options)
 
     def test_open_corner_given_sets_the_start_of_the_bar(self):
         bottom, right, top, left = self.frame()
@@ -127,9 +151,6 @@ class FoldedBarObjectTest(FoldedBarFixture):
             ("Key", False, dict(key=False)),
             ("InsideRadius", 4.0, dict(radius=4.0, key=False)),
             ("CornerRadii", [0.0, 5.0, 0.0], dict(radius=4.0, corner_radii={1: 5.0}, key=False)),
-            # Without the relief a 5 mm radius bends 88.8 degrees at most: the 90 degree corner goes back to 4 mm first.
-            ("CornerRadii", [0.0, 0.0, 0.0], dict(radius=4.0, key=False)),
-            ("Relief", False, dict(radius=4.0, **PLAIN)),
         ):
             with self.subTest(prop=prop):
                 setattr(bar, prop, value)
@@ -165,6 +186,19 @@ class FoldedBarObjectTest(FoldedBarFixture):
         self.assertIn("Invalid", bar.State)
         self.assertEqual(str(raised.exception), bar.getStatusString())
 
+    def test_tube_too_short_for_its_corners_leaves_the_bar_in_error(self):
+        # S23: the right tube (Profile001) cannot hold two bends of r = 130.
+        profiles, bar = self.make_bar(**PLAIN)
+
+        bar.InsideRadius = 130.0
+        self.doc.recompute()
+
+        self.assertIn("Invalid", bar.State)
+        self.assertEqual("Profile001 is too short for the radius of its corners.", bar.getStatusString())
+        bar.InsideRadius = 120.0
+        self.doc.recompute()
+        self.assertOneSolid(bar)
+
     def test_bar_in_a_moved_part_stays_where_the_frame_is(self):
         part = self.doc.addObject("App::Part", "Part")
         part.Placement = App.Placement(App.Vector(100, 50, 20), App.Rotation(App.Vector(0, 0, 1), 30))
@@ -178,6 +212,53 @@ class FoldedBarObjectTest(FoldedBarFixture):
         self.assertSameVolume(expected, found)
         self.assertLess((expected.BoundBox.Center - found.BoundBox.Center).Length, LENGTH_TOLERANCE)
         self.assertAlmostEqual(expected.BoundBox.DiagonalLength, found.BoundBox.DiagonalLength, delta=LENGTH_TOLERANCE)
+
+    def test_users_40x40_tube_folds_with_an_outer_radius_of_130(self):
+        # S15 (L40): two 40x40x1.5 tubes at 90 degrees bent with the largest inside radius, 38.5 / (1 - cos 45) - 3 =
+        # 128.45 mm rounded down to 128.4 (outer radius 129.9): the bend axis lies past the inner wall and the inside
+        # of the bend passes 1.3 mm outside the inner corner. Folded and unfolded, the bar is one valid solid; the
+        # outer corner is round with radius r + t, the inner corner stays sharp with both inner walls whole.
+        r, t, e = 128.4, 1.5, 20.0
+        profiles = self.frame(
+            edges=(((0, 0, 0), (600, 0, 0)), ((600, 0, 0), (600, 600, 0))), width=2 * e, height=2 * e, thickness=t
+        )
+        configuration = BendConfiguration("Steel 40x40x1.5", "Steel", t, r, 0.4)
+
+        bar = make_folded_bar(profiles, configuration, key=False)
+        unfolded = make_unfolded_bar(bar)
+        self.doc.recompute()
+
+        self.assertOneSolid(bar)
+        self.assertOneSolid(unfolded)
+        developed = 1200 + 2 * (e - r - t) + math.radians(90) * (r + 0.4 * t)
+        self.assertAlmostEqual(developed, bar.DevelopedLength.Value, places=6)
+        self.assertAlmostEqual(developed, unfolded.Shape.BoundBox.XLength, delta=LENGTH_TOLERANCE)
+        shape = bar.Shape
+        box = shape.BoundBox
+        for value, expected in ((box.XMin, 0), (box.XMax, 600 + e), (box.YMin, -e), (box.YMax, 600)):
+            self.assertAlmostEqual(expected, value, delta=LENGTH_TOLERANCE)
+        cylinders = [face.Surface.Radius for face in shape.Faces if isinstance(face.Surface, Part.Cylinder)]
+        self.assertTrue(any(abs(radius - (r + t)) < LENGTH_TOLERANCE for radius in cylinders), cylinders)
+        self.assertTrue(any(abs(radius - r) < LENGTH_TOLERANCE for radius in cylinders), cylinders)
+
+        def inside(x, y, z=0.0):
+            return shape.isInside(App.Vector(x, y, z), 1e-6, True)
+
+        # The bend axis: r + t inside both outer faces (x = 620, y = -20); the bent wall on the bisector.
+        center = App.Vector(600 + e - r - t, -e + r + t, 0)
+        bisector = App.Vector(1, -1, 0).normalize()
+        for w in (0.0, e - t / 2, -(e - t / 2)):
+            middle = center + bisector * (r + t / 2)
+            self.assertTrue(inside(middle.x, middle.y, w), w)
+            past = center + bisector * (r + t + 0.1)
+            self.assertFalse(inside(past.x, past.y, w), w)
+        self.assertFalse(inside(600 + e - 0.1, -e + 0.1))
+        # The inner corner (580, 20): material on both inner walls up to it, on both sides of the miter line
+        # (x + y = 600), and none past it.
+        for w in (0.0, 10.0, -10.0):
+            for x, y in ((579.9, 19.9), (580.5, 19.0), (581.0, 19.5), (580.1, 20.1), (560.0, 19.25), (580.75, 40.0)):
+                self.assertTrue(inside(x, y, w), (x, y, w))
+            self.assertFalse(inside(579.9, 20.1, w), w)
 
 
 class SegmentsRefreshTest(FoldedBarFixture):

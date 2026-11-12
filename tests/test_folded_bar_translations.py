@@ -13,6 +13,7 @@ from test_folded_bar_panel import STEEL, FoldedPanelFixture
 
 from freecad.maxproframe.bend_config import BendConfiguration, BendConfigurationStore, set_last_used_configuration
 from freecad.maxproframe.bend_config_dialog import BendConfigurationsDialog
+from freecad.maxproframe.ff_tools import translate
 
 ALU = BendConfiguration("Alu 3", "Aluminium", 3.0, 4.0, 0.33)
 
@@ -45,9 +46,9 @@ class TestFoldedBarPanelSpanish(FoldedPanelFixture):
         self.assertEqual("Llave de encastre", form.cb_key.text())
         self.assertEqual("Diámetro de la llave", field_label(form.groupBox_notch, form.spin_key_diameter))
         self.assertEqual("Predeterminado", form.spin_key_diameter.specialValueText())
-        self.assertEqual("Ancho del cuello", field_label(form.groupBox_notch, form.spin_neck_width))
-        self.assertEqual("Alivio junto a la pared doblada", form.cb_relief.text())
-        self.assertEqual("Radio del alivio", field_label(form.groupBox_notch, form.spin_relief_radius))
+        self.assertFalse(hasattr(form, "spin_neck_width"))
+        self.assertFalse(hasattr(form, "cb_relief"))
+        self.assertFalse(hasattr(form, "spin_relief_radius"))
         self.assertEqual("Previsualización", form.groupBox_preview.title())
         self.assertEqual("Actualizar automáticamente", form.cb_auto_update.text())
         self.assertEqual("Previsualización actualizada", form.status_label.text())
@@ -65,7 +66,10 @@ class TestFoldedBarPanelSpanish(FoldedPanelFixture):
 
         panel = self.run_command(bottom, right, top, left)
         panel.form.spin_radius.setValue(1.0)
-        self.assertRefused(panel, "El radio interior de plegado tiene que estar entre 2 y 33.5 mm.")
+        self.assertRefused(panel, "El radio interior de plegado tiene que estar entre 2 y 159.8 mm.")
+        # S23
+        panel.form.spin_radius.setValue(130.0)
+        self.assertRefused(panel, "Profile001 es demasiado corto para el radio de sus esquinas.")
 
     def test_without_a_configuration_the_panel_says_how_to_add_one_in_spanish(self):
         use_language(self, "Spanish", "es_ES")
@@ -75,6 +79,25 @@ class TestFoldedBarPanelSpanish(FoldedPanelFixture):
         panel = self.run_command(*self.frame())
 
         self.assertRefused(panel, "Agregá una configuración de plegado: presioná Gestionar configuraciones.")
+
+    def test_the_command_tooltip_says_to_click_the_tubes_in_spanish(self):
+        # S22: the panel opens at once and takes the tubes clicked.
+        use_language(self, "Spanish", "es_ES")
+
+        tooltip = translate(
+            "MaxProFrame_FoldedBar",
+            "<b>Folded Bar</b><br><br>Click two or more tube profiles (or pieces made from them) that meet end to end, "
+            "the first one where the bar starts: their corners fold, with a V notch, a key and a relief cut by the "
+            "laser and the outer wall bent. A closed frame stays open at one corner. Double-click the bar to edit it.",
+        )
+
+        self.assertEqual(
+            "<b>Barra plegada</b><br><br>Hacé clic en dos o más perfiles de tubo (o piezas hechas con ellos) que se "
+            "unan extremo con extremo, primero en aquel donde empieza la barra: sus esquinas se pliegan, con una "
+            "muesca en V, una llave y un alivio cortados con láser y la pared exterior doblada. Un marco cerrado "
+            "queda abierto en una esquina. Doble clic en la barra para editarla.",
+            tooltip,
+        )
 
 
 class TestBendConfigurationsDialogSpanish(unittest.TestCase):

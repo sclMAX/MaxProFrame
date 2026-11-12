@@ -1,10 +1,13 @@
 """Folded miter commands and the Folded Bar panel (odd/tasks/folded-miter.md, T6: S1 S2 S6 S8 S9 S12, with the
-S14 S17 S20 S21 settings the panel shows).
+S14 S17 S20 settings the panel shows; the relief has none, L36).
 
 Folded Bar folds the selected tubes with a bend configuration of the store, previewed live like End Miter; every
 reason the chain does not fold, and an own miter at a folded corner, is shown and keeps OK disabled. Double-click
 edits a bar in one Undo step. Unfold Bar makes the straight bar of a selected Folded Bar. Create BOM and Populate IDs
 take a selected Folded Bar.
+
+S22 (T9): like Create Miter Ends, Folded Bar is active with a document, opens its panel at once and takes the tube
+pieces clicked while the panel is open.
 """
 
 import os
@@ -18,7 +21,7 @@ from unittest.mock import patch
 import FreeCAD as App
 import FreeCADGui as Gui
 from miter_helpers import use_language
-from PySide import QtWidgets
+from PySide import QtCore, QtWidgets
 from test_end_miter_geometry import polar
 from test_extend_cut_preview import keep_auto_preview
 from test_folded_bar import FoldedBarFixture
@@ -47,15 +50,17 @@ ALU_3 = BendConfiguration("Alu 3", "Aluminium", 3.0, 4.0, 0.33)
 AUTO_PREVIEW = SimpleNamespace(auto_preview_param="Folded Bar Auto Preview")
 COMMANDS = ("MaxProFrame_FoldedBar", "MaxProFrame_UnfoldBar", "MaxProFrame_BendConfigurations")
 NOT_A_CHAIN = "The selected profiles do not form one chain: Profile meets none of the others."
-# 50 mm deep tube, 2 mm walls, key of a quarter of the depth: 2 <= r <= 50 - 4 - 12.5.
-RADIUS_RANGE = "The inside bend radius must be between 2 and 33.5 mm."
-WIDE_WITHOUT_RELIEF = (
-    "The corner between Profile001 and Profile002 bends 135 degrees: without the relief it bends up to "
-    "106.3 degrees. Turn the relief on."
-)
+# 50 mm deep tube, 2 mm walls, 90 degree corners: 2 <= r <= 48 / (1 - cos 45) - 4 = 159.88, rounded down to 0.1 mm,
+# with or without the key (S15, L40).
+RADIUS_RANGE = "The inside bend radius must be between 2 and 159.8 mm."
+# The tab of the default key (12.5 mm) stands out of its flank only with less clearance than half of it.
+KEY_TOO_BIG = "The key does not fit in the notch between Profile and Profile001: make it smaller."
 OWN_MITER = "Profile_Mt cuts Profile at its folded corner with Profile001: delete it or make that corner the open one."
 OWN_MITER_OPEN_CHAIN = "Profile_Mt cuts Profile at its folded corner with Profile001: delete it."
+# S23: the right tube of the rectangle (200 mm, 250 on its outer wall) holds two bends of r = 120, not of r = 130.
+TOO_SHORT = "Profile001 is too short for the radius of its corners."
 NO_CONFIGURATION = "Add a bend configuration: press Manage configurations."
+TOO_FEW = "Select at least two profiles that meet end to end."
 BOM_PARAMS = (
     ("Bool", "Full Parent Path"),
     ("Bool", "Include Links in BOM"),
@@ -109,12 +114,23 @@ class FoldedPanelFixture(FoldedBarFixture):
         self.addCleanup(Gui.Selection.clearSelection)
         self.recorded = []
         recorded = self.recorded
+        # Every selection change FreeCAD reports to a panel: none once the panel stopped listening.
+        self.notified = []
+        notified = self.notified
         base = create_folded_bar_tool.FoldedBarTaskPanel
 
         class Recording(base):
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, **kwargs)
                 recorded.append(self)
+
+            def addSelection(self, *args):
+                notified.append((self, "add", args[1]))
+                return super().addSelection(*args)
+
+            def removeSelection(self, *args):
+                notified.append((self, "remove", args[1]))
+                return super().removeSelection(*args)
 
         recorder = patch.object(create_folded_bar_tool, "FoldedBarTaskPanel", Recording)
         recorder.start()
@@ -209,20 +225,15 @@ class CommandTest(FoldedPanelFixture):
                 self.assertEqual(icon, os.path.basename(pixmap))
                 self.assertEqual("{http://www.w3.org/2000/svg}svg", ElementTree.parse(pixmap).getroot().tag)
 
-    def test_folded_bar_needs_two_or_more_profiles_or_pieces_made_from_them(self):
+    def test_folded_bar_is_active_with_a_document_whatever_is_selected(self):
+        # S22: like Create Miter Ends, the pieces are clicked once the panel is open.
         bottom, right, top, left = self.frame()
         miter = self.miter(bottom, left)
         sketch = bottom.AttachmentSupport[0][0]
-        for selection, active in (
-            ((), False),
-            ((bottom,), False),
-            ((bottom, right), True),
-            ((miter, right, top, left), True),
-            ((right, sketch), False),
-        ):
+        for selection in ((), (bottom,), (bottom, right), (miter, right, top, left), (right, sketch), (sketch,)):
             with self.subTest(selection=[obj.Label for obj in selection]):
                 self.select(*selection)
-                self.assertEqual(active, FoldedBarCommand().IsActive())
+                self.assertTrue(FoldedBarCommand().IsActive())
 
     def test_unfold_bar_needs_one_folded_bar(self):
         profiles, bar = self.make_bar(**PLAIN)
@@ -271,15 +282,24 @@ class CreatePanelTest(FoldedPanelFixture):
         self.assertEqual(0, form.combo_open_corner.currentIndex())
         self.assertEqual([0.0, 0.0, 0.0], [spin.value() for spin in panel.corner_spins()])
         self.assertEqual(
-            (0.0, True, True, 0.0, 0.0, 0.0),
-            (
-                form.spin_clearance.value(),
-                form.cb_key.isChecked(),
-                form.cb_relief.isChecked(),
-                form.spin_key_diameter.value(),
-                form.spin_neck_width.value(),
-                form.spin_relief_radius.value(),
-            ),
+            (0.0, True, 0.0),
+            (form.spin_clearance.value(), form.cb_key.isChecked(), form.spin_key_diameter.value()),
+        )
+        # S20 (L26): the key is a half circle, sized by its diameter only: no neck field.
+        self.assertFalse(hasattr(form, "spin_neck_width"))
+        # S8, S20 (L36): the relief is always on, its radius the inside radius of each corner: no check box, no field.
+        self.assertFalse(hasattr(form, "cb_relief"))
+        self.assertFalse(hasattr(form, "spin_relief_radius"))
+        notch = form.groupBox_notch.layout()
+        boxes = form.groupBox_notch.findChildren(QtWidgets.QCheckBox)
+        self.assertEqual(["Interlocking key"], [box.text() for box in boxes])
+        self.assertEqual(
+            ["Clearance", "Key diameter"],
+            [
+                notch.itemAt(row, QtWidgets.QFormLayout.LabelRole).widget().text()
+                for row in range(notch.rowCount())
+                if notch.itemAt(row, QtWidgets.QFormLayout.LabelRole) is not None
+            ],
         )
         self.assertTrue(form.cb_auto_update.isChecked())
         self.assertAccepts(panel)
@@ -322,7 +342,6 @@ class CreatePanelTest(FoldedPanelFixture):
         panel.corner_spins()[1].setValue(5.0)
         form.spin_clearance.setValue(0.2)
         form.cb_key.setChecked(False)
-        form.spin_relief_radius.setValue(3.5)
 
         self.assertTrue(panel.accept())
         self.close_dialog()
@@ -334,17 +353,9 @@ class CreatePanelTest(FoldedPanelFixture):
             (bar.BendConfiguration, bar.BendMaterial, bar.WallThickness.Value, bar.InsideRadius.Value, bar.KFactor),
         )
         self.assertEqual([0.0, 5.0, 0.0], list(bar.CornerRadii))
-        self.assertEqual(
-            (0.2, False, True, 0.0, 0.0, 3.5),
-            (
-                round(bar.Clearance.Value, 9),
-                bar.Key,
-                bar.Relief,
-                bar.KeyDiameter.Value,
-                bar.NeckWidth.Value,
-                bar.ReliefRadius.Value,
-            ),
-        )
+        self.assertEqual((0.2, False, 0.0), (round(bar.Clearance.Value, 9), bar.Key, bar.KeyDiameter.Value))
+        self.assertNotIn("Relief", bar.PropertiesList)
+        self.assertNotIn("ReliefRadius", bar.PropertiesList)
         self.assertEqual([bottom, right, top, left], list(bar.Segments))
         self.assertEqual([bottom, left], list(bar.OpenCorner))
         self.assertEqual(STEEL.name, get_last_used_configuration())
@@ -409,19 +420,34 @@ class CreatePanelTest(FoldedPanelFixture):
         panel.form.spin_radius.setValue(1.0)
 
         self.assertRefused(panel, RADIUS_RANGE)
-        panel.form.spin_radius.setValue(33.5)
+        panel.form.spin_radius.setValue(160.0)
+        self.assertRefused(panel, RADIUS_RANGE)
+        # Past the old limit (33.5 mm with the key) the key fits below the bend axis point; with 6.5 mm of clearance
+        # it does not fit.
+        panel.form.spin_radius.setValue(46.0)
+        self.assertAccepts(panel)
+        panel.form.spin_clearance.setValue(6.5)
+        self.assertRefused(panel, KEY_TOO_BIG)
+        panel.form.cb_key.setChecked(False)
         self.assertAccepts(panel)
 
-    def test_relief_off_at_a_wide_corner_shows_why_and_disables_ok(self):
+    def test_tube_too_short_for_its_corners_is_named_and_disables_ok(self):
+        set_last_used_configuration(STEEL.name)
+        panel = self.run_command(*self.frame())
+        panel.form.cb_key.setChecked(False)
+
+        panel.form.spin_radius.setValue(130.0)
+
+        self.assertRefused(panel, TOO_SHORT)
+        panel.form.spin_radius.setValue(120.0)
+        self.assertAccepts(panel)
+
+    def test_a_wide_corner_folds_with_the_relief(self):
+        # The relief is always on (L36): a 135 degree corner folds.
         set_last_used_configuration(STEEL.name)
         panel = self.run_command(*self.wide_chain())
+
         self.assertFalse(panel.form.combo_open_corner.isVisibleTo(panel.form))
-        self.assertAccepts(panel)
-
-        panel.form.cb_relief.setChecked(False)
-
-        self.assertRefused(panel, WIDE_WITHOUT_RELIEF)
-        panel.form.cb_relief.setChecked(True)
         self.assertAccepts(panel)
 
     def test_own_miter_at_a_folded_corner_is_reported_until_that_corner_opens(self):
@@ -495,6 +521,243 @@ class CreatePanelTest(FoldedPanelFixture):
 
         self.assertIn("Steel r5", panel.configuration_names())
         self.assertEqual(STEEL.name, panel.form.combo_configuration.currentData())
+
+
+class PickAsYouGoTest(FoldedPanelFixture):
+    """S22: the pieces clicked while the panel is open join the bar, as in Create Miter Ends."""
+
+    def setUp(self):
+        super().setUp()
+        set_last_used_configuration(STEEL.name)
+
+    def click(self, obj, sub="Face1", point=None, ctrl=False):
+        modifiers = QtCore.Qt.KeyboardModifier.ControlModifier if ctrl else QtCore.Qt.KeyboardModifier.NoModifier
+        with patch.object(QtWidgets.QApplication, "keyboardModifiers", return_value=modifiers):
+            if point is None:
+                Gui.Selection.addSelection(self.doc.Name, obj.Name, sub)
+            else:
+                Gui.Selection.addSelection(self.doc.Name, obj.Name, sub, *point)
+            self.events()
+
+    def listed(self, panel):
+        form = panel.form
+        return [form.members_list.item(row).text() for row in range(form.members_list.count())]
+
+    def selected(self):
+        return {s.ObjectName: s.SubElementNames for s in Gui.Selection.getSelectionEx()}
+
+    def test_with_nothing_selected_the_panel_opens_and_says_why_ok_is_disabled(self):
+        panel = self.run_command()
+
+        self.assertEqual([], panel.selection)
+        self.assertEqual([], self.listed(panel))
+        self.assertRefused(panel, TOO_FEW)
+        self.assertEqual("No preview", panel.form.status_label.text())
+        self.assertEqual([], self.bars())
+
+    def test_clicked_profiles_join_the_list_in_order_and_the_chain_and_preview_follow(self):
+        bottom, right, top, left = self.frame()
+        panel = self.run_command()
+        form = panel.form
+
+        self.click(bottom, "Face3")
+        self.assertEqual(["Profile"], self.listed(panel))
+        self.assertRefused(panel, TOO_FEW)
+        self.assertEqual([], self.bars())
+
+        self.click(right)
+        self.assertEqual(["Profile", "Profile001"], self.listed(panel))
+        self.assertAccepts(panel)
+        self.assertFalse(form.combo_open_corner.isVisibleTo(form))
+        self.assertEqual([0.0], [spin.value() for spin in panel.corner_spins()])
+        (bar,) = self.bars()
+        self.assertOneSolid(bar)
+        self.assertEqual([bottom, right], list(bar.Segments))
+        self.assertFalse(bottom.Visibility or right.Visibility)
+        self.assertEqual("Preview updated", form.status_label.text())
+        # The listed pieces show selected: here as the preview that hides them.
+        self.assertEqual({bar.Name: ()}, self.selected())
+
+        self.click(top)
+        self.click(left, "Edge2")
+        self.assertEqual(["Profile", "Profile001", "Profile002", "Profile003"], self.listed(panel))
+        self.assertEqual([bottom, right, top, left], panel.selection)
+        self.assertTrue(form.combo_open_corner.isVisibleTo(form))
+        self.assertEqual(
+            ["Between Profile and Profile003", "Between Profile and Profile001"],
+            [form.combo_open_corner.itemText(i) for i in range(form.combo_open_corner.count())],
+        )
+        self.assertEqual(3, len(panel.corner_spins()))
+        self.assertTrue(all(spin.isVisibleTo(form) for spin in panel.corner_spins()))
+        self.assertAccepts(panel)
+        self.assertEqual([bar], self.bars())
+        self.assertEqual([bottom, right, top, left], list(bar.Segments))
+        self.assertEqual([bottom, left], list(bar.OpenCorner))
+        self.assertOneSolid(bar)
+        self.assertFalse(any(tip.Visibility for tip in (bottom, right, top, left)))
+
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        self.assertEqual([bar], self.bars())
+        self.assertOneSolid(bar)
+        self.assertEqual({}, self.selected())
+
+    def test_a_profile_clicked_again_stays_listed_once(self):
+        bottom, right, top, _ = self.frame()
+        panel = self.run_command(bottom, right)
+
+        self.click(bottom, "Face2")
+
+        self.assertEqual([bottom, right], panel.selection)
+
+    def test_ctrl_click_on_a_listed_profile_removes_it(self):
+        keep_auto_preview(self, AUTO_PREVIEW, False)
+        bottom, right, top, _ = self.frame()
+        panel = self.run_command(bottom, right, top)
+
+        self.click(right, "Face3", ctrl=True)
+
+        self.assertEqual([bottom, top], panel.selection)
+        self.assertEqual(["Profile", "Profile002"], self.listed(panel))
+        self.assertRefused(panel, NOT_A_CHAIN)
+        self.assertEqual({bottom.Name: (), top.Name: ()}, self.selected())
+
+    def test_deselecting_a_listed_profile_removes_it(self):
+        keep_auto_preview(self, AUTO_PREVIEW, False)
+        bottom, right, top, _ = self.frame()
+        panel = self.run_command(bottom, right, top)
+        self.assertEqual({bottom.Name: (), right.Name: (), top.Name: ()}, self.selected())
+
+        Gui.Selection.removeSelection(self.doc.Name, top.Name)
+        self.events()
+
+        self.assertEqual([bottom, right], panel.selection)
+        self.assertEqual(["Profile", "Profile001"], self.listed(panel))
+        self.assertEqual([0.0], [spin.value() for spin in panel.corner_spins()])
+        self.assertEqual({bottom.Name: (), right.Name: ()}, self.selected())
+
+    def test_clearing_the_selection_keeps_the_list(self):
+        bottom, right, _, _ = self.frame()
+        panel = self.run_command(bottom, right)
+
+        Gui.Selection.clearSelection()
+        self.events()
+
+        self.assertEqual([bottom, right], panel.selection)
+        self.assertEqual(1, len(self.bars()))
+
+    def test_ctrl_click_on_the_preview_removes_the_piece_under_it_and_shows_it_again(self):
+        bottom, right, top, left = self.frame()
+        panel = self.run_command(bottom, right, top, left)
+        (bar,) = self.bars()
+
+        # A click on the preview, over the middle of the left tube.
+        self.click(bar, "Face1", point=(0.0, 100.0, 0.0), ctrl=True)
+
+        self.assertEqual([bottom, right, top], panel.selection)
+        self.assertAccepts(panel)
+        self.assertEqual([bar], self.bars())
+        self.assertEqual([bottom, right, top], list(bar.Segments))
+        self.assertEqual([], list(bar.OpenCorner))
+        self.assertEqual(2, len(panel.corner_spins()))
+        self.assertOneSolid(bar)
+        self.assertTrue(left.Visibility)
+        self.assertFalse(any(tip.Visibility for tip in (bottom, right, top)))
+        self.assertEqual({bar.Name: ()}, self.selected())
+
+        # Without a chain there is no preview: every tube shows again.
+        self.click(bar, "Face1", point=(300.0, 100.0, 0.0), ctrl=True)
+
+        self.assertEqual([bottom, top], panel.selection)
+        self.assertRefused(panel, NOT_A_CHAIN)
+        self.assertEqual([], self.bars())
+        self.assertTrue(all(tip.Visibility for tip in (bottom, right, top, left)))
+        self.assertEqual("No preview", panel.form.status_label.text())
+
+        self.click(right)
+        self.assertEqual([bottom, top, right], panel.selection)
+        (bar,) = self.bars()
+        self.assertOneSolid(bar)
+
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+        self.assertEqual([], self.bars())
+        self.assertTrue(all(tip.Visibility for tip in (bottom, right, top, left)))
+
+    def test_what_is_not_a_tube_piece_is_ignored(self):
+        bottom, right, _, _ = self.frame()
+        sketch = bottom.AttachmentSupport[0][0]
+        box = self.doc.addObject("Part::Box", "Box")
+        self.doc.recompute()
+        panel = self.run_command(bottom, sketch)
+        self.assertEqual([bottom], panel.selection)
+
+        for obj, sub in ((sketch, "Edge2"), (box, "Face1"), (box, "")):
+            with self.subTest(clicked=obj.Label):
+                self.click(obj, sub)
+                self.assertEqual([bottom], panel.selection)
+                self.assertEqual(["Profile"], self.listed(panel))
+
+    def test_a_piece_made_from_a_listed_profile_takes_its_place(self):
+        bottom, right, top, left = self.frame()
+        panel = self.run_command(bottom, right, top)
+        miter = self.miter(bottom, left)
+        self.events()
+
+        self.click(miter)
+        self.click(bottom)
+
+        self.assertEqual([miter, right, top], panel.selection)
+        self.assertEqual(["Profile_Mt", "Profile001", "Profile002"], self.listed(panel))
+
+    def test_ok_cancel_and_closing_stop_listening_and_leave_nothing_selected(self):
+        for close in ("accept", "reject", "closeDialog"):
+            with self.subTest(close=close):
+                for bar in self.bars():
+                    self.doc.removeObject(bar.Name)
+                profiles = self.frame()
+                panel = self.run_command(*profiles[:2])
+                self.click(profiles[2])
+                self.assertEqual(profiles[:3], panel.selection)
+                if close == "closeDialog":
+                    Gui.Control.closeDialog()
+                else:
+                    self.assertTrue(getattr(panel, close)())
+                self.close_dialog()
+                if close != "closeDialog":
+                    self.assertEqual({}, self.selected())
+                del self.notified[:]
+
+                self.click(profiles[3])
+                Gui.Selection.removeSelection(self.doc.Name, profiles[3].Name)
+                self.events()
+
+                self.assertEqual([], [entry for entry in self.notified if entry[0] is panel])
+                self.assertEqual(profiles[:3], panel.selection)
+                self.assertEqual(1 if close == "accept" else 0, len(self.bars()))
+                Gui.Selection.clearSelection()
+
+    def test_editing_a_bar_does_not_follow_the_selection(self):
+        # As End Miter's edit: the pieces of an edited bar are not changed by clicks.
+        profiles, bar = self.make_bar(**PLAIN)
+        other = self.frame()
+        panel = self.edit(bar)
+
+        self.click(other[0])
+        Gui.Selection.removeSelection(self.doc.Name, other[0].Name)
+        self.events()
+        self.assertEqual([], [entry for entry in self.notified if entry[0] is panel])
+        # Even told directly, the edited bar keeps its pieces.
+        panel.addSelection(self.doc.Name, other[1].Name, "Face1", (0.0, 0.0, 0.0))
+        panel.removeSelection(self.doc.Name, profiles[1].Name, "")
+        self.events()
+
+        self.assertEqual(profiles, panel.selection)
+        self.assertEqual(4, panel.form.members_list.count())
+        panel.form.spin_clearance.setValue(0.3)
+        self.assertTrue(panel.accept())
+        self.assertEqual(profiles, list(bar.Segments))
+        self.assertAlmostEqual(0.3, bar.Clearance.Value, places=9)
 
 
 class EditPanelTest(FoldedPanelFixture):

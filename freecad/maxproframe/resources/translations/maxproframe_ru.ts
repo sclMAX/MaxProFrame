@@ -2849,11 +2849,15 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>The corner between {} and {} bends {:g} degrees: without the relief it bends up to {:g} degrees. Turn the relief on.</source>
+        <source>The key does not fit in the notch between {} and {}: make it smaller.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>The key does not fit in the notch between {} and {}: make it smaller.</source>
+        <source>The key does not fit in the notch between {} and {} with this inside radius: make the radius smaller or turn the key off.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} is too short for the radius of its corners.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2930,31 +2934,11 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Bulb diameter of the key; Default: a quarter of the tube depth across the bent wall</source>
+        <source>Diameter of the key, a half circle on the miter line; Default: a quarter of the tube depth across the bent wall</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Key diameter</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Neck width of the key; Default: 60 % of the bulb diameter</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Neck width</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Relief next to the bent wall</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Radius of the relief; Default: the inside bend radius of the corner</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Relief radius</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3105,7 +3089,7 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>&lt;b&gt;Folded Bar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select two or more tube profiles (or pieces made from them) that meet end to end, the first one where the bar starts: their corners fold, with a V notch, a key and a relief cut by the laser and the outer wall bent. A closed frame stays open at one corner. Double-click the bar to edit it.</source>
+        <source>&lt;b&gt;Folded Bar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click two or more tube profiles (or pieces made from them) that meet end to end, the first one where the bar starts: their corners fold, with a V notch, a key and a relief cut by the laser and the outer wall bent. A closed frame stays open at one corner. Double-click the bar to edit it.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

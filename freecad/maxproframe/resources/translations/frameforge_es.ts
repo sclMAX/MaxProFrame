@@ -1433,8 +1433,9 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>The selected profiles do not form one chain.</source><translation>Los perfiles seleccionados no forman una sola cadena.</translation></message>
     <message><source>{config} is for {a:g} mm walls; {tube} has {b:g} mm walls.</source><translation>{config} es para paredes de {a:g} mm; {tube} tiene paredes de {b:g} mm.</translation></message>
     <message><source>The inside bend radius must be between {min:g} and {max:g} mm.</source><translation>El radio interior de plegado tiene que estar entre {min:g} y {max:g} mm.</translation></message>
-    <message><source>The corner between {} and {} bends {:g} degrees: without the relief it bends up to {:g} degrees. Turn the relief on.</source><translation>La esquina entre {} y {} se pliega {:g} grados: sin el alivio se pliega hasta {:g} grados. Activá el alivio.</translation></message>
     <message><source>The key does not fit in the notch between {} and {}: make it smaller.</source><translation>La llave no entra en la muesca entre {} y {}: achicala.</translation></message>
+    <message><source>The key does not fit in the notch between {} and {} with this inside radius: make the radius smaller or turn the key off.</source><translation>La llave no entra en la muesca entre {} y {} con este radio interior: achicá el radio o desactivá la llave.</translation></message>
+    <message><source>{} is too short for the radius of its corners.</source><translation>{} es demasiado corto para el radio de sus esquinas.</translation></message>
     <message><source>{}: its developed length ({:.1f} mm) is longer than the stock length of the cut list ({:.1f} mm).
 </source><translation>{}: su longitud desarrollada ({:.1f} mm) supera la longitud de barra de la lista de cortes ({:.1f} mm).
 </translation></message>
@@ -1455,13 +1456,8 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Gap between the notch flanks and around the key, half on each side</source><translation>Separación entre los flancos de la muesca y alrededor de la llave, la mitad de cada lado</translation></message>
     <message><source>Clearance</source><translation>Holgura</translation></message>
     <message><source>Interlocking key</source><translation>Llave de encastre</translation></message>
-    <message><source>Bulb diameter of the key; Default: a quarter of the tube depth across the bent wall</source><translation>Diámetro del bulbo de la llave; Predeterminado: un cuarto de la medida del tubo perpendicular a la pared doblada</translation></message>
+    <message><source>Diameter of the key, a half circle on the miter line; Default: a quarter of the tube depth across the bent wall</source><translation>Diámetro de la llave, un medio círculo sobre la línea del inglete; Predeterminado: un cuarto de la medida del tubo perpendicular a la pared doblada</translation></message>
     <message><source>Key diameter</source><translation>Diámetro de la llave</translation></message>
-    <message><source>Neck width of the key; Default: 60 % of the bulb diameter</source><translation>Ancho del cuello de la llave; Predeterminado: 60 % del diámetro del bulbo</translation></message>
-    <message><source>Neck width</source><translation>Ancho del cuello</translation></message>
-    <message><source>Relief next to the bent wall</source><translation>Alivio junto a la pared doblada</translation></message>
-    <message><source>Radius of the relief; Default: the inside bend radius of the corner</source><translation>Radio del alivio; Predeterminado: el radio interior de plegado de la esquina</translation></message>
-    <message><source>Relief radius</source><translation>Radio del alivio</translation></message>
     <message><source>Preview</source><translation>Previsualización</translation></message>
     <message><source>Update automatically</source><translation>Actualizar automáticamente</translation></message>
     <message><source>Default</source><translation>Predeterminado</translation></message>
@@ -1501,7 +1497,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
 <context>
     <name>MaxProFrame_FoldedBar</name>
     <message><source>Folded Bar</source><translation>Barra plegada</translation></message>
-    <message><source>&lt;b&gt;Folded Bar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select two or more tube profiles (or pieces made from them) that meet end to end, the first one where the bar starts: their corners fold, with a V notch, a key and a relief cut by the laser and the outer wall bent. A closed frame stays open at one corner. Double-click the bar to edit it.</source><translation>&lt;b&gt;Barra plegada&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná dos o más perfiles de tubo (o piezas hechas con ellos) que se unan extremo con extremo, primero aquel donde empieza la barra: sus esquinas se pliegan, con una muesca en V, una llave y un alivio cortados con láser y la pared exterior doblada. Un marco cerrado queda abierto en una esquina. Doble clic en la barra para editarla.</translation></message>
+    <message><source>&lt;b&gt;Folded Bar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click two or more tube profiles (or pieces made from them) that meet end to end, the first one where the bar starts: their corners fold, with a V notch, a key and a relief cut by the laser and the outer wall bent. A closed frame stays open at one corner. Double-click the bar to edit it.</source><translation>&lt;b&gt;Barra plegada&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en dos o más perfiles de tubo (o piezas hechas con ellos) que se unan extremo con extremo, primero en aquel donde empieza la barra: sus esquinas se pliegan, con una muesca en V, una llave y un alivio cortados con láser y la pared exterior doblada. Un marco cerrado queda abierto en una esquina. Doble clic en la barra para editarla.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_UnfoldBar</name>

@@ -36,12 +36,13 @@ FOLDED_MITER_TEXTS = (
     ("MaxProFrame", "The selected profiles do not form one chain."),
     ("MaxProFrame", "{config} is for {a:g} mm walls; {tube} has {b:g} mm walls."),
     ("MaxProFrame", "The inside bend radius must be between {min:g} and {max:g} mm."),
+    ("MaxProFrame", "The key does not fit in the notch between {} and {}: make it smaller."),
     (
         "MaxProFrame",
-        "The corner between {} and {} bends {:g} degrees: without the relief it bends up to {:g} degrees. Turn the "
-        "relief on.",
+        "The key does not fit in the notch between {} and {} with this inside radius: make the radius smaller or "
+        "turn the key off.",
     ),
-    ("MaxProFrame", "The key does not fit in the notch between {} and {}: make it smaller."),
+    ("MaxProFrame", "{} is too short for the radius of its corners."),
     (
         "MaxProFrame",
         "{}: its developed length ({:.1f} mm) is longer than the stock length of the cut list ({:.1f} mm).\n",
@@ -63,13 +64,12 @@ FOLDED_MITER_TEXTS = (
     ("MaxProFrame", "Gap between the notch flanks and around the key, half on each side"),
     ("MaxProFrame", "Clearance"),
     ("MaxProFrame", "Interlocking key"),
-    ("MaxProFrame", "Bulb diameter of the key; Default: a quarter of the tube depth across the bent wall"),
+    (
+        "MaxProFrame",
+        "Diameter of the key, a half circle on the miter line; Default: a quarter of the tube depth across the bent "
+        "wall",
+    ),
     ("MaxProFrame", "Key diameter"),
-    ("MaxProFrame", "Neck width of the key; Default: 60 % of the bulb diameter"),
-    ("MaxProFrame", "Neck width"),
-    ("MaxProFrame", "Relief next to the bent wall"),
-    ("MaxProFrame", "Radius of the relief; Default: the inside bend radius of the corner"),
-    ("MaxProFrame", "Relief radius"),
     ("MaxProFrame", "Preview"),
     ("MaxProFrame", "Update automatically"),
     ("MaxProFrame", "Default"),
@@ -108,7 +108,7 @@ FOLDED_MITER_TEXTS = (
     ("MaxProFrame_FoldedBar", "Folded Bar"),
     (
         "MaxProFrame_FoldedBar",
-        "<b>Folded Bar</b><br><br>Select two or more tube profiles (or pieces made from them) that meet end to end, "
+        "<b>Folded Bar</b><br><br>Click two or more tube profiles (or pieces made from them) that meet end to end, "
         "the first one where the bar starts: their corners fold, with a V notch, a key and a relief cut by the laser "
         "and the outer wall bent. A closed frame stays open at one corner. Double-click the bar to edit it.",
     ),
