@@ -3,7 +3,8 @@
 The chain unbends into one straight solid along X: each folded corner keeps its outer wall whole through the bend
 zone and gets a V notch (with its key and relief) in the other walls; the developed length follows the settings of
 each corner (odd/tasks/folded-corners.md, T2: S6 outer radius, S7 thickness from the profile, S8 automatic K-factor
-of DIN 6935); the cuts made on the segments (miters, holes) move with them.
+of DIN 6935); the cuts made on the segments (miters, holes) move with them. A corner with the ``Stepped`` joint cuts
+its inner wall band with tube cross-sections instead of the V (odd/tasks/stepped-corners.md, T1: S2 S3 S5).
 """
 
 import math
@@ -37,6 +38,24 @@ SIDE_WALL = DEPTH / 2 - T / 2
 PLAIN = dict(key=False)
 TOLERANCE = 1e-6
 LENGTH_TOLERANCE = 1e-4
+# The stepped joint with a 4 mm step (odd/tasks/stepped-corners.md, S2).
+S = 4.0
+STEPPED = dict(joint="Stepped", step_depth=S)
+
+
+def step_ends(angle, s=S, r=R, t=T, depth=DEPTH):
+    """(x_A, x'_B) of a stepped corner (L8): A's end along A and B's end along B, from their bend axis points.
+
+    With y = v - (r + t), the inner bands of A (y in [D - s, D]) and of B (y' in [D - s, D] in B's frame, turned by
+    the bend angle) overlap in a parallelogram whose vertices are at x = (cos a - b) / sin and x' = (a - cos b) / sin,
+    a and b in {D - s, D}; A ends at its farthest x, B at its farthest x'.
+    """
+    theta = math.radians(angle)
+    top = depth - r - t
+    bands = [(a, b) for a in (top - s, top) for b in (top - s, top)]
+    x_a = max((math.cos(theta) * a - b) / math.sin(theta) for a, b in bands)
+    x_b = max((a - math.cos(theta) * b) / math.sin(theta) for a, b in bands)
+    return x_a, x_b
 
 
 def bend(radius=None, **changes):
@@ -850,6 +869,277 @@ class FeatureTransferTest(UnfoldFixture):
         self.assertFalse(self.filled(bar, corner, along, DEPTH / 2, SIDE_WALL))
         self.assertTrue(self.filled(bar, corner, along + 10, DEPTH / 2, SIDE_WALL))
         self.assertTrue(self.filled(plain, plain.corners[0], along, DEPTH / 2, SIDE_WALL))
+
+
+class SteppedCornerUnfoldTest(UnfoldFixture):
+    """odd/tasks/stepped-corners.md, T1: the Stepped joint of a folded corner (S2, S3, S5)."""
+
+    def chain_at(self, angle):
+        """Two 200 mm tubes meeting at a corner of ``angle`` (the bend angle)."""
+        corner = tuple(p + q for p, q in zip((200, 0, 0), polar(200, angle)))
+        return build_chain(self.frame(edges=(((0, 0, 0), (200, 0, 0)), ((200, 0, 0), corner))))
+
+    def local_faces(self, bar, corner, reach):
+        """(normal, box) in the frame of ``corner`` of the faces of the bar within ``reach`` of the corner along u."""
+        back = corner.frame.inverse()
+        found = []
+        for face in bar.shape.Faces:
+            local = face.copy()
+            local.Placement = back.multiply(local.Placement)
+            box = local.BoundBox
+            if box.XMin >= reach[0] and box.XMax <= reach[1]:
+                found.append((back.Rotation.multVec(face.normalAt(*face.Surface.parameter(face.CenterOfMass))), box))
+        return found
+
+    def edge_along_u(self, bar, corner, v, w, empty, full):
+        """u where the bar changes from empty (at u = ``empty``) to filled (at u = ``full``), within 1e-5 mm."""
+        self.assertFalse(self.filled(bar, corner, empty, v, w))
+        self.assertTrue(self.filled(bar, corner, full, v, w))
+        while abs(full - empty) > 1e-5:
+            middle = (empty + full) / 2
+            if self.filled(bar, corner, middle, v, w):
+                full = middle
+            else:
+                empty = middle
+        return (empty + full) / 2
+
+    def test_miter_is_the_default_joint_and_ignores_the_step_settings(self):
+        # S1, S5: Miter is today's joint; its step settings are neither used nor checked.
+        settings = CornerSettings(outer_radius=R + T)
+        self.assertEqual(("Miter", 0.0, False), (settings.joint, settings.step_depth, settings.step_flip))
+        chain = self.rectangle()
+
+        plain = unfold(chain, STEEL)
+        ignored = unfold(chain, bend(joint="Miter", step_depth=1.0, step_flip=True))
+
+        self.solid(ignored)
+        self.assertAlmostEqual(plain.shape.Volume, ignored.shape.Volume, delta=TOLERANCE)
+        self.assertEqual(len(plain.shape.Faces), len(ignored.shape.Faces))
+        self.assertEqual(0.0, plain.shape.cut(ignored.shape).Volume)
+
+    def test_unknown_joint_is_refused(self):
+        with self.assertRaises(ValueError) as raised:
+            check_settings(self.rectangle(), bend(joint="Dovetail"))
+        self.assertNotIsInstance(raised.exception, UnfoldError)
+        self.assertEqual("Unknown joint 'Dovetail': give Miter or Stepped.", str(raised.exception))
+
+    def test_inner_walls_end_at_cross_sections_at_90_degrees(self):
+        # S2, S3: at 90 degrees A's inner band runs to x_A = -(D - s) (flush with B's inner face) and B's starts at
+        # x'_B = D (on A's visible face); below the band the side walls keep the V flanks (u = -+(v - r - t)).
+        chain = self.rectangle()
+        stepped = unfold(chain, bend(**STEPPED))
+        miter = unfold(chain, STEEL)
+
+        self.solid(stepped)
+        x_a, x_b = step_ends(90)
+        self.assertAlmostEqual(-(DEPTH - R - T - S), x_a, places=9)
+        self.assertAlmostEqual(DEPTH - R - T, x_b, places=9)
+        for corner, miter_corner in zip(stepped.corners, miter.corners):
+            ba = corner.bend_allowance
+            # The inner wall, and the side walls in the band (d - s < v < d - t).
+            for v, w in ((DEPTH - T / 2, 0.0), (DEPTH - (S + T) / 2, SIDE_WALL), (DEPTH - (S + T) / 2, -SIDE_WALL)):
+                for u, kept in ((x_a - 0.1, True), (x_a + 0.1, False), (ba + x_b - 0.1, False), (ba + x_b + 0.1, True)):
+                    self.assertEqual(kept, self.filled(stepped, corner, u, v, w), (u, v, w))
+                # The miter cuts both at the V flanks (u = -(v - 5) and BA + v - 5): A short of x_A, B past x'_B.
+                self.assertFalse(self.filled(miter, miter_corner, x_a - 0.1, v, w))
+                self.assertTrue(self.filled(miter, miter_corner, ba + x_b - 0.1, v, w))
+            v = DEPTH - S - 0.5
+            for u, kept in ((-(v - R - T) - 0.1, True), (-(v - R - T) + 0.1, False)):
+                self.assertEqual(kept, self.filled(stepped, corner, u, v, SIDE_WALL), (u, v))
+            for u, kept in ((ba + v - R - T - 0.1, False), (ba + v - R - T + 0.1, True)):
+                self.assertEqual(kept, self.filled(stepped, corner, u, v, SIDE_WALL), (u, v))
+
+    def test_every_cut_through_the_inner_wall_is_a_cross_section(self):
+        # S2: every cut face of the stepped corner contains w; the ones through the inner wall are tube cross-sections
+        # (normal along u). The miter cuts the inner wall at theta / 2.
+        for angle in (60, 90, 120):
+            with self.subTest(angle=angle):
+                bar = unfold(self.chain_at(angle), bend(**STEPPED))
+                self.solid(bar)
+                corner = bar.corners[0]
+                x_a, x_b = step_ends(corner.bend_angle)
+                tangent = math.tan(math.radians(corner.bend_angle) / 2)
+                reach = (min(x_a, -DEPTH * tangent) - 10, corner.bend_allowance + max(x_b, DEPTH * tangent) + 10)
+                faces = self.local_faces(bar, corner, reach)
+                through = 0
+                for normal, box in faces:
+                    if abs(normal.z) > 1 - TOLERANCE or abs(normal.y) > 1 - TOLERANCE:
+                        continue  # a face of the tube walls, or a step face (normal along v)
+                    self.assertAlmostEqual(0.0, normal.z, delta=TOLERANCE, msg=(normal, box))
+                    if box.YMax > DEPTH - T + 0.01:
+                        self.assertAlmostEqual(1.0, abs(normal.x), delta=TOLERANCE, msg=(normal, box))
+                        through += 1
+                # A's end and B's end.
+                self.assertGreaterEqual(through, 2)
+        miter = unfold(self.chain_at(90), STEEL)
+        corner = miter.corners[0]
+        faces = self.local_faces(miter, corner, (-DEPTH - 10, corner.bend_allowance + DEPTH + 10))
+        tilted = [
+            normal
+            for normal, box in faces
+            if box.YMax > DEPTH - T + 0.01 and max(abs(normal.x), abs(normal.y), abs(normal.z)) < 1 - TOLERANCE
+        ]
+        self.assertTrue(tilted)
+
+    def test_wedge_on_the_visible_face_of_b_is_s_cot_theta_wide_at_60_degrees(self):
+        # S3: B's inner wall ends s cot(theta) past where A's visible face meets B's (D tan(theta / 2) along B).
+        bar = unfold(self.chain_at(60), bend(**STEPPED))
+
+        self.solid(bar)
+        corner = bar.corners[0]
+        ba = corner.bend_allowance
+        x_a, x_b = step_ends(corner.bend_angle)
+        b_end = self.edge_along_u(bar, corner, DEPTH - T / 2, 0.0, ba + x_b - 0.5, ba + x_b + 0.5) - ba
+        a_end = self.edge_along_u(bar, corner, DEPTH - T / 2, 0.0, x_a + 0.5, x_a - 0.5)
+        self.assertAlmostEqual(x_b, b_end, delta=1e-4)
+        self.assertAlmostEqual(x_a, a_end, delta=1e-4)
+        wedge = b_end - (DEPTH - R - T) * math.tan(math.radians(30))
+        self.assertAlmostEqual(S / math.tan(math.radians(60)), wedge, delta=1e-4)
+
+    def test_tab_of_a_trims_the_side_walls_of_b_where_it_folds_into_them(self):
+        # L8: below 90 degrees A's tab (its band past the miter line) folds onto B's side walls below B's band: T'
+        # removes them from B. The miter keeps them, and has no tab.
+        chain = self.chain_at(60)
+        stepped = unfold(chain, bend(**STEPPED))
+        miter = unfold(chain, STEEL)
+
+        self.solid(stepped)
+        theta = math.radians(60)
+        top = DEPTH - R - T
+        x_a, _ = step_ends(60)
+        # In A's tab, near its lower end; B's frame turns by theta about the bend axis point.
+        x, y = x_a - 0.3, top - S + 0.3
+        x_b, y_b = x * math.cos(theta) + y * math.sin(theta), -x * math.sin(theta) + y * math.cos(theta)
+        self.assertLess(y_b, top - S)
+        self.assertGreater(x_b, y_b * math.tan(theta / 2))
+        for w in (SIDE_WALL, -SIDE_WALL):
+            for bar, kept in ((stepped, True), (miter, False)):
+                corner = bar.corners[0]
+                self.assertEqual(kept, self.filled(bar, corner, x, R + T + y, w), w)
+                self.assertEqual(not kept, self.filled(bar, corner, corner.bend_allowance + x_b, R + T + y_b, w), w)
+
+    def test_clearance_opens_the_step_faces_half_of_it_each(self):
+        # S5: A's end moves back g/2 along A, B's end g/2 along B, and B's step face (the top of its side walls under
+        # the band, where A's end rests at 90 degrees) g/2 down.
+        g = 1.0
+        chain = self.rectangle()
+        tight = unfold(chain, bend(**STEPPED))
+        loose = unfold(chain, bend(clearance=g, **STEPPED))
+
+        self.solid(loose)
+        x_a, x_b = step_ends(90)
+        for tight_corner, corner in zip(tight.corners, loose.corners):
+            ba = corner.bend_allowance
+            for v, w in ((DEPTH - T / 2, 0.0), (DEPTH - (S + T) / 2, SIDE_WALL)):
+                for u, kept in (
+                    (x_a - g / 2 - 0.1, True),
+                    (x_a - g / 2 + 0.1, False),
+                    (ba + x_b + g / 2 - 0.1, False),
+                    (ba + x_b + g / 2 + 0.1, True),
+                ):
+                    self.assertEqual(kept, self.filled(loose, corner, u, v, w), (u, v, w))
+                self.assertTrue(self.filled(tight, tight_corner, x_a - g / 2 + 0.1, v, w))
+                self.assertTrue(self.filled(tight, tight_corner, ba + x_b + 0.1, v, w))
+            for v, kept in ((DEPTH - S - g / 4, False), (DEPTH - S - 3 * g / 4, True)):
+                for w in (SIDE_WALL, -SIDE_WALL):
+                    self.assertTrue(self.filled(tight, tight_corner, ba + x_b - 2, v, w))
+                    self.assertEqual(kept, self.filled(loose, corner, ba + x_b - 2, v, w), (v, w))
+
+    def test_step_flip_gives_the_tab_to_the_segment_after(self):
+        # S5: StepFlip swaps A and B: mirrored about the middle of the bend zone.
+        chain = self.rectangle()
+        normal = unfold(chain, bend(**STEPPED))
+        flipped = unfold(chain, bend(step_flip=True, **STEPPED))
+
+        self.solid(flipped)
+        x_a, x_b = step_ends(90)
+        for normal_corner, corner in zip(normal.corners, flipped.corners):
+            ba = corner.bend_allowance
+            for v, w in ((DEPTH - T / 2, 0.0), (DEPTH - (S + T) / 2, SIDE_WALL)):
+                for u, kept in (
+                    (-x_b - 0.1, True),
+                    (-x_b + 0.1, False),
+                    (ba - x_a - 0.1, False),
+                    (ba - x_a + 0.1, True),
+                ):
+                    self.assertEqual(kept, self.filled(flipped, corner, u, v, w), (u, v, w))
+                self.assertTrue(self.filled(normal, normal_corner, -x_b + 0.1, v, w))
+                self.assertFalse(self.filled(normal, normal_corner, ba - x_a + 0.1, v, w))
+
+    def test_key_stays_below_the_band(self):
+        # The miter line seen on the side walls ends at the band (v = d - s): the key sits at its middle, from the gap
+        # around the relief disc (2 mm outward from the bend axis point) to d - s, and must fit below the band. A 44 mm
+        # key on r = 2 fits with s = 3; past s = 4 its tab would reach into the band wherever its socket clears the
+        # bent wall (the miter fits it below the inner wall, d - t).
+        corners = bend(radius=2.0, key_diameter=44.0, joint="Stepped", step_depth=3.0)
+        chain = self.rectangle()
+        bar = unfold(chain, corners)
+
+        self.solid(bar)
+        along = (-2.0 + (DEPTH - 3.0 - 2.0 - T) / math.cos(math.radians(45))) / 2
+        KeyRoomUnfoldTest.assertKeyAt(self, bar, d=44.0, r=2.0, along=along)
+        self.assertRefused(
+            "The key does not fit in the notch between Profile and Profile001: make it smaller.",
+            chain,
+            replace(corners, step_depth=4.1),
+        )
+        self.solid(unfold(chain, replace(corners, joint="Miter")))
+
+    def test_step_depth_outside_its_limits_is_refused(self):
+        # S5: at least the wall thickness, under half the depth (rounded down to 0.1 mm) and above the relief (v = t + r).
+        chain = self.rectangle()
+        message = "The step depth of the corner between Profile and Profile001 must be between 2 and 24.9 mm."
+        for step in (1.9, 25.0, 24.95):
+            with self.subTest(step=step):
+                self.assertRefused(message, chain, bend(joint="Stepped", step_depth=step))
+        self.assertRefused(
+            "The step depth of the corner between Profile001 and Profile002 must be between 2 and 24.9 mm.",
+            chain,
+            [STEEL, bend(joint="Stepped", step_depth=1.0), STEEL],
+        )
+        for step in (2.0, 24.9):
+            with self.subTest(step=step):
+                self.solid(unfold(chain, bend(joint="Stepped", step_depth=step, **PLAIN)))
+        # r = 30: the relief reaches v = 32, so the band (from d - s) fits down to it: s <= 50 - 32.
+        self.assertRefused(
+            "The step depth of the corner between Profile and Profile001 must be between 2 and 18 mm.",
+            chain,
+            bend(radius=30.0, joint="Stepped", step_depth=18.1),
+        )
+        self.solid(unfold(chain, bend(radius=30.0, joint="Stepped", step_depth=18.0, **PLAIN)))
+
+    def test_step_that_does_not_fit_at_the_angle_is_refused(self):
+        # L8: at 30 degrees the bands overlap far along A: past s = 11.5 A's tab reaches B's side of the V.
+        chain = self.chain_at(30)
+        self.assertRefused(
+            "The step of the corner between Profile and Profile001 does not fit at this angle: make the step depth "
+            "smaller.",
+            chain,
+            bend(joint="Stepped", step_depth=12.0),
+        )
+        self.solid(unfold(chain, bend(joint="Stepped", step_depth=11.0, **PLAIN)))
+
+    def test_automatic_step_depth_is_the_wall_or_the_outer_corner_radius_of_the_tube(self):
+        # S5: 0 = automatic: the larger of the wall thickness and the outer corner radius of the tube (RadiusLarge).
+        from freecad.maxproframe.unfolded_geometry import automatic_step_depth
+
+        self.assertEqual(2.0, automatic_step_depth(2.0, 0.0))
+        self.assertEqual(2.0, automatic_step_depth(2.0, 1.5))
+        self.assertEqual(5.0, automatic_step_depth(2.0, 5.0))
+        bottom, right, top, left = self.frame()
+        chain = build_chain([bottom, right, top, left])
+        for corner_radius, step in ((0.0, T), (1.5, T), (5.0, 5.0)):
+            with self.subTest(corner_radius=corner_radius):
+                for profile in (bottom, right, top, left):
+                    profile.RadiusLarge = corner_radius
+                self.doc.recompute()
+                bar = unfold(chain, bend(joint="Stepped", **PLAIN))
+                x_a, x_b = step_ends(90, s=step)
+                for corner in bar.corners:
+                    for u, kept in ((x_a - 0.1, True), (x_a + 0.1, False)):
+                        self.assertEqual(kept, self.filled(bar, corner, u, DEPTH - T / 2, 0.0), (u, step))
+                    v = DEPTH - step - 0.1
+                    self.assertFalse(self.filled(bar, corner, -(v - R - T) + 0.1, v, SIDE_WALL), (v, step))
 
 
 if __name__ == "__main__":

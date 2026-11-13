@@ -5,7 +5,9 @@ At each folded corner the bend strip (the outer wall in the bend zone) is replac
 bend revolved by the bend angle around the bend center, r + t inside the outer face: the outer corners are round and
 the outside of the frame keeps its size. The rest of the bar is split at the notch flanks into its segments, and each
 one goes back where its profile was drawn, so its cuts (miters, cutouts, holes) stay there and the key tab of a
-segment fills the socket of the next one. See odd/tasks/folded-miter.md, section "T4 design".
+segment fills the socket of the next one. At a stepped corner the inner wall band is split inside the gap the band
+leaves between both segments instead, so the band that covers the overlap goes with its own segment, flipped or not.
+See odd/tasks/folded-miter.md, section "T4 design", and odd/tasks/stepped-corners.md (L8).
 """
 
 import math
@@ -45,6 +47,8 @@ def _after(corner, thickness, far, reach):
 
     The flank half plane alone would reach back past the start of the bend (u < 0) when the bend allowance is shorter
     than the outside setback (wide angles), taking the outer wall of the segment before; u >= 0 keeps it there.
+    At a stepped corner the segment after owns the stepped band from ``step_split`` on, whichever segment's band
+    reaches past the flanks there.
     """
     h = math.radians(corner.bend_angle) / 2
     ba, r, t = corner.bend_allowance, corner.inside_radius, thickness
@@ -54,9 +58,18 @@ def _after(corner, thickness, far, reach):
 
     low, high = -reach, reach
     far = max(far, flank(high)) + reach
+    split = corner.step_split
+    if split is not None:
+        band, middle = split
+        far = max(far, middle + reach)
+        high = band
     behind = _polygon([(flank(low), low), (far, low), (far, high), (flank(high), high)])
     started = _polygon([(0, low), (far, low), (far, high), (0, high)])
-    return _in_frame(corner, behind.common(started), reach)
+    owned = behind.common(started)
+    if split is not None:
+        owned = owned.fuse(_polygon([(middle, band), (far, band), (far, reach), (middle, reach)])).removeSplitter()
+        owned = owned.Faces[0] if len(owned.Faces) == 1 else owned
+    return _in_frame(corner, owned, reach)
 
 
 def fold_bar(chain, unfolded):
