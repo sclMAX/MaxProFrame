@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       repetitions:
-        description: 'Runs of the full suite in the original order (1-20)'
+        description: 'Runs of the full suite in the original order (1-9)'
         required: false
         default: '3'
       seed:
@@ -21,8 +21,8 @@ jobs:
   flakiness:
     name: Native FreeCAD 1.1.4 repeated runs
     runs-on: ubuntu-24.04
-    # A run is the suite in ci.yml's shards, each stopped at the per-shard timeout of the stable target (2 x 480 s).
-    # The budget covers every shard of the maximum 20 repetitions plus the shuffled run timing out (336 minutes),
+    # A run is the suite in ci.yml's shards, each stopped at the per-shard timeout of the stable target (4 x 480 s).
+    # The budget covers every shard of the maximum 9 repetitions plus the shuffled run timing out (320 minutes),
     # plus setup and summary, within GitHub's 360-minute limit.
     timeout-minutes: 355
 
@@ -91,8 +91,8 @@ jobs:
           TIMEOUT: ${{ steps.target.outputs.timeout }}
           SHARDS: ${{ steps.target.outputs.shards }}
         run: |
-          if [[ ! "$REPETITIONS" =~ ^[0-9]+$ ]] || (( REPETITIONS < 1 || REPETITIONS > 20 )); then
-            echo "repetitions must be an integer from 1 to 20 (got '$REPETITIONS')" >&2
+          if [[ ! "$REPETITIONS" =~ ^[0-9]+$ ]] || (( REPETITIONS < 1 || REPETITIONS > 9 )); then
+            echo "repetitions must be an integer from 1 to 9 (got '$REPETITIONS')" >&2
             exit 2
           fi
           if [[ ! "$SHUFFLE_SEED" =~ ^[0-9]+$ ]]; then

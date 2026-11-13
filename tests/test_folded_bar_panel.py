@@ -186,6 +186,37 @@ class PumpingDocument:
             self._state.during = False
 
 
+class Elsewhere:
+    """Proxy of a document object whose next recompute runs ``during``: a recompute the panel did not start, as the
+    user's or the expression editor's, that pumps Qt events (issue #148)."""
+
+    def __init__(self, obj, during):
+        obj.Proxy = self
+        self.during = during
+
+    def execute(self, obj):
+        during, self.during = self.during, None
+        if during is not None:
+            during()
+
+
+class Observers:
+    """Records the document observers added and removed while a test runs."""
+
+    def __init__(self, test):
+        self.added, self.removed = [], []
+        for name, log in (("addDocumentObserver", self.added), ("removeDocumentObserver", self.removed)):
+            real = getattr(App, name)
+
+            def recorded(observer, real=real, log=log):
+                log.append(observer)
+                return real(observer)
+
+            patcher = patch.object(App, name, recorded)
+            patcher.start()
+            test.addCleanup(patcher.stop)
+
+
 class FoldedPanelFixture(FoldedBarFixture):
     @classmethod
     def setUpClass(cls):
@@ -318,6 +349,23 @@ class FoldedPanelFixture(FoldedBarFixture):
             self.assertLessEqual(min(values), center + 1e-6, axis)
             self.assertGreaterEqual(max(values), center - 1e-6, axis)
             self.assertLessEqual(max(abs(value - center) for value in values), half, axis)
+
+    def assertShapeBack(self, bar, volume):
+        """After Cancel ``bar`` shows its shape as before, of ``volume``, and a recompute keeps it.
+
+        With undo off the panel puts the bar back by hand and recomputes it. FreeCAD 27 (weekly) keeps undo on
+        whatever UndoMode is set to: there Cancel aborts the transaction, which puts the shape back too but leaves
+        the objects touched, as Cancel with undo on does here (issue #148).
+        """
+        self.assertNotIn("Invalid", bar.State)
+        if self.doc.UndoMode == 0:
+            # Undo really off (FreeCAD 1.1): the panel recomputed the bar it put back by hand.
+            self.assertOneSolid(bar)
+        self.assertEqual(1, len(bar.Shape.Solids))
+        self.assertAlmostEqual(volume, bar.Shape.Volume, delta=1e-3)
+        self.doc.recompute()
+        self.assertOneSolid(bar)
+        self.assertAlmostEqual(volume, bar.Shape.Volume, delta=1e-3)
 
     def assertRefused(self, panel, message):
         self.assertIn(message, self.messages(panel).split("\n"))
@@ -809,6 +857,7 @@ class RemoveTest(FoldedPanelFixture):
         first, second, third = profiles = self.frame(edges=RECTANGLE[:3])
         bar = make_folded_bar(profiles, [bend(radius=4.0, **PLAIN), bend(radius=5.0, **PLAIN)])
         values = [((c.PieceA, c.PieceB), corner_values(c)) for c in bar.Corners]
+        volume = bar.Shape.Volume
         panel = self.edit(bar)
         self.pick(panel, 0)
         panel.form.button_remove.click()
@@ -824,7 +873,8 @@ class RemoveTest(FoldedPanelFixture):
         self.assertEqual(profiles, list(bar.Segments))
         self.assertEqual(values, [((c.PieceA, c.PieceB), corner_values(c)) for c in bar.Corners])
         self.assertEqual(sorted(c.Name for c in bar.Corners), sorted(c.Name for c in self.corner_objects()))
-        self.assertOneSolid(bar)
+        self.assertFalse(first.Visibility)
+        self.assertShapeBack(bar, volume)
         self.assertFalse(first.Visibility)
 
 
@@ -1398,6 +1448,12 @@ class EditPanelTest(FoldedPanelFixture):
         self.assertEqual(names, [corner.Name for corner in bar.Corners])
         self.assertEqual(sorted(names), sorted(corner.Name for corner in self.corner_objects()))
         self.assertEqual([0.0] * 3, self.clearances(bar))
+        # The corner still has no object: the bar recomputes into its error again (with undo on, as on FreeCAD 27,
+        # Cancel leaves it touched; see assertShapeBack).
+        if self.doc.UndoMode == 0:
+            # Undo really off (FreeCAD 1.1): the panel put the bar back by hand and recomputed it already.
+            self.assertIn("Invalid", bar.State)
+        self.doc.recompute()
         self.assertIn("Invalid", bar.State)
 
 
@@ -1469,6 +1525,7 @@ class ExpressionTest(FoldedPanelFixture):
     def test_cancel_with_undo_off_removes_an_expression_set_while_editing(self):
         _, bar = self.make_bar(**PLAIN)
         values = [corner_values(c) for c in bar.Corners]
+        volume = bar.Shape.Volume
         panel = self.edit(bar)
         self.doc.UndoMode = 0
         corner = self.folded_corners(bar)[0]
@@ -1483,7 +1540,7 @@ class ExpressionTest(FoldedPanelFixture):
 
         self.assertEqual({}, dict(corner.ExpressionEngine))
         self.assertEqual(values, [corner_values(c) for c in bar.Corners])
-        self.assertOneSolid(bar)
+        self.assertShapeBack(bar, volume)
 
     def test_cancel_of_a_new_bar_with_an_expression_leaves_the_document_unchanged(self):
         profiles = self.frame()
@@ -1526,6 +1583,23 @@ class NoFreezeTest(FoldedPanelFixture):
         calls = self.watch_geometry(state)
         with patch.object(panel, "doc", PumpingDocument(self.doc, during, state)):
             panel.update_preview()
+        return [name for name, during in calls if during], calls
+
+    def recompute_elsewhere(self, during):
+        """Recompute the document as the user does, not the panel, ``during`` running inside the recompute; (geometry
+        run during it, all of it)."""
+        state = SimpleNamespace(during=False)
+        calls = self.watch_geometry(state)
+
+        def watched():
+            state.during = True
+            try:
+                during()
+            finally:
+                state.during = False
+
+        Elsewhere(self.doc.addObject("App::FeaturePython", "Elsewhere"), watched)
+        self.doc.recompute()
         return [name for name, during in calls if during], calls
 
     def wait_for_preview(self, panel):
@@ -1650,6 +1724,59 @@ class NoFreezeTest(FoldedPanelFixture):
         self.assertEqual([False], pressed)
         self.assertFalse(Gui.Control.activeDialog())
         self.assertEqual((9.0, 0.3, True, 10.0, 0.0), corner_values(self.folded_corners(bar)[1]))
+        self.assertOneSolid(bar)
+
+    def test_a_recompute_started_elsewhere_holds_the_preview_and_the_clicks_until_it_ends(self):
+        # A recompute of the user's or of the expression editor pumps Qt events as the panel's does (issue #148).
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+        form = panel.form
+        scene, children = self.scene()
+        self.pick(panel, 1)
+        # The preview delay starts.
+        form.spin_outer_radius.setValue(9.0)
+
+        def click_and_wait():
+            # Corner 1 selected, and the preview delay over before the recompute ends.
+            self.pick(panel, 0)
+            QtTest.QTest.qWait(GAP_DELAY_MS * 2)
+
+        during, calls = self.recompute_elsewhere(click_and_wait)
+
+        self.assertEqual([], during)
+        self.wait_for_preview(panel)
+        self.assertIn("corner_box", [name for name, _ in calls])
+        self.assertEqual((9.0, 0.2, True, 10.0, 0.0), corner_values(self.folded_corners(bar)[1]))
+        self.assertEqual("2 · Profile001 → Profile002 · R 9 mm · key · clearance 0.2 mm", self.rows(panel)[1])
+        # Corner 1 selected: its values in the fields, drawn over the 3D view.
+        self.assertEqual(
+            (6.0, 0.2, False), (form.spin_outer_radius.value(), form.spin_clearance.value(), form.cb_key.isChecked())
+        )
+        (points,) = overlay_points(self.overlay(scene, children))
+        self.assertAround(points, App.Vector(300, 0, 0))
+        self.assertOneSolid(bar)
+
+    def test_cancel_pressed_during_a_recompute_started_elsewhere_waits_for_it_and_puts_the_bar_back(self):
+        _, bar = self.three_corner_bar()
+        values = [corner_values(corner) for corner in self.folded_corners(bar)]
+        panel = self.edit(bar)
+        self.pick(panel, 1)
+        panel.form.spin_outer_radius.setValue(9.0)
+        panel.update_preview()
+        pressed = []
+
+        during, _ = self.recompute_elsewhere(lambda: pressed.append(panel.reject()))
+
+        self.assertEqual([], during)
+        self.assertEqual([False], pressed)
+        for _ in range(40):
+            if not Gui.Control.activeDialog():
+                break
+            self.events()
+            QtTest.QTest.qWait(GAP_DELAY_MS // 2)
+        self.assertFalse(Gui.Control.activeDialog())
+        self.doc.recompute()
+        self.assertEqual(values, [corner_values(corner) for corner in self.folded_corners(bar)])
         self.assertOneSolid(bar)
 
     def test_a_value_typed_applies_when_the_field_is_done(self):
@@ -1804,6 +1931,38 @@ class NoFreezeTest(FoldedPanelFixture):
 
         self.assertFalse(spin.property("mixedValues"))
         self.assertEqual([6.0, 7.0, 6.0], [corner_values(corner)[0] for corner in self.folded_corners(bar)])
+
+
+class RecomputeElsewhereTest(FoldedPanelFixture):
+    """Issue #148: work queued while a recompute the panel did not start runs once, after it, and the observer goes."""
+
+    def test_work_queued_during_an_outside_recompute_runs_once_after_it(self):
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+        observers = Observers(self)
+        runs = []
+
+        def work():
+            runs.append(bool(self.doc.Recomputing))
+
+        def during():
+            self.pick(panel, 0)
+            panel.form.spin_outer_radius.setValue(9.0)
+            panel._wait(work)
+            panel._wait(work)
+            QtTest.QTest.qWait(GAP_DELAY_MS * 2)
+
+        Elsewhere(self.doc.addObject("App::FeaturePython", "Elsewhere"), during)
+        self.doc.recompute()
+        self.assertEqual([], runs)
+        self.assertEqual(1, len(observers.added))
+
+        QtTest.QTest.qWait(GAP_DELAY_MS * 4)
+        self.events()
+
+        self.assertEqual([False], runs)
+        self.assertEqual(observers.added, observers.removed)
+        self.assertIsNone(panel._recompute_end)
 
 
 class DarkThemeTest(FoldedPanelFixture):

@@ -269,6 +269,19 @@ def show_panel(panel):
     Gui.Control.showDialog(panel)
 
 
+class _RecomputeEnd:
+    """Document observer: once the document ``doc`` ends a recompute, ``callback`` runs from the event loop, outside
+    FreeCAD's observer dispatch."""
+
+    def __init__(self, doc, callback):
+        self.name = doc.Name
+        self.callback = callback
+
+    def slotRecomputedDocument(self, doc):
+        if doc.Name == self.name:
+            QtCore.QTimer.singleShot(0, self.callback)
+
+
 class _FinishOnEnter(QtCore.QObject):
     """Enter in a corner field finishes the field and nothing else (S15).
 
@@ -325,6 +338,10 @@ class FoldedBarTaskPanel:
         self._syncing = False
         self._transaction_open = False
         self._recomputing = False
+        # A recompute the panel did not start runs: the observer told when it ends, and whether a look is due at it
+        # in a moment anyway, to run what waits for it.
+        self._recompute_end = None
+        self._resuming = False
         # What the panel was asked to do while the preview recomputed, run once it returns (S15).
         self._waiting = []
         self._deferred = None
@@ -860,6 +877,10 @@ class FoldedBarTaskPanel:
             self._show_messages()
             if self._selected() or self._overlay is not None:
                 self._highlight()
+        self._run_waiting()
+
+    def _run_waiting(self):
+        """Run what waited for the recompute, then OK or Cancel pressed meanwhile."""
         waiting, self._waiting = self._waiting, []
         for work in waiting:
             if self._active():
@@ -871,19 +892,65 @@ class FoldedBarTaskPanel:
     def _forced_preview(self):
         self.update_preview(force=True)
 
-    def _wait(self, work):
-        """Whether ``work`` waits for the preview recompute to end, to run once then (S15).
+    def _busy(self):
+        """Whether the document recomputes: the panel's preview, or a recompute the panel did not start (the user's,
+        the expression editor's), which pumps Qt events all the same (issue #148)."""
+        if self._recomputing:
+            return True
+        try:
+            return _alive_document(self.doc) and bool(self.doc.Recomputing)
+        except Exception:
+            return False
 
-        A recompute pumps Qt events (FreeCAD's progress bar): a key typed, a click on the list or a button runs
-        inside it. An OCC boolean run there (the checks of the corners, the overlay) waits forever for the threads
-        the paused boolean of the recompute holds, and FreeCAD freezes (L23). Values typed still reach the panel,
-        but nothing geometric runs until the recompute returns.
+    def _wait(self, work):
+        """Whether ``work`` waits for the recompute to end, to run once then (S15).
+
+        A recompute pumps Qt events (FreeCAD's progress bar; newer FreeCAD inside its booleans too): a key typed, the
+        preview delay over, a click on the list or a button runs inside it. An OCC boolean run there (the checks of
+        the corners, the overlay) waits forever for the threads the paused boolean of the recompute holds, and
+        FreeCAD freezes (L23). Values typed still reach the panel, but nothing geometric runs until the recompute
+        returns.
         """
-        if not self._recomputing:
+        if not self._busy():
             return False
         if work not in self._waiting:
             self._waiting.append(work)
+        self._resume_later()
         return True
+
+    def _resume_later(self):
+        """What waits for a recompute the panel did not start runs once the document says it ended, or at the latest
+        a moment later. The panel's own preview runs it as it returns."""
+        if self._recomputing:
+            return
+        if self._recompute_end is None:
+            self._recompute_end = _RecomputeEnd(self.doc, self._resume)
+            App.addDocumentObserver(self._recompute_end)
+        if not self._resuming:
+            self._resuming = True
+            QtCore.QTimer.singleShot(GAP_DELAY_MS, self._look_again)
+
+    def _look_again(self):
+        self._resuming = False
+        self._resume()
+
+    def _resume(self):
+        if not self._active():
+            return
+        if self._busy():
+            self._resume_later()
+            return
+        self._stop_watching()
+        self._run_waiting()
+
+    def _stop_watching(self):
+        """No longer told when the document ends a recompute."""
+        observer, self._recompute_end = self._recompute_end, None
+        if observer is not None:
+            try:
+                App.removeDocumentObserver(observer)
+            except Exception:
+                pass
 
     def _preview(self, force):
         wanted = self._wanted()
@@ -1213,6 +1280,7 @@ class FoldedBarTaskPanel:
     def clean(self):
         self._closed = True
         self._timer.stop()
+        self._stop_watching()
         self._waiting = []
         self._leave_fields()
         # The corners drawn over the 3D view go with the panel (S13).
@@ -1311,9 +1379,10 @@ class FoldedBarTaskPanel:
 
     def _defer(self, button):
         """A recompute pumps Qt events: OK or Cancel pressed during it waits for it to end."""
-        if not self._recomputing:
+        if not self._busy():
             return False
         self._deferred = button
+        self._resume_later()
         return True
 
     def open(self):
