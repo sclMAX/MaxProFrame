@@ -14,6 +14,7 @@ from freecad.maxproframe._utils import (
     get_childrens_from_extrudedcutout,
     get_profile_from_extrudedcutout,
     is_extrudedcutout,
+    is_foldedbar,
     is_trimmedbody,
     restore_length,
 )
@@ -523,8 +524,14 @@ class ViewProviderDrillHole(ViewProviderExtrudedCutout):
         return [base]
 
     def onDelete(self, fp, sub):
-        if self.Object.baseObject:
-            self.Object.baseObject[0].ViewObject.Visibility = True
+        """Show the base again; in a Folded Bar the bar folds the base again instead and keeps it hidden."""
+        from freecad.maxproframe.folded_bar import release_piece
+
+        obj = self.Object
+        folded = any(is_foldedbar(parent) and obj in parent.Segments for parent in obj.InList)
+        release_piece(obj)
+        if obj.baseObject and not folded:
+            obj.baseObject[0].ViewObject.Visibility = True
         return True
 
     def setEdit(self, vobj, mode):

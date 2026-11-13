@@ -27,7 +27,7 @@ per task; push, PR and merge stay the user's decisions.
   before every recompute (NewestPieceObserver precedent, profile_pattern.py:661-720); relink helper before a preview
   piece is removed; Folded Bar panel `_member_at` reuses it. route=worker; commit=(this commit) [x]
 - T2 [S1, S4] End Miter. route=worker (parallel); commit=(T2 commit) [x]
-- T3 [S2, S4, S5] Drill Hole. route=worker (parallel); commit=
+- T3 [S2, S4, S5] Drill Hole. route=worker (parallel); commit=(T3 commit) [x]
 - T4 [S3, S4, S5] Cutout (panel and direct face+sketch path). route=worker (parallel); commit=(T4 commit) [x]
 - T5 [S3, S4, S5] Extend Cut and Notch (target face on a bar, profiles from a bar, no dependency loop, no cut at a
   folded corner). route=worker (parallel); commit=(T5 commit) [x]
@@ -75,3 +75,8 @@ per task; push, PR and merge stay the user's decisions.
   `release_piece` in `_drop_preview`, recompute in `_discard_preview`. RED 12 of 12 (+ refusals re-proved with the
   rules disabled: 2 failures); GREEN test_extend_cut_folded_bar 12 (stable, weekly; parent re-run 12 OK); extend cut
   panel/preview/polish/lost-face 45/22/31/10, notch panel/preview 30/9, keep end 22 OK.
+- L10 T3 evidence (worker mwexmcpn-6-9fix): create_drill_hole_tool.py bar mapping in addSelection/_add_items (tube
+  face, tube vertex), `_from_bar`, `_unfold_bars`, release + recompute in `_drop_preview` / `_discard_preview`;
+  drill_hole.py onDelete releases the hole and keeps a folded tube hidden. RED 12 of 14; GREEN
+  test_drill_hole_folded_bar 14 (stable, weekly; parent re-run 14 OK); drill hole panel/geometry/rebase/reference/
+  resources 99/26/4/10/2 OK. Open for T7: tooltips/prompts of Drill Hole, Profile Pattern do not mention a Folded Bar.

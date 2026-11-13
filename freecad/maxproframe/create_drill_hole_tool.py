@@ -5,7 +5,7 @@ import FreeCADGui as Gui
 import Part
 from PySide import QtCore, QtGui
 
-from freecad.maxproframe._utils import get_profile_from_trimmedbody
+from freecad.maxproframe._utils import get_profile_from_trimmedbody, is_foldedbar
 from freecad.maxproframe.create_end_miter_tool import (
     GAP_DELAY_MS,
     _alive_document,
@@ -44,6 +44,7 @@ from freecad.maxproframe.expression_fields import (
 )
 from freecad.maxproframe.extruded_cutout import CUT_TYPES, wall_thickness
 from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, get_param_group, translate
+from freecad.maxproframe.folded_bar import bar_tips, release_piece, segment_at, straight_part_message
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
 
 # Offsets of a new drill hole from its reference point, in mm: the hole starts on the picked point.
@@ -94,6 +95,28 @@ def _click_point(other):
     except Exception:
         return None
     return None if point.Length == 0 else point
+
+
+def _preselected_point(obj, sub):
+    """The global point the element ``sub`` of ``obj`` was picked at in the current selection, or None."""
+    try:
+        for sel in Gui.Selection.getSelectionEx():
+            if sel.Object != obj:
+                continue
+            for name, point in zip(sel.SubElementNames, sel.PickedPoints):
+                if name == sub:
+                    return _click_point(point)
+    except Exception:
+        pass
+    return None
+
+
+def _folded(piece):
+    """Whether a Folded Bar folds ``piece``: the bar shows it and hides it."""
+    try:
+        return any(is_foldedbar(obj) and piece in obj.Segments for obj in piece.InList)
+    except Exception:
+        return False
 
 
 def _container_placement(obj):
@@ -256,7 +279,9 @@ class DrillHoleTaskPanel:
     is explained. The point the offsets are measured from is the one filled marker. What FreeCAD selects
     under a clicked marker is no pick.
     A click on the drill hole being previewed or edited (it hides its base) stands for the face or
-    vertex of its base under the click.
+    vertex of its base under the click. A click on a straight wall of a Folded Bar stands for the face
+    of the tube under the clicked point, at its newest piece; on a bend it adds nothing and the panel
+    says "Click a straight part of the folded bar.". The bar folds the preview at each recompute.
 
     Without ``edited`` the preview is the drill hole OK keeps, made once a face and a vertex are
     picked, inside one transaction that Cancel aborts. Apply and continue keeps it in its own Undo step,
@@ -743,7 +768,7 @@ class DrillHoleTaskPanel:
         """Take the first usable face, then the first of its vertices, of the preselection; return the problems."""
         messages = []
         vertices = []
-        for obj, subs in selection:
+        for obj, subs in self._unfold_bars(selection, messages):
             problem = trimmed_body_problem(None, obj)
             if problem is not None:
                 messages.append(problem)
@@ -775,6 +800,49 @@ class DrillHoleTaskPanel:
                 )
         self._set_depth()
         return messages
+
+    def _unfold_bars(self, selection, messages):
+        """``selection`` with each element of a Folded Bar as the element of the tube under it (see _from_bar).
+
+        An element of a bar that stands for no tube is left out, its reason added to ``messages``.
+        """
+        items = []
+        for obj, subs in selection:
+            if not is_foldedbar(obj):
+                items.append((obj, subs))
+                continue
+            for sub in subs:
+                tip, name, _, reason = self._from_bar(obj, sub, _preselected_point(obj, sub))
+                if reason is not None:
+                    messages.append(reason)
+                else:
+                    items.append((tip, (name,)))
+        return items
+
+    def _from_bar(self, bar, sub, point=None):
+        """(tip, element, point, reason): the tube of the Folded Bar ``bar`` a click on ``sub`` at ``point`` drills.
+
+        A face is the face of the tube under the point, at its current tip (``folded_bar.segment_at``); a vertex is
+        the vertex of a tip at its place, the tip of the face already picked first. A bend, or an element on no
+        single tube, gives no tip and the reason: "Click a straight part of the folded bar."
+        """
+        if not sub:
+            return None, None, point, translate("frameforge", "{}: pick one of its faces").format(bar.Label)
+        element = _element(bar, sub)
+        if isinstance(element, Part.Vertex):
+            corner = _container_placement(bar).multVec(element.Point)
+            tips = bar_tips(bar)
+            if self.face is not None:
+                # The vertex of the face already picked first, the way a click on that tube would be.
+                tips.sort(key=lambda tip: self._on_base(tip, None)[0] != self.face[0])
+            for tip in tips:
+                placement = _container_placement(tip)
+                for index, vertex in enumerate(tip.Shape.Vertexes, start=1):
+                    if placement.multVec(vertex.Point).isEqual(corner, REFERENCE_TOLERANCE):
+                        return tip, f"Vertex{index}", None, None
+            return None, None, corner, straight_part_message()
+        pick = segment_at(bar, sub, point)
+        return pick.tip, pick.face, pick.point, pick.reason
 
     def _vertex_problem(self, obj, sub):
         """Why the vertex ``sub`` of ``obj`` cannot be the vertex of the face, or None when it can."""
@@ -840,6 +908,8 @@ class DrillHoleTaskPanel:
         if self.obj is None or obj != self.obj or not _in_document(obj) or not obj.baseObject:
             return obj, sub
         base = obj.baseObject[0]
+        if sub is None:
+            return base, None
         name = _base_element(base, _element(obj, sub))
         return (base, name) if name is not None else (obj, sub)
 
@@ -1216,7 +1286,8 @@ class DrillHoleTaskPanel:
                 self.obj is None or not _in_document(self.obj) or self.obj.baseObject[0] != self.face[0]
             ):
                 # A drill hole is named after its base: another base makes another preview.
-                self._drop_preview()
+                # The recompute below has a Folded Bar fold the base of the dropped one again.
+                self._drop_preview(recompute=False)
                 self._make_preview()
             self._apply_to(self.obj)
             self.doc.recompute()
@@ -1250,20 +1321,33 @@ class DrillHoleTaskPanel:
         self._visibility = []
         return hidden
 
-    def _drop_preview(self):
-        """Remove the preview and show the bodies it hid as they were before."""
+    def _drop_preview(self, recompute=True):
+        """Remove the preview and show the bodies it hid as they were before.
+
+        A Folded Bar folding the preview folds its base again first, so no bar links a removed object; with
+        ``recompute`` the document is then recomputed, so the bar shows its tube without the hole.
+        """
         if self.edited is not None:
             return
         obj = self.obj
         hidden = self._forget_preview()
+        folded = False
         if obj is not None and _in_document(obj):
+            folded = _folded(obj)
+            release_piece(obj)
             self.doc.removeObject(obj.Name)
         for body, visible in hidden:
             if _in_document(body):
                 body.ViewObject.Visibility = visible
+        if folded and recompute:
+            self.doc.recompute()
 
     def _discard_preview(self):
-        """Abort the preview transaction; a leftover preview (undo disabled) is removed by hand."""
+        """Abort the preview transaction; a leftover preview (undo disabled) is removed by hand.
+
+        A Folded Bar that folded the preview folds its base again, recomputed: as before the panel.
+        """
+        folded = self.edited is None and self.obj is not None and _in_document(self.obj) and _folded(self.obj)
         if self._transaction_open and _alive_document(self.doc):
             try:
                 self.doc.abortTransaction()
@@ -1271,6 +1355,8 @@ class DrillHoleTaskPanel:
                 pass
         self._transaction_open = False
         self._drop_preview()
+        if folded and _alive_document(self.doc) and any("Touched" in obj.State for obj in self.doc.Objects):
+            self.doc.recompute()
 
     def _restore_edit(self):
         """Put the edited drill hole back as it was when the panel opened, even with undo disabled."""
@@ -1301,7 +1387,14 @@ class DrillHoleTaskPanel:
         source = document.getObject(getattr(obj, "Name", obj)) if document else None
         if source is None:
             return
-        changed, messages = self._pick(*self._on_base(source, sub), _click_point(other))
+        point = _click_point(other)
+        if is_foldedbar(source):
+            # The tube under the click, at its current tip: the preview when the bar folds it.
+            source, sub, point, reason = self._from_bar(source, sub, point)
+            if reason is not None:
+                self._show([reason])
+                return
+        changed, messages = self._pick(*self._on_base(source, sub), point)
         self._show(messages)
         if changed:
             # Never recompute during FreeCAD's selection observer dispatch.
