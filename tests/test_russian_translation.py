@@ -36,6 +36,14 @@ FOLDED_MITER_TEXTS = (
     ("MaxProFrame", "The selected profiles do not form one chain."),
     ("MaxProFrame", "{config} is for {a:g} mm walls; {tube} has {b:g} mm walls."),
     ("MaxProFrame", "The inside bend radius must be between {min:g} and {max:g} mm."),
+    ("MaxProFrame", "The outer radius of the corner between {} and {} must be between {min:g} and {max:g} mm."),
+    ("MaxProFrame", "The K-factor of the corner between {} and {} must be between 0 and 1."),
+    (
+        "MaxProFrame",
+        "The key does not fit in the notch between {} and {} with this radius: make the radius smaller or turn the "
+        "key off.",
+    ),
+    ("MaxProFrame", "The corner between {} and {} has no Folded Corner object."),
     ("MaxProFrame", "The key does not fit in the notch between {} and {}: make it smaller."),
     (
         "MaxProFrame",

@@ -24,8 +24,8 @@ from miter_helpers import use_language
 from PySide import QtCore, QtWidgets
 from test_end_miter_geometry import polar
 from test_extend_cut_preview import keep_auto_preview
-from test_folded_bar import FoldedBarFixture
-from test_unfolded_geometry import PLAIN
+from test_folded_bar import FoldedBarFixture, corner_values
+from test_unfolded_geometry import PLAIN, bend
 
 from freecad.maxproframe import bend_config_dialog, create_folded_bar_tool
 from freecad.maxproframe._utils import is_foldedbar, is_unfoldedbar
@@ -349,16 +349,17 @@ class CreatePanelTest(FoldedPanelFixture):
 
         (bar,) = self.bars()
         self.assertOneSolid(bar)
+        # folded-corners T3: the corner objects hold the values; outer radius = inside radius + the 2 mm wall, the
+        # K-factor is the configuration's; the open corner has the sizes of the first one.
         self.assertEqual(
-            ("Steel 50x50x2", "Steel", 2.0, 4.0, 0.4),
-            (bar.BendConfiguration, bar.BendMaterial, bar.WallThickness.Value, bar.InsideRadius.Value, bar.KFactor),
+            [(6.0, 0.2, False, 0.0, 0.4), (7.0, 0.2, False, 0.0, 0.4), (6.0, 0.2, False, 0.0, 0.4)],
+            [corner_values(corner) for corner in self.folded_corners(bar)],
         )
-        self.assertEqual([0.0, 5.0, 0.0], list(bar.CornerRadii))
-        self.assertEqual((0.2, False, 0.0), (round(bar.Clearance.Value, 9), bar.Key, bar.KeyDiameter.Value))
-        self.assertNotIn("Relief", bar.PropertiesList)
-        self.assertNotIn("ReliefRadius", bar.PropertiesList)
+        self.assertEqual([(6.0, 0.2, False, 0.0, 0.4)], [corner_values(c) for c in bar.Corners if c.Open])
+        for name in ("InsideRadius", "CornerRadii", "Clearance", "Key", "OpenCorner", "Relief", "ReliefRadius"):
+            self.assertNotIn(name, bar.PropertiesList)
         self.assertEqual([bottom, right, top, left], list(bar.Segments))
-        self.assertEqual([bottom, left], list(bar.OpenCorner))
+        self.assertEqual([(bottom, left)], self.open_pairs(bar))
         self.assertEqual(STEEL.name, get_last_used_configuration())
         self.assertEqual(undos + 1, len(self.doc.UndoNames))
         self.assertEqual("Create Folded Bar", self.doc.UndoNames[0])
@@ -465,7 +466,8 @@ class CreatePanelTest(FoldedPanelFixture):
         self.assertTrue(panel.accept())
         (bar,) = self.bars()
         self.assertOneSolid(bar)
-        self.assertEqual([miter, right], list(bar.OpenCorner))
+        # The corner objects name the profiles: the miter keeps the corner of its profile.
+        self.assertEqual([(bottom, right)], self.open_pairs(bar))
 
     def test_own_miter_at_a_folded_corner_of_an_open_chain_is_reported(self):
         set_last_used_configuration(STEEL.name)
@@ -496,7 +498,7 @@ class CreatePanelTest(FoldedPanelFixture):
 
         (bar,) = self.bars()
         self.assertOneSolid(bar)
-        self.assertEqual([bottom, right], list(bar.OpenCorner))
+        self.assertEqual([(bottom, right)], self.open_pairs(bar))
         # The bar starts at the open corner of the first selected profile and runs away from it.
         self.assertEqual([bottom, left, top, right], list(bar.Segments))
 
@@ -593,7 +595,8 @@ class PickAsYouGoTest(FoldedPanelFixture):
         self.assertAccepts(panel)
         self.assertEqual([bar], self.bars())
         self.assertEqual([bottom, right, top, left], list(bar.Segments))
-        self.assertEqual([bottom, left], list(bar.OpenCorner))
+        self.assertEqual([(bottom, left)], self.open_pairs(bar))
+        self.assertEqual(4, len(bar.Corners))
         self.assertOneSolid(bar)
         self.assertFalse(any(tip.Visibility for tip in (bottom, right, top, left)))
 
@@ -659,7 +662,10 @@ class PickAsYouGoTest(FoldedPanelFixture):
         self.assertAccepts(panel)
         self.assertEqual([bar], self.bars())
         self.assertEqual([bottom, right, top], list(bar.Segments))
-        self.assertEqual([], list(bar.OpenCorner))
+        # The corners of the left tube left with it.
+        self.assertEqual([], self.open_pairs(bar))
+        self.assertEqual([(bottom, right), (right, top)], [(c.PieceA, c.PieceB) for c in bar.Corners])
+        self.assertEqual(list(bar.Corners), self.corner_objects())
         self.assertEqual(2, len(panel.corner_spins()))
         self.assertOneSolid(bar)
         self.assertTrue(left.Visibility)
@@ -683,6 +689,7 @@ class PickAsYouGoTest(FoldedPanelFixture):
         self.assertTrue(panel.reject())
         self.close_dialog()
         self.assertEqual([], self.bars())
+        self.assertEqual([], self.corner_objects())
         self.assertTrue(all(tip.Visibility for tip in (bottom, right, top, left)))
 
     def test_what_is_not_a_tube_piece_is_ignored(self):
@@ -758,17 +765,22 @@ class PickAsYouGoTest(FoldedPanelFixture):
         panel.form.spin_clearance.setValue(0.3)
         self.assertTrue(panel.accept())
         self.assertEqual(profiles, list(bar.Segments))
-        self.assertAlmostEqual(0.3, bar.Clearance.Value, places=9)
+        self.assertEqual([0.3] * 4, [round(corner.Clearance.Value, 9) for corner in bar.Corners])
 
 
 class EditPanelTest(FoldedPanelFixture):
+    def clearances(self, bar):
+        return [round(corner.Clearance.Value, 9) for corner in bar.Corners]
+
     def test_double_click_edits_the_bar_in_one_undo_step(self):
-        _, bar = self.make_bar(radius=4.0, corner_radii={2: 5.0})
+        set_last_used_configuration(STEEL.name)
+        _, bar = self.make_bar(corners=[bend(radius=4.0), bend(radius=4.0), bend(radius=5.0)])
         undos = len(self.doc.UndoNames)
 
         panel = self.edit(bar)
 
         form = panel.form
+        # The bar keeps no configuration: the last one used; the radii are the inside radii of its corners.
         self.assertEqual(STEEL.name, form.combo_configuration.currentData())
         self.assertEqual(4.0, form.spin_radius.value())
         self.assertEqual([0.0, 0.0, 5.0], [spin.value() for spin in panel.corner_spins()])
@@ -778,37 +790,43 @@ class EditPanelTest(FoldedPanelFixture):
         self.close_dialog()
 
         self.assertEqual(1, len(self.bars()))
-        self.assertAlmostEqual(0.3, bar.Clearance.Value, places=9)
-        self.assertFalse(bar.Key)
-        self.assertEqual(4.0, bar.InsideRadius.Value)
-        self.assertEqual([0.0, 0.0, 5.0], list(bar.CornerRadii))
+        self.assertEqual(
+            [(6.0, 0.3, False, 0.0, 0.4), (6.0, 0.3, False, 0.0, 0.4), (7.0, 0.3, False, 0.0, 0.4)],
+            [corner_values(corner) for corner in self.folded_corners(bar)],
+        )
         self.assertOneSolid(bar)
         self.assertEqual(undos + 1, len(self.doc.UndoNames))
         self.assertEqual("Edit Folded Bar", self.doc.UndoNames[0])
         self.doc.undo()
         self.doc.recompute()
-        self.assertEqual((0.0, True), (bar.Clearance.Value, bar.Key))
+        self.assertEqual(
+            [(6.0, 0.0, True, 0.0, 0.4), (6.0, 0.0, True, 0.0, 0.4), (7.0, 0.0, True, 0.0, 0.4)],
+            [corner_values(corner) for corner in self.folded_corners(bar)],
+        )
 
     def test_ok_without_changes_adds_no_undo_step(self):
-        _, bar = self.make_bar(**PLAIN)
+        profiles, bar = self.make_bar(**PLAIN)
+        values = [corner_values(corner) for corner in bar.Corners]
         undos = len(self.doc.UndoNames)
         panel = self.edit(bar)
 
         self.assertTrue(panel.accept())
 
         self.assertEqual(undos, len(self.doc.UndoNames))
-        self.assertEqual([], list(bar.OpenCorner))
+        self.assertEqual([(profiles[0], profiles[3])], self.open_pairs(bar))
+        self.assertEqual(values, [corner_values(corner) for corner in bar.Corners])
 
     def test_edit_opens_the_other_corner_of_the_first_piece(self):
         bottom, right, top, left = self.frame()
-        bar = make_folded_bar([bottom, right, top, left], STEEL, **PLAIN)
+        bar = make_folded_bar([bottom, right, top, left], bend(**PLAIN))
         panel = self.edit(bar)
 
         panel.form.combo_open_corner.setCurrentIndex(1)
         self.assertTrue(panel.accept())
 
         self.assertOneSolid(bar)
-        self.assertEqual([bottom, right], list(bar.OpenCorner))
+        self.assertEqual([(bottom, right)], self.open_pairs(bar))
+        self.assertEqual(4, len(self.corner_objects()))
         self.assertEqual([bottom, left, top, right], list(bar.Segments))
 
     def test_cancel_puts_the_edited_bar_back(self):
@@ -817,25 +835,54 @@ class EditPanelTest(FoldedPanelFixture):
         panel = self.edit(bar)
         panel.form.spin_clearance.setValue(0.3)
         panel.update_preview()
-        self.assertAlmostEqual(0.3, bar.Clearance.Value, places=9)
+        self.assertEqual([0.3] * 4, self.clearances(bar))
 
         self.assertTrue(panel.reject())
         self.close_dialog()
         self.doc.recompute()
 
-        self.assertEqual(0.0, bar.Clearance.Value)
+        self.assertEqual([0.0] * 4, self.clearances(bar))
         self.assertAlmostEqual(volume, bar.Shape.Volume, delta=1e-3)
 
-    def test_bar_whose_configuration_is_not_stored_keeps_its_copy(self):
+    def test_cancel_with_undo_disabled_puts_the_corners_back_and_removes_the_new_ones(self):
+        self.doc.UndoMode = 0
         _, bar = self.make_bar(**PLAIN)
-        self.store.delete(STEEL.name)
+        missing = self.folded_corners(bar)[1]
+        self.doc.removeObject(missing.Name)
+        self.doc.recompute()
+        self.assertIn("Invalid", bar.State)
+        names = [corner.Name for corner in bar.Corners]
+        panel = self.edit(bar)
+        panel.form.spin_clearance.setValue(0.3)
+        panel.update_preview()
+        self.assertOneSolid(bar)
+        self.assertEqual(4, len(bar.Corners))
+        self.assertEqual([0.3] * 4, self.clearances(bar))
+
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+
+        self.assertEqual(names, [corner.Name for corner in bar.Corners])
+        self.assertEqual(sorted(names), sorted(corner.Name for corner in self.corner_objects()))
+        self.assertEqual([0.0] * 3, self.clearances(bar))
+        self.assertIn("Invalid", bar.State)
+
+    def test_edit_offers_the_last_used_configuration_and_keeps_the_corners(self):
+        # folded-corners T3: the bar keeps no configuration; its corners keep their K-factor until another one is
+        # chosen.
+        set_last_used_configuration(ALU_3.name)
+        _, bar = self.make_bar(**PLAIN)
+        values = [corner_values(corner) for corner in bar.Corners]
+        undos = len(self.doc.UndoNames)
 
         panel = self.edit(bar)
 
-        self.assertEqual(STEEL.name, panel.form.combo_configuration.currentData())
+        self.assertEqual(ALU_3.name, panel.form.combo_configuration.currentData())
+        self.assertEqual(3.0, panel.form.spin_radius.value())
         self.assertAccepts(panel)
         self.assertTrue(panel.accept())
-        self.assertEqual("Steel", bar.BendMaterial)
+        self.assertEqual(values, [corner_values(corner) for corner in bar.Corners])
+        self.assertEqual(undos, len(self.doc.UndoNames))
 
 
 class OutputCommandsTest(FoldedPanelFixture):

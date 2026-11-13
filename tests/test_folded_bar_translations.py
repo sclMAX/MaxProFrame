@@ -66,7 +66,9 @@ class TestFoldedBarPanelSpanish(FoldedPanelFixture):
 
         panel = self.run_command(bottom, right, top, left)
         panel.form.spin_radius.setValue(1.0)
-        self.assertRefused(panel, "El radio interior de plegado tiene que estar entre 2 y 159.8 mm.")
+        self.assertRefused(
+            panel, "El radio exterior de la esquina entre Profile y Profile001 tiene que estar entre 4 y 161.8 mm."
+        )
         # S23
         panel.form.spin_radius.setValue(130.0)
         self.assertRefused(panel, "Profile001 es demasiado corto para el radio de sus esquinas.")

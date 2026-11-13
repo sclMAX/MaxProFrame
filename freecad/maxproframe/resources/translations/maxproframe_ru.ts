@@ -2845,6 +2845,22 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>The outer radius of the corner between {} and {} must be between {min:g} and {max:g} mm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The K-factor of the corner between {} and {} must be between 0 and 1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The key does not fit in the notch between {} and {} with this radius: make the radius smaller or turn the key off.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The corner between {} and {} has no Folded Corner object.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>The inside bend radius must be between {min:g} and {max:g} mm.</source>
         <translation type="unfinished"></translation>
     </message>

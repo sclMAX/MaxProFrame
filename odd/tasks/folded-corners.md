@@ -1,7 +1,8 @@
 # Folded corners: one object per corner, edited from a list of corners
 Rework of the Folded Bar (feature folded-miter, PR #145/#146, not released): every corner is a `FoldedCorner` object
 with its own outer radius, clearance, key and K-factor (Fx), the panel lists corners instead of tubes, and bend
-configurations go away (thickness and material come from the profile). Branch feat/folded-corners. Status: specs, review.
+configurations go away (thickness and material come from the profile). Branch feat/folded-corners. Delivery: one PR,
+one commit per task (each about one review slice; T3 and T4 may each pass 400 lines). Status: T1-T2 done, T3 next.
 
 ## Specs
 - S1 Corner list (L1): "cambiamos esa lista para que muestre las esquinas, con la opcion de quitar" -> the
@@ -59,9 +60,10 @@ configurations go away (thickness and material come from the profile). Branch fe
   diameter, K-factor), thickness from the profile, automatic K, outer-radius limits and messages - worker
   (context backstop) - done, commit below (L10).
 - T3 S7 S10 FoldedCorner object, FoldedBar properties and execute through its corners, tree children, delete
-  lifecycle; remove bend_config, dialog, command, icon and their tests - inline - pending.
-- T4 S1-S5 S9 panel: corner list with multi-selection, highlight, Remove, open corner, per-corner fields with Fx,
-  last used values; configuration widgets removed - inline - pending.
+  lifecycle, `make_folded_bar(selection, corners, open_corner)`; every bend property leaves the bar; the current panel
+  only gets the glue to create and edit corner objects - worker (context backstop) - done, commit below (L11).
+- T4 S1-S5 S7 S9 panel: corner list with multi-selection, highlight, Remove, open corner, per-corner fields with Fx,
+  last used values; configuration widgets removed; remove bend_config, dialog, command, icon and their tests - pending.
 - T5 S1-S11 tutorial, README, CHANGELOG, es/ru translations and .qm - inline - pending.
 
 ## Log
@@ -111,4 +113,14 @@ configurations go away (thickness and material come from the profile). Branch fe
   wall, K from the configuration) until T3/T4; the panel still says Inside radius while limits quote the outer radius.
   RED: test_unfolded_geometry ImportError CornerSettings. GREEN (parent rerun): test_unfolded_geometry 41,
   test_folded_geometry 11, test_folded_bar 26, test_folded_bar_panel 44, test_folded_chain 23, test_russian_translation
-  6 OK.
+  6 OK. Commit aa46dc3. Assess medium, review not due.
+- L11 T3 evidence (worker mwe81ag1-3-f5y6, parent check): `folded_corner.py` (FoldedCorner: PieceA/PieceB base
+  profiles, OuterRadius, Clearance, Key, KeyDiameter, KFactor, Open), bar `Corners` (folded corners in chain order,
+  open corner last), helpers `open_corner`, `bar_chain`, `folded_corners`, `bar_settings`, `update_corners`,
+  `remove_corners` (via `unsetupObject`); every bend property removed from the bar; panel glue only. Message "The corner
+  between {} and {} has no Folded Corner object.". RED: ModuleNotFoundError folded_corner, then 33 errors on the old
+  make_folded_bar signature. Parent found test_folded_bar_translations failing since T2 (untranslated outer-radius
+  message, missed by the T2 check): es translations of the 4 new messages, ru unfinished entries, .qm recompiled, test
+  expectation updated. GREEN (parent): test_folded_bar_translations 6, test_folded_bar 35, test_folded_bar_panel 45,
+  test_unfolded_geometry 41, test_folded_geometry 11, test_folded_chain 23, test_russian_translation 6,
+  test_compile_translations 3 OK.

@@ -4,6 +4,9 @@ See odd/tasks/folded-miter.md, T6. The panel folds the selected tube pieces with
 (S6), with its inside radius (S9, S14), the open corner of a closed frame (S17), the clearance and the key (S8, S20;
 the relief is always cut, its radius the inside radius of each corner). Whatever keeps the chain from folding is shown
 and keeps OK disabled: the chain messages, an own miter at a folded corner (S12) and the unfold messages (S9, S15).
+The bar keeps its sizes in its Folded Corner objects (odd/tasks/folded-corners.md, T3): the panel turns its fields into
+the settings of each corner (outer radius = inside radius + the wall of the tube, K-factor of the configuration) and
+reads them back from the corners of an edited bar, until T4 lists the corners themselves.
 
 Like Create Miter Ends (S22, T9), the command opens the panel at once, with the selected pieces if any, and the panel
 takes the pieces clicked while it is open: a click adds one at the end of the list, Ctrl+click or deselecting drops it.
@@ -32,7 +35,7 @@ from freecad.maxproframe.create_end_miter_tool import (
 )
 from freecad.maxproframe.expression_fields import length_field
 from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, get_param_group, translate
-from freecad.maxproframe.folded_bar import bend_configuration, check_settings, make_folded_bar, make_unfolded_bar
+from freecad.maxproframe.folded_bar import bar_chain, folded_corners, make_folded_bar, make_unfolded_bar, update_corners
 from freecad.maxproframe.folded_chain import (
     ChainError,
     base_profile,
@@ -42,29 +45,20 @@ from freecad.maxproframe.folded_chain import (
 )
 from freecad.maxproframe.profile_pattern import container_placement, newest_piece, placed
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
-from freecad.maxproframe.unfolded_geometry import UnfoldError
+from freecad.maxproframe.unfolded_geometry import CornerSettings, UnfoldError, check_settings
 
 # Remembered state of the panel's "Update automatically" check box.
 AUTO_PREVIEW_PARAM = "Folded Bar Auto Preview"
 # Largest radius, clearance or key size the fields take (mm).
 MAX_SIZE = 1000.0
-# Bar properties the panel sets, besides Segments.
-PROPERTIES = (
-    "BendConfiguration",
-    "BendMaterial",
-    "WallThickness",
-    "KFactor",
-    "InsideRadius",
-    "CornerRadii",
-    "Clearance",
-    "Key",
-    "KeyDiameter",
-    "OpenCorner",
-)
+# Corner object properties the panel sets; of the bar it sets Segments and Corners.
+PROPERTIES = ("PieceA", "PieceB", "OuterRadius", "Clearance", "Key", "KeyDiameter", "KFactor", "Open")
 
 
 def _plain(value):
     """A property value as the panel compares it."""
+    if hasattr(value, "Name") and hasattr(value, "Document"):
+        return value.Name
     if hasattr(value, "Value"):
         return round(value.Value, 9)
     if isinstance(value, float):
@@ -77,6 +71,27 @@ def _plain(value):
 def _corner_key(chain, corner):
     """A corner by the two profiles meeting there, whatever the order of the chain."""
     return frozenset(chain.segments[index].profile.Name for index in (corner.before, corner.after))
+
+
+def _snapshot(bar):
+    """What the panel may change on ``bar``: its Segments and Corners, and the PROPERTIES of each corner object."""
+    corners = [obj for obj in bar.Corners if obj is not None]
+    return {
+        "Segments": list(bar.Segments),
+        "Corners": corners,
+        "values": {obj.Name: {prop: getattr(obj, prop) for prop in PROPERTIES} for obj in corners},
+    }
+
+
+def _plain_snapshot(snapshot):
+    return (
+        _plain(snapshot["Segments"]),
+        _plain(snapshot["Corners"]),
+        tuple(
+            (name, tuple((prop, _plain(value)) for prop, value in values.items()))
+            for name, values in sorted(snapshot["values"].items())
+        ),
+    )
 
 
 def show_panel(panel):
@@ -127,12 +142,12 @@ class FoldedBarTaskPanel:
         self._store_error = ""
         # Inside radius of the corners given their own, by the pair of profiles meeting there (S14).
         self._overrides = {}
+        # K-factor of the corners of an edited bar, by pair: kept until another configuration is chosen.
+        self._kept_k_factors = {}
         self._row_keys = []
         self._corner_rows = []
         if edited is not None:
-            self._before = {prop: getattr(edited, prop) for prop in ("Segments",) + PROPERTIES}
-        # The configuration the edited bar keeps a copy of: offered even when the store lacks it or differs.
-        self._document_copy = bend_configuration(edited) if edited is not None else None
+            self._before = _snapshot(edited)
         self._timer = QtCore.QTimer()
         self._timer.setSingleShot(True)
         self._timer.setInterval(GAP_DELAY_MS)
@@ -238,25 +253,41 @@ class FoldedBarTaskPanel:
             form.spin_radius.setValue(configuration.inside_radius if configuration is not None else 0.0)
             form.cb_key.setChecked(True)
         else:
-            self._load_configurations(obj.BendConfiguration)
-            form.spin_radius.setValue(obj.InsideRadius.Value)
-            form.spin_clearance.setValue(obj.Clearance.Value)
-            form.cb_key.setChecked(obj.Key)
-            form.spin_key_diameter.setValue(obj.KeyDiameter.Value)
+            # The bar keeps no configuration: the last one used is offered.
+            self._load_configurations(get_last_used_configuration())
+            self._fill_from_corners(obj)
         self._fill_open_corners()
-        if obj is not None:
-            try:
-                chain = build_chain(self.selection, open_corner=list(obj.OpenCorner) or None)
-            except ChainError:
-                chain = None
-            if chain is not None:
-                for corner, radius in zip(chain.corners, obj.CornerRadii):
-                    if radius > 0:
-                        self._overrides[_corner_key(chain, corner)] = radius
         self._enable_sizes()
 
+    def _fill_from_corners(self, bar):
+        """The fields from the corner objects of ``bar``: its first folded corner gives the bar radius and the notch,
+        the corners whose inside radius differs get their own row."""
+        form = self.form
+        try:
+            chain = bar_chain(bar)
+        except ChainError:
+            return
+        found = [(corner, obj) for corner, obj in zip(chain.corners, folded_corners(bar, chain)) if obj is not None]
+        if not found:
+            return
+
+        def inside(corner, obj):
+            return round(obj.OuterRadius.Value - chain.segments[corner.before].thickness, 9)
+
+        first_corner, first = found[0]
+        radius = inside(first_corner, first)
+        form.spin_radius.setValue(radius)
+        form.spin_clearance.setValue(first.Clearance.Value)
+        form.cb_key.setChecked(first.Key)
+        form.spin_key_diameter.setValue(first.KeyDiameter.Value)
+        for corner, obj in found:
+            key = _corner_key(chain, corner)
+            self._kept_k_factors[key] = obj.KFactor
+            if inside(corner, obj) != radius:
+                self._overrides[key] = inside(corner, obj)
+
     def _load_configurations(self, selected):
-        """List the stored configurations (and the edited bar's own copy), ``selected`` chosen."""
+        """List the stored configurations, ``selected`` chosen."""
         combo = self.form.combo_configuration
         self._configurations, self._store_error = {}, ""
         try:
@@ -269,16 +300,6 @@ class FoldedBarTaskPanel:
         for configuration in stored:
             self._configurations[configuration.name] = configuration
             combo.addItem(configuration.name, configuration.name)
-        copy = self._document_copy
-        if copy is not None and self._configurations.get(copy.name) != copy:
-            # The bar keeps its own values: the stored configuration of that name is not the one it was made with.
-            text = translate("MaxProFrame", "{} (copy in the document)").format(copy.name)
-            index = combo.findData(copy.name)
-            if index < 0:
-                combo.addItem(text, copy.name)
-            else:
-                combo.setItemText(index, text)
-            self._configurations[copy.name] = copy
         for index in range(combo.count()):
             configuration = self._configurations[combo.itemData(index)]
             combo.setItemData(
@@ -400,25 +421,31 @@ class FoldedBarTaskPanel:
             self._overrides.pop(key, None)
         self._changed()
 
-    def _corner_radii(self, chain):
-        return [self._overrides.get(_corner_key(chain, corner), 0.0) for corner in chain.corners]
-
     # Checks.
 
-    def _options(self, chain):
-        """The ``unfold`` options of the panel values for ``chain``."""
+    def _settings(self, chain):
+        """The ``CornerSettings`` of each folded corner of ``chain`` from the panel values.
+
+        The outer radius is the inside radius of the corner (its own, else the bar's) plus the wall of its tube; the
+        K-factor is the configuration's, or the one an edited corner keeps while no other configuration is chosen.
+        """
         form = self.form
-
-        def size(spin):
-            return spin.value() or None
-
-        return dict(
-            radius=form.spin_radius.value(),
-            corner_radii={index: radius for index, radius in enumerate(self._corner_radii(chain)) if radius > 0},
-            clearance=form.spin_clearance.value(),
-            key=form.cb_key.isChecked(),
-            key_diameter=size(form.spin_key_diameter),
-        )
+        configuration = self._configuration()
+        k_factor = float(configuration.k_factor) if configuration is not None else 0.0
+        settings = []
+        for corner in chain.corners:
+            key = _corner_key(chain, corner)
+            inside = self._overrides.get(key, form.spin_radius.value())
+            settings.append(
+                CornerSettings(
+                    outer_radius=inside + chain.segments[corner.before].thickness,
+                    clearance=form.spin_clearance.value(),
+                    key=form.cb_key.isChecked(),
+                    key_diameter=form.spin_key_diameter.value(),
+                    k_factor=float(self._kept_k_factors.get(key, k_factor)),
+                )
+            )
+        return settings
 
     def _check(self):
         """(messages of what keeps the bar from folding, chain or None)."""
@@ -435,7 +462,7 @@ class FoldedBarTaskPanel:
         problems += [cut_at_fold_message(chain, cut) for cut in cuts_at_folds(chain)]
         if configuration is not None:
             try:
-                check_settings(chain, configuration, **self._options(chain))
+                check_settings(chain, self._settings(chain))
             except UnfoldError as error:
                 problems.append(str(error))
         return problems, chain
@@ -484,6 +511,8 @@ class FoldedBarTaskPanel:
         if not self._active():
             return
         configuration = self._configuration()
+        # The chosen configuration gives its K-factor to every corner.
+        self._kept_k_factors = {}
         if configuration is not None:
             self.form.spin_radius.blockSignals(True)
             self.form.spin_radius.setValue(configuration.inside_radius)
@@ -523,32 +552,14 @@ class FoldedBarTaskPanel:
         """What the bar must be: None while something keeps it from folding."""
         if self._problems or self._chain is None:
             return None
-        values = self._properties(self._chain)
-        tips = tuple(segment.tip.Name for segment in self._chain.segments)
-        return (("Segments", tips),) + tuple((prop, _plain(values[prop])) for prop in PROPERTIES)
-
-    def _properties(self, chain):
-        form = self.form
-        configuration = self._configuration()
-        return {
-            "BendConfiguration": configuration.name,
-            "BendMaterial": configuration.material,
-            "WallThickness": float(configuration.thickness),
-            "KFactor": float(configuration.k_factor),
-            "InsideRadius": form.spin_radius.value(),
-            "CornerRadii": self._corner_radii(chain),
-            "Clearance": form.spin_clearance.value(),
-            "Key": form.cb_key.isChecked(),
-            "KeyDiameter": form.spin_key_diameter.value(),
-            "OpenCorner": self._open_corner_property(),
-        }
-
-    def _open_corner_property(self):
-        """OpenCorner for the panel's choice; an edited bar keeps its own when it still opens there."""
-        if self.edited is not None and self.form.combo_open_corner.currentIndex() <= 0:
-            # The first choice is where the bar's segments open: its first and last one meet there.
-            return list(self._before["OpenCorner"])
-        return self._open_corner() or []
+        chain = self._chain
+        tips = tuple(segment.tip.Name for segment in chain.segments)
+        corners = tuple(
+            (tuple(sorted(_corner_key(chain, corner))), tuple(_plain(value) for value in vars(settings).values()))
+            for corner, settings in zip(chain.corners, self._settings(chain))
+        )
+        opened = (chain.segments[0].profile.Name, chain.segments[-1].profile.Name) if chain.closed else None
+        return (("Segments", tips), ("Corners", corners), ("Open", opened))
 
     def update_preview(self, *args, force=False):
         """Make the bar match the panel when Update automatically is checked (or ``force``)."""
@@ -582,16 +593,13 @@ class FoldedBarTaskPanel:
         self._syncing = True
         try:
             if self.obj is None or not _alive(self.obj):
-                options = self._options(self._chain)
-                self.obj = make_folded_bar(
-                    self.selection, self._configuration(), open_corner=self._open_corner(), **options
-                )
+                self.obj = make_folded_bar(self.selection, self._settings(self._chain), open_corner=self._open_corner())
             else:
-                values = self._properties(self._chain)
                 if self.edited is None:
                     # The pieces clicked since: the bar follows the chain of the list.
-                    values = dict(Segments=[segment.tip for segment in self._chain.segments], **values)
-                self._apply(self.obj, values)
+                    self._apply(self.obj, {"Segments": [segment.tip for segment in self._chain.segments]})
+                # The corner objects follow the chain and the fields; the open one is where the chain opens.
+                update_corners(self.obj, self._chain, self._settings(self._chain))
                 self.doc.recompute()
             self._error = _failures([self.obj])
         except Exception as error:
@@ -827,15 +835,35 @@ class FoldedBarTaskPanel:
                 if _alive(piece) and piece.Visibility != visible:
                     piece.Visibility = visible
         elif _alive(self.edited):
-            for prop, value in self._before.items():
-                if _plain(getattr(self.edited, prop)) != _plain(value):
-                    setattr(self.edited, prop, value)
-                    changed = True
+            changed = self._restore_edited()
         if changed:
             self.doc.recompute()
 
+    def _restore_edited(self):
+        """Put the edited bar and its corner objects back as they were; remove the corner objects made since."""
+        bar, before = self.edited, self._before
+        changed = False
+        made = [obj for obj in bar.Corners if _alive(obj) and obj.Name not in before["values"]]
+        for prop in ("Segments", "Corners"):
+            kept = [obj for obj in before[prop] if _alive(obj)]
+            if _plain(list(getattr(bar, prop))) != _plain(kept):
+                setattr(bar, prop, kept)
+                changed = True
+        for obj in made:
+            self.doc.removeObject(obj.Name)
+            changed = True
+        for name, values in before["values"].items():
+            obj = self.doc.getObject(name)
+            if obj is None:
+                continue
+            for prop, value in values.items():
+                if _plain(getattr(obj, prop)) != _plain(value):
+                    setattr(obj, prop, value)
+                    changed = True
+        return changed
+
     def _unchanged(self):
-        return all(_plain(getattr(self.edited, prop)) == _plain(value) for prop, value in self._before.items())
+        return _plain_snapshot(_snapshot(self.edited)) == _plain_snapshot(self._before)
 
     def _close_edit(self):
         if self.edited is None or not _alive_document(self.doc):
