@@ -178,6 +178,29 @@ class EndMiterFoldedBarTest(FoldedBarToolsFixture):
 
         self.assertBothEndsMitered()
 
+    def test_undo_after_ok_gives_the_bar_its_tubes_back_and_redo_the_miters(self):
+        for auto in (True, False):
+            with self.subTest(auto_preview=auto):
+                self.assertBarAsBefore()
+                panel = self.open_panel([self.bottom])
+                panel.form.cb_auto_update.setChecked(auto)
+                self.click(self.bar, RIGHT_LEG)
+                self.click(self.bar, LEFT_LEG)
+                self.assertTrue(panel.accept())
+                self.assertBothEndsMitered()
+
+                self.doc.undo()
+                self.doc.recompute()
+                self.assertBarAsBefore()
+
+                self.doc.redo()
+                self.doc.recompute()
+                self.assertBothEndsMitered()
+
+                # The next round starts from the bar as before.
+                self.doc.undo()
+                self.doc.recompute()
+
     def test_a_click_on_a_mitered_end_of_the_bar_stands_for_its_tube(self):
         panel = self.open_panel([self.bottom])
         self.click(self.bar, RIGHT_LEG)

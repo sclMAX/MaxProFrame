@@ -35,7 +35,7 @@ per task; push, PR and merge stay the user's decisions.
 - T7 [S1-S5] docs (tutorial, README, CHANGELOG), translations, full suite, verify. route=worker (docs) + parent; commit=(T7 docs commit)
 
 - T8 [S4] deleting a miter/trim or cutout from the tree releases it (the bar keeps its tube, hidden), plus the
-  verifier's regression tests (reopen untouched, release no-op, End Miter undo/redo). route=worker; commit=
+  verifier's regression tests (reopen untouched, release no-op, End Miter undo/redo). route=worker; commit=(T8 commit) [x]
 
 ## Log
 - L1 (2026-11-13) user, with a screenshot of End Miter ("Ingletes") listing only Profile_TC80x40x1.5_000 next to a
@@ -98,3 +98,8 @@ per task; push, PR and merge stay the user's decisions.
   already unfinished). Pre-existing at 7ddca7c but now easy to hit: deleting a miter/trim or cutout from the tree drops
   its tube from the bar (trimmed_profile.py onDelete, extruded_cutout.py onDelete do not release) -> T8; undo after a
   recompute outside the transaction drops a tube (panels recompute inside it; follow-up).
+- L13 T8 evidence (worker mweyw30z-c-8nwg): trimmed_profile.py and extruded_cutout.py onDelete release the piece and
+  show the base only when no bar folds it. RED test_folded_bar_tools 2 failures (Segments [top, left]); GREEN 13
+  (stable, weekly), test_end_miter_folded_bar 10 (undo/redo on and off auto preview), cutout/extend cut folded bar
+  12/12, end miter panel/edit 14/6, extend cut panel 45, cutout flow/depth 19/14, drill hole folded bar 14, trimmed
+  profile pid 2, folded bar 35 OK. Full suites (job-12/13) stopped: the tree changed under them; re-run after T8.

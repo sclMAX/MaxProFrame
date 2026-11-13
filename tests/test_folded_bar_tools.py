@@ -10,6 +10,9 @@ recompute of the document, without touching the bar, and the tube stays hidden (
 """
 
 import math
+import os
+import shutil
+import tempfile
 import unittest
 
 import FreeCAD as App
@@ -19,6 +22,7 @@ from test_unfolded_geometry import PLAIN, STEEL, bend
 
 from freecad.maxproframe import folded_bar
 from freecad.maxproframe.create_end_miter_tool import make_end_miter_profile
+from freecad.maxproframe.create_extruded_cutout_tool import make_cutout_sketch, make_extruded_cutout
 from freecad.maxproframe.folded_chain import build_chain
 from freecad.maxproframe.folded_geometry import fold
 from freecad.maxproframe.profile_pattern import container_placement, placed
@@ -178,17 +182,126 @@ class BarFollowsTest(FoldedBarToolsFixture):
         self.assertAlmostEqual(0.0, bar.Shape.BoundBox.YMin, delta=ON_FACE)
         self.assertFalse(right.Visibility)
 
-    def test_a_removed_segment_does_not_break_the_recompute_of_the_others(self):
+    def test_a_segment_removed_without_release_drops_out_of_the_bar_and_the_others_still_recompute(self):
         (bottom, right, top, left), bar = self.make_legs()
         miter = self.miter_right(bottom, right)
         self.doc.recompute()
 
-        # Removed without release: the bar loses the entry; the follow before the recompute skips it.
+        # Removed without release (no tool, no tree delete): the bar loses the entry, it does not get the tube back;
+        # the follow before the recompute skips the removed entry and the bar folds the tubes left.
         self.doc.removeObject(miter.Name)
         self.doc.recompute()
 
         self.assertEqual("Valid", right.getStatusString())
-        self.assertNotIn(None, list(bar.Segments))
+        self.assertEqual([top, left], list(bar.Segments))
+        self.assertOneSolid(bar)
+
+
+class DeleteFromTreeTest(FoldedBarToolsFixture):
+    """T8: a miter or cutout deleted from the tree gives its tube back to the bar, which keeps it hidden."""
+
+    def delete_from_tree(self, piece):
+        """Delete ``piece`` as the tree does: its ViewProvider ``onDelete``, the removal, then a recompute."""
+        view = getattr(piece, "ViewObject", None)
+        self.assertIsNotNone(view, "the tree delete needs the GUI")
+        self.assertTrue(view.Proxy.onDelete(view, []))
+        self.doc.removeObject(piece.Name)
+        self.doc.recompute()
+
+    def assertBarFoldsItsTubes(self, bar, tubes, volume):
+        self.assertEqual(tubes, list(bar.Segments))
+        self.assertOneSolid(bar)
+        self.assertNotIn("Touched", bar.State)
+        self.assertAlmostEqual(volume, bar.Shape.Volume, delta=1e-3)
+        for tube in tubes:
+            self.assertFalse(tube.Visibility, tube.Label)
+
+    def test_a_miter_on_a_tube_of_the_bar_deleted_from_the_tree_gives_the_bar_its_tube_back_hidden(self):
+        (bottom, right, top, left), bar = self.make_legs()
+        volume = bar.Shape.Volume
+        miter = make_end_miter_profile(right, [bottom])
+        self.doc.recompute()
+        self.assertEqual([miter, top, left], list(bar.Segments))
+
+        self.delete_from_tree(miter)
+
+        self.assertBarFoldsItsTubes(bar, [right, top, left], volume)
+        self.assertAlmostEqual(0.0, bar.Shape.BoundBox.YMin, delta=ON_FACE)
+
+    def test_a_cutout_on_a_tube_of_the_bar_deleted_from_the_tree_gives_the_bar_its_tube_back_hidden(self):
+        (_, right, top, left), bar = self.make_legs()
+        volume = bar.Shape.Volume
+        point = App.Vector(325, 100, 0)
+        face = face_at(right, point)
+        sketch = make_cutout_sketch(right, face)
+        local = sketch.Placement.inverse().multVec(point)
+        sketch.addGeometry(Part.Circle(App.Vector(local.x, local.y, 0), App.Vector(0, 0, 1), 5.0))
+        cutout = make_extruded_cutout(sketch, (right, [face]))
+        self.doc.recompute()
+        self.assertEqual("Valid", cutout.getStatusString())
+        self.assertEqual([cutout, top, left], list(bar.Segments))
+        self.assertLess(bar.Shape.Volume, volume - 1.0)
+
+        self.delete_from_tree(cutout)
+
+        self.assertBarFoldsItsTubes(bar, [right, top, left], volume)
+        # The sketch shows again, as for a cutout of a loose profile.
+        self.assertTrue(sketch.Visibility)
+
+    def test_a_miter_on_a_loose_profile_deleted_from_the_tree_shows_the_profile_again(self):
+        (bottom, right, top, left), bar = self.make_legs()
+        volume = bar.Shape.Volume
+        miter = make_end_miter_profile(bottom, [right])
+        self.doc.recompute()
+        bottom.ViewObject.Visibility = False
+
+        self.delete_from_tree(miter)
+
+        self.assertTrue(bottom.Visibility)
+        self.assertBarFoldsItsTubes(bar, [right, top, left], volume)
+
+
+class BarReopenTest(FoldedBarToolsFixture):
+    """The verifier's regressions (L12): a saved bar reopens untouched; releasing a piece no bar folds is a no-op."""
+
+    def test_a_saved_bar_with_a_miter_on_a_leg_reopens_untouched_and_recomputes_the_same(self):
+        (bottom, right, top, left), bar = self.make_legs()
+        miter = make_end_miter_profile(right, [bottom])
+        self.doc.recompute()
+        self.assertEqual([miter, top, left], list(bar.Segments))
+        names = [segment.Name for segment in bar.Segments]
+        volume = bar.Shape.Volume
+        bar_name = bar.Name
+        folder = tempfile.mkdtemp(prefix="mpf_folded_bar_tools_")
+        self.addCleanup(shutil.rmtree, folder, True)
+        path = os.path.join(folder, f"{self.doc.Name}.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+
+        # The cleanup of the fixture closes the document by this same name.
+        self.doc = App.openDocument(path)
+
+        bar = self.doc.getObject(bar_name)
+        self.assertEqual([], [obj.Name for obj in self.doc.Objects if "Touched" in obj.State])
+        folded_bar.follow_new_pieces(self.doc)
+        self.assertEqual([], [obj.Name for obj in self.doc.Objects if "Touched" in obj.State])
+        self.assertEqual(names, [segment.Name for segment in bar.Segments])
+        self.doc.recompute()
+        self.assertEqual(names, [segment.Name for segment in bar.Segments])
+        self.assertOneSolid(bar)
+        self.assertAlmostEqual(volume, bar.Shape.Volume, delta=1e-3)
+
+    def test_release_of_a_piece_no_bar_folds_changes_nothing(self):
+        (bottom, right, top, left), bar = self.make_legs()
+        self.doc.recompute()
+        self.assertNotIn("Touched", bar.State)
+
+        for piece in (right, bottom, None):
+            with self.subTest(piece=getattr(piece, "Label", piece)):
+                folded_bar.release_piece(piece)
+
+                self.assertEqual([right, top, left], list(bar.Segments))
+                self.assertNotIn("Touched", bar.State)
 
 
 if __name__ == "__main__":
