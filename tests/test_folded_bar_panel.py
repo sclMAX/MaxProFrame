@@ -200,6 +200,23 @@ class Elsewhere:
             during()
 
 
+class Observers:
+    """Records the document observers added and removed while a test runs."""
+
+    def __init__(self, test):
+        self.added, self.removed = [], []
+        for name, log in (("addDocumentObserver", self.added), ("removeDocumentObserver", self.removed)):
+            real = getattr(App, name)
+
+            def recorded(observer, real=real, log=log):
+                log.append(observer)
+                return real(observer)
+
+            patcher = patch.object(App, name, recorded)
+            patcher.start()
+            test.addCleanup(patcher.stop)
+
+
 class FoldedPanelFixture(FoldedBarFixture):
     @classmethod
     def setUpClass(cls):
@@ -341,6 +358,9 @@ class FoldedPanelFixture(FoldedBarFixture):
         the objects touched, as Cancel with undo on does here (issue #148).
         """
         self.assertNotIn("Invalid", bar.State)
+        if self.doc.UndoMode == 0:
+            # Undo really off (FreeCAD 1.1): the panel recomputed the bar it put back by hand.
+            self.assertOneSolid(bar)
         self.assertEqual(1, len(bar.Shape.Solids))
         self.assertAlmostEqual(volume, bar.Shape.Volume, delta=1e-3)
         self.doc.recompute()
@@ -1430,6 +1450,9 @@ class EditPanelTest(FoldedPanelFixture):
         self.assertEqual([0.0] * 3, self.clearances(bar))
         # The corner still has no object: the bar recomputes into its error again (with undo on, as on FreeCAD 27,
         # Cancel leaves it touched; see assertShapeBack).
+        if self.doc.UndoMode == 0:
+            # Undo really off (FreeCAD 1.1): the panel put the bar back by hand and recomputed it already.
+            self.assertIn("Invalid", bar.State)
         self.doc.recompute()
         self.assertIn("Invalid", bar.State)
 
@@ -1908,6 +1931,38 @@ class NoFreezeTest(FoldedPanelFixture):
 
         self.assertFalse(spin.property("mixedValues"))
         self.assertEqual([6.0, 7.0, 6.0], [corner_values(corner)[0] for corner in self.folded_corners(bar)])
+
+
+class RecomputeElsewhereTest(FoldedPanelFixture):
+    """Issue #148: work queued while a recompute the panel did not start runs once, after it, and the observer goes."""
+
+    def test_work_queued_during_an_outside_recompute_runs_once_after_it(self):
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+        observers = Observers(self)
+        runs = []
+
+        def work():
+            runs.append(bool(self.doc.Recomputing))
+
+        def during():
+            self.pick(panel, 0)
+            panel.form.spin_outer_radius.setValue(9.0)
+            panel._wait(work)
+            panel._wait(work)
+            QtTest.QTest.qWait(GAP_DELAY_MS * 2)
+
+        Elsewhere(self.doc.addObject("App::FeaturePython", "Elsewhere"), during)
+        self.doc.recompute()
+        self.assertEqual([], runs)
+        self.assertEqual(1, len(observers.added))
+
+        QtTest.QTest.qWait(GAP_DELAY_MS * 4)
+        self.events()
+
+        self.assertEqual([False], runs)
+        self.assertEqual(observers.added, observers.removed)
+        self.assertIsNone(panel._recompute_end)
 
 
 class DarkThemeTest(FoldedPanelFixture):

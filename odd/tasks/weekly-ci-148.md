@@ -20,7 +20,7 @@ were authorized by the user for this work ("push pr y merge directo, luego ataqu
 
 ## Tasks
 - T1 [S2, S3] folded bar panel hang and cancel-with-undo-disabled on weekly. route=worker; commit=(T1 commit) [x]
-- T2 [S4] cutout loose-tube test order dependence on weekly. route=worker (parallel); commit=
+- T2 [S4] cutout loose-tube test order dependence on weekly. route=worker (parallel); commit=(T2 commit) [x] partial: flake not reproduced; isolation leak fixed; runner prints failures at once
 - T3 [S1] PR, CI weekly green (both shards), merge. route=parent; commit=
 
 ## Log
@@ -42,3 +42,18 @@ were authorized by the user for this work ("push pr y merge directo, luego ataqu
   objects stay Touched; tests adapted (`assertShapeBack`: not Invalid, one solid, same volume before and after a
   recompute). RED: 2 new NoFreezeTest tests failed on both runtimes, S2 test hung on weekly; GREEN test_folded_bar_panel
   79 OK on weekly (205 s, 0 "Recursive calling") and stable (220 s); parent re-run ExpressionTest 5 OK on weekly.
+- L4 Independent verify of 9ab5ed2 (mwf3gomr-g-h08o): S2 pass, S3 pass; differential test_folded_bar_panel stable 26c32fa
+  77 OK (5 "Recursive calling" lines) vs HEAD 79 OK (0), weekly HEAD 79 OK in 279 s, no hang; 7 scratch probes (observer
+  once, other documents ignored, Cancel deferred once, closed dialog drops work, never-ending recompute checks every
+  300 ms and stops on close, failing recompute resumes) OK on both runtimes. Follow-ups applied by the parent: stable
+  keeps the restore-by-hand checks before the recompute (`UndoMode == 0` guard in EditPanelTest and assertShapeBack),
+  RecomputeElsewhereTest (verifier P1) added.
+- L5 T2 (worker mwf2absf-f-fxru, partial): S4 not reproduced in 337 local weekly runs (shard 2/2 x7 incl. under load,
+  exact CI order replays, 320 pair runs); CI run 43441208207 (same tree) passed it: a rare flake, assertion unknown
+  because unittest prints details only at the end and the shard was killed by the S2 hang. Found and fixed a real
+  isolation leak: CutoutFoldedBarFixture removed the `_edit_sketch` patch before close_dialog processed events, so the
+  real Sketcher and a depth-panel listener fired in the next test (RED FixtureIsolationTest on both runtimes, GREEN);
+  the loose-tube assertions print the panel message. Parent: ci/run-tests.FCMacro ImmediateDetailsResult writes each
+  failure/error/subtest traceback as soon as it happens (RED ci/tests/test_immediate_failures.py "18 not less than 1",
+  GREEN; ci/tests 210 OK). Focused weekly and stable: RecomputeElsewhereTest 1, EditPanelTest 4, RemoveTest 4,
+  ExpressionTest 5, test_cutout_folded_bar 13, all OK.

@@ -62,11 +62,12 @@ class CutoutFoldedBarFixture(FoldedBarToolsFixture):
         Gui.Selection.clearSelection()
         self.addCleanup(Gui.Selection.clearSelection)
         self.panels = []
-        self.addCleanup(self.close_dialog)
-        # The face panel opens the new sketch once closed: the tests draw in it without the Sketcher.
+        # The face panel opens the new sketch once closed: the tests draw in it without the Sketcher. The patch
+        # outlives close_dialog, where that deferred opening runs (FixtureIsolationTest).
         opener = patch.object(create_extruded_cutout_tool, "_edit_sketch")
         self.edit_sketch = opener.start()
         self.addCleanup(opener.stop)
+        self.addCleanup(self.close_dialog)
 
     def close_dialog(self):
         if Gui.Control.activeDialog():
@@ -280,8 +281,8 @@ class CutoutPanelOnFoldedBarTest(CutoutFoldedBarFixture):
 
         self.click(bottom, point)
 
-        self.assertEqual(f"{bottom.Label} ({bottom.Name}) {face}", self.face_label(panel))
-        self.assertTrue(panel.accept())
+        self.assertEqual(f"{bottom.Label} ({bottom.Name}) {face}", self.face_label(panel), self.message(panel))
+        self.assertTrue(panel.accept(), self.message(panel))
         sketch, cutout = self.created(before)
         self.assertEqual((bottom, [face]), cutout.baseObject)
         self.assertEqual([(bottom, (face,))], sketch.AttachmentSupport)
@@ -326,6 +327,31 @@ class DepthPanelOnFoldedBarTest(CutoutFoldedBarFixture):
         self.assertOneSolid(bar)
         self.assertAlmostEqual(volume, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
         self.assertFalse(right.Visibility)
+
+
+class FixtureIsolationTest(unittest.TestCase):
+    """A test of this module leaves nothing behind for the next one (weekly CI #148, S4).
+
+    OK in the face panel opens the new sketch once the panel is closed (``_edit_sketch`` on a 0 ms timer). The
+    fixture closes the panel in its cleanup: the timer then fires and must still find the patched opener. The real
+    one opened the Sketcher on the document being closed, whose closing then left the depth panel of that cutout
+    on a timer for the next test (``_DepthAfterSketch``).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    def test_the_sketch_made_by_ok_is_not_opened_once_the_test_has_ended(self):
+        result = unittest.TestResult()
+        with patch.object(create_extruded_cutout_tool, "_edit_sketch") as after_the_test:
+            CutoutPanelOnFoldedBarTest("test_a_loose_tube_still_takes_its_own_face").run(result)
+            QtWidgets.QApplication.processEvents()
+
+        self.assertEqual([], [text for _, text in result.failures + result.errors])
+        after_the_test.assert_not_called()
+        self.assertEqual(set(), create_extruded_cutout_tool._DepthAfterSketch._listening)
+        self.assertFalse(Gui.Control.activeDialog())
 
 
 class DirectCutoutOnFoldedBarTest(CutoutFoldedBarFixture):
