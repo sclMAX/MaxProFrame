@@ -21,7 +21,8 @@ were authorized by the user for this work ("push pr y merge directo, luego ataqu
 ## Tasks
 - T1 [S2, S3] folded bar panel hang and cancel-with-undo-disabled on weekly. route=worker; commit=(T1 commit) [x]
 - T2 [S4] cutout loose-tube test order dependence on weekly. route=worker (parallel); commit=(T2 commit) [x] partial: flake not reproduced; isolation leak fixed; runner prints failures at once
-- T3 [S1] PR, CI weekly green (both shards), merge. route=parent; commit=
+- T4 [S1] shards: stable and weekly 2 -> 4 at the same timeouts; nightly max repetitions 20 -> 9. route=parent; commit=(T4 commit) [x]
+- T3 [S1] PR, CI weekly green (all shards), merge. route=parent; commit=
 
 ## Log
 - L1 (2026-11-13) user: "push pr y merge directo, luego ataquemos el 148". PR #149 merged (26c32fa).
@@ -57,3 +58,11 @@ were authorized by the user for this work ("push pr y merge directo, luego ataqu
   failure/error/subtest traceback as soon as it happens (RED ci/tests/test_immediate_failures.py "18 not less than 1",
   GREEN; ci/tests 210 OK). Focused weekly and stable: RecomputeElsewhereTest 1, EditPanelTest 4, RemoveTest 4,
   ExpressionTest 5, test_cutout_folded_bar 13, all OK.
+- L6 PR #150 CI run 43448518357: all 4 native shards (stable too) stopped at their timeouts (480/540 s) in
+  test_drill_hole_panel, no failures; the post-#149 main run 43441208207 also timed out on both stable shards (required
+  check red on main), while PR #149's run of the same tree passed. Not a hang: locally test_drill_hole_panel takes
+  117 s alone and 131 s after test_cutout_folded_bar; a stable shard reached only 688 of ~980 tests in 480 s: the suite
+  outgrew 2 shards. User chose "4 grupos, mismo tiempo (recomendado)" (stable and weekly 4 shards at 480/540 s;
+  nightly max repetitions 20 -> 9 to keep (9+1) x 4 x 480 s + setup within the 355-minute job).
+- L7 T4: ci/targets.json shards 4/4; ci/tests/test_policy.py pins; test_nightly_policy MAX_REPETITIONS = 9;
+  nightly.yml limit 1-9 and budget comment; docs/ci.md. ci/tests 210 OK.

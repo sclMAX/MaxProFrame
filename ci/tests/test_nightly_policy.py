@@ -18,6 +18,10 @@ STABLE_SHA256 = "f6dc6ba676e5ac96a565ebc8d657232f94c6158e85b4352141bd1a46f6b4343
 STABLE_URL = "https://github.com/FreeCAD/FreeCAD/releases/download/1.1.4/FreeCAD_1.1.4-Linux-x86_64-py311.AppImage"
 
 
+# The most repetitions nightly.yml accepts: every shard of each, plus the shuffled run, must fit its job budget.
+MAX_REPETITIONS = 9
+
+
 def write_fake_tests(tests_dir, modules=4, methods=5):
     tests_dir.mkdir(parents=True, exist_ok=True)
     for index in range(modules):
@@ -294,7 +298,7 @@ class TestNightlyWorkflowPolicy(unittest.TestCase):
 
     def test_job_budget_covers_every_shard_of_the_maximum_runs(self):
         stable = test_policy.load_targets()["stable"]
-        worst_minutes = (20 + 1) * stable["shards"] * stable["timeout"] / 60
+        worst_minutes = (MAX_REPETITIONS + 1) * stable["shards"] * stable["timeout"] / 60
         budget = int(re.search(r"timeout-minutes: (\d+)", self.content).group(1))
         # Setup (install, cache, extraction) and the summary need time too: at least 15 minutes on top.
         self.assertGreaterEqual(budget, worst_minutes + 15)
