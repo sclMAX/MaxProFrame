@@ -32,7 +32,7 @@ per task; push, PR and merge stay the user's decisions.
 - T5 [S3, S4, S5] Extend Cut and Notch (target face on a bar, profiles from a bar, no dependency loop, no cut at a
   folded corner). route=worker (parallel); commit=(T5 commit) [x]
 - T6 [S3] Profile Pattern with a whole Folded Bar. route=worker (parallel); commit=(T6 commit) [x]
-- T7 [S1-S5] docs (tutorial, README, CHANGELOG), full suite, verify. route=parent; commit=
+- T7 [S1-S5] docs (tutorial, README, CHANGELOG), translations, full suite, verify. route=worker (docs) + parent; commit=(T7 docs commit)
 
 ## Log
 - L1 (2026-11-13) user, with a screenshot of End Miter ("Ingletes") listing only Profile_TC80x40x1.5_000 next to a
@@ -80,3 +80,11 @@ per task; push, PR and merge stay the user's decisions.
   drill_hole.py onDelete releases the hole and keeps a folded tube hidden. RED 12 of 14; GREEN
   test_drill_hole_folded_bar 14 (stable, weekly; parent re-run 14 OK); drill hole panel/geometry/rebase/reference/
   resources 99/26/4/10/2 OK. Open for T7: tooltips/prompts of Drill Hole, Profile Pattern do not mention a Folded Bar.
+- L11 T7 docs/translations (worker mwey4wrb-a-nkwo): es for "Click a straight part of the folded bar." ("Hacé clic en
+  una parte recta de la barra plegada.") and "{} cannot be cut at its folded corner with {}."; Drill Hole prompt and
+  tooltip and Profile Pattern piece hint and tooltip name a folded bar (es; ru unfinished, old ru sources vanished);
+  17 .qm recompiled; tutorial "### Tools on a Folded Bar", README, CHANGELOG. Approved extra surfaces (parent):
+  tests/test_drill_hole_panel.py, tests/test_toolbar_translations.py (string updates), tests/test_russian_translation.py
+  (append to FOLDED_MITER_TEXTS). RED test_folded_bar_translations 1 failure; GREEN 7; translation/drill/pattern/cutout
+  modules OK. ru left for @c0n5t: 6 entries. Follow-up: Cutout prompt/tooltip and "Select a planar face of a profile,
+  a trimmed profile or a cutout." do not mention a folded bar.

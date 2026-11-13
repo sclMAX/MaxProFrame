@@ -66,7 +66,8 @@ EXPECTED = {
     "MaxProFrame_DrillHole": (
         "Drill Hole",
         "Agujero",
-        "Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego en uno de sus nueve círculos",
+        "Hacé clic en una cara plana de un perfil, un perfil recortado, un calado o una barra plegada y luego en uno "
+        "de sus nueve círculos",
     ),
     "MaxProFrame_ProfilePattern": (
         "Profile Pattern",
