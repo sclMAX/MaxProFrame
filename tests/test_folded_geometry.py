@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import FreeCAD as App
 import Part
 from test_end_miter_geometry import polar
-from test_unfolded_geometry import DEPTH, PLAIN, STEEL, K, R, T, UnfoldFixture, key_centers
+from test_unfolded_geometry import DEPTH, PLAIN, STEEL, K, R, T, UnfoldFixture, bend, key_centers
 
 from freecad.maxproframe.drill_hole import make_drill_hole
 from freecad.maxproframe.folded_chain import build_chain
@@ -113,7 +113,7 @@ class RectangleFoldTest(FoldFixture):
 
         for options in (PLAIN, {}):
             with self.subTest(options=options):
-                shape = self.solid(fold(chain, STEEL, **options) if options else self.default.folded)
+                shape = self.solid(fold(chain, bend(**options)) if options else self.default.folded)
                 box_ = shape.BoundBox
                 for value, expected in (
                     (box_.XMin, -E),
@@ -147,9 +147,9 @@ class RectangleFoldTest(FoldFixture):
         chain = self.default.chain
         # The relief takes the side walls out of the bend zone, so the folded pieces do not overlap the bent wall.
         options = dict(key=False)
-        unfolded = unfold(chain, STEEL, **options)
+        unfolded = unfold(chain, bend(**options))
 
-        # What fold(chain, STEEL, **options) computes.
+        # What fold(chain, bend(**options)) computes.
         shape = self.solid(fold_bar(chain, unfolded))
 
         # The outer wall section (50 x 2) revolves with its centroid at r + t/2 from the axis instead of BA long flat.
@@ -192,7 +192,7 @@ class KeyFoldTest(FoldFixture):
     def test_clearance_leaves_a_gap_between_the_flanks(self):
         chain = self.default.chain
         tight = self.solid(self.default.folded)
-        loose = self.solid(fold(chain, STEEL, clearance=1.0))
+        loose = self.solid(fold(chain, bend(clearance=1.0)))
 
         v = 12.0
         h = math.radians(45)
@@ -209,7 +209,7 @@ class KeyFoldTest(FoldFixture):
         # their relief arcs (the relief radius is the inside radius: the arcs are centered on the bend axis).
         chain = self.default.chain
         tight = self.solid(self.default.folded)
-        loose = self.solid(fold(chain, STEEL, clearance=1.0, key=False))
+        loose = self.solid(fold(chain, bend(clearance=1.0, key=False)))
 
         for corner in chain.corners:
             center = self.center(corner)
@@ -231,7 +231,7 @@ class CornerRadiusFoldTest(FoldFixture):
         chain = self.default.chain
         plain = self.solid(self.default.folded)
 
-        shape = self.solid(fold(chain, STEEL, corner_radii={1: 6.0}))
+        shape = self.solid(fold(chain, [STEEL, bend(radius=6.0), STEEL]))
 
         corners = chain.corners
         self.assertRoundCorner(shape, corners[1], 6.0)
@@ -258,7 +258,7 @@ class ArbitraryAnglesFoldTest(FoldFixture):
         chain = self.chain()
         for options in (dict(key=False), {}):
             with self.subTest(options=options):
-                shape = self.solid(fold(chain, STEEL, **options))
+                shape = self.solid(fold(chain, bend(**options)))
 
                 for index, segment in enumerate(chain.segments):
                     # Clear of the corners: a folded corner reaches e tan(theta / 2) along each segment (inner wall).

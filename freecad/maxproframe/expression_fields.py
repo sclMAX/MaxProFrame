@@ -11,7 +11,64 @@ from PySide import QtCore, QtGui
 
 def _widget(class_name, fallback):
     widget = Gui.UiLoader().createWidget(class_name)
-    return widget if widget is not None else fallback()
+    widget = widget if widget is not None else fallback()
+    _keep_theme_text(widget)
+    return widget
+
+
+# Object name of the event filter that keeps the text of a field in the colors of the theme.
+_THEME_TEXT = "maxproframe_theme_text"
+
+
+class _ThemeText(QtCore.QObject):
+    """Gives the text of an editable field the colors of the theme back when FreeCAD resets them.
+
+    FreeCAD's spin box keeps the palette its field had before the stylesheet styled it and, whenever the field
+    is resized or bound with no expression, sets the text of the active window to that palette's: black on the
+    dark field of FreeCAD Dark. A field driven by an expression is read-only: its gray (or red, when invalid)
+    text is FreeCAD's and stays.
+    """
+
+    def __init__(self, spin):
+        super().__init__(spin)
+        self.setObjectName(_THEME_TEXT)
+        self.spin = spin
+        self.syncing = False
+
+    def eventFilter(self, watched, event):
+        if event.type() == QtCore.QEvent.PaletteChange and not self.syncing:
+            self.sync()
+        return False
+
+    def sync(self):
+        line = self.spin.lineEdit()
+        if line is None or self.spin.isReadOnly():
+            return
+        theme = self.spin.palette()
+        palette = line.palette()
+        text = QtGui.QPalette.Text
+        groups = (QtGui.QPalette.Active, QtGui.QPalette.Inactive)
+        if all(palette.color(group, text) == theme.color(group, text) for group in groups):
+            return
+        for group in groups:
+            palette.setColor(group, text, theme.color(group, text))
+        self.syncing = True
+        try:
+            line.setPalette(palette)
+        finally:
+            self.syncing = False
+
+
+def _keep_theme_text(spin):
+    """Keep the text of ``spin`` in the colors of the theme (see _ThemeText); once per field."""
+    line = spin.lineEdit()
+    if line is None or spin.findChildren(QtCore.QObject, _THEME_TEXT):
+        return
+    keeper = _ThemeText(spin)
+    # The field's own palette changes when the theme does; its line edit's when FreeCAD sets its colors.
+    spin.installEventFilter(keeper)
+    line.installEventFilter(keeper)
+    keeper.sync()
 
 
 def length_field(minimum, maximum, value, decimals=2):
@@ -59,6 +116,7 @@ def bind(widget, obj, prop):
     A field unbound before gets its editor back only once bound: a failed bind leaves it bound to the old
     object, whose editor stays taken away.
     """
+    _keep_theme_text(widget)
     try:
         Gui.ExpressionBinding(widget).bind(obj, prop)
     except Exception:
@@ -78,6 +136,7 @@ def unbind(widget):
     The field stays bound to the object it showed: its Fx icon is hidden and its = swallowed, so the editor
     cannot set an expression on that object. Binding the field again shows the icon.
     """
+    _keep_theme_text(widget)
     for label in widget.lineEdit().findChildren(QtGui.QLabel):
         label.hide()
     if not widget.findChildren(QtCore.QObject, _NO_EDITOR):

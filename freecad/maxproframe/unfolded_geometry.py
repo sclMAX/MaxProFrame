@@ -2,14 +2,17 @@
 
 Every segment of the chain (``folded_chain.build_chain``) is moved rigidly onto the X axis, one after the other,
 so that the outside of the frame keeps its size (outside mold line): between two segments the outer wall of the bend
-(the one that stays whole) develops its bend allowance theta * (r + K t). At each folded corner the other walls get
+(the one that stays whole) develops its bend allowance theta * (r + K t), with r the inside radius of the corner (its
+outer radius less the wall thickness of the tube) and K its K-factor, by default the one of DIN 6935
+(``automatic_k_factor``). At each folded corner the other walls get
 a V notch whose flanks meet when the corner folds, with an interlocking key (a half circle centered on the miter line,
 at its middle or slid along it to the nearest place where it fits, standing out of one flank as the tab, its socket cut
 into the other) and a curved relief next to the bent wall, always cut, whose radius is the inside radius of the corner
 (so the disc it keeps is concentric with the bend axis); the clearance moves the flanks, the key and the relief arcs
-apart.
+apart. Each corner has its own settings (``CornerSettings``).
 The cuts made on each segment (its trims, cutouts and drill holes) move with it. The bar starts at X = 0 at the
-open-corner end of the first segment. See odd/tasks/folded-miter.md, section "T3 design".
+open-corner end of the first segment. See odd/tasks/folded-miter.md, section "T3 design", and
+odd/tasks/folded-corners.md (S6 outer radius, S7 thickness from the profile, S8 automatic K-factor).
 """
 
 import math
@@ -32,13 +35,44 @@ VOLUME_TOLERANCE = 1e-6
 END_MARGIN = 1.0
 # How close the key slides to whatever keeps it from the middle of the miter line (mm).
 KEY_STEP = 1e-3
-# The largest inside radius is rounded down to it, so the range in the message is accepted whole (mm).
+# The largest outer radius is rounded down to it, so the range in the message is accepted whole (mm).
 RADIUS_STEP = 0.1
 X_AXIS = App.Vector(1, 0, 0)
+# DIN 6935: from this r / t on the neutral axis is at the middle of the wall (K = 0.5).
+DIN_6935_RATIO = 5.0
 
 
 class UnfoldError(ValueError):
     """The chain cannot unfold with these settings; the message says why."""
+
+
+@dataclass(frozen=True)
+class CornerSettings:
+    """How one folded corner bends.
+
+    ``outer_radius``: the radius seen outside the bend (mm); the inside radius is it less the wall thickness of the
+    tube. ``clearance`` goes half on each side of the notch flanks and of the key, and all of it on the relief arcs.
+    ``key``: the interlocking key in the notch, of ``key_diameter`` (0: a quarter of the depth across the bent wall).
+    ``k_factor``: where the neutral axis sits in the wall, 0 < K <= 1 (0: automatic, ``automatic_k_factor``).
+    """
+
+    outer_radius: float
+    clearance: float = 0.0
+    key: bool = True
+    key_diameter: float = 0.0
+    k_factor: float = 0.0
+
+
+def automatic_k_factor(inside_radius, thickness):
+    """The K-factor of DIN 6935 for a bend of ``inside_radius`` in a wall of ``thickness``.
+
+    DIN 6935 gives the correction factor k = 0.65 + 0.5 log10(r / t) up to r / t = 5 and 1 from there on; the K-factor
+    is half of it: K = 0.325 + 0.25 log10(r / t), 0.5 from r / t = 5 on (0.325 at r = t, 0.40 at r = 2t).
+    """
+    ratio = float(inside_radius) / float(thickness)
+    if ratio >= DIN_6935_RATIO - SIZE_TOLERANCE:
+        return 0.5
+    return 0.325 + 0.25 * math.log10(ratio)
 
 
 @dataclass
@@ -108,16 +142,6 @@ def _prism(face, reach):
     return face.extrude(App.Vector(0, 0, 2 * reach))
 
 
-def _check_thickness(chain, configuration):
-    tube = chain.segments[0]
-    if abs(float(configuration.thickness) - tube.thickness) > SIZE_TOLERANCE:
-        raise UnfoldError(
-            translate("MaxProFrame", "{config} is for {a:g} mm walls; {tube} has {b:g} mm walls.").format(
-                config=configuration.name, a=float(configuration.thickness), tube=_label(tube.profile), b=tube.thickness
-            )
-        )
-
-
 @dataclass
 class _Bend:
     """The sizes of one folded corner, in its (u, v) plane."""
@@ -150,20 +174,33 @@ class _Bend:
         return (self.radius + self.thickness) * math.tan(self.half)
 
     def check_radius(self):
-        """At least the wall thickness; at most the largest radius whose inside of the bend (radius r around the bend
-        axis) still passes outside the inner corner, less two wall thicknesses (S15, L40). The inner corner is on the
-        flank at v = depth, (r + t - depth) / cos(theta / 2) from the bend axis point: that equals r at
-        (depth - t) / (1 - cos(theta / 2)). It depends on the angle of the corner; the key takes no room from it
-        (whether the key fits on the miter line is ``check_key``'s job)."""
+        """The outer radius (r + t), checked as such (S6): at least twice the wall thickness (the inside radius at
+        least the wall thickness); at most the largest inside radius whose inside of the bend (radius r around the
+        bend axis) still passes outside the inner corner, less two wall thicknesses (S15, L40), plus the wall. The
+        inner corner is on the flank at v = depth, (r + t - depth) / cos(theta / 2) from the bend axis point: that
+        equals r at (depth - t) / (1 - cos(theta / 2)). It depends on the angle of the corner; the key takes no room
+        from it (whether the key fits on the miter line is ``check_key``'s job)."""
         t = self.thickness
-        minimum = t
-        largest = (self.depth - t) / (1 - math.cos(self.half)) - 2 * t
+        outer = self.radius + t
+        minimum = 2 * t
+        # The largest inside radius ((depth - t) / (1 - cos(theta / 2)) - 2t) plus the wall.
+        largest = (self.depth - t) / (1 - math.cos(self.half)) - t
         maximum = round(math.floor(largest / RADIUS_STEP + SIZE_TOLERANCE) * RADIUS_STEP, 6)
-        if self.radius < minimum - SIZE_TOLERANCE or self.radius > maximum + SIZE_TOLERANCE:
+        if outer < minimum - SIZE_TOLERANCE or outer > maximum + SIZE_TOLERANCE:
             raise UnfoldError(
-                translate("MaxProFrame", "The inside bend radius must be between {min:g} and {max:g} mm.").format(
-                    min=minimum, max=maximum
-                )
+                translate(
+                    "MaxProFrame",
+                    "The outer radius of the corner between {} and {} must be between {min:g} and {max:g} mm.",
+                ).format(*self.names, min=minimum, max=maximum)
+            )
+
+    def check_k_factor(self):
+        """Where the neutral axis sits in the wall: above 0 (its inside face) up to 1 (its outside face)."""
+        if not 0 < self.k_factor <= 1:
+            raise UnfoldError(
+                translate(
+                    "MaxProFrame", "The K-factor of the corner between {} and {} must be between 0 and 1."
+                ).format(*self.names)
             )
 
     def _flank_heights(self, v):
@@ -345,8 +382,8 @@ class _Bend:
             raise UnfoldError(
                 translate(
                     "MaxProFrame",
-                    "The key does not fit in the notch between {} and {} with this inside radius: make the radius "
-                    "smaller or turn the key off.",
+                    "The key does not fit in the notch between {} and {} with this radius: make the radius smaller or "
+                    "turn the key off.",
                 ).format(*self.names)
             )
         raise refused
@@ -369,32 +406,53 @@ class _Bend:
         return removed
 
 
-def _bends(chain, configuration, radius, corner_radii, clearance, key, key_diameter):
-    radius = float(configuration.inside_radius) if radius is None else float(radius)
-    corner_radii = corner_radii or {}
+def _per_corner(chain, corners):
+    """One CornerSettings per corner of ``chain``: ``corners`` is one for all of them or one per corner."""
+    if isinstance(corners, CornerSettings):
+        return [corners] * len(chain.corners)
+    corners = list(corners)
+    if len(corners) != len(chain.corners):
+        raise ValueError(
+            f"Give one CornerSettings per corner of the chain: it has {len(chain.corners)} corners, "
+            f"{len(corners)} given."
+        )
+    return corners
+
+
+def _bends(chain, corners):
+    """The bends of ``chain`` with the settings ``corners`` (``unfold``), checked as ``unfold`` checks them."""
     bends = []
-    for index, corner in enumerate(chain.corners):
-        r = float(corner_radii.get(index, radius))
-        diameter = corner.depth * KEY_DIAMETER_RATIO if key_diameter is None else float(key_diameter)
+    for corner, chosen in zip(chain.corners, _per_corner(chain, corners)):
+        # The wall thickness is the profile's (S7): the inside radius follows from the outer one (S6).
+        thickness = chain.segments[corner.before].thickness
         bend = _Bend(
             names=(_label(chain.segments[corner.before].profile), _label(chain.segments[corner.after].profile)),
             angle=corner.bend_angle,
-            radius=r,
-            thickness=chain.segments[corner.before].thickness,
-            k_factor=float(configuration.k_factor),
+            radius=float(chosen.outer_radius) - thickness,
+            thickness=thickness,
+            k_factor=float(chosen.k_factor),
             depth=corner.depth,
-            clearance=float(clearance),
-            key=key,
-            diameter=diameter,
+            clearance=float(chosen.clearance),
+            key=bool(chosen.key),
+            diameter=float(chosen.key_diameter) or corner.depth * KEY_DIAMETER_RATIO,
         )
         bend.check_radius()
+        if bend.k_factor == 0:
+            # S8: automatic, once the inside radius is known to be at least the wall thickness.
+            bend.k_factor = automatic_k_factor(bend.radius, thickness)
+        bend.check_k_factor()
         bends.append(bend)
     # A tube too short for its bends makes no key fit either: say so first.
     _check_lengths(chain, bends)
-    if key:
-        for bend in bends:
+    for bend in bends:
+        if bend.key:
             bend.check_key()
     return bends
+
+
+def check_settings(chain, corners):
+    """Raise what ``unfold`` would raise for ``corners`` (as ``unfold`` takes them), without building any shape."""
+    _bends(chain, corners)
 
 
 def _check_lengths(chain, bends):
@@ -482,20 +540,20 @@ def _segment_changes(chain, placements, section, x_min, x_max):
     return removed, added
 
 
-def unfold(chain, configuration, radius=None, corner_radii=None, clearance=0.0, key=True, key_diameter=None):
-    """The unfolded bar of ``chain`` (``folded_chain.build_chain``) bent with ``configuration``.
+def unfold(chain, corners):
+    """The unfolded bar of ``chain`` (``folded_chain.build_chain``) bent with ``corners``.
 
-    ``radius`` is the inside bend radius of the bar (the configuration's when None); ``corner_radii`` maps a corner
-    index to its own radius. ``clearance`` goes half on each side of the notch flanks and of the key, and all of it on
-    the relief arcs (they face the bent wall). The key (a half circle of ``key_diameter`` centered on the miter line,
-    at its middle or where it fits nearest to it, a quarter of the depth across the bent wall by default) can be
-    turned off. The relief is always cut, its radius the inside radius of each corner: the disc it keeps is then
-    concentric with the bend axis (any other radius leaves a void or a collision at the folded corner).
-    Raises UnfoldError when the configuration, the radius or the key do not suit the tube, or when a tube is too short
-    for the bends at its ends.
+    ``corners`` is one ``CornerSettings`` for every corner, or a sequence of one per corner of the chain in chain
+    order (ValueError otherwise). The wall thickness is the one of the tubes. At each corner the clearance goes half on
+    each side of the notch flanks and of the key, and all of it on the relief arcs (they face the bent wall). The key
+    (a half circle centered on the miter line, at its middle or where it fits nearest to it, a quarter of the depth
+    across the bent wall by default) can be turned off. The relief is always cut, its radius the inside radius of
+    each corner: the disc it keeps is then concentric with the bend axis (any other radius leaves a void or a
+    collision at the folded corner). The K-factor is the one of DIN 6935 unless given (``automatic_k_factor``).
+    Raises UnfoldError when the radius, the K-factor or the key of a corner do not suit the tube, or when a tube is too
+    short for the bends at its ends.
     """
-    _check_thickness(chain, configuration)
-    bends = _bends(chain, configuration, radius, corner_radii, clearance, key, key_diameter)
+    bends = _bends(chain, corners)
     placements, corners = _straight_placements(chain, bends)
     section = _section(chain, placements[0])
     x_min = _box(placed(_global_shape(chain.segments[0].tip), placements[0])).XMin

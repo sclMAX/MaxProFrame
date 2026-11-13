@@ -1431,10 +1431,11 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>{} and {} do not meet at a corner.</source><translation>{} y {} no se unen en una esquina.</translation></message>
     <message><source>The open corner must be at one end of the first selected profile ({}).</source><translation>La esquina abierta tiene que estar en un extremo del primer perfil seleccionado ({}).</translation></message>
     <message><source>The selected profiles do not form one chain.</source><translation>Los perfiles seleccionados no forman una sola cadena.</translation></message>
-    <message><source>{config} is for {a:g} mm walls; {tube} has {b:g} mm walls.</source><translation>{config} es para paredes de {a:g} mm; {tube} tiene paredes de {b:g} mm.</translation></message>
-    <message><source>The inside bend radius must be between {min:g} and {max:g} mm.</source><translation>El radio interior de plegado tiene que estar entre {min:g} y {max:g} mm.</translation></message>
+    <message><source>The outer radius of the corner between {} and {} must be between {min:g} and {max:g} mm.</source><translation>El radio exterior de la esquina entre {} y {} tiene que estar entre {min:g} y {max:g} mm.</translation></message>
+    <message><source>The K-factor of the corner between {} and {} must be between 0 and 1.</source><translation>El factor K de la esquina entre {} y {} tiene que estar entre 0 y 1.</translation></message>
+    <message><source>The key does not fit in the notch between {} and {} with this radius: make the radius smaller or turn the key off.</source><translation>La llave no entra en la muesca entre {} y {} con este radio: achicá el radio o desactivá la llave.</translation></message>
+    <message><source>The corner between {} and {} has no Folded Corner object.</source><translation>La esquina entre {} y {} no tiene objeto Esquina plegada.</translation></message>
     <message><source>The key does not fit in the notch between {} and {}: make it smaller.</source><translation>La llave no entra en la muesca entre {} y {}: achicala.</translation></message>
-    <message><source>The key does not fit in the notch between {} and {} with this inside radius: make the radius smaller or turn the key off.</source><translation>La llave no entra en la muesca entre {} y {} con este radio interior: achicá el radio o desactivá la llave.</translation></message>
     <message><source>{} is too short for the radius of its corners.</source><translation>{} es demasiado corto para el radio de sus esquinas.</translation></message>
     <message><source>{}: its developed length ({:.1f} mm) is longer than the stock length of the cut list ({:.1f} mm).
 </source><translation>{}: su longitud desarrollada ({:.1f} mm) supera la longitud de barra de la lista de cortes ({:.1f} mm).
@@ -1442,17 +1443,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>{} does not fold into one solid: change its bend settings.</source><translation>{} no se pliega en un solo sólido: cambiá sus valores de plegado.</translation></message>
     <message><source>{} does not unfold into one solid: change its bend settings.</source><translation>{} no se despliega en un solo sólido: cambiá sus valores de plegado.</translation></message>
     <message><source>Folded Bar</source><translation>Barra plegada</translation></message>
-    <message><source>Tube pieces, from the start of the bar</source><translation>Piezas de tubo, desde el inicio de la barra</translation></message>
-    <message><source>Bend</source><translation>Plegado</translation></message>
-    <message><source>Manage configurations</source><translation>Gestionar configuraciones</translation></message>
-    <message><source>Configuration</source><translation>Configuración</translation></message>
-    <message><source>Inside bend radius of every folded corner</source><translation>Radio interior de plegado de todas las esquinas plegadas</translation></message>
-    <message><source>Inside radius</source><translation>Radio interior</translation></message>
     <message><source>Corners</source><translation>Esquinas</translation></message>
-    <message><source>Open corner</source><translation>Esquina abierta</translation></message>
-    <message><source>Where the closed frame stays open: the bar starts there, at the first piece</source><translation>Dónde queda abierto el marco cerrado: la barra empieza ahí, en la primera pieza</translation></message>
-    <message><source>Inside radius of each folded corner:</source><translation>Radio interior de cada esquina plegada:</translation></message>
-    <message><source>Notch</source><translation>Muesca</translation></message>
     <message><source>Gap between the notch flanks and around the key, half on each side</source><translation>Separación entre los flancos de la muesca y alrededor de la llave, la mitad de cada lado</translation></message>
     <message><source>Clearance</source><translation>Holgura</translation></message>
     <message><source>Interlocking key</source><translation>Llave de encastre</translation></message>
@@ -1461,38 +1452,28 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Preview</source><translation>Previsualización</translation></message>
     <message><source>Update automatically</source><translation>Actualizar automáticamente</translation></message>
     <message><source>Default</source><translation>Predeterminado</translation></message>
-    <message><source>{} (copy in the document)</source><translation>{} (copia en el documento)</translation></message>
-    <message><source>{}: {:g} mm walls, inside radius {:g} mm, K-factor {:g}</source><translation>{}: paredes de {:g} mm, radio interior {:g} mm, factor K {:g}</translation></message>
-    <message><source>Between {} and {}</source><translation>Entre {} y {}</translation></message>
-    <message><source>Bar radius</source><translation>Radio de la barra</translation></message>
-    <message><source>{} to {}</source><translation>{} a {}</translation></message>
-    <message><source>Add a bend configuration: press Manage configurations.</source><translation>Agregá una configuración de plegado: presioná Gestionar configuraciones.</translation></message>
     <message><source>Pending changes</source><translation>Cambios pendientes</translation></message>
     <message><source>Preview updated</source><translation>Previsualización actualizada</translation></message>
     <message><source>No preview</source><translation>Sin previsualización</translation></message>
-    <message><source>Bend Configurations</source><translation>Configuraciones de plegado</translation></message>
-    <message><source>New</source><translation>Nueva</translation></message>
-    <message><source>Delete</source><translation>Eliminar</translation></message>
-    <message><source>Where the neutral axis sits in the wall: 0 inside face, 1 outside face</source><translation>Dónde está la fibra neutra en la pared: 0 cara interior, 1 cara exterior</translation></message>
-    <message><source>Name</source><translation>Nombre</translation></message>
-    <message><source>Material</source><translation>Material</translation></message>
-    <message><source>Wall thickness</source><translation>Espesor de pared</translation></message>
-    <message><source>Inside bend radius</source><translation>Radio interior de plegado</translation></message>
     <message><source>K-factor</source><translation>Factor K</translation></message>
-    <message><source>Save</source><translation>Guardar</translation></message>
-    <message><source>There is already a configuration called {}.</source><translation>Ya hay una configuración llamada {}.</translation></message>
-    <message><source>Delete the bend configuration {}? The bars made with it keep their copy.</source><translation>¿Eliminar la configuración de plegado {}? Las barras hechas con ella conservan su copia.</translation></message>
-    <message><source>The configuration name must not be empty.</source><translation>El nombre de la configuración no puede estar vacío.</translation></message>
-    <message><source>The material must not be empty.</source><translation>El material no puede estar vacío.</translation></message>
-    <message><source>The wall thickness must be greater than 0 mm.</source><translation>El espesor de pared tiene que ser mayor que 0 mm.</translation></message>
-    <message><source>The inside bend radius must be at least the wall thickness ({} mm).</source><translation>El radio interior de plegado tiene que ser al menos el espesor de pared ({} mm).</translation></message>
-    <message><source>The K-factor must be between 0 and 1.</source><translation>El factor K tiene que estar entre 0 y 1.</translation></message>
-    <message><source>Bend configuration "{}" does not exist.</source><translation>La configuración de plegado "{}" no existe.</translation></message>
-    <message><source>'configurations' must be a list.</source><translation>'configurations' tiene que ser una lista.</translation></message>
-    <message><source>Bend configurations file '{}' has version {}; this MaxProFrame reads version {}.</source><translation>El archivo de configuraciones de plegado '{}' tiene la versión {}; este MaxProFrame lee la versión {}.</translation></message>
-    <message><source>each configuration must be an object.</source><translation>cada configuración tiene que ser un objeto.</translation></message>
-    <message><source>Corrupt bend configurations file '{}': {}</source><translation>Archivo de configuraciones de plegado dañado '{}': {}</translation></message>
     <message><source>Folded Miters</source><translation>Ingletes plegados</translation></message>
+    <message><source>Tube</source><translation>Tubo</translation></message>
+    <message><source>Material and wall thickness of the tubes, from their profile</source><translation>Material y espesor de pared de los tubos, tomados de su perfil</translation></message>
+    <message><source>Corners from the start of the bar: click, Ctrl+click or Shift+click to select the ones to edit</source><translation>Esquinas desde el inicio de la barra: hacé clic, Ctrl+clic o Mayús+clic para seleccionar las que vas a editar</translation></message>
+    <message><source>Remove</source><translation>Quitar</translation></message>
+    <message><source>Open bar: take off the end tube of the first or last corner selected. Closed frame: open the frame at the selected corner.</source><translation>Barra abierta: quita el tubo del extremo de la primera o la última esquina seleccionada. Marco cerrado: abre el marco en la esquina seleccionada.</translation></message>
+    <message><source>Corner</source><translation>Esquina</translation></message>
+    <message><source>Radius seen outside the bend: the inside radius is it less the wall thickness</source><translation>Radio que se ve por fuera del plegado: el radio interior es este menos el espesor de pared</translation></message>
+    <message><source>Outer radius</source><translation>Radio exterior</translation></message>
+    <message><source>Automatic</source><translation>Automático</translation></message>
+    <message><source>Where the neutral axis sits in the wall, 0 &lt; K &lt;= 1; Automatic: from DIN 6935, by the inside radius and the wall thickness</source><translation>Dónde está la fibra neutra en la pared, 0 &lt; K &lt;= 1; Automático: según DIN 6935, por el radio interior y el espesor de pared</translation></message>
+    <message><source>Open · {} → {}</source><translation>Abierta · {} → {}</translation></message>
+    <message><source>key</source><translation>llave</translation></message>
+    <message><source>no key</source><translation>sin llave</translation></message>
+    <message><source>{} · {} → {} · R {} · {} · clearance {}</source><translation>{} · {} → {} · R {} · {} · holgura {}</translation></message>
+    <message><source>Click the tube where the bar starts.</source><translation>Hacé clic en el tubo donde empieza la barra.</translation></message>
+    <message><source>Click the next tube, after {}.</source><translation>Hacé clic en el tubo siguiente, después de {}.</translation></message>
+    <message><source>Tubes picked: {}</source><translation>Tubos elegidos: {}</translation></message>
 </context>
 <context>
     <name>MaxProFrame_FoldedBar</name>
@@ -1505,8 +1486,18 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>&lt;b&gt;Unfold Bar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a Folded Bar: its straight bar with every cut is made from X = 0 along X, to export with File &gt; Export (STEP, IGES, BREP) for a tube laser.</source><translation>&lt;b&gt;Desplegar barra&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná una barra plegada: se crea su barra recta con todos los cortes, desde X = 0 a lo largo de X, para exportarla con Archivo &gt; Exportar (STEP, IGES, BREP) a un láser de tubos.</translation></message>
 </context>
 <context>
-    <name>MaxProFrame_BendConfigurations</name>
-    <message><source>Bend Configurations</source><translation>Configuraciones de plegado</translation></message>
-    <message><source>&lt;b&gt;Bend Configurations&lt;/b&gt;&lt;br&gt;&lt;br&gt;Add, edit and delete the saved bend configurations of folded bars: material, wall thickness, inside bend radius and K-factor.</source><translation>&lt;b&gt;Configuraciones de plegado&lt;/b&gt;&lt;br&gt;&lt;br&gt;Agregá, editá y eliminá las configuraciones de plegado guardadas de las barras plegadas: material, espesor de pared, radio interior de plegado y factor K.</translation></message>
+    <name>App::Property</name>
+    <message><source>Profile of one of the two tubes meeting at the corner</source><translation>Perfil de uno de los dos tubos que se unen en la esquina</translation></message>
+    <message><source>Profile of the other tube meeting at the corner</source><translation>Perfil del otro tubo que se une en la esquina</translation></message>
+    <message><source>Where a closed frame stays open: the bar starts and ends here, unfolded</source><translation>Dónde queda abierto un marco cerrado: la barra empieza y termina acá, sin plegar</translation></message>
+    <message><source>Radius seen outside the bend; the inside radius is it less the wall thickness</source><translation>Radio que se ve por fuera del plegado; el radio interior es este menos el espesor de pared</translation></message>
+    <message><source>Where the neutral axis sits in the wall: 0 &lt; K &lt;= 1; 0: automatic, from DIN 6935</source><translation>Dónde está la fibra neutra en la pared: 0 &lt; K &lt;= 1; 0: automático, según DIN 6935</translation></message>
+    <message><source>Gap between the notch flanks and around the key, half on each side</source><translation>Separación entre los flancos de la muesca y alrededor de la llave, la mitad de cada lado</translation></message>
+    <message><source>Interlocking key in the notch</source><translation>Llave de encastre en la muesca</translation></message>
+    <message><source>Diameter of the key, a half circle on the miter line; 0: a quarter of the tube depth across the bent wall</source><translation>Diámetro de la llave, un medio círculo sobre la línea del inglete; 0: un cuarto de la medida del tubo perpendicular a la pared doblada</translation></message>
+    <message><source>Tube pieces folded into the bar, in chain order from its start</source><translation>Piezas de tubo plegadas en la barra, en el orden de la cadena desde su inicio</translation></message>
+    <message><source>Folded Corner objects of the bar in chain order from its start, then the open corner of a closed frame</source><translation>Objetos Esquina plegada de la barra en el orden de la cadena desde su inicio, y después la esquina abierta de un marco cerrado</translation></message>
+    <message><source>Length of the unfolded bar: the length to cut</source><translation>Longitud de la barra desplegada: la longitud a cortar</translation></message>
+    <message><source>The folded bar this is the straight bar of</source><translation>La barra plegada de la que esta es la barra recta</translation></message>
 </context>
 </TS>

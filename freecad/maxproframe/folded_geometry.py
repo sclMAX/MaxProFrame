@@ -97,9 +97,9 @@ def fold_bar(chain, unfolded):
     return folded
 
 
-def fold(chain, configuration, **options):
-    """The folded solid of ``chain`` bent with ``configuration``; ``options`` are those of ``unfold``.
+def fold(chain, corners):
+    """The folded solid of ``chain`` bent with ``corners``: one ``CornerSettings`` or one per corner (``unfold``).
 
     Raises UnfoldError when the chain cannot unfold with these settings.
     """
-    return fold_bar(chain, unfold(chain, configuration, **options))
+    return fold_bar(chain, unfold(chain, corners))

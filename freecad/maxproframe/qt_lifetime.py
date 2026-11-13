@@ -15,6 +15,17 @@ def _invalidate(wrapper):
     invalidate(wrapper)
 
 
+def is_alive(obj):
+    """Whether the Qt object behind the wrapper ``obj`` still exists."""
+    if obj is None:
+        return False
+    try:
+        from shiboken6 import isValid
+    except ImportError:
+        return True
+    return isValid(obj)
+
+
 def invalidate_wrapper_on_destroy(widget):
     # A widget built by the UI loader and later deleted by Qt (the task view deletes the panel
     # form when its dialog closes) keeps a registered PySide wrapper: it still looks valid, and a

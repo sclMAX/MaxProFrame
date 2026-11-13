@@ -1,9 +1,11 @@
-"""FoldedBar and UnfoldedBar objects (odd/tasks/folded-miter.md, T5: S2 S3 S4 S13 S19, with S14 S17 S20 as properties).
+"""FoldedBar and UnfoldedBar objects (odd/tasks/folded-miter.md, T5: S2 S3 S4 S13 S19, with S14 S17 S20 as properties)
+and the FoldedCorner objects of a bar (odd/tasks/folded-corners.md, T3: S7 S10 S11).
 
 A closed rectangle of four tubes with three folded corners and an open one becomes one FoldedBar: one valid solid
-where the frame was drawn, recomputed when its bend settings change, saved and opened again with the document. It
-hides the segment tips and is one piece for the BOM, the cut list and the IDs, of its developed length. The
-UnfoldedBar is the straight bar from X = 0 that FreeCAD's own STEP export writes.
+where the frame was drawn, recomputed when one of its corners changes, saved and opened again with the document. Each
+corner is a FoldedCorner object of its own (outer radius, clearance, key, K-factor; the open one of a closed frame
+too); the bar keeps no bend setting. It hides the segment tips and is one piece for the BOM, the cut list and the IDs,
+of its developed length. The UnfoldedBar is the straight bar from X = 0 that FreeCAD's own STEP export writes.
 """
 
 import math
@@ -15,36 +17,95 @@ from unittest import mock
 
 import FreeCAD as App
 import Part
-from test_unfolded_geometry import PLAIN, STEEL, UnfoldFixture
+from test_unfolded_geometry import PLAIN, UnfoldFixture, bend
 
 from freecad.maxproframe._utils import get_profiles_and_links_from_document, get_profiles_and_links_from_object
-from freecad.maxproframe.bend_config import BendConfiguration
 from freecad.maxproframe.best_fit import CutPart, best_fit_decreasing
 from freecad.maxproframe.create_bom import make_cut_list, traverse_assembly
+from freecad.maxproframe.create_end_miter_tool import make_end_miter_profile
 from freecad.maxproframe.drill_hole import make_drill_hole
 from freecad.maxproframe.ff_tools import get_param_group
-from freecad.maxproframe.folded_bar import check_settings, make_folded_bar, make_unfolded_bar
+from freecad.maxproframe.folded_bar import make_folded_bar, make_unfolded_bar
 from freecad.maxproframe.folded_chain import ChainError, build_chain
+from freecad.maxproframe.folded_corner import is_folded_corner
 from freecad.maxproframe.folded_geometry import fold, fold_bar
 from freecad.maxproframe.populate_ids import populate_ids
 from freecad.maxproframe.profile_pattern import container_placement, placed
-from freecad.maxproframe.unfolded_geometry import UnfoldError, unfold
+from freecad.maxproframe.unfolded_geometry import CornerSettings, UnfoldError, check_settings, unfold
 
 VOLUME_TOLERANCE = 1e-3
 LENGTH_TOLERANCE = 1e-4
 STOCK_PARAM = "Stock Length"
 KERF = 1.0
+# folded-corners S7, S10: every bend setting left the bar for its corners (no migration, S11).
+REMOVED_BAR_PROPERTIES = (
+    "BendConfiguration",
+    "BendMaterial",
+    "WallThickness",
+    "InsideRadius",
+    "KFactor",
+    "CornerRadii",
+    "OpenCorner",
+    "Clearance",
+    "Key",
+    "KeyDiameter",
+)
+CORNER_PROPERTIES = {
+    "PieceA": "App::PropertyLink",
+    "PieceB": "App::PropertyLink",
+    "OuterRadius": "App::PropertyLength",
+    "Clearance": "App::PropertyLength",
+    "Key": "App::PropertyBool",
+    "KeyDiameter": "App::PropertyLength",
+    "KFactor": "App::PropertyFloat",
+    "Open": "App::PropertyBool",
+}
+
+
+def corner_values(corner):
+    """(OuterRadius, Clearance, Key, KeyDiameter, KFactor) of a FoldedCorner, rounded."""
+    return (
+        round(corner.OuterRadius.Value, 9),
+        round(corner.Clearance.Value, 9),
+        corner.Key,
+        round(corner.KeyDiameter.Value, 9),
+        round(corner.KFactor, 9),
+    )
+
+
+def settings_values(settings):
+    return (
+        round(settings.outer_radius, 9),
+        round(settings.clearance, 9),
+        settings.key,
+        round(settings.key_diameter, 9),
+        round(settings.k_factor, 9),
+    )
 
 
 class FoldedBarFixture(UnfoldFixture):
-    def make_bar(self, container=None, **options):
-        """The rectangle frame (in ``container`` when given) folded at three corners, open at the first one."""
+    def make_bar(self, container=None, corners=None, open_corner=None, **options):
+        """The rectangle frame (in ``container`` when given) folded at three corners, open at the first one.
+
+        ``corners``: the CornerSettings of every folded corner, or one per corner; else ``bend(**options)``.
+        """
         profiles = self.frame()
         if container is not None:
             container.addObjects([profiles[0].AttachmentSupport[0][0], *profiles])
-        bar = make_folded_bar(profiles, STEEL, **options)
+        bar = make_folded_bar(profiles, bend(**options) if corners is None else corners, open_corner=open_corner)
         self.assertEqual("Valid", bar.getStatusString())
         return profiles, bar
+
+    def folded_corners(self, bar):
+        """The corner objects of ``bar`` that fold, in its order."""
+        return [corner for corner in bar.Corners if not corner.Open]
+
+    def open_pairs(self, bar):
+        """(PieceA, PieceB) of the open corner objects of ``bar``."""
+        return [(corner.PieceA, corner.PieceB) for corner in bar.Corners if corner.Open]
+
+    def corner_objects(self):
+        return [obj for obj in self.doc.Objects if is_folded_corner(obj)]
 
     def assertSameVolume(self, expected, shape):
         self.assertAlmostEqual(expected.Volume, shape.Volume, delta=VOLUME_TOLERANCE)
@@ -60,127 +121,273 @@ class FoldedBarObjectTest(FoldedBarFixture):
         profiles, bar = self.make_bar()
 
         chain = build_chain(profiles)
-        # fold(chain, STEEL) is fold_bar of this unfold.
-        expected = unfold(chain, STEEL)
+        # fold(chain, bend()) is fold_bar of this unfold.
+        expected = unfold(chain, bend())
         self.assertOneSolid(bar)
         self.assertSameVolume(fold_bar(chain, expected), bar.Shape)
         self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
         self.assertEqual(profiles, list(bar.Segments))
-        self.assertEqual([], list(bar.OpenCorner))
         for tip in profiles:
             self.assertFalse(tip.Visibility, tip.Label)
         self.assertTrue(bar.Visibility)
-        # A copy of the configuration: the document does not need the configurations file of this computer.
-        self.assertEqual(
-            ("Steel 50x50x2", "Steel", 2.0, 3.0, 0.4),
-            (bar.BendConfiguration, bar.BendMaterial, bar.WallThickness.Value, bar.InsideRadius.Value, bar.KFactor),
-        )
-        self.assertEqual([0.0, 0.0, 0.0], list(bar.CornerRadii))
-        self.assertEqual((0.0, True, 0.0), (bar.Clearance.Value, bar.Key, bar.KeyDiameter.Value))
         self.assertEqual(1, bar.getEditorMode("DevelopedLength").count("ReadOnly"))
         # Like a profile, for the BOM and the cut list.
         self.assertEqual(("Square Hollow", "50x50x2", "Steel", ""), (bar.Family, bar.SizeName, bar.Material, bar.PID))
 
-    def test_the_key_has_no_neck_setting(self):
-        # S20 (L26): the key is a half circle, sized by its diameter only.
-        profiles, bar = self.make_bar(key=False)
+    def test_the_bar_keeps_no_bend_setting(self):
+        # folded-corners S7, S10: the corners hold them; the wall thickness and the material are the profile's.
+        _, bar = self.make_bar(**PLAIN)
 
-        self.assertNotIn("NeckWidth", bar.PropertiesList)
-        with self.assertRaises(TypeError) as raised:
-            make_folded_bar(profiles, STEEL, neck_width=5.0)
-        self.assertEqual("Unknown folded bar options: neck_width", str(raised.exception))
-        with self.assertRaises(TypeError):
-            unfold(build_chain(profiles), STEEL, neck_width=5.0)
+        self.assertEqual([], [name for name in REMOVED_BAR_PROPERTIES if name in bar.PropertiesList])
+        self.assertEqual("App::PropertyLinkList", bar.getTypeIdOfProperty("Corners"))
 
-    def test_the_relief_has_no_setting(self):
-        # S8, S20 (L36): the relief is always on, its radius the inside radius of each corner.
-        profiles, bar = self.make_bar(key=False)
+    def test_one_corner_object_per_folded_corner_and_the_open_one_of_a_closed_frame(self):
+        # S10: corner objects in chain order (corner 1 at the start of the bar), then the open corner, whose sizes
+        # are the first corner's.
+        bottom, right, top, left = profiles = self.frame()
+        settings = [
+            CornerSettings(outer_radius=6.0, clearance=0.2, key=False, k_factor=0.4),
+            CornerSettings(outer_radius=7.0, key=False, k_factor=0.0),
+            CornerSettings(outer_radius=5.0, key=False, key_diameter=10.0, k_factor=0.45),
+        ]
 
-        self.assertNotIn("Relief", bar.PropertiesList)
-        self.assertNotIn("ReliefRadius", bar.PropertiesList)
+        bar = make_folded_bar(profiles, settings)
+
+        self.assertOneSolid(bar)
+        corners = list(bar.Corners)
+        self.assertEqual(4, len(corners))
+        self.assertEqual(corners, self.corner_objects())
+        self.assertEqual(
+            [(bottom, right), (right, top), (top, left), (bottom, left)],
+            [(corner.PieceA, corner.PieceB) for corner in corners],
+        )
+        self.assertEqual([False, False, False, True], [corner.Open for corner in corners])
+        self.assertEqual(
+            [settings_values(chosen) for chosen in settings + settings[:1]],
+            [corner_values(corner) for corner in corners],
+        )
+        for corner in corners:
+            self.assertEqual("App::FeaturePython", corner.TypeId)
+            self.assertNotIn("Shape", corner.PropertiesList)
+            self.assertEqual(CORNER_PROPERTIES, {name: corner.getTypeIdOfProperty(name) for name in CORNER_PROPERTIES})
+        expected = unfold(build_chain(profiles), settings)
+        self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
+        self.assertSameVolume(fold_bar(build_chain(profiles), expected), bar.Shape)
+
+    def test_one_settings_for_every_corner_and_an_open_chain_without_open_corner(self):
+        edges = (((0, 0, 0), (300, 0, 0)), ((300, 0, 0), (300, 200, 0)), ((300, 200, 0), (0, 200, 0)))
+        first, second, third = profiles = self.frame(edges=edges)
+
+        bar = make_folded_bar(profiles, bend(radius=4.0, **PLAIN))
+
+        self.assertOneSolid(bar)
+        self.assertEqual([(first, second), (second, third)], [(c.PieceA, c.PieceB) for c in bar.Corners])
+        self.assertEqual([], self.open_pairs(bar))
+        self.assertEqual([settings_values(bend(radius=4.0, **PLAIN))] * 2, [corner_values(c) for c in bar.Corners])
+
+    def test_wrong_number_of_corner_settings_is_refused_before_anything_is_made(self):
+        profiles = self.frame()
         count = len(self.doc.Objects)
-        for options, message in (
-            (dict(relief=False), "Unknown folded bar options: relief"),
-            (dict(relief_radius=2.0), "Unknown folded bar options: relief_radius"),
-            (dict(relief=True, relief_radius=2.0), "Unknown folded bar options: relief, relief_radius"),
-        ):
+
+        with self.assertRaises(ValueError):
+            make_folded_bar(profiles, [bend(), bend()])
+
+        self.assertEqual(count, len(self.doc.Objects))
+
+    def test_the_key_and_the_relief_have_no_other_setting(self):
+        # S20 (L26, L36): the key is a half circle sized by its diameter only; the relief is always on.
+        profiles, bar = self.make_bar(**PLAIN)
+
+        for name in ("NeckWidth", "Relief", "ReliefRadius"):
+            self.assertNotIn(name, bar.PropertiesList)
+            self.assertNotIn(name, bar.Corners[0].PropertiesList)
+        count = len(self.doc.Objects)
+        for options in (dict(neck_width=5.0), dict(relief=False), dict(relief_radius=2.0)):
             with self.subTest(options=options):
-                with self.assertRaises(TypeError) as raised:
-                    make_folded_bar(profiles, STEEL, **options)
-                self.assertEqual(message, str(raised.exception))
+                with self.assertRaises(TypeError):
+                    make_folded_bar(profiles, bend(**PLAIN), **options)
                 self.assertEqual(count, len(self.doc.Objects))
                 with self.assertRaises(TypeError):
-                    unfold(build_chain(profiles), STEEL, **options)
+                    unfold(build_chain(profiles), bend(), **options)
                 with self.assertRaises(TypeError):
-                    check_settings(build_chain(profiles), STEEL, **options)
+                    check_settings(build_chain(profiles), bend(), **options)
 
     def test_open_corner_given_sets_the_start_of_the_bar(self):
         bottom, right, top, left = self.frame()
 
-        bar = make_folded_bar([bottom, right, top, left], STEEL, open_corner=(bottom, right), **PLAIN)
+        bar = make_folded_bar([bottom, right, top, left], bend(**PLAIN), open_corner=(bottom, right))
 
         chain = build_chain([bottom, right, top, left], open_corner=(bottom, right))
-        expected = unfold(chain, STEEL, **PLAIN)
+        expected = unfold(chain, bend(**PLAIN))
         self.assertOneSolid(bar)
-        self.assertEqual([bottom, right], list(bar.OpenCorner))
+        self.assertEqual([(bottom, right)], self.open_pairs(bar))
+        self.assertEqual(
+            [(bottom, left), (left, top), (top, right)],
+            [(corner.PieceA, corner.PieceB) for corner in self.folded_corners(bar)],
+        )
         self.assertEqual([segment.tip for segment in chain.segments], list(bar.Segments))
         self.assertSameVolume(fold_bar(chain, expected), bar.Shape)
         self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
 
-    def test_options_set_the_bar_properties(self):
-        profiles, bar = self.make_bar(radius=4.0, corner_radii={1: 5.0}, clearance=0.2, key=False)
-
-        chain = build_chain(profiles)
-        self.assertOneSolid(bar)
-        self.assertEqual(4.0, bar.InsideRadius.Value)
-        self.assertEqual([0.0, 5.0, 0.0], list(bar.CornerRadii))
-        self.assertAlmostEqual(0.2, bar.Clearance.Value, places=9)
-        self.assertFalse(bar.Key)
-        options = dict(radius=4.0, corner_radii={1: 5.0}, clearance=0.2, key=False)
-        expected = unfold(chain, STEEL, **options)
-        self.assertSameVolume(fold_bar(chain, expected), bar.Shape)
-        self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
-
-    def test_changing_a_bend_property_recomputes_the_bar(self):
+    def test_changing_a_corner_recomputes_the_bar(self):
         profiles, bar = self.make_bar()
         unfolded = make_unfolded_bar(bar)
         chain = build_chain(profiles)
+        corners = self.folded_corners(bar)
+
+        def no_key():
+            for corner in corners:
+                corner.Key = False
+
+        def radius():
+            corners[1].OuterRadius = 7.0
+
+        def clearance():
+            corners[2].Clearance = 0.3
 
         # The key goes first: the bars without it fold faster.
-        for prop, value, options in (
-            ("Key", False, dict(key=False)),
-            ("InsideRadius", 4.0, dict(radius=4.0, key=False)),
-            ("CornerRadii", [0.0, 5.0, 0.0], dict(radius=4.0, corner_radii={1: 5.0}, key=False)),
+        for change, settings in (
+            (no_key, bend(key=False)),
+            (radius, [bend(key=False), bend(radius=5.0, key=False), bend(key=False)]),
+            (clearance, [bend(key=False), bend(radius=5.0, key=False), bend(clearance=0.3, key=False)]),
         ):
-            with self.subTest(prop=prop):
-                setattr(bar, prop, value)
+            with self.subTest(change=change.__name__):
+                change()
                 self.doc.recompute()
                 self.assertOneSolid(bar)
-                # fold(chain, STEEL, **options) is fold_bar of this unfold.
-                expected = unfold(chain, STEEL, **options)
+                # fold(chain, settings) is fold_bar of this unfold.
+                expected = unfold(chain, settings)
                 self.assertSameVolume(fold_bar(chain, expected), bar.Shape)
                 self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
                 self.assertOneSolid(unfolded)
                 self.assertSameVolume(expected.shape, unfolded.Shape)
+
+    def test_an_expression_on_a_corner_drives_the_bar(self):
+        # S9, S10: the corner properties take expressions.
+        profiles, bar = self.make_bar(**PLAIN)
+        corner = self.folded_corners(bar)[0]
+
+        corner.setExpression("OuterRadius", "2 * 10 mm")
+        self.doc.recompute()
+
+        self.assertAlmostEqual(20.0, corner.OuterRadius.Value, places=9)
+        self.assertOneSolid(bar)
+        expected = unfold(build_chain(profiles), [bend(radius=18.0, **PLAIN), bend(**PLAIN), bend(**PLAIN)])
+        self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
+
+    def test_the_open_corner_is_the_one_marked_open(self):
+        bottom, right, top, left = profiles = self.frame()
+        bar = make_folded_bar(profiles, bend(**PLAIN))
+        corners = {frozenset((c.PieceA.Name, c.PieceB.Name)): c for c in bar.Corners}
+
+        corners[frozenset((bottom.Name, left.Name))].Open = False
+        corners[frozenset((bottom.Name, right.Name))].Open = True
+        self.doc.recompute()
+
+        self.assertOneSolid(bar)
+        chain = build_chain(profiles, open_corner=(bottom, right))
+        self.assertEqual([segment.tip for segment in chain.segments], list(bar.Segments))
+        self.assertAlmostEqual(unfold(chain, bend(**PLAIN)).length, bar.DevelopedLength.Value, places=6)
+
+    def test_corner_identity_survives_a_trim_made_after_the_bar(self):
+        # The corner objects link the profiles, not the tips: an end miter made on one later keeps every corner.
+        bottom, right, top, left = profiles = self.frame()
+        bar = make_folded_bar(profiles, bend(**PLAIN))
+        corners = list(bar.Corners)
+        miter = make_end_miter_profile(bottom, [left])
+        self.doc.recompute()
+        bar.touch()
+        self.doc.recompute()
+
+        self.assertEqual([miter, right, top, left], list(bar.Segments))
+        self.assertEqual(corners, list(bar.Corners))
+        self.assertEqual((bottom, right), (corners[0].PieceA, corners[0].PieceB))
+        self.assertOneSolid(bar)
+        corners[0].OuterRadius = 7.0
+        self.doc.recompute()
+
+        self.assertOneSolid(bar)
+        chain = build_chain([miter, right, top, left])
+        expected = unfold(chain, [bend(radius=5.0, **PLAIN), bend(**PLAIN), bend(**PLAIN)])
+        self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
+
+    def test_a_corner_removed_from_the_document_leaves_the_bar_in_error(self):
+        profiles, bar = self.make_bar(**PLAIN)
+        corner = self.folded_corners(bar)[1]
+
+        self.doc.removeObject(corner.Name)
+        self.doc.recompute()
+
+        self.assertEqual(3, len(bar.Corners))
+        self.assertIn("Invalid", bar.State)
+        self.assertEqual(
+            "The corner between Profile001 and Profile002 has no Folded Corner object.", bar.getStatusString()
+        )
+
+    def test_deleting_the_bar_deletes_its_corners_and_undo_brings_them_back(self):
+        self.doc.UndoMode = 1
+        profiles, bar = self.make_bar(**PLAIN)
+        names = sorted(corner.Name for corner in bar.Corners)
+        self.assertEqual(4, len(names))
+
+        self.doc.openTransaction("Delete")
+        self.doc.removeObject(bar.Name)
+        self.doc.commitTransaction()
+
+        self.assertEqual([], self.corner_objects())
+        self.doc.undo()
+        self.assertEqual(names, sorted(obj.Name for obj in self.corner_objects()))
+        bar = self.doc.getObject(bar.Name)
+        self.assertEqual(names, sorted(corner.Name for corner in bar.Corners))
+
+    def test_the_tree_shows_segments_and_corners_under_the_bar(self):
+        profiles, bar = self.make_bar(**PLAIN)
+
+        self.assertEqual(profiles + list(bar.Corners), bar.ViewObject.Proxy.claimChildren())
+        for corner in bar.Corners:
+            self.assertEqual("FoldedBar.svg", os.path.basename(corner.ViewObject.Proxy.getIcon()))
+
+    def test_deleting_the_bar_in_the_gui_shows_its_pieces_again(self):
+        profiles, bar = self.make_bar(**PLAIN)
+
+        self.assertTrue(bar.ViewObject.Proxy.onDelete(bar.ViewObject, []))
+        self.doc.removeObject(bar.Name)
+
+        self.assertTrue(all(tip.Visibility for tip in profiles))
+        self.assertEqual([], self.corner_objects())
+
+    def test_wall_thickness_comes_from_the_profile(self):
+        # odd/tasks/folded-corners.md S6, S7: the outer radius less the 2 mm wall of the tube is the inside radius.
+        profiles = self.frame()
+
+        bar = make_folded_bar(profiles, CornerSettings(outer_radius=6.0, k_factor=0.33, key=False))
+
+        self.assertOneSolid(bar)
+        expected = unfold(build_chain(profiles), bend(radius=4.0, k_factor=0.33, key=False))
+        self.assertEqual([4.0] * 3, [corner.inside_radius for corner in expected.corners])
+        self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
+        self.assertSameVolume(fold_bar(build_chain(profiles), expected), bar.Shape)
 
     def test_selection_that_cannot_fold_leaves_the_bar_in_error_with_the_chain_message(self):
         bottom, right, top, left = self.frame()
         with self.assertRaises(ChainError) as raised:
             build_chain([bottom, top])
 
-        bar = make_folded_bar([bottom, top], STEEL)
+        bar = make_folded_bar([bottom, top], bend())
 
         self.assertIn("Invalid", bar.State)
         self.assertEqual(str(raised.exception), bar.getStatusString())
+        self.assertEqual([], list(bar.Corners))
         # Nothing folded: the tips stay shown.
         self.assertTrue(all(tip.Visibility for tip in (bottom, right, top, left)))
 
     def test_settings_that_cannot_unfold_leave_the_bar_in_error_with_the_unfold_message(self):
         profiles, bar = self.make_bar(**PLAIN)
         with self.assertRaises(UnfoldError) as raised:
-            unfold(build_chain(profiles), STEEL, radius=1.0, **PLAIN)
+            unfold(build_chain(profiles), bend(radius=1.0, **PLAIN))
 
-        bar.InsideRadius = 1.0
+        for corner in bar.Corners:
+            corner.OuterRadius = 3.0
         self.doc.recompute()
 
         self.assertIn("Invalid", bar.State)
@@ -190,12 +397,14 @@ class FoldedBarObjectTest(FoldedBarFixture):
         # S23: the right tube (Profile001) cannot hold two bends of r = 130.
         profiles, bar = self.make_bar(**PLAIN)
 
-        bar.InsideRadius = 130.0
+        for corner in bar.Corners:
+            corner.OuterRadius = 132.0
         self.doc.recompute()
 
         self.assertIn("Invalid", bar.State)
         self.assertEqual("Profile001 is too short for the radius of its corners.", bar.getStatusString())
-        bar.InsideRadius = 120.0
+        for corner in bar.Corners:
+            corner.OuterRadius = 122.0
         self.doc.recompute()
         self.assertOneSolid(bar)
 
@@ -207,7 +416,7 @@ class FoldedBarObjectTest(FoldedBarFixture):
         profiles, bar = self.make_bar(container=part, **PLAIN)
 
         self.assertIn(bar, part.Group)
-        expected = fold(build_chain(profiles), STEEL, **PLAIN)
+        expected = fold(build_chain(profiles), bend(**PLAIN))
         found = placed(bar.Shape, container_placement(bar))
         self.assertSameVolume(expected, found)
         self.assertLess((expected.BoundBox.Center - found.BoundBox.Center).Length, LENGTH_TOLERANCE)
@@ -222,9 +431,7 @@ class FoldedBarObjectTest(FoldedBarFixture):
         profiles = self.frame(
             edges=(((0, 0, 0), (600, 0, 0)), ((600, 0, 0), (600, 600, 0))), width=2 * e, height=2 * e, thickness=t
         )
-        configuration = BendConfiguration("Steel 40x40x1.5", "Steel", t, r, 0.4)
-
-        bar = make_folded_bar(profiles, configuration, key=False)
+        bar = make_folded_bar(profiles, CornerSettings(outer_radius=r + t, k_factor=0.4, key=False))
         unfolded = make_unfolded_bar(bar)
         self.doc.recompute()
 
@@ -298,7 +505,7 @@ class SegmentsRefreshTest(FoldedBarFixture):
         self.assertFalse(hole.Visibility)
         self.assertAlmostEqual(length, bar.DevelopedLength.Value, places=9)
         self.assertAlmostEqual(volume - math.pi * 5**2 * 2.0, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
-        self.assertSameVolume(fold(build_chain([bottom, hole, top, left]), STEEL, **PLAIN), bar.Shape)
+        self.assertSameVolume(fold(build_chain([bottom, hole, top, left]), bend(**PLAIN)), bar.Shape)
 
 
 class UnfoldedBarObjectTest(FoldedBarFixture):
@@ -307,7 +514,7 @@ class UnfoldedBarObjectTest(FoldedBarFixture):
 
         unfolded = make_unfolded_bar(bar)
 
-        expected = unfold(build_chain(profiles), STEEL, **PLAIN)
+        expected = unfold(build_chain(profiles), bend(**PLAIN))
         self.assertOneSolid(unfolded)
         self.assertEqual(bar, unfolded.FoldedBar)
         self.assertSameVolume(expected.shape, unfolded.Shape)
@@ -354,7 +561,7 @@ class RestoreTest(FoldedBarFixture):
 
         bar, unfolded = (self.doc.getObject(name) for name in names)
         self.assertAlmostEqual(developed, bar.DevelopedLength.Value, places=9)
-        self.assertAlmostEqual(0.2, bar.Clearance.Value, places=9)
+        self.assertEqual([0.2] * 4, [round(corner.Clearance.Value, 9) for corner in bar.Corners])
         self.assertEqual(4, len(bar.Segments))
         for recomputed in (False, True):
             if recomputed:
@@ -457,7 +664,7 @@ class BomTest(FoldedBarFixture):
 
     def test_populate_ids_groups_a_bar_in_error(self):
         bottom, right, top, left = self.frame()
-        bar = make_folded_bar([bottom, top], STEEL)
+        bar = make_folded_bar([bottom, top], bend())
         group = self.doc.addObject("App::DocumentObjectGroup", "Group")
         group.addObject(bar)
 

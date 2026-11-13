@@ -1084,6 +1084,46 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
             self.assertTrue(p.Shape.isValid())
         self.assertEqual(state(profiles[2]), after_width[2])
 
+    def test_mixed_numeric_shows_mixed_values_while_the_edges_differ(self):
+        doc = self._new_doc("DocMixedLabel")
+        sk = self._create_rectangle_sketch(doc)
+        Gui.Selection.clearSelection()
+        panel = CreateProfileTaskPanel()
+        self.panels.append(panel)
+        panel.open()
+        self._select_square_hollow(panel)
+        Gui.Selection.addObserver(panel)
+        for edge in ("Edge1", "Edge2"):
+            Gui.Selection.addSelection(doc.Name, sk.Name, edge)
+        width = panel.form_proxy.sb_width
+        panel.edge_list_widget.select_edge((sk, "Edge1"))
+        width.setValue(width.value() + 5)
+        window = width.window()
+        self.addCleanup(window.hide)
+        window.show()
+        self.app.processEvents()
+
+        def mixed_label():
+            labels = [label for label in width.findChildren(QtWidgets.QLabel) if label.isVisible()]
+            return [label.text() for label in labels if label.text() == translate("frameforge", "Mixed values")]
+
+        self.assertEqual([], mixed_label())
+        panel.edge_list_widget.list_widget.item(1).setSelected(True)
+        self.app.processEvents()
+        self.assertTrue(width.property("mixedValues"))
+        self.assertEqual(["Mixed values"], mixed_label())
+        # The label covers the value: the field looks the same whatever value lies under it.
+        before = width.grab().toImage()
+        width.blockSignals(True)
+        width.setValue(width.value() + 1)
+        width.blockSignals(False)
+        self.app.processEvents()
+        self.assertTrue(before == width.grab().toImage())
+        panel.edge_list_widget.list_widget.item(1).setSelected(False)
+        self.app.processEvents()
+        self.assertFalse(width.property("mixedValues"))
+        self.assertEqual([], mixed_label())
+
     def test_selected_removal_restores_survivor_appearance_and_exclusion(self):
         doc = self._new_doc("DocRemoveHighlighted")
         sk = self._create_rectangle_sketch(doc)

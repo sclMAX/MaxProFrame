@@ -1,4 +1,5 @@
-"""Expression fields (Fx): the icon sits at the right end of the field, vertically centered."""
+"""Expression fields (Fx): the icon sits at the right end of the field, vertically centered, and a bound field
+keeps its text readable in FreeCAD's dark theme (odd/tasks/folded-corners.md, T7: S14)."""
 
 import unittest
 from unittest.mock import patch
@@ -11,6 +12,42 @@ from freecad.maxproframe.expression_fields import bind, count_field, length_fiel
 
 # Pixels the icon may sit off its place (FreeCAD's margin and rounding).
 SLACK = 6
+MAIN_WINDOW_PARAMS = "User parameter:BaseApp/Preferences/MainWindow"
+# What the FreeCAD Dark preference pack sets (PreferencePacks/FreeCAD Dark/FreeCAD Dark.cfg).
+DARK_THEME = (("StyleSheet", "FreeCAD.qss"), ("Theme", "FreeCAD Dark"), ("QtStyle", "FreeCAD"))
+# Least lightness difference (0-255) between a text and its background for the text to be read.
+READABLE = 100
+
+
+def use_dark_theme(test):
+    """Style FreeCAD with its FreeCAD Dark theme for ``test``, as the preference pack does; the theme before after."""
+    param = App.ParamGet(MAIN_WINDOW_PARAMS)
+    stored = param.GetStrings()
+    saved = [(name, name in stored, param.GetString(name)) for name, _ in DARK_THEME]
+
+    def restore():
+        for name, was_stored, value in saved:
+            if was_stored:
+                param.SetString(name, value)
+            else:
+                param.RemString(name)
+        Gui.runCommand("Std_ReloadStyleSheet")
+
+    test.addCleanup(restore)
+    for name, value in DARK_THEME:
+        param.SetString(name, value)
+    # FreeCAD restyles on its Reload stylesheet command, not when the parameters change; it fills the @ colors.
+    Gui.runCommand("Std_ReloadStyleSheet")
+
+
+def assert_readable(test, spin):
+    """The text of ``spin`` reads on its background whether its window is active or not."""
+    palette = spin.lineEdit().palette()
+    text = palette.color(QtGui.QPalette.Active, QtGui.QPalette.Text)
+    base = palette.color(QtGui.QPalette.Active, QtGui.QPalette.Base)
+    inactive = palette.color(QtGui.QPalette.Inactive, QtGui.QPalette.Text)
+    test.assertGreaterEqual(abs(text.lightness() - base.lightness()), READABLE, (text.name(), base.name()))
+    test.assertEqual(inactive.name(), text.name())
 
 
 class ExpressionFieldFixture(unittest.TestCase):
@@ -84,6 +121,74 @@ class TestExpressionIconPlace(ExpressionFieldFixture):
         self.window.resize(480, 120)
         self.events()
         self.assert_in_place(length)
+
+
+class TestExpressionFieldColors(ExpressionFieldFixture):
+    """A bound field keeps the text colors of the theme, and FreeCAD's own colors for an expression."""
+
+    def show_bound(self):
+        spin = length_field(0.0, 1000.0, 10.0)
+        self.layout.addRow("Length", spin)
+        self.window.resize(320, 120)
+        self.window.show()
+        self.events()
+        self.assertTrue(bind(spin, self.varset, "Length"))
+        self.events()
+        return spin
+
+    def test_a_bound_field_reads_in_the_dark_theme(self):
+        use_dark_theme(self)
+        spin = self.show_bound()
+        assert_readable(self, spin)
+        # Unbound again it still reads.
+        unbind(spin)
+        self.events()
+        assert_readable(self, spin)
+
+    def test_a_field_driven_by_an_expression_keeps_freecads_expression_color(self):
+        use_dark_theme(self)
+        spin = self.show_bound()
+        self.varset.setExpression("Length", "2 * 6 mm")
+        self.doc.recompute()
+        self.events()
+        self.assertTrue(Gui.ExpressionBinding(spin).hasExpression())
+        palette = spin.lineEdit().palette()
+        driven = palette.color(QtGui.QPalette.Active, QtGui.QPalette.Text)
+        self.assertEqual(QtGui.QColor(QtCore.Qt.lightGray).name(), driven.name())
+        self.assertEqual(driven.name(), palette.color(QtGui.QPalette.Inactive, QtGui.QPalette.Text).name())
+        # An expression that cannot be evaluated: FreeCAD's red.
+        self.varset.setExpression("Length", "2 * 6 mm * Nowhere")
+        self.doc.recompute()
+        self.events()
+        invalid = spin.lineEdit().palette().color(QtGui.QPalette.Active, QtGui.QPalette.Text)
+        self.assertEqual(QtGui.QColor(QtCore.Qt.red).name(), invalid.name())
+        # The expression taken away: the theme's text again.
+        self.varset.setExpression("Length", None)
+        self.doc.recompute()
+        self.events()
+        assert_readable(self, spin)
+
+    def test_the_light_theme_keeps_the_text_color_of_the_field(self):
+        spin = self.show_bound()
+
+        def text():
+            return spin.lineEdit().palette().color(QtGui.QPalette.Active, QtGui.QPalette.Text).name()
+
+        theme = spin.palette().color(QtGui.QPalette.Active, QtGui.QPalette.Text).name()
+        self.assertEqual(theme, text())
+        unbind(spin)
+        self.events()
+        self.assertEqual(theme, text())
+
+    def test_the_theme_text_keeper_goes_with_its_field(self):
+        import shiboken6
+
+        spin = self.show_bound()
+        (keeper,) = spin.findChildren(QtCore.QObject, "maxproframe_theme_text")
+        spin.setParent(None)
+        spin.deleteLater()
+        QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+        self.assertFalse(shiboken6.isValid(keeper))
 
 
 class TestExpressionUnbind(ExpressionFieldFixture):

@@ -50,7 +50,6 @@ WITHOUT_SHORTCUT = (
     "MaxProFrame_ProfilePattern",
     "MaxProFrame_FoldedBar",
     "MaxProFrame_UnfoldBar",
-    "MaxProFrame_BendConfigurations",
 )
 
 

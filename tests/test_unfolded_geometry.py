@@ -1,27 +1,35 @@
 """Unfolded bar of a folded chain (odd/tasks/folded-miter.md, T3: S1 S3 S5 S6 S8 S9 S14 S15 S16 S17 S20).
 
 The chain unbends into one straight solid along X: each folded corner keeps its outer wall whole through the bend
-zone and gets a V notch (with its key and relief) in the other walls; the developed length follows the bend
-configuration; the cuts made on the segments (miters, holes) move with them.
+zone and gets a V notch (with its key and relief) in the other walls; the developed length follows the settings of
+each corner (odd/tasks/folded-corners.md, T2: S6 outer radius, S7 thickness from the profile, S8 automatic K-factor
+of DIN 6935); the cuts made on the segments (miters, holes) move with them.
 """
 
 import math
 import unittest
+from dataclasses import replace
 
 import FreeCAD as App
 import Part
 from test_end_miter_geometry import polar
 from test_folded_chain import ChainFixture
 
-from freecad.maxproframe.bend_config import BendConfiguration
 from freecad.maxproframe.drill_hole import make_drill_hole
 from freecad.maxproframe.folded_chain import build_chain
 from freecad.maxproframe.trimmed_profile import TrimmedProfile
-from freecad.maxproframe.unfolded_geometry import UnfoldError, unfold
+from freecad.maxproframe.unfolded_geometry import (
+    CornerSettings,
+    UnfoldError,
+    automatic_k_factor,
+    check_settings,
+    unfold,
+)
 
-# 50 x 50 x 2 square tube, centered on its path; the configuration bends its 2 mm walls with r = 3, K = 0.4.
-STEEL = BendConfiguration("Steel 50x50x2", "Steel", 2.0, 3.0, 0.4)
+# 50 x 50 x 2 square tube, centered on its path; its 2 mm walls bend with an inside radius of 3 (outer radius 5) and
+# K = 0.4 at every corner.
 R, T, K = 3.0, 2.0, 0.4
+STEEL = CornerSettings(outer_radius=R + T, k_factor=K)
 DEPTH = 50.0
 # w of the middle of a side wall: the walls across the bend axis.
 SIDE_WALL = DEPTH / 2 - T / 2
@@ -29,6 +37,13 @@ SIDE_WALL = DEPTH / 2 - T / 2
 PLAIN = dict(key=False)
 TOLERANCE = 1e-6
 LENGTH_TOLERANCE = 1e-4
+
+
+def bend(radius=None, **changes):
+    """``STEEL`` with ``changes``; ``radius`` is the inside radius (the outer radius is ``radius`` + T)."""
+    if radius is not None:
+        changes["outer_radius"] = radius + T
+    return replace(STEEL, **changes)
 
 
 def allowance(angle, r=R, k=K):
@@ -108,16 +123,18 @@ class UnfoldFixture(ChainFixture):
         """Whether the bar has material at (u, v, w) of the frame of ``corner``."""
         return bar.shape.isInside(corner.frame.multVec(App.Vector(u, v, w)), TOLERANCE, True)
 
-    def assertRefused(self, message, chain, configuration=STEEL, **kwargs):
-        with self.assertRaises(UnfoldError) as raised:
-            unfold(chain, configuration, **kwargs)
-        self.assertIsInstance(raised.exception, ValueError)
-        self.assertEqual(message, str(raised.exception))
+    def assertRefused(self, message, chain, corners=STEEL):
+        for check in (unfold, check_settings):
+            with self.subTest(check=check.__name__):
+                with self.assertRaises(UnfoldError) as raised:
+                    check(chain, corners)
+                self.assertIsInstance(raised.exception, ValueError)
+                self.assertEqual(message, str(raised.exception))
 
 
 class RectangleUnfoldTest(UnfoldFixture):
     def test_rectangle_unfolds_into_one_straight_solid_of_the_developed_length(self):
-        bar = unfold(self.rectangle(), STEEL, **PLAIN)
+        bar = unfold(self.rectangle(), bend(**PLAIN))
 
         shape = self.solid(bar)
         ba = allowance(90)
@@ -150,7 +167,7 @@ class RectangleUnfoldTest(UnfoldFixture):
     def test_placements_move_each_segment_path_onto_the_bar(self):
         chain = self.rectangle()
 
-        bar = unfold(chain, STEEL, **PLAIN)
+        bar = unfold(chain, bend(**PLAIN))
 
         ba = allowance(90)
         starts = [0.0, 340.0 + ba, 580.0 + 2 * ba, 920.0 + 3 * ba]
@@ -169,7 +186,7 @@ class RectangleUnfoldTest(UnfoldFixture):
         bottom, right, top, left = self.frame()
         chain = build_chain([bottom, right, top, left], open_corner=(bottom, right))
 
-        bar = unfold(chain, STEEL, **PLAIN)
+        bar = unfold(chain, bend(**PLAIN))
 
         self.solid(bar)
         self.assertLength(developed([300, 200, 300, 200], [90] * 3), bar)
@@ -183,7 +200,7 @@ class RectangleUnfoldTest(UnfoldFixture):
         chain = self.rectangle()
         for options in (PLAIN, {}):
             with self.subTest(options=options):
-                bar = unfold(chain, STEEL, **options)
+                bar = unfold(chain, bend(**options))
                 self.solid(bar)
                 for corner in bar.corners:
                     ba = corner.bend_allowance
@@ -195,7 +212,7 @@ class RectangleUnfoldTest(UnfoldFixture):
                     self.assertFalse(self.filled(bar, corner, ba / 2, DEPTH / 2, -SIDE_WALL))
 
     def test_relief_removes_the_side_walls_next_to_the_bent_wall(self):
-        relieved = unfold(self.rectangle(), STEEL, key=False)
+        relieved = unfold(self.rectangle(), bend(key=False))
 
         self.solid(relieved)
         for corner in relieved.corners:
@@ -213,7 +230,7 @@ class RectangleUnfoldTest(UnfoldFixture):
         # S8, S20 (L36): the relief radius is the inside radius of each corner, the one given to a single corner
         # included, so the disc it keeps is concentric with the bend axis: it keeps the side walls up to r from the
         # bend axis point of each segment and removes them from there to the bent wall.
-        bar = unfold(self.rectangle(), STEEL, corner_radii={1: 6.0})
+        bar = unfold(self.rectangle(), [STEEL, bend(radius=6.0), STEEL])
 
         self.solid(bar)
         a = math.radians(30)
@@ -241,8 +258,8 @@ class RectangleUnfoldTest(UnfoldFixture):
 
     def test_clearance_moves_each_flank_back_half_of_it(self):
         chain = self.rectangle()
-        tight = unfold(chain, STEEL, **PLAIN)
-        loose = unfold(chain, STEEL, clearance=1.0, **PLAIN)
+        tight = unfold(chain, bend(**PLAIN))
+        loose = unfold(chain, bend(clearance=1.0, **PLAIN))
 
         self.solid(loose)
         self.assertAlmostEqual(tight.length, loose.length, places=9)
@@ -264,7 +281,7 @@ class RectangleUnfoldTest(UnfoldFixture):
     def test_key_keeps_a_tab_on_one_flank_and_cuts_its_socket_in_the_other(self):
         chain = self.rectangle()
         keyed = unfold(chain, STEEL)
-        unkeyed = unfold(chain, STEEL, key=False)
+        unkeyed = unfold(chain, bend(key=False))
 
         self.solid(keyed)
         self.solid(unkeyed)
@@ -280,8 +297,8 @@ class RectangleUnfoldTest(UnfoldFixture):
         # S8 (L26): the arcs of the relief (centered on the bend axis points with the default radius) move back the
         # whole clearance: folded, they face the bent wall, whose face does not move.
         chain = self.rectangle()
-        tight = unfold(chain, STEEL, key=False)
-        loose = unfold(chain, STEEL, clearance=1.0, key=False)
+        tight = unfold(chain, bend(key=False))
+        loose = unfold(chain, bend(clearance=1.0, key=False))
 
         self.solid(loose)
         a = math.radians(45) / 4
@@ -303,7 +320,7 @@ class RectangleUnfoldTest(UnfoldFixture):
         # half the clearance; the socket (radius d/2 + g/2) is cut into the flank of the segment after; both centered
         # on the miter line at its middle (from the relief arc gap to the inner corner, L33), without a neck.
         g, d = 1.0, DEPTH / 4
-        bar = unfold(self.rectangle(), STEEL, clearance=g)
+        bar = unfold(self.rectangle(), bend(clearance=g))
 
         self.solid(bar)
         tab, socket = d / 2 - g / 2, d / 2 + g / 2
@@ -334,74 +351,200 @@ class RectangleUnfoldTest(UnfoldFixture):
 
     def test_radius_outside_its_limits_is_refused(self):
         chain = self.rectangle()
-        # S15 (L40): min = t; max = (depth - t) / (1 - cos(theta / 2)) - 2t, the largest radius whose inside of the bend
-        # still passes outside the inner corner, less two walls; 48 / 0.29289 - 4 = 159.88 at 90 degrees, rounded
-        # down to 0.1 mm. With or without the key: the key takes no room from the radius.
-        message = "The inside bend radius must be between 2 and 159.8 mm."
-        self.assertRefused(message, chain, radius=1.9)
-        self.assertRefused(message, chain, radius=159.9)
-        self.assertRefused(message, chain, radius=159.9, key=False)
-        self.assertRefused(message, chain, corner_radii={1: 159.9})
-        refused = BendConfiguration("Steel big radius", "Steel", 2.0, 160.0, 0.4)
-        self.assertRefused(message, chain, configuration=refused)
+        # S6, S15 (L40): the outer radius is checked: min = 2t; max = (depth - t) / (1 - cos(theta / 2)) - 2t + t, the
+        # largest inside radius whose inside of the bend still passes outside the inner corner, less two walls
+        # (48 / 0.29289 - 4 = 159.88 at 90 degrees), plus the wall, rounded down to 0.1 mm. With or without the key:
+        # the key takes no room from the radius.
+        message = "The outer radius of the corner between Profile and Profile001 must be between 4 and 161.8 mm."
+        self.assertRefused(message, chain, bend(outer_radius=3.9))
+        self.assertRefused(message, chain, bend(outer_radius=161.9))
+        self.assertRefused(message, chain, bend(outer_radius=161.9, key=False))
+        self.assertRefused(
+            "The outer radius of the corner between Profile001 and Profile002 must be between 4 and 161.8 mm.",
+            chain,
+            [STEEL, bend(outer_radius=161.9), STEEL],
+        )
 
     def test_radius_at_its_limits_is_accepted(self):
-        # Legs long enough for the outer arc of the largest radius (r + t = 161.8 mm from both outer walls).
+        # Legs long enough for the outer arc of the largest radius (161.8 mm from both outer walls).
         chain = build_chain(self.frame(edges=(((0, 0, 0), (600, 0, 0)), ((600, 0, 0), (600, 600, 0)))))
-        for radius, options in ((2.0, {}), (159.8, dict(key=False))):
-            with self.subTest(radius=radius, options=options):
-                bar = unfold(chain, STEEL, radius=radius, **options)
+        for outer, options in ((4.0, {}), (161.8, dict(key=False))):
+            with self.subTest(outer=outer, options=options):
+                bar = unfold(chain, bend(outer_radius=outer, **options))
                 self.solid(bar)
-                self.assertLength(developed([600, 600], [90], [radius]), bar)
-                self.assertEqual([radius], [corner.inside_radius for corner in bar.corners])
+                self.assertLength(developed([600, 600], [90], [outer - T]), bar)
+                self.assertAlmostEqual(outer - T, bar.corners[0].inside_radius, places=9)
         # With the key at that radius the miter line is 1.7 mm long, below the inner wall: no key fits on it.
         self.assertRefused(
-            "The key does not fit in the notch between Profile and Profile001 with this inside radius: make the "
-            "radius smaller or turn the key off.",
+            "The key does not fit in the notch between Profile and Profile001 with this radius: make the radius "
+            "smaller or turn the key off.",
             chain,
-            radius=159.8,
+            bend(outer_radius=161.8),
         )
 
     def test_largest_radius_follows_the_angle_of_each_corner(self):
-        # S15 (L40): 48 / (1 - cos 30) - 4 = 354.28 at 60 degrees, 48 / (1 - cos 67.5) - 4 = 73.76 at 135 degrees; each
-        # corner is checked with its own angle and radius, and the message gives its own range.
+        # S15 (L40): 48 / (1 - cos 30) - 4 = 354.28 at 60 degrees, 48 / (1 - cos 67.5) - 4 = 73.76 at 135 degrees, plus
+        # the wall for the outer radius; each corner is checked with its own angle and radius, and the message gives
+        # its own range.
         a, b = (0, 0, 0), (200, 0, 0)
         c = tuple(p + q for p, q in zip(b, polar(150, 60)))
         d = tuple(p + q for p, q in zip(c, polar(120, 195)))
         chain = build_chain(self.frame(edges=((a, b), (b, c), (c, d))))
         self.assertEqual([60.0, 135.0], [round(corner.bend_angle, 6) for corner in chain.corners])
 
-        self.assertRefused("The inside bend radius must be between 2 and 73.7 mm.", chain, radius=73.8, key=False)
         self.assertRefused(
-            "The inside bend radius must be between 2 and 354.2 mm.", chain, corner_radii={0: 354.3}, key=False
+            "The outer radius of the corner between Profile001 and Profile002 must be between 4 and 75.7 mm.",
+            chain,
+            bend(outer_radius=75.8, key=False),
+        )
+        self.assertRefused(
+            "The outer radius of the corner between Profile and Profile001 must be between 4 and 356.2 mm.",
+            chain,
+            [bend(outer_radius=356.3, key=False), bend(key=False)],
         )
 
-    def test_one_corner_can_override_the_bar_radius(self):
-        bar = unfold(self.rectangle(), STEEL, corner_radii={1: 6.0})
+    def test_one_corner_can_have_its_own_radius(self):
+        bar = unfold(self.rectangle(), [STEEL, bend(radius=6.0), STEEL])
 
         self.solid(bar)
         self.assertEqual([R, 6.0, R], [corner.inside_radius for corner in bar.corners])
         self.assertAlmostEqual(allowance(90, 6.0), bar.corners[1].bend_allowance, places=9)
         self.assertLength(developed([300, 200, 300, 200], [90] * 3, [R, 6.0, R]), bar)
 
-    def test_length_follows_the_bend_configuration(self):
+    def test_length_follows_the_k_factor_and_the_radius_of_the_corners(self):
         chain = self.rectangle()
-        softer = BendConfiguration("Steel K 0.3", "Steel", 2.0, 3.0, 0.3)
-        wider = BendConfiguration("Steel r 4", "Steel", 2.0, 4.0, 0.4)
 
-        first = unfold(chain, STEEL, **PLAIN)
-        second = unfold(chain, softer, **PLAIN)
-        third = unfold(chain, wider, **PLAIN)
+        first = unfold(chain, bend(**PLAIN))
+        second = unfold(chain, bend(k_factor=0.3, **PLAIN))
+        third = unfold(chain, bend(radius=4.0, **PLAIN))
 
         self.assertAlmostEqual(3 * (math.pi / 2) * (0.4 - 0.3) * 2, first.length - second.length, places=6)
         self.assertLength(developed([300, 200, 300, 200], [90] * 3, k=0.3), second)
         self.assertEqual([4.0] * 3, [corner.inside_radius for corner in third.corners])
         self.assertLength(developed([300, 200, 300, 200], [90] * 3, [4.0] * 3), third)
 
-    def test_configuration_for_other_walls_is_refused(self):
-        thicker = BendConfiguration("Steel 2.5", "Steel", 2.5, 3.0, 0.4)
 
-        self.assertRefused("Steel 2.5 is for 2.5 mm walls; Profile has 2 mm walls.", self.rectangle(), thicker)
+class CornerSettingsUnfoldTest(UnfoldFixture):
+    """odd/tasks/folded-corners.md, T2: every corner has its own outer radius (S6), the wall thickness of its tube
+    (S7), clearance, key and K-factor, automatic by DIN 6935 unless given (S8)."""
+
+    LENGTHS = [300, 200, 300, 200]
+
+    def test_automatic_k_factor_follows_din_6935(self):
+        # S8 (L9): K = 0.325 + 0.25 log10(r / t), 0.5 from r / t = 5 on.
+        for ratio, expected in (
+            (1.0, 0.325),
+            (2.0, 0.325 + 0.25 * math.log10(2.0)),
+            (3.0, 0.325 + 0.25 * math.log10(3.0)),
+            (5.0, 0.5),
+            (10.0, 0.5),
+        ):
+            with self.subTest(ratio=ratio):
+                self.assertAlmostEqual(expected, automatic_k_factor(ratio * T, T), places=12)
+                self.assertAlmostEqual(expected, automatic_k_factor(ratio * 1.5, 1.5), places=12)
+        self.assertAlmostEqual(0.400, automatic_k_factor(2 * T, T), places=3)
+        self.assertAlmostEqual(0.444, automatic_k_factor(3 * T, T), places=3)
+
+    def test_k_factor_0_is_automatic_for_each_corner(self):
+        # r / t = 2 (outer 6, inside 4): K = 0.400; r / t = 5 (outer 12) and 6 (outer 14): K = 0.5.
+        small = 0.325 + 0.25 * math.log10(2.0)
+        self.assertEqual(0.0, CornerSettings(outer_radius=6.0).k_factor)
+        for outer, k in ((6.0, small), (12.0, 0.5), (14.0, 0.5)):
+            with self.subTest(outer=outer):
+                bar = unfold(self.rectangle(), CornerSettings(outer_radius=outer, key=False))
+                self.solid(bar)
+                r = outer - T
+                for corner in bar.corners:
+                    self.assertAlmostEqual(r, corner.inside_radius, places=9)
+                    self.assertAlmostEqual(allowance(90, r, k), corner.bend_allowance, places=9)
+                self.assertLength(developed(self.LENGTHS, [90] * 3, [r] * 3, k=k), bar)
+
+    def test_k_factor_given_overrides_the_automatic_one(self):
+        chain = self.rectangle()
+
+        bar = unfold(chain, CornerSettings(outer_radius=6.0, key=False, k_factor=0.3))
+
+        self.assertLength(developed(self.LENGTHS, [90] * 3, [4.0] * 3, k=0.3), bar)
+        self.assertIsNone(check_settings(chain, CornerSettings(outer_radius=6.0, k_factor=1.0)))
+
+    def test_k_factor_outside_0_to_1_is_refused(self):
+        chain = self.rectangle()
+        for k in (1.5, -0.1):
+            with self.subTest(k=k):
+                self.assertRefused(
+                    "The K-factor of the corner between Profile and Profile001 must be between 0 and 1.",
+                    chain,
+                    bend(k_factor=k),
+                )
+        self.assertRefused(
+            "The K-factor of the corner between Profile002 and Profile003 must be between 0 and 1.",
+            chain,
+            [STEEL, STEEL, bend(k_factor=1.01)],
+        )
+
+    def test_outer_radius_30_bends_with_the_inside_radius_of_the_tube_walls(self):
+        # S6 (L2): 30 mm outside on a 1.5 mm tube bends with an inside radius of 28.5 mm (r / t = 19: K = 0.5).
+        tubes = self.frame(family="Rectangular Hollow", width=40.0, height=80.0, thickness=1.5)
+
+        bar = unfold(build_chain(tubes), CornerSettings(outer_radius=30.0, key=False))
+
+        self.solid(bar)
+        for corner in bar.corners:
+            self.assertAlmostEqual(28.5, corner.inside_radius, places=9)
+            self.assertAlmostEqual(math.radians(90) * (28.5 + 0.5 * 1.5), corner.bend_allowance, places=9)
+
+    def test_outer_radius_of_twice_the_wall_is_the_smallest(self):
+        chain = self.rectangle()
+
+        bar = unfold(chain, bend(outer_radius=2 * T, **PLAIN))
+
+        self.solid(bar)
+        self.assertEqual([T] * 3, [corner.inside_radius for corner in bar.corners])
+        self.assertLength(developed(self.LENGTHS, [90] * 3, [T] * 3), bar)
+        self.assertRefused(
+            "The outer radius of the corner between Profile and Profile001 must be between 4 and 161.8 mm.",
+            chain,
+            bend(outer_radius=2 * T - 0.01),
+        )
+
+    def test_each_corner_keeps_its_own_clearance_key_and_radius(self):
+        # The key on the first corner only, 1 mm of clearance on the second one, an inside radius of 6 on the third.
+        corners = [STEEL, bend(clearance=1.0, key=False), bend(radius=6.0, key=False)]
+
+        bar = unfold(self.rectangle(), corners)
+
+        self.solid(bar)
+        self.assertEqual([R, R, 6.0], [corner.inside_radius for corner in bar.corners])
+        self.assertLength(developed(self.LENGTHS, [90] * 3, [R, R, 6.0]), bar)
+        for corner, r, keyed in zip(bar.corners, (R, R, 6.0), (True, False, False)):
+            tab, socket = key_centers(corner, r=r)
+            for w in (SIDE_WALL, -SIDE_WALL):
+                self.assertEqual(keyed, self.filled(bar, corner, *tab, w), (r, keyed, w))
+                self.assertEqual(not keyed, self.filled(bar, corner, *socket, w), (r, keyed, w))
+        # Half the clearance back from the flank of the segment before, at mid depth: open on the second corner only.
+        h, v = math.radians(45), DEPTH / 2
+        for corner, r, kept in zip(bar.corners[1:], (R, 6.0), (False, True)):
+            u = -(v - r - T) * math.tan(h) - 0.25 * math.cos(h)
+            self.assertEqual(kept, self.filled(bar, corner, u, v - 0.25 * math.sin(h), SIDE_WALL), r)
+
+    def test_wrong_number_of_corner_settings_is_refused(self):
+        chain = self.rectangle()
+        for corners in ([STEEL, STEEL], [STEEL] * 4, []):
+            for check in (unfold, check_settings):
+                with self.subTest(count=len(corners), check=check.__name__):
+                    with self.assertRaises(ValueError) as raised:
+                        check(chain, corners)
+                    self.assertNotIsInstance(raised.exception, UnfoldError)
+                    self.assertEqual(
+                        f"Give one CornerSettings per corner of the chain: it has 3 corners, {len(corners)} given.",
+                        str(raised.exception),
+                    )
+
+    def test_check_settings_builds_no_shape(self):
+        chain = self.rectangle()
+
+        self.assertIsNone(check_settings(chain, STEEL))
+        self.assertIsNone(check_settings(chain, [STEEL, bend(radius=6.0), bend(clearance=0.5)]))
 
 
 class ArbitraryAnglesUnfoldTest(UnfoldFixture):
@@ -463,10 +606,9 @@ class KeyRoomUnfoldTest(UnfoldFixture):
         tubes = self.frame(family="Rectangular Hollow", width=40.0, height=80.0, thickness=1.5)
         chain = build_chain(tubes)
         self.assertEqual([40.0] * 3, [round(corner.depth, 6) for corner in chain.corners])
-        configuration = BendConfiguration("Steel 80x40x1.5", "Steel", 1.5, 25.0, 0.4)
         line = dict(r=25.0, g=0.5, depth=40.0, t=1.5)
 
-        bar = unfold(chain, configuration, clearance=0.5, key_diameter=8.0)
+        bar = unfold(chain, CornerSettings(outer_radius=26.5, k_factor=0.4, clearance=0.5, key_diameter=8.0))
 
         self.solid(bar)
         start, end = miter_line(bar.corners[0], **line)
@@ -477,7 +619,7 @@ class KeyRoomUnfoldTest(UnfoldFixture):
     def test_radius_above_the_old_key_room_unfolds_with_the_key(self):
         # S15 (L39, L40): the key no longer takes its diameter from the largest radius (was depth - 2t - d = 33.5 mm).
         chain = self.rectangle()
-        bar = unfold(chain, STEEL, radius=40.0)
+        bar = unfold(chain, bend(radius=40.0))
 
         self.solid(bar)
         self.assertLength(developed([300, 200, 300, 200], [90] * 3, [40.0] * 3), bar)
@@ -489,15 +631,17 @@ class KeyRoomUnfoldTest(UnfoldFixture):
         # 38.5 / (1 - cos 45) - 3 = 128.45 mm (L40), rounded down to 0.1 mm.
         tubes = self.frame(family="Rectangular Hollow", width=40.0, height=80.0, thickness=1.5)
         chain = build_chain(tubes)
-        configuration = BendConfiguration("Steel 80x40x1.5", "Steel", 1.5, 30.0, 0.4)
+        corners = CornerSettings(outer_radius=31.5, k_factor=0.4, clearance=1.0)
 
-        bar = unfold(chain, configuration, clearance=1.0)
+        bar = unfold(chain, corners)
 
         self.solid(bar)
         self.assertEqual([30.0] * 3, [corner.inside_radius for corner in bar.corners])
         self.assertKeyAt(bar, d=10.0, g=1.0, r=30.0, depth=40.0, t=1.5, side_wall=40.0 - 1.5 / 2)
         self.assertRefused(
-            "The inside bend radius must be between 1.5 and 128.4 mm.", chain, configuration=configuration, radius=128.5
+            "The outer radius of the corner between Profile and Profile001 must be between 3 and 129.9 mm.",
+            chain,
+            replace(corners, outer_radius=130.0),
         )
 
     def test_users_40x40_tube_folds_with_an_outer_radius_of_130(self):
@@ -509,18 +653,18 @@ class KeyRoomUnfoldTest(UnfoldFixture):
             edges=(((0, 0, 0), (600, 0, 0)), ((600, 0, 0), (600, 600, 0))), width=depth, height=depth, thickness=t
         )
         chain = build_chain(tubes)
-        configuration = BendConfiguration("Steel 40x40x1.5", "Steel", t, r, 0.4)
+        corners = CornerSettings(outer_radius=r + t, k_factor=0.4)
 
-        bar = unfold(chain, configuration, key=False)
+        bar = unfold(chain, replace(corners, key=False))
 
         self.solid(bar)
         h = math.radians(45)
         self.assertLength(1200 + 2 * (depth / 2 - r - t) * math.tan(h) + math.radians(90) * (r + 0.4 * t), bar)
         self.assertRefused(
-            "The key does not fit in the notch between Profile and Profile001 with this inside radius: make the "
-            "radius smaller or turn the key off.",
+            "The key does not fit in the notch between Profile and Profile001 with this radius: make the radius "
+            "smaller or turn the key off.",
             chain,
-            configuration=configuration,
+            corners,
         )
 
     def test_key_slides_inward_out_of_a_narrow_v(self):
@@ -528,7 +672,7 @@ class KeyRoomUnfoldTest(UnfoldFixture):
         # 30 mm tab would cross the other flank. It slides inward until it touches it: (d/2) / sin(theta) mm from where
         # the flanks meet, BA / (2 sin(theta / 2)) mm outward from the bend axis point.
         chain = self.narrow_chain()
-        bar = unfold(chain, STEEL, key_diameter=30.0)
+        bar = unfold(chain, bend(key_diameter=30.0))
 
         self.solid(bar)
         corner = bar.corners[0]
@@ -539,7 +683,7 @@ class KeyRoomUnfoldTest(UnfoldFixture):
     def test_key_slides_outward_off_the_inner_wall(self):
         # With r = 2, centered at the middle of the miter line (v = 26.3), the tab of a 44 mm key would reach into
         # the inner wall (v = 48): it slides outward until its tab touches it, at v = 48 - 22.
-        bar = unfold(self.rectangle(), STEEL, radius=2.0, key_diameter=44.0)
+        bar = unfold(self.rectangle(), bend(radius=2.0, key_diameter=44.0))
 
         self.solid(bar)
         corner = bar.corners[0]
@@ -552,17 +696,17 @@ class KeyRoomUnfoldTest(UnfoldFixture):
         self.assertRefused(
             "The key does not fit in the notch between Profile and Profile001: make it smaller.",
             self.narrow_chain(),
-            key_diameter=43.0,
+            bend(key_diameter=43.0),
         )
 
     def test_key_the_clearance_leaves_no_room_for_is_refused(self):
         # With 18 mm of clearance even the smallest key (37 mm across, its tab just past its flank) has a 27.5 mm
         # socket: taller than the side wall between the bent wall and the inner wall wherever it sits on the miter line.
         message = (
-            "The key does not fit in the notch between Profile and Profile001 with this inside radius: make the "
-            "radius smaller or turn the key off."
+            "The key does not fit in the notch between Profile and Profile001 with this radius: make the radius "
+            "smaller or turn the key off."
         )
-        self.assertRefused(message, self.rectangle(), clearance=18.0, key_diameter=37.0)
+        self.assertRefused(message, self.rectangle(), bend(clearance=18.0, key_diameter=37.0))
 
 
 class ShortTubeUnfoldTest(UnfoldFixture):
@@ -575,15 +719,18 @@ class ShortTubeUnfoldTest(UnfoldFixture):
     def test_tube_too_short_for_the_bends_at_both_ends_is_refused(self):
         # r = 130: 2 x 132 = 264 mm of setbacks on 250 mm. Checked after the radius range, before the key.
         chain = self.rectangle()
-        self.assertRefused(self.SHORT, chain, radius=130.0)
-        self.assertRefused(self.SHORT, chain, radius=130.0, key=False)
-        self.assertRefused(self.SHORT, chain, configuration=BendConfiguration("Steel r130", "Steel", 2.0, 130.0, 0.4))
-        self.assertRefused("The inside bend radius must be between 2 and 159.8 mm.", chain, radius=159.9)
+        self.assertRefused(self.SHORT, chain, bend(radius=130.0))
+        self.assertRefused(self.SHORT, chain, bend(radius=130.0, key=False))
+        self.assertRefused(
+            "The outer radius of the corner between Profile and Profile001 must be between 4 and 161.8 mm.",
+            chain,
+            bend(radius=159.9),
+        )
 
     def test_tube_long_enough_for_its_bends_unfolds_into_one_solid(self):
         # r = 120: 2 x 122 = 244 mm on 250, 6 mm of straight outer wall left between the bends.
         chain = self.rectangle()
-        bar = unfold(chain, STEEL, radius=120.0, **PLAIN)
+        bar = unfold(chain, bend(radius=120.0, **PLAIN))
 
         self.solid(bar)
         self.assertLength(developed([300, 200, 300, 200], [90] * 3, [120.0] * 3), bar)
@@ -594,9 +741,9 @@ class ShortTubeUnfoldTest(UnfoldFixture):
         # r = 123: 2 x 125 = 250 mm, no straight outer wall left: the tube would come apart (2 solids), so S23 refuses
         # it; with 0.1 mm of straight wall (r = 122.95) it unfolds into one solid.
         chain = self.rectangle()
-        self.assertRefused(self.SHORT, chain, radius=123.0, key=False)
+        self.assertRefused(self.SHORT, chain, bend(radius=123.0, key=False))
 
-        bar = unfold(chain, STEEL, radius=122.95, **PLAIN)
+        bar = unfold(chain, bend(radius=122.95, **PLAIN))
         self.solid(bar)
 
     def test_a_corner_radius_names_the_one_tube_it_makes_too_short(self):
@@ -604,17 +751,19 @@ class ShortTubeUnfoldTest(UnfoldFixture):
         # 130 at the corner between left and top: left holds 122 + 132 = 254 mm on 250, top 254 on 350.
         bottom, right, top, left = self.frame()
         chain = build_chain([bottom, right, top, left], open_corner=(bottom, right))
-        self.solid(unfold(chain, STEEL, radius=120.0, **PLAIN))
+        self.solid(unfold(chain, bend(radius=120.0, **PLAIN)))
 
         self.assertRefused(
-            "Profile003 is too short for the radius of its corners.", chain, radius=120.0, corner_radii={1: 130.0}
+            "Profile003 is too short for the radius of its corners.",
+            chain,
+            [bend(radius=120.0), bend(radius=130.0), bend(radius=120.0)],
         )
 
     def test_open_end_takes_no_setback(self):
         # Two 200 mm tubes, one corner, r = 130: each tube holds one setback (132 mm) on 225 mm, the open end none.
         chain = build_chain(self.frame(edges=(((0, 0, 0), (200, 0, 0)), ((200, 0, 0), (200, 200, 0)))))
 
-        bar = unfold(chain, STEEL, radius=130.0, **PLAIN)
+        bar = unfold(chain, bend(radius=130.0, **PLAIN))
 
         self.solid(bar)
         self.assertLength(developed([200, 200], [90], [130.0]), bar)
@@ -646,10 +795,10 @@ class FeatureTransferTest(UnfoldFixture):
         ]
 
     def test_end_miter_at_the_open_corner_slants_the_bar_ends(self):
-        plain = unfold(self.rectangle(), STEEL, **PLAIN)
+        plain = unfold(self.rectangle(), bend(**PLAIN))
         chain, miters = self.mitered_rectangle()
 
-        bar = unfold(chain, STEEL, **PLAIN)
+        bar = unfold(chain, bend(**PLAIN))
 
         shape = self.solid(bar)
         self.assertEqual(2, len(self.ends_normal_to_x(plain.shape)))
@@ -680,7 +829,7 @@ class FeatureTransferTest(UnfoldFixture):
             for index, found in enumerate(right.Shape.Vertexes, 1)
             if found.Point.isEqual(App.Vector(275, 0, 25), 1e-6)
         )
-        plain = unfold(build_chain([bottom, right, top, left]), STEEL, **PLAIN)
+        plain = unfold(build_chain([bottom, right, top, left]), bend(**PLAIN))
         hole = make_drill_hole((right, (f"Face{top_face}",)), vertex)
         hole.OffsetAlong = 100.0
         hole.OffsetAcross = 25.0
@@ -689,7 +838,7 @@ class FeatureTransferTest(UnfoldFixture):
         self.assertEqual("Valid", hole.getStatusString())
         self.assertFalse(hole.Shape.isInside(App.Vector(300, 100, 24), TOLERANCE, True))
 
-        bar = unfold(build_chain([bottom, right, top, left]), STEEL, **PLAIN)
+        bar = unfold(build_chain([bottom, right, top, left]), bend(**PLAIN))
 
         self.solid(bar)
         self.assertAlmostEqual(plain.length, bar.length, places=9)

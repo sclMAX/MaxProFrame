@@ -1,21 +1,17 @@
-"""The Folded Bar panel and the Bend Configurations dialog show Spanish text when FreeCAD runs in Spanish.
+"""The Folded Bar panel shows Spanish text when FreeCAD runs in Spanish.
 
-odd/tasks/folded-miter.md, T7. The texts are in the MaxProFrame context of the Spanish catalog.
+odd/tasks/folded-miter.md, T7, with the corner list of odd/tasks/folded-corners.md, T4. The texts are in the
+MaxProFrame context of the Spanish catalog; the mixed state is Create Profile's ("Mixed values" of frameforge).
 """
 
-import shutil
-import tempfile
 import unittest
 
+import FreeCADGui as Gui
 from miter_helpers import use_language
 from PySide import QtWidgets
-from test_folded_bar_panel import STEEL, FoldedPanelFixture
+from test_folded_bar_panel import FoldedPanelFixture
 
-from freecad.maxproframe.bend_config import BendConfiguration, BendConfigurationStore, set_last_used_configuration
-from freecad.maxproframe.bend_config_dialog import BendConfigurationsDialog
 from freecad.maxproframe.ff_tools import translate
-
-ALU = BendConfiguration("Alu 3", "Aluminium", 3.0, 4.0, 0.33)
 
 
 def field_label(group, field):
@@ -24,38 +20,91 @@ def field_label(group, field):
 
 
 class TestFoldedBarPanelSpanish(FoldedPanelFixture):
-    def test_the_panel_speaks_spanish(self):
+    def setUp(self):
+        super().setUp()
         use_language(self, "Spanish", "es_ES")
-        set_last_used_configuration(STEEL.name)
 
+    def test_the_panel_speaks_spanish(self):
         panel = self.run_command(*self.frame())
 
         form = panel.form
         self.assertEqual("Barra plegada", form.windowTitle())
-        self.assertEqual("Piezas de tubo, desde el inicio de la barra", form.groupBox_members.title())
-        self.assertEqual("Plegado", form.groupBox_bend.title())
-        self.assertEqual("Gestionar configuraciones", form.button_manage.text())
-        self.assertEqual("Radio interior", field_label(form.groupBox_bend, form.spin_radius))
         self.assertEqual("Esquinas", form.groupBox_corners.title())
-        self.assertEqual("Esquina abierta", form.label_open_corner.text())
-        self.assertEqual("Entre Profile y Profile003", form.combo_open_corner.itemText(0))
-        self.assertEqual("Radio interior de cada esquina plegada:", form.label_corner_radii.text())
-        self.assertEqual("Radio de la barra", panel.corner_spins()[0].specialValueText())
-        self.assertEqual("Muesca", form.groupBox_notch.title())
-        self.assertEqual("Holgura", field_label(form.groupBox_notch, form.spin_clearance))
+        self.assertEqual("Tubo", field_label(form.groupBox_corners, form.label_tube))
+        self.assertEqual("Steel · 2 mm", form.label_tube.text())
+        self.assertEqual("Material y espesor de pared de los tubos, tomados de su perfil", form.label_tube.toolTip())
+        self.assertEqual(
+            "Esquinas desde el inicio de la barra: hacé clic, Ctrl+clic o Mayús+clic para seleccionar las que vas a "
+            "editar",
+            form.corner_list.toolTip(),
+        )
+        self.assertEqual(
+            [
+                "1 · Profile → Profile001 · R 10 mm · llave · holgura 0.5 mm",
+                "2 · Profile001 → Profile002 · R 10 mm · llave · holgura 0.5 mm",
+                "3 · Profile002 → Profile003 · R 10 mm · llave · holgura 0.5 mm",
+                "Abierta · Profile003 → Profile",
+            ],
+            self.rows(panel),
+        )
+        self.assertEqual("Quitar", form.button_remove.text())
+        self.assertEqual(
+            "Barra abierta: quita el tubo del extremo de la primera o la última esquina seleccionada. Marco cerrado: "
+            "abre el marco en la esquina seleccionada.",
+            form.button_remove.toolTip(),
+        )
+        corner = form.groupBox_corner
+        self.assertEqual("Esquina", corner.title())
+        self.assertEqual("Radio exterior", field_label(corner, form.spin_outer_radius))
+        self.assertEqual(
+            "Radio que se ve por fuera del plegado: el radio interior es este menos el espesor de pared",
+            form.spin_outer_radius.toolTip(),
+        )
+        self.assertEqual("Holgura", field_label(corner, form.spin_clearance))
+        self.assertEqual(
+            "Separación entre los flancos de la muesca y alrededor de la llave, la mitad de cada lado",
+            form.spin_clearance.toolTip(),
+        )
         self.assertEqual("Llave de encastre", form.cb_key.text())
-        self.assertEqual("Diámetro de la llave", field_label(form.groupBox_notch, form.spin_key_diameter))
+        self.assertEqual("Diámetro de la llave", field_label(corner, form.spin_key_diameter))
         self.assertEqual("Predeterminado", form.spin_key_diameter.specialValueText())
-        self.assertFalse(hasattr(form, "spin_neck_width"))
-        self.assertFalse(hasattr(form, "cb_relief"))
-        self.assertFalse(hasattr(form, "spin_relief_radius"))
+        self.assertEqual("Factor K", field_label(corner, form.spin_k_factor))
+        self.assertEqual("Automático", form.spin_k_factor.specialValueText())
+        self.assertEqual(
+            "Dónde está la fibra neutra en la pared, 0 < K <= 1; Automático: según DIN 6935, por el radio interior y "
+            "el espesor de pared",
+            form.spin_k_factor.toolTip(),
+        )
         self.assertEqual("Previsualización", form.groupBox_preview.title())
         self.assertEqual("Actualizar automáticamente", form.cb_auto_update.text())
         self.assertEqual("Previsualización actualizada", form.status_label.text())
 
+    def test_the_hints_of_the_list_are_spanish(self):
+        bottom, _, top, _ = self.frame()
+        panel = self.run_command()
+        self.assertEqual(["Hacé clic en el tubo donde empieza la barra."], self.rows(panel))
+        Gui.Selection.addSelection(self.doc.Name, bottom.Name, "Face1")
+        self.events()
+        self.assertEqual(["Hacé clic en el tubo siguiente, después de Profile."], self.rows(panel))
+        self.close_dialog()
+
+        panel = self.run_command(bottom, top)
+
+        self.assertEqual(["Tubos elegidos: Profile, Profile002"], self.rows(panel))
+
+    def test_mixed_values_and_no_key_are_spanish(self):
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+
+        self.pick(panel, 0, 1)
+
+        form = panel.form
+        self.assertEqual("1 · Profile → Profile001 · R 6 mm · sin llave · holgura 0.2 mm", self.rows(panel)[0])
+        self.assertEqual("Llave de encastre — Varios", form.cb_key.text())
+        labels = [label.text() for label in form.spin_outer_radius.findChildren(QtWidgets.QLabel)]
+        self.assertIn("Varios", labels)
+
     def test_the_reasons_not_to_fold_are_spanish(self):
-        use_language(self, "Spanish", "es_ES")
-        set_last_used_configuration(STEEL.name)
         bottom, right, top, left = self.frame()
 
         panel = self.run_command(bottom, top)
@@ -65,25 +114,35 @@ class TestFoldedBarPanelSpanish(FoldedPanelFixture):
         self.close_dialog()
 
         panel = self.run_command(bottom, right, top, left)
-        panel.form.spin_radius.setValue(1.0)
-        self.assertRefused(panel, "El radio interior de plegado tiene que estar entre 2 y 159.8 mm.")
+        self.pick(panel, 0, 1, 2)
+        panel.form.spin_outer_radius.setValue(3.0)
+        self.assertRefused(
+            panel, "El radio exterior de la esquina entre Profile y Profile001 tiene que estar entre 4 y 161.8 mm."
+        )
         # S23
-        panel.form.spin_radius.setValue(130.0)
+        panel.form.cb_key.setChecked(False)
+        panel.form.spin_outer_radius.setValue(132.0)
         self.assertRefused(panel, "Profile001 es demasiado corto para el radio de sus esquinas.")
 
-    def test_without_a_configuration_the_panel_says_how_to_add_one_in_spanish(self):
-        use_language(self, "Spanish", "es_ES")
-        for configuration in self.store.configurations():
-            self.store.delete(configuration.name)
-
-        panel = self.run_command(*self.frame())
-
-        self.assertRefused(panel, "Agregá una configuración de plegado: presioná Gestionar configuraciones.")
+    def test_the_folded_corner_property_tooltips_are_spanish(self):
+        # odd/tasks/folded-corners.md, T5: the property editor of a Folded Corner speaks Spanish.
+        self.assertEqual(
+            "Radio que se ve por fuera del plegado; el radio interior es este menos el espesor de pared",
+            translate("App::Property", "Radius seen outside the bend; the inside radius is it less the wall thickness"),
+        )
+        self.assertEqual(
+            "Dónde está la fibra neutra en la pared: 0 < K <= 1; 0: automático, según DIN 6935",
+            translate(
+                "App::Property", "Where the neutral axis sits in the wall: 0 < K <= 1; 0: automatic, from DIN 6935"
+            ),
+        )
+        self.assertEqual(
+            "Longitud de la barra desplegada: la longitud a cortar",
+            translate("App::Property", "Length of the unfolded bar: the length to cut"),
+        )
 
     def test_the_command_tooltip_says_to_click_the_tubes_in_spanish(self):
         # S22: the panel opens at once and takes the tubes clicked.
-        use_language(self, "Spanish", "es_ES")
-
         tooltip = translate(
             "MaxProFrame_FoldedBar",
             "<b>Folded Bar</b><br><br>Click two or more tube profiles (or pieces made from them) that meet end to end, "
@@ -98,54 +157,6 @@ class TestFoldedBarPanelSpanish(FoldedPanelFixture):
             "queda abierto en una esquina. Doble clic en la barra para editarla.",
             tooltip,
         )
-
-
-class TestBendConfigurationsDialogSpanish(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
-
-    def setUp(self):
-        use_language(self, "Spanish", "es_ES")
-        folder = tempfile.mkdtemp(prefix="mpf_bend_dialog_es_")
-        self.addCleanup(shutil.rmtree, folder, True)
-        self.store = BendConfigurationStore(folder)
-        self.store.save(ALU)
-        self.dialog = BendConfigurationsDialog(store=self.store)
-        self.addCleanup(self.dialog.deleteLater)
-
-    def test_the_dialog_speaks_spanish(self):
-        dialog = self.dialog
-        self.assertEqual("Configuraciones de plegado", dialog.windowTitle())
-        self.assertEqual("Nueva", dialog.button_new.text())
-        self.assertEqual("Eliminar", dialog.button_delete.text())
-        self.assertEqual("Guardar", dialog.button_save.text())
-        labels = {label.text() for label in dialog.findChildren(QtWidgets.QLabel)}
-        for text in ("Nombre", "Material", "Espesor de pared", "Radio interior de plegado", "Factor K"):
-            with self.subTest(label=text):
-                self.assertIn(text, labels)
-        self.assertEqual(
-            "Dónde está la fibra neutra en la pared: 0 cara interior, 1 cara exterior", dialog.spin_k_factor.toolTip()
-        )
-
-    def test_the_store_messages_are_spanish(self):
-        dialog = self.dialog
-        for name, radius, message in (
-            ("", 4.0, "El nombre de la configuración no puede estar vacío."),
-            ("Alu r2", 2.0, "El radio interior de plegado tiene que ser al menos el espesor de pared (3 mm)."),
-        ):
-            with self.subTest(message=message):
-                dialog.new()
-                dialog.edit_name.setText(name)
-                dialog.spin_radius.setValue(radius)
-                self.assertFalse(dialog.save())
-                self.assertEqual(message, dialog.message_label.text())
-        dialog.new()
-        dialog.edit_name.setText(ALU.name)
-        dialog.spin_radius.setValue(ALU.inside_radius)
-        self.assertFalse(dialog.save())
-        self.assertEqual("Ya hay una configuración llamada Alu 3.", dialog.message_label.text())
-        self.assertEqual([ALU], self.store.configurations())
 
 
 if __name__ == "__main__":

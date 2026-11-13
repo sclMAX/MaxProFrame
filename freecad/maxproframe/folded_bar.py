@@ -1,38 +1,29 @@
 """Folded Bar and Unfolded Bar: the document objects of folded miters.
 
 A Folded Bar joins a chain of tube profiles (``folded_chain.build_chain``) by folded corners: its shape is the
-folded solid with the real bend radius (``folded_geometry.fold_bar``), where the frame was drawn. It keeps a copy of
-its bend configuration, so the document opens the same on a computer without that configuration, and every size of
-its corners (radius per bar and per corner, clearance, key; the relief follows the radius). It hides the segment
-tips and is one piece for the BOM, the cut list and the IDs, as long as its developed length. The Unfolded Bar is its
-straight solid from X = 0 along +X, the one exported (STEP, IGES, BREP) for a tube laser. See
-odd/tasks/folded-miter.md, "T5 design".
+folded solid with the real bend radius (``folded_geometry.fold_bar``), where the frame was drawn. Each corner is a
+Folded Corner object it links in ``Corners`` (``folded_corner``, odd/tasks/folded-corners.md S10): its outer radius,
+clearance, key and K-factor, and the open corner of a closed frame; the bar keeps no bend setting of its own (S7), the
+wall thickness is the one of its tubes. It hides the segment tips and is one piece for the BOM, the cut list and the
+IDs, as long as its developed length. The Unfolded Bar is its straight solid from X = 0 along +X, the one exported
+(STEP, IGES, BREP) for a tube laser. See odd/tasks/folded-miter.md, "T5 design".
 """
 
 import os
 
 import FreeCAD as App
-import Part
 
-from freecad.maxproframe.bend_config import BendConfiguration
 from freecad.maxproframe.ff_tools import ICONPATH, get_param_group, place_in_container_of, translate
-from freecad.maxproframe.folded_chain import ChainError, base_profile, build_chain
+from freecad.maxproframe.folded_chain import ChainError, build_chain
+from freecad.maxproframe.folded_corner import corner_key, corner_settings, make_folded_corner, set_corner_settings
 from freecad.maxproframe.folded_geometry import fold_bar
 from freecad.maxproframe.profile_pattern import container_placement
-from freecad.maxproframe.unfolded_geometry import UnfoldError, _bends, _check_thickness, unfold
+from freecad.maxproframe.unfolded_geometry import CornerSettings, UnfoldError, unfold
 from freecad.maxproframe.version import __version__ as ff_version
 
 # Where the Create BOM panel keeps the stock length of the cut list, and its default (mm).
 STOCK_LENGTH_PARAM = "Stock Length"
 DEFAULT_STOCK_LENGTH = 6000.0
-# make_folded_bar options -> property; the unfold argument of the same name.
-OPTION_PROPERTIES = {
-    "radius": "InsideRadius",
-    "corner_radii": "CornerRadii",
-    "clearance": "Clearance",
-    "key": "Key",
-    "key_diameter": "KeyDiameter",
-}
 
 
 def _add(obj, kind, name, group, tooltip, value=None, read_only=False):
@@ -46,40 +37,116 @@ def _add(obj, kind, name, group, tooltip, value=None, read_only=False):
         obj.setEditorMode(name, 1)
 
 
-def bend_configuration(obj):
-    """The bend configuration a Folded Bar keeps a copy of."""
-    return BendConfiguration(
-        obj.BendConfiguration, obj.BendMaterial, obj.WallThickness.Value, obj.InsideRadius.Value, obj.KFactor
-    )
+def _alive(obj):
+    try:
+        return obj is not None and obj.Document is not None
+    except Exception:
+        return False
 
 
-def unfold_options(obj):
-    """The ``unfold`` arguments of the sizes a Folded Bar keeps; 0 is the default size of each."""
-
-    def size(value):
-        return value.Value or None
-
-    return dict(
-        radius=obj.InsideRadius.Value,
-        corner_radii={index: radius for index, radius in enumerate(obj.CornerRadii) if radius > 0},
-        clearance=obj.Clearance.Value,
-        key=obj.Key,
-        key_diameter=size(obj.KeyDiameter),
-    )
+def open_corner(bar):
+    """The corner object of ``bar`` marked ``Open`` (the first one), or None."""
+    for obj in bar.Corners:
+        if obj is not None and obj.Open and corner_key(obj) is not None:
+            return obj
+    return None
 
 
-def check_settings(chain, configuration, radius=None, corner_radii=None, clearance=0.0, key=True, key_diameter=None):
-    """Raise the UnfoldError ``unfold`` would raise for these settings, without building any shape."""
-    _check_thickness(chain, configuration)
-    _bends(
-        chain,
-        configuration,
-        radius=radius,
-        corner_radii=corner_radii,
-        clearance=clearance,
-        key=key,
-        key_diameter=key_diameter,
-    )
+def bar_chain(bar):
+    """The chain of ``bar``: its segments, open where its open corner object says (else where ``build_chain`` does)."""
+    opened = open_corner(bar)
+    return build_chain(list(bar.Segments), open_corner=[opened.PieceA, opened.PieceB] if opened else None)
+
+
+def _pair(chain, corner):
+    return chain.segments[corner.before].profile, chain.segments[corner.after].profile
+
+
+def folded_corners(bar, chain):
+    """The corner object of ``bar`` of each folded corner of ``chain``, in chain order; None where it has none.
+
+    A corner is matched by its two profiles, in either order; the open corner object is not one of them.
+    """
+    opened = open_corner(bar)
+    by_pair = {}
+    for obj in bar.Corners:
+        key = corner_key(obj)
+        if key is not None and obj is not opened:
+            by_pair.setdefault(key, obj)
+    return [by_pair.get(frozenset(profile.Name for profile in _pair(chain, corner))) for corner in chain.corners]
+
+
+def bar_settings(bar, chain):
+    """The ``CornerSettings`` of each folded corner of ``chain`` from the corner objects of ``bar``.
+
+    Raises UnfoldError naming the two pieces of a corner that has no corner object.
+    """
+    settings = []
+    for corner, obj in zip(chain.corners, folded_corners(bar, chain)):
+        if obj is None:
+            raise UnfoldError(
+                translate("MaxProFrame", "The corner between {} and {} has no Folded Corner object.").format(
+                    *(profile.Label for profile in _pair(chain, corner))
+                )
+            )
+        settings.append(corner_settings(obj))
+    return settings
+
+
+def _per_corner(chain, corners):
+    """``corners`` as one ``CornerSettings`` per folded corner of ``chain``; ValueError for a wrong count."""
+    if isinstance(corners, CornerSettings):
+        return [corners] * len(chain.corners)
+    corners = list(corners)
+    if len(corners) != len(chain.corners):
+        raise ValueError(f"{len(chain.corners)} corner settings expected, {len(corners)} given")
+    return corners
+
+
+def update_corners(bar, chain, corners):
+    """Make the corner objects of ``bar`` the corners of ``chain``, bent with ``corners``, and link them in order.
+
+    ``corners`` is one ``CornerSettings`` for every folded corner or one per folded corner in chain order. A closed
+    frame also gets its open corner (``Open``, last in ``Corners``) with the sizes of the first corner. The corner
+    objects of ``bar`` are kept by their two profiles (they keep their names, so the expressions on them); missing
+    ones are made, the ones of corners no longer in the chain are removed.
+    """
+    settings = _per_corner(chain, corners)
+    wanted = [(_pair(chain, corner), chosen, False) for corner, chosen in zip(chain.corners, settings)]
+    if chain.closed and settings:
+        # The bar starts at its first segment, at the open corner: the last segment meets it there.
+        wanted.append(((chain.segments[0].profile, chain.segments[-1].profile), settings[0], True))
+    existing = {}
+    for obj in bar.Corners:
+        key = corner_key(obj)
+        if key is not None:
+            existing.setdefault(key, obj)
+    objects = []
+    for (piece_a, piece_b), chosen, is_open in wanted:
+        obj = existing.pop(frozenset((piece_a.Name, piece_b.Name)), None)
+        if obj is None:
+            obj = make_folded_corner(bar, piece_a, piece_b, chosen, open_corner=is_open)
+        else:
+            set_corner_settings(obj, chosen)
+            if bool(obj.Open) != is_open:
+                obj.Open = is_open
+        objects.append(obj)
+    if [obj.Name for obj in bar.Corners if obj is not None] != [obj.Name for obj in objects]:
+        bar.Corners = objects
+    for obj in existing.values():
+        if _alive(obj):
+            bar.Document.removeObject(obj.Name)
+
+
+def remove_corners(bar):
+    """Remove the corner objects of ``bar`` that no other bar links."""
+    doc = bar.Document
+    for obj in list(bar.Corners):
+        if not _alive(obj):
+            continue
+        others = [parent for parent in obj.InList if parent is not bar and "Corners" in parent.PropertiesList]
+        if not others:
+            doc.removeObject(obj.Name)
 
 
 def stock_length():
@@ -121,46 +188,11 @@ class FoldedBar:
             translate("App::Property", "Tube pieces folded into the bar, in chain order from its start"),
         )  # fmt: skip
         _add(
-            obj, "App::PropertyLinkList", "OpenCorner", "FoldedBar",
-            translate("App::Property", "The two pieces meeting at the open corner of a closed frame; none: default"),
-        )  # fmt: skip
-        _add(
-            obj, "App::PropertyString", "BendConfiguration", "Bend",
-            translate("App::Property", "Name of the bend configuration copied into the bar"),
-        )  # fmt: skip
-        _add(
-            obj, "App::PropertyString", "BendMaterial", "Bend",
-            translate("App::Property", "Material of the bend configuration"),
-        )  # fmt: skip
-        _add(
-            obj, "App::PropertyLength", "WallThickness", "Bend",
-            translate("App::Property", "Wall thickness the bend configuration is for"),
-        )  # fmt: skip
-        _add(
-            obj, "App::PropertyLength", "InsideRadius", "Bend",
-            translate("App::Property", "Inside bend radius of every folded corner"),
-        )  # fmt: skip
-        _add(
-            obj, "App::PropertyFloat", "KFactor", "Bend",
-            translate("App::Property", "Where the neutral axis sits in the wall: 0 inside face, 1 outside face"),
-        )  # fmt: skip
-        _add(
-            obj, "App::PropertyFloatList", "CornerRadii", "Bend",
-            translate("App::Property", "Inside bend radius of each folded corner in chain order; 0: InsideRadius"),
-        )  # fmt: skip
-        _add(
-            obj, "App::PropertyLength", "Clearance", "Notch",
-            translate("App::Property", "Gap between the notch flanks and around the key, half on each side"),
-        )  # fmt: skip
-        _add(
-            obj, "App::PropertyBool", "Key", "Notch", translate("App::Property", "Interlocking key in each notch"), True
-        )
-        _add(
-            obj, "App::PropertyLength", "KeyDiameter", "Notch",
+            obj, "App::PropertyLinkList", "Corners", "FoldedBar",
             translate(
                 "App::Property",
-                "Diameter of the key, a half circle on the miter line; 0: a quarter of the tube depth across the "
-                "bent wall",
+                "Folded Corner objects of the bar in chain order from its start, then the open corner of a closed "
+                "frame",
             ),
         )  # fmt: skip
         _add(
@@ -176,11 +208,15 @@ class FoldedBar:
         """A bar saved by an older MaxProFrame gets the properties it lacks, with their defaults."""
         self.add_properties(obj)
 
+    def unsetupObject(self, obj):
+        """The bar leaves the document (not by undo): its corner objects go with it."""
+        remove_corners(obj)
+
     def execute(self, obj):
         self.unfolded = None
-        chain = build_chain(list(obj.Segments), open_corner=list(obj.OpenCorner) or None)
+        chain = bar_chain(obj)
         self._follow_tips(obj, chain)
-        unfolded = unfold(chain, bend_configuration(obj), **unfold_options(obj))
+        unfolded = unfold(chain, bar_settings(obj, chain))
         folded = fold_bar(chain, unfolded) if _one_solid(unfolded.shape) else None
         if not _one_solid(folded):
             raise UnfoldError(
@@ -228,8 +264,8 @@ class FoldedBar:
         """The ``unfold`` result of the bar ``obj``: the one of its last recompute, else computed now."""
         unfolded = getattr(self, "unfolded", None)
         if unfolded is None or "Touched" in obj.State:
-            chain = build_chain(list(obj.Segments), open_corner=list(obj.OpenCorner) or None)
-            unfolded = unfold(chain, bend_configuration(obj), **unfold_options(obj))
+            chain = bar_chain(obj)
+            unfolded = unfold(chain, bar_settings(obj, chain))
         return unfolded
 
     def dumps(self):
@@ -289,7 +325,8 @@ class ViewProviderFoldedBar:
         return os.path.join(ICONPATH, "FoldedBar.svg")
 
     def claimChildren(self):
-        return list(self.Object.Segments)
+        """Under the bar in the tree: its segments, then its corners."""
+        return [obj for obj in (*self.Object.Segments, *self.Object.Corners) if obj is not None]
 
     def doubleClicked(self, vobj):
         """Edit the bar: unhandled, the tree starts renaming it instead."""
@@ -321,7 +358,7 @@ class ViewProviderFoldedBar:
         return True
 
     def onDelete(self, vobj, sub):
-        """The pieces of a deleted bar show again."""
+        """The pieces of a deleted bar show again; its corners are removed with it (``FoldedBar.unsetupObject``)."""
         for tip in self.Object.Segments:
             if tip is not None:
                 tip.Visibility = True
@@ -351,25 +388,26 @@ class ViewProviderUnfoldedBar:
         return None
 
 
-def make_folded_bar(selection, configuration, open_corner=None, **options):
-    """A Folded Bar of the tube pieces ``selection`` (first = start of the bar) bent with ``configuration``.
+def make_folded_bar(selection, corners, open_corner=None):
+    """A Folded Bar of the tube pieces ``selection`` (first = start of the bar), its corners bent with ``corners``.
 
-    ``open_corner``: the pair of pieces meeting where a closed frame opens (``build_chain``). ``options`` are the
-    sizes of ``unfold`` (radius, corner_radii as {corner index: radius}, clearance, key, key_diameter). The bar joins
-    the folder or Part holding the first piece and is recomputed: a selection that does not fold leaves it in error
-    with the reason.
+    ``corners`` is one ``CornerSettings`` for every folded corner or a sequence of one per folded corner in chain
+    order (ValueError otherwise, before anything is made). ``open_corner``: the pair of pieces meeting where a closed
+    frame opens (``build_chain``). A Folded Corner object is made for each folded corner, and for the open corner of a
+    closed frame (``Open``, with the sizes of the first corner). The bar joins the folder or Part holding the first
+    piece and is recomputed: a selection that does not fold leaves it in error with the reason, and without corners.
     """
-    unknown = set(options) - set(OPTION_PROPERTIES)
-    if unknown:
-        raise TypeError(f"Unknown folded bar options: {', '.join(sorted(unknown))}")
     selection = list(selection)
     try:
         chain = build_chain(selection, open_corner=open_corner)
-        segments = [segment.tip for segment in chain.segments]
-        corners = len(chain.corners)
     except ChainError:
         # Kept as selected: the recompute reports why it does not fold.
-        segments, corners = selection, max(len(selection) - 1, 0)
+        chain = None
+    if chain is not None:
+        corners = _per_corner(chain, corners)
+        segments = [segment.tip for segment in chain.segments]
+    else:
+        segments = selection
 
     doc = selection[0].Document
     obj = doc.addObject("Part::FeaturePython", "FoldedBar")
@@ -377,20 +415,9 @@ def make_folded_bar(selection, configuration, open_corner=None, **options):
     FoldedBar(obj)
     if getattr(obj, "ViewObject", None) is not None:
         ViewProviderFoldedBar(obj.ViewObject)
-    obj.BendConfiguration = configuration.name
-    obj.BendMaterial = configuration.material
-    obj.WallThickness = float(configuration.thickness)
-    obj.InsideRadius = float(configuration.inside_radius)
-    obj.KFactor = float(configuration.k_factor)
-    radii = [0.0] * corners
-    for index, radius in dict(options.pop("corner_radii", None) or {}).items():
-        radii[index] = float(radius)
-    obj.CornerRadii = radii
-    for option, value in options.items():
-        if value is not None:
-            setattr(obj, OPTION_PROPERTIES[option], value)
     obj.Segments = segments
-    obj.OpenCorner = list(open_corner or ())
+    if chain is not None:
+        update_corners(obj, chain, corners)
     doc.recompute()
     return obj
 
