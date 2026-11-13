@@ -22,6 +22,12 @@ import FreeCADGui as Gui
 from miter_helpers import use_language
 from pivy import coin
 from PySide import QtCore, QtWidgets
+
+try:
+    from PySide6 import QtTest
+except ImportError:
+    from PySide2 import QtTest
+
 from test_end_miter_geometry import polar
 from test_expression_fields import assert_readable, use_dark_theme
 from test_extend_cut_preview import keep_auto_preview, scene_graph
@@ -32,7 +38,7 @@ from test_unfolded_geometry import PLAIN, bend
 from freecad.maxproframe import create_folded_bar_tool
 from freecad.maxproframe._utils import is_foldedbar, is_unfoldedbar
 from freecad.maxproframe.create_bom_tool import CreateBOMCommand, CreateBOMTaskPanel
-from freecad.maxproframe.create_end_miter_tool import make_end_miter_profile
+from freecad.maxproframe.create_end_miter_tool import GAP_DELAY_MS, make_end_miter_profile
 from freecad.maxproframe.create_folded_bar_tool import FoldedBarCommand, UnfoldBarCommand
 from freecad.maxproframe.ff_tools import ICONPATH, get_param_group
 from freecad.maxproframe.folded_bar import make_folded_bar
@@ -152,6 +158,31 @@ def stored_params():
         getattr(param, f"Get{kind}")(name) if name in getattr(param, f"Get{kind}s")() else None
         for kind, name in CORNER_PARAMS
     )
+
+
+class PumpingDocument:
+    """The panel's document, whose recompute pumps Qt events as FreeCAD's progress bar does (folded-corners S15, L23):
+    ``during`` runs once, inside the first recompute, as keys typed and clicks made meanwhile; ``state.during`` is
+    set for the whole recompute."""
+
+    def __init__(self, doc, during, state):
+        self._doc = doc
+        self._during = during
+        self._state = state
+
+    def __getattr__(self, name):
+        return getattr(self._doc, name)
+
+    def recompute(self, *args):
+        during, self._during = self._during, None
+        if during is None:
+            return self._doc.recompute(*args)
+        self._state.during = True
+        try:
+            during()
+            return self._doc.recompute(*args)
+        finally:
+            self._state.during = False
 
 
 class FoldedPanelFixture(FoldedBarFixture):
@@ -1467,6 +1498,223 @@ class ExpressionTest(FoldedPanelFixture):
 
         self.assertEqual(before, self.names())
         self.assertTrue(all(tip.Visibility for tip in profiles))
+
+
+class NoFreezeTest(FoldedPanelFixture):
+    """folded-corners S15: no geometry while the preview recomputes; a typed value applies once the field is done."""
+
+    def watch_geometry(self, state):
+        """For every check of the corners and every corner drawn over the 3D view, whether it ran during the
+        recompute: an OCC boolean run there waits forever for the threads of the recompute's own (L23)."""
+        calls = []
+        for name in ("check_settings", "corner_box"):
+            real = getattr(create_folded_bar_tool, name)
+
+            def watched(*args, real=real, name=name, **kwargs):
+                calls.append((name, state.during))
+                return real(*args, **kwargs)
+
+            patcher = patch.object(create_folded_bar_tool, name, watched)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        return calls
+
+    def recompute_with(self, panel, during):
+        """Preview ``panel`` now, ``during`` running inside its recompute; (geometry run during it, all of it)."""
+        state = SimpleNamespace(during=False)
+        calls = self.watch_geometry(state)
+        with patch.object(panel, "doc", PumpingDocument(self.doc, during, state)):
+            panel.update_preview()
+        return [name for name, during in calls if during], calls
+
+    def wait_for_preview(self, panel):
+        """Let the preview delay pass until the panel says the preview is up to date."""
+        for _ in range(40):
+            self.events()
+            if panel.form.status_label.text() == "Preview updated":
+                return
+            QtTest.QTest.qWait(GAP_DELAY_MS // 2)
+        self.assertEqual("Preview updated", panel.form.status_label.text())
+
+    def show(self, panel):
+        """Show the panel in an active window, as FreeCAD does, to type in its fields."""
+        Gui.Control.showTaskView()
+        window = panel.form.window()
+        window.show()
+        window.activateWindow()
+        for _ in range(200):
+            if panel.form.spin_clearance.isVisible():
+                break
+            self.events()
+            QtCore.QThread.msleep(10)
+        self.assertTrue(panel.form.spin_clearance.isVisible())
+        # No field keeps the focus while the dialog closes (cleanups run in reverse order).
+        self.addCleanup(self.leave_fields)
+
+    def leave_fields(self):
+        focused = QtWidgets.QApplication.focusWidget()
+        if focused is not None:
+            focused.clearFocus()
+        self.events()
+
+    def type_in(self, spin, text):
+        """Type ``text`` over the value of ``spin``, as keys, without completing the field."""
+        spin.setFocus()
+        spin.selectAll()
+        QtTest.QTest.keyClicks(spin, text)
+        self.events()
+
+    def test_changes_made_during_the_recompute_wait_for_it_and_then_apply(self):
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+        form = panel.form
+        scene, children = self.scene()
+        self.pick(panel, 1)
+        form.spin_outer_radius.setValue(9.0)
+
+        def keys_and_clicks():
+            # Corner 2: a clearance typed and its key turned off; then corner 1 selected.
+            form.spin_clearance.setValue(0.3)
+            form.cb_key.click()
+            self.pick(panel, 0)
+
+        during, calls = self.recompute_with(panel, keys_and_clicks)
+
+        self.assertEqual([], during)
+        self.assertIn("check_settings", [name for name, _ in calls])
+        self.wait_for_preview(panel)
+        self.assertEqual(
+            [(6.0, 0.2, False, 0.0, 0.4), (9.0, 0.3, False, 10.0, 0.0), (8.0, 0.2, False, 0.0, 0.45)],
+            [corner_values(corner) for corner in self.folded_corners(bar)],
+        )
+        self.assertEqual("2 · Profile001 → Profile002 · R 9 mm · no key · clearance 0.3 mm", self.rows(panel)[1])
+        self.assertEqual("", self.messages(panel))
+        # Corner 1 selected: its values in the fields, drawn over the 3D view.
+        self.assertEqual(
+            (6.0, 0.2, False), (form.spin_outer_radius.value(), form.spin_clearance.value(), form.cb_key.isChecked())
+        )
+        (points,) = overlay_points(self.overlay(scene, children))
+        self.assertAround(points, App.Vector(300, 0, 0))
+        self.assertOneSolid(bar)
+
+    def test_remove_clicked_during_the_recompute_opens_the_frame_once_it_returns(self):
+        (_, right, top, _), bar = self.three_corner_bar()
+        panel = self.edit(bar)
+        self.pick(panel, 1)
+        panel.form.spin_outer_radius.setValue(9.0)
+
+        during, _ = self.recompute_with(panel, panel.form.button_remove.click)
+
+        self.assertEqual([], during)
+        self.events()
+        self.assertEqual("Open · Profile001 → Profile002", self.rows(panel)[3])
+        self.assertEqual("Preview updated", panel.form.status_label.text())
+        self.assertEqual([{right.Name, top.Name}], [{a.Name, b.Name} for a, b in self.open_pairs(bar)])
+        self.assertOneSolid(bar)
+
+    def test_a_preview_due_during_the_recompute_runs_once_it_returns(self):
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+        form = panel.form
+        self.pick(panel, 1)
+        # The preview delay starts.
+        form.spin_outer_radius.setValue(9.0)
+
+        def long_recompute():
+            # A value typed, and the preview delay over before the recompute ends.
+            form.spin_clearance.setValue(0.3)
+            QtTest.QTest.qWait(GAP_DELAY_MS * 2)
+
+        self.recompute_with(panel, long_recompute)
+        self.events()
+
+        # Not dropped: the preview ran right after the recompute, with the value typed.
+        self.assertEqual("Preview updated", form.status_label.text())
+        self.assertEqual((9.0, 0.3, True, 10.0, 0.0), corner_values(self.folded_corners(bar)[1]))
+
+    def test_ok_pressed_during_the_recompute_waits_for_it_and_keeps_the_value_typed(self):
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+        self.pick(panel, 1)
+        panel.form.spin_outer_radius.setValue(9.0)
+        pressed = []
+
+        def type_and_ok():
+            panel.form.spin_clearance.setValue(0.3)
+            pressed.append(panel.accept())
+
+        self.recompute_with(panel, type_and_ok)
+        self.events()
+
+        self.assertEqual([False], pressed)
+        self.assertFalse(Gui.Control.activeDialog())
+        self.assertEqual((9.0, 0.3, True, 10.0, 0.0), corner_values(self.folded_corners(bar)[1]))
+        self.assertOneSolid(bar)
+
+    def test_a_value_typed_applies_when_the_field_is_done(self):
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+        self.show(panel)
+        spin = panel.form.spin_clearance
+        point = spin.locale().decimalPoint()
+        self.pick(panel, 1)
+        row = "2 · Profile001 → Profile002 · R 7 mm · key · clearance 0.2 mm"
+        self.assertEqual(row, self.rows(panel)[1])
+
+        self.type_in(spin, "0" + point + "5")
+        QtTest.QTest.qWait(GAP_DELAY_MS * 2)
+        self.events()
+
+        # Nothing yet: neither the row nor the corner.
+        self.assertEqual(row, self.rows(panel)[1])
+        self.assertEqual(0.2, corner_values(self.folded_corners(bar)[1])[1])
+        self.assertEqual("Preview updated", panel.form.status_label.text())
+        # Leaving the field completes it.
+        panel.form.spin_outer_radius.setFocus()
+        self.events()
+        self.assertEqual("2 · Profile001 → Profile002 · R 7 mm · key · clearance 0.5 mm", self.rows(panel)[1])
+        self.wait_for_preview(panel)
+        self.assertEqual(0.5, corner_values(self.folded_corners(bar)[1])[1])
+
+        # Enter completes it too, and FreeCAD's task view takes it as OK: the bar keeps the value.
+        self.type_in(spin, "0" + point + "4")
+        self.assertEqual(0.5, corner_values(self.folded_corners(bar)[1])[1])
+        QtTest.QTest.keyClick(spin, QtCore.Qt.Key_Return)
+        self.events()
+        self.assertFalse(Gui.Control.activeDialog())
+        self.assertEqual(0.4, corner_values(self.folded_corners(bar)[1])[1])
+        self.assertOneSolid(bar)
+
+    def test_an_arrow_key_applies_at_once(self):
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+        self.show(panel)
+        spin = panel.form.spin_clearance
+        self.pick(panel, 1)
+        spin.setFocus()
+
+        QtTest.QTest.keyClick(spin, QtCore.Qt.Key_Up)
+        self.events()
+
+        self.assertEqual("2 · Profile001 → Profile002 · R 7 mm · key · clearance 1.2 mm", self.rows(panel)[1])
+        self.wait_for_preview(panel)
+        self.assertEqual(1.2, corner_values(self.folded_corners(bar)[1])[1])
+
+    def test_the_value_under_mixed_values_typed_again_goes_to_every_selected_corner(self):
+        # The outer radii are 6, 7 and 8 mm: corners 1 and 3 show Mixed values over 6 mm.
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+        self.show(panel)
+        spin = panel.form.spin_outer_radius
+        self.pick(panel, 0, 2)
+        self.assertTrue(spin.property("mixedValues"))
+
+        self.type_in(spin, "6")
+        panel.form.spin_clearance.setFocus()
+        self.wait_for_preview(panel)
+
+        self.assertFalse(spin.property("mixedValues"))
+        self.assertEqual([6.0, 7.0, 6.0], [corner_values(corner)[0] for corner in self.folded_corners(bar)])
 
 
 class DarkThemeTest(FoldedPanelFixture):

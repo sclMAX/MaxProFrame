@@ -9,6 +9,9 @@ takes off the end tube of the first or last corner of an open bar, or opens a cl
 (S4). A new corner starts with the values last set in the panel, remembered in the MaxProFrame parameters on OK (S5).
 The selected corners of the preview are drawn over the 3D view, each as the part of the bar around its vertex, in the
 selection color (S13).
+A value typed in a corner field applies once the field is done (Enter, Tab or leaving it); the arrows and the wheel at
+once. While the preview recomputes, FreeCAD's progress bar runs the keys and clicks of the panel: they wait for the
+recompute to end, as OCC booleans run inside its own would wait forever for its threads (S15).
 The wall thickness and the material are the profile's, shown read-only (S7). Whatever keeps the chain from folding is
 shown and keeps OK disabled: the chain messages, an own miter at a folded corner (S12) and the unfold messages of the
 corners (S9, S15).
@@ -291,6 +294,8 @@ class FoldedBarTaskPanel:
         self._syncing = False
         self._transaction_open = False
         self._recomputing = False
+        # What the panel was asked to do while the preview recomputed, run once it returns (S15).
+        self._waiting = []
         self._deferred = None
         self._previewed = None
         self._problems = []
@@ -416,6 +421,9 @@ class FoldedBarTaskPanel:
         layout.addWidget(form.groupBox_corner)
         # A field whose value differs between the selected corners says so, as in Create Profile.
         self._mixed = {name: _MixedPresentation(getattr(form, name)) for name, _, _ in NUMBER_FIELDS}
+        for name, _, _ in NUMBER_FIELDS:
+            # A value typed applies once the field is done, not at every key (S15).
+            getattr(form, name).setKeyboardTracking(False)
 
         form.groupBox_preview = QtWidgets.QGroupBox(translate("MaxProFrame", "Preview"))
         preview = QtWidgets.QVBoxLayout(form.groupBox_preview)
@@ -524,7 +532,7 @@ class FoldedBarTaskPanel:
         self.form.label_tube.setText(text)
 
     def _corner_selection_changed(self):
-        if not self._active():
+        if not self._active() or self._wait(self._corner_selection_changed):
             return
         self._mixed_edits.clear()
         self._present_fields()
@@ -662,8 +670,9 @@ class FoldedBarTaskPanel:
 
     def remove_corners(self, *args):
         """Remove the selected corners: the end tube of the first or last corner of an open bar, or open a closed
-        frame at the selected corner, the bar then starting there. Whether anything changed."""
-        if not self._active():
+        frame at the selected corner, the bar then starting there. Whether anything changed (not yet while the
+        preview recomputes: it waits)."""
+        if not self._active() or self._wait(self.remove_corners):
             return False
         action = self._removal()
         if action is None:
@@ -735,6 +744,8 @@ class FoldedBarTaskPanel:
 
     def _refresh(self):
         """Check the panel values; show the corners, the tube, the fields, the messages, the status and OK."""
+        if self._wait(self._refresh):
+            return
         self._problems, self._chain = self._check()
         self._show_rows()
         self._show_tube()
@@ -773,7 +784,7 @@ class FoldedBarTaskPanel:
     # Changes.
 
     def _changed(self, *args):
-        if not self._active():
+        if not self._active() or self._wait(self._changed):
             return
         self._refresh()
         self._timer.start()
@@ -801,7 +812,8 @@ class FoldedBarTaskPanel:
         """Make the bar match the panel when Update automatically is checked (or ``force``)."""
         if not self._active():
             return
-        if self._recomputing:
+        if self._wait(self._forced_preview if force else self.update_preview):
+            # Asked for (the preview delay over) while the preview recomputes: right after it, not dropped.
             return
         self._recomputing = True
         try:
@@ -816,9 +828,30 @@ class FoldedBarTaskPanel:
             self._show_messages()
             if self._selected() or self._overlay is not None:
                 self._highlight()
+        waiting, self._waiting = self._waiting, []
+        for work in waiting:
+            if self._active():
+                work()
         deferred, self._deferred = self._deferred, None
         if deferred is not None and self._active() and deferred():
             self._close_dialog()
+
+    def _forced_preview(self):
+        self.update_preview(force=True)
+
+    def _wait(self, work):
+        """Whether ``work`` waits for the preview recompute to end, to run once then (S15).
+
+        A recompute pumps Qt events (FreeCAD's progress bar): a key typed, a click on the list or a button runs
+        inside it. An OCC boolean run there (the checks of the corners, the overlay) waits forever for the threads
+        the paused boolean of the recompute holds, and FreeCAD freezes (L23). Values typed still reach the panel,
+        but nothing geometric runs until the recompute returns.
+        """
+        if not self._recomputing:
+            return False
+        if work not in self._waiting:
+            self._waiting.append(work)
+        return True
 
     def _preview(self, force):
         wanted = self._wanted()
@@ -988,6 +1021,7 @@ class FoldedBarTaskPanel:
         return any(selection.Object == member for selection in Gui.Selection.getSelectionEx("*"))
 
     def addSelection(self, doc, obj, sub, point=None):
+        # The preview syncs while it recomputes: a selection change then is no click to take (S15).
         if self._syncing or not self._active() or self.edited is not None:
             return
         source = self._clicked(doc, obj, sub, point)
@@ -1018,7 +1052,7 @@ class FoldedBarTaskPanel:
         pass
 
     def _after_selection(self):
-        if not self._active():
+        if not self._active() or self._wait(self._after_selection):
             return
         self.update_preview()
         self._highlight()
@@ -1046,7 +1080,7 @@ class FoldedBarTaskPanel:
         """Show the selected corners in the 3D view (S2, S3, S13): the ones the preview folds drawn over it, the bar
         around each vertex, with nothing selected in FreeCAD; the tubes of the others selected while the preview does
         not fold them. With no corner selected, the listed pieces (new bar)."""
-        if not self._active():
+        if not self._active() or self._wait(self._highlight):
             return
         rows = self._selected()
         if not rows or self._chain is None:
@@ -1164,6 +1198,8 @@ class FoldedBarTaskPanel:
     def clean(self):
         self._closed = True
         self._timer.stop()
+        self._waiting = []
+        self._leave_fields()
         # The corners drawn over the 3D view go with the panel (S13).
         remove_overlay(self._overlay)
         self._overlay = None
@@ -1173,6 +1209,16 @@ class FoldedBarTaskPanel:
             Gui.Selection.removeObserver(self)
         except Exception:
             pass
+
+    def _leave_fields(self):
+        """No field of the panel keeps the focus while the dialog closes (Enter in a field presses OK in FreeCAD's
+        task view): a field that loses the focus as it is deleted runs its focus handlers on a deleted widget."""
+        try:
+            focused = QtWidgets.QApplication.focusWidget()
+            if focused is not None and self.form is not None and self.form.isAncestorOf(focused):
+                focused.clearFocus()
+        except RuntimeError:
+            pass  # The form is gone already.
 
     def _discard(self):
         """Abort the transaction; with undo disabled, remove the new bar or put the edited one back by hand."""

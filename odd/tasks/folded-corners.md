@@ -84,7 +84,8 @@ one commit per task (each about one review slice; T3 and T4 may each pass 400 li
 - T6 S13 corner highlight overlay in the 3D view - worker (context backstop) - done, 02d32ad (L21).
 - T7 S14 selected corner shows its values - worker (context backstop) - done, commit below (L25).
 - T9 S3 the Mixed label ("Varios") hides the value in every theme - worker with T7 - done, commit below (L25).
-- T8 S15 freeze while typing a corner field - cause confirmed (L23): OCC thread-pool deadlock from panel checks run inside the recompute's nested event loop - worker after T7/T9 - pending.
+- T8 S15 freeze while typing a corner field - worker (context backstop) - done, commit below (L27); follow-ups T10.
+- T10 S15 Enter in a corner field finishes the field without pressing OK; `_MixedPresentation.eventFilter` safe on a deleted field (L27) - inline (worker unavailable: auth error) - pending.
 
 ## Log
 - L1 (2026-11-12) "Si para darle funcionalidad, cambiamos esa lista para que muestre las esquinas, con la opcion de
@@ -251,3 +252,17 @@ one commit per task (each about one review slice; T3 and T4 may each pass 400 li
   TestExpressionFieldColors (8 OK). Not fixed: F2 inactive-window text after clearing an expression is now the theme
   text instead of light gray (intended); F3 a field a panel makes read-only is skipped (unreachable today). Not
   verified: pixels in an active windowed session, weekly runtime for the verifier's own runs.
+- L27 T8 evidence (worker mweru983-5-kk98, parent check): one gate `FoldedBarTaskPanel._wait(work)`: while
+  `_recomputing` the work is queued once and runs right after the recompute (then OK/Cancel held by `_defer`);
+  gated: update_preview (timer, Auto update, Remove, `_after_selection`; forced preview kept), `_changed` (fields,
+  cb_key, `_finish_mixed`), list selection, Remove, `_after_selection`, `_refresh` and `_highlight`; values typed
+  still stored at once. addSelection/removeSelection already return under `_syncing` during the preview's recompute.
+  Keyboard tracking off on the four corner fields only. `clean()` clears the focus of a panel field (`_leave_fields`).
+  RED (NoFreezeTest on the old code): geometry during recompute `[] != ['check_settings', 'check_settings',
+  'corner_box']`, Remove `[] != ['check_settings']`, preview dropped `'Preview updated' != 'Pending changes'`, typed
+  value applied before the field was finished. GREEN stable: test_folded_bar_panel 73, test_folded_bar 35,
+  test_folded_bar_translations 6; weekly test_folded_bar_panel only the 3 known L25 failures; black/isort clean.
+  Simulated nested loop (`PumpingDocument`), not a windowed progress bar. Found: Enter in a field also presses OK
+  (FreeCAD task view), now the natural way to finish a value; `_MixedPresentation.eventFilter` runs on a deleted
+  spin box when a focused field is destroyed ("Internal C++ object already deleted", one SIGSEGV in a run). The
+  follow-up worker (mwesiwl4-7-wbrv) failed with an auth error and changed nothing -> T10 inline.
