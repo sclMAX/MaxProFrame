@@ -50,9 +50,9 @@ ALU_3 = BendConfiguration("Alu 3", "Aluminium", 3.0, 4.0, 0.33)
 AUTO_PREVIEW = SimpleNamespace(auto_preview_param="Folded Bar Auto Preview")
 COMMANDS = ("MaxProFrame_FoldedBar", "MaxProFrame_UnfoldBar", "MaxProFrame_BendConfigurations")
 NOT_A_CHAIN = "The selected profiles do not form one chain: Profile meets none of the others."
-# 50 mm deep tube, 2 mm walls, 90 degree corners: 2 <= r <= 48 / (1 - cos 45) - 4 = 159.88, rounded down to 0.1 mm,
-# with or without the key (S15, L40).
-RADIUS_RANGE = "The inside bend radius must be between 2 and 159.8 mm."
+# 50 mm deep tube, 2 mm walls, 90 degree corners: 2 <= r <= 48 / (1 - cos 45) - 4 = 159.88, plus the wall for the
+# outer radius, rounded down to 0.1 mm, with or without the key (S15, L40; folded-corners S6).
+RADIUS_RANGE = "The outer radius of the corner between Profile and Profile001 must be between 4 and 161.8 mm."
 # The tab of the default key (12.5 mm) stands out of its flank only with less clearance than half of it.
 KEY_TOO_BIG = "The key does not fit in the notch between Profile and Profile001: make it smaller."
 OWN_MITER = "Profile_Mt cuts Profile at its folded corner with Profile001: delete it or make that corner the open one."
@@ -309,7 +309,8 @@ class CreatePanelTest(FoldedPanelFixture):
 
         self.assertEqual("Alu 3", panel.form.combo_configuration.currentData())
         self.assertEqual(4.0, panel.form.spin_radius.value())
-        self.assertRefused(panel, "Alu 3 is for 3 mm walls; Profile has 2 mm walls.")
+        # folded-corners S7: the wall thickness is the profile's; the configuration's is not checked against it.
+        self.assertAccepts(panel)
 
     def test_choosing_a_configuration_takes_its_radius(self):
         panel = self.run_command(*self.frame())

@@ -35,9 +35,11 @@ configurations go away (thickness and material come from the profile). Branch fe
   tubes (shown read-only in the panel, e.g. `Aluminio · 1,5 mm`); the Bend Configurations command, dialog, store
   (`.bend/configurations.json`), its icon and the bar's BendConfiguration, BendMaterial, WallThickness and
   InsideRadius properties are removed.
-- S8 Automatic K-factor (L3, "si" to "K automático por esquina, con la opción de sobrescribirlo"): each corner's
-  K-factor is Automatic by default (0), taken from inside radius / thickness: r/t < 1 -> 0.33, 1 <= r/t < 3 -> 0.40,
-  3 <= r/t < 10 -> 0.45, r/t >= 10 -> 0.50; a value from 0.01 to 1 overrides it for that corner.
+- S8 Automatic K-factor (L3, "si" to "K automático por esquina, con la opción de sobrescribirlo"; L9 "si vamos con
+  la curva y citemos la norma en el tutorial y documentacion."): each corner's K-factor is Automatic by default (0),
+  from DIN 6935 with r the inside radius and t the wall thickness: K = 0.325 + 0.25 log10(r/t), at most 0.5 (r/t = 1
+  -> 0.325, 2 -> 0.40, 3 -> 0.444, 5 and above -> 0.5); a value above 0 up to 1 overrides it for that corner. The
+  tutorial and the code documentation cite DIN 6935.
 - S9 Fx (L2 "Los campos deberian ser fx.", L4 "Desde el inicio") -> outer radius, clearance, key diameter and
   K-factor of the selected corner take FreeCAD expressions in the panel (Fx icon or `=`), bound to that corner's
   object; when creating, Fx appears once the preview exists. OK keeps them in the Undo step, Cancel takes them back.
@@ -46,18 +48,18 @@ configurations go away (thickness and material come from the profile). Branch fe
   default), KFactor (0: automatic) and Open (closed frames). It replaces the bar's CornerRadii, OpenCorner, Clearance,
   Key and KeyDiameter. Editing a corner property recomputes the bar; expressions survive removing or reordering other
   corners; deleting the bar deletes its corners; removing a corner deletes its object.
-- S11 Bars saved before (decision: feature not released, light migration) -> a bar saved by 1.13.x/main with the old
-  properties opens with one FoldedCorner per corner holding the same geometry (outer radius = old corner radius or
-  InsideRadius + WallThickness, its K-factor, clearance and key), and the old properties removed.
+- S11 Bars saved before (L8): "No lanzamos release de la feature aun, no necesitamos migracion." -> no migration:
+  bars saved with the old properties are not converted.
 - S12 Decimal separator (L5 "Actiovo la opcion.", L6 "Agrega la nota.") -> no code: the tutorial explains FreeCAD's
   Edit > Preferences > General > Substitute decimal separator for the keypad period.
 
 ## Tasks
-- T1 S12 tutorial note on the decimal separator - inline - commit pending.
+- T1 S12 tutorial note on the decimal separator - inline - done, c71d918.
 - T2 S6 S7 S8 geometry per corner: `unfold`/`_bends` take per-corner settings (outer radius, clearance, key, key
-  diameter, K-factor), thickness from the profile, automatic K, outer-radius limits and messages - inline - pending.
-- T3 S7 S10 S11 FoldedCorner object, FoldedBar properties and execute through its corners, tree children, delete
-  lifecycle, migration; remove bend_config, dialog, command, icon and their tests - inline - pending.
+  diameter, K-factor), thickness from the profile, automatic K, outer-radius limits and messages - worker
+  (context backstop) - done, commit below (L10).
+- T3 S7 S10 FoldedCorner object, FoldedBar properties and execute through its corners, tree children, delete
+  lifecycle; remove bend_config, dialog, command, icon and their tests - inline - pending.
 - T4 S1-S5 S9 panel: corner list with multi-selection, highlight, Remove, open corner, per-corner fields with Fx,
   last used values; configuration widgets removed - inline - pending.
 - T5 S1-S11 tutorial, README, CHANGELOG, es/ru translations and .qm - inline - pending.
@@ -96,3 +98,17 @@ configurations go away (thickness and material come from the profile). Branch fe
   test_russian_translation. Tests to rework: test_bend_config 16 and test_bend_config_dialog 12 (delete),
   test_folded_bar 25, test_folded_bar_panel 44, test_folded_bar_translations 6, test_unfolded_geometry 33,
   test_folded_geometry 11, test_folded_chain 22 (open corner).
+- L8 (2026-11-12) "1. explicame un poco mas la diferencia entre escalonado o curva. 2. No lanzamos release de la
+  feature aun, no necesitamos migracion." -> S11 rewritten (no migration), T3 without migration; S8 step table vs
+  continuous curve (DIN 6935: K = 0.325 + 0.25 log10(r/t), 0.5 from r/t = 5) explained, choice pending.
+- L9 (2026-11-12) "si vamos con la curva y citemos la norma en el tutorial y documentacion." -> S8 rewritten (DIN 6935
+  curve); implementation starts with T2.
+- L10 T2 evidence (worker mwe7eyoz-2-16g2, parent check): `CornerSettings(outer_radius, clearance, key, key_diameter,
+  k_factor)`, `automatic_k_factor` (DIN 6935: 0.325 + 0.25 log10(r/t), exactly 0.5 from r/t = 5), `unfold(chain,
+  corners)`, `check_settings(chain, corners)`, `fold(chain, corners)`; messages "The outer radius of the corner between
+  {} and {} must be between {min:g} and {max:g} mm.", "The K-factor of the corner between {} and {} must be between 0
+  and 1.", key message "with this radius". Temporary adapter `folded_bar.corner_settings` (outer = inside + profile
+  wall, K from the configuration) until T3/T4; the panel still says Inside radius while limits quote the outer radius.
+  RED: test_unfolded_geometry ImportError CornerSettings. GREEN (parent rerun): test_unfolded_geometry 41,
+  test_folded_geometry 11, test_folded_bar 26, test_folded_bar_panel 44, test_folded_chain 23, test_russian_translation
+  6 OK.

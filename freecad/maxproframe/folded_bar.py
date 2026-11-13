@@ -14,12 +14,13 @@ import os
 import FreeCAD as App
 import Part
 
+from freecad.maxproframe import unfolded_geometry
 from freecad.maxproframe.bend_config import BendConfiguration
 from freecad.maxproframe.ff_tools import ICONPATH, get_param_group, place_in_container_of, translate
 from freecad.maxproframe.folded_chain import ChainError, base_profile, build_chain
 from freecad.maxproframe.folded_geometry import fold_bar
 from freecad.maxproframe.profile_pattern import container_placement
-from freecad.maxproframe.unfolded_geometry import UnfoldError, _bends, _check_thickness, unfold
+from freecad.maxproframe.unfolded_geometry import CornerSettings, UnfoldError, unfold
 from freecad.maxproframe.version import __version__ as ff_version
 
 # Where the Create BOM panel keeps the stock length of the cut list, and its default (mm).
@@ -68,17 +69,40 @@ def unfold_options(obj):
     )
 
 
+def corner_settings(chain, configuration, radius=None, corner_radii=None, clearance=0.0, key=True, key_diameter=None):
+    """The ``CornerSettings`` of each corner of ``chain`` from the bar-wide sizes a Folded Bar keeps today.
+
+    The outer radius of a corner is its inside radius (its own in ``corner_radii``, else ``radius``, else the
+    configuration's) plus the wall thickness of its tube; the K-factor is the configuration's. ``key_diameter`` None
+    or 0 is the default key. Until the corners are objects of their own (odd/tasks/folded-corners.md, T3).
+    """
+    radius = float(configuration.inside_radius) if radius is None else float(radius)
+    corner_radii = corner_radii or {}
+    return [
+        CornerSettings(
+            outer_radius=float(corner_radii.get(index, radius)) + chain.segments[corner.before].thickness,
+            clearance=float(clearance),
+            key=bool(key),
+            key_diameter=float(key_diameter or 0.0),
+            k_factor=float(configuration.k_factor),
+        )
+        for index, corner in enumerate(chain.corners)
+    ]
+
+
 def check_settings(chain, configuration, radius=None, corner_radii=None, clearance=0.0, key=True, key_diameter=None):
     """Raise the UnfoldError ``unfold`` would raise for these settings, without building any shape."""
-    _check_thickness(chain, configuration)
-    _bends(
+    unfolded_geometry.check_settings(
         chain,
-        configuration,
-        radius=radius,
-        corner_radii=corner_radii,
-        clearance=clearance,
-        key=key,
-        key_diameter=key_diameter,
+        corner_settings(
+            chain,
+            configuration,
+            radius=radius,
+            corner_radii=corner_radii,
+            clearance=clearance,
+            key=key,
+            key_diameter=key_diameter,
+        ),
     )
 
 
@@ -180,7 +204,7 @@ class FoldedBar:
         self.unfolded = None
         chain = build_chain(list(obj.Segments), open_corner=list(obj.OpenCorner) or None)
         self._follow_tips(obj, chain)
-        unfolded = unfold(chain, bend_configuration(obj), **unfold_options(obj))
+        unfolded = unfold(chain, corner_settings(chain, bend_configuration(obj), **unfold_options(obj)))
         folded = fold_bar(chain, unfolded) if _one_solid(unfolded.shape) else None
         if not _one_solid(folded):
             raise UnfoldError(
@@ -229,7 +253,7 @@ class FoldedBar:
         unfolded = getattr(self, "unfolded", None)
         if unfolded is None or "Touched" in obj.State:
             chain = build_chain(list(obj.Segments), open_corner=list(obj.OpenCorner) or None)
-            unfolded = unfold(chain, bend_configuration(obj), **unfold_options(obj))
+            unfolded = unfold(chain, corner_settings(chain, bend_configuration(obj), **unfold_options(obj)))
         return unfolded
 
     def dumps(self):

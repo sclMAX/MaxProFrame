@@ -15,7 +15,7 @@ from unittest import mock
 
 import FreeCAD as App
 import Part
-from test_unfolded_geometry import PLAIN, STEEL, UnfoldFixture
+from test_unfolded_geometry import PLAIN, UnfoldFixture, bend
 
 from freecad.maxproframe._utils import get_profiles_and_links_from_document, get_profiles_and_links_from_object
 from freecad.maxproframe.bend_config import BendConfiguration
@@ -30,6 +30,8 @@ from freecad.maxproframe.populate_ids import populate_ids
 from freecad.maxproframe.profile_pattern import container_placement, placed
 from freecad.maxproframe.unfolded_geometry import UnfoldError, unfold
 
+# The bend configuration of the bars: inside radius 3, K = 0.4, as ``bend()`` of test_unfolded_geometry.
+STEEL = BendConfiguration("Steel 50x50x2", "Steel", 2.0, 3.0, 0.4)
 VOLUME_TOLERANCE = 1e-3
 LENGTH_TOLERANCE = 1e-4
 STOCK_PARAM = "Stock Length"
@@ -60,8 +62,8 @@ class FoldedBarObjectTest(FoldedBarFixture):
         profiles, bar = self.make_bar()
 
         chain = build_chain(profiles)
-        # fold(chain, STEEL) is fold_bar of this unfold.
-        expected = unfold(chain, STEEL)
+        # fold(chain, bend()) is fold_bar of this unfold.
+        expected = unfold(chain, bend())
         self.assertOneSolid(bar)
         self.assertSameVolume(fold_bar(chain, expected), bar.Shape)
         self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
@@ -90,7 +92,7 @@ class FoldedBarObjectTest(FoldedBarFixture):
             make_folded_bar(profiles, STEEL, neck_width=5.0)
         self.assertEqual("Unknown folded bar options: neck_width", str(raised.exception))
         with self.assertRaises(TypeError):
-            unfold(build_chain(profiles), STEEL, neck_width=5.0)
+            unfold(build_chain(profiles), bend(), neck_width=5.0)
 
     def test_the_relief_has_no_setting(self):
         # S8, S20 (L36): the relief is always on, its radius the inside radius of each corner.
@@ -110,7 +112,7 @@ class FoldedBarObjectTest(FoldedBarFixture):
                 self.assertEqual(message, str(raised.exception))
                 self.assertEqual(count, len(self.doc.Objects))
                 with self.assertRaises(TypeError):
-                    unfold(build_chain(profiles), STEEL, **options)
+                    unfold(build_chain(profiles), bend(), **options)
                 with self.assertRaises(TypeError):
                     check_settings(build_chain(profiles), STEEL, **options)
 
@@ -120,7 +122,7 @@ class FoldedBarObjectTest(FoldedBarFixture):
         bar = make_folded_bar([bottom, right, top, left], STEEL, open_corner=(bottom, right), **PLAIN)
 
         chain = build_chain([bottom, right, top, left], open_corner=(bottom, right))
-        expected = unfold(chain, STEEL, **PLAIN)
+        expected = unfold(chain, bend(**PLAIN))
         self.assertOneSolid(bar)
         self.assertEqual([bottom, right], list(bar.OpenCorner))
         self.assertEqual([segment.tip for segment in chain.segments], list(bar.Segments))
@@ -136,8 +138,8 @@ class FoldedBarObjectTest(FoldedBarFixture):
         self.assertEqual([0.0, 5.0, 0.0], list(bar.CornerRadii))
         self.assertAlmostEqual(0.2, bar.Clearance.Value, places=9)
         self.assertFalse(bar.Key)
-        options = dict(radius=4.0, corner_radii={1: 5.0}, clearance=0.2, key=False)
-        expected = unfold(chain, STEEL, **options)
+        options = dict(clearance=0.2, key=False)
+        expected = unfold(chain, [bend(radius=radius, **options) for radius in (4.0, 5.0, 4.0)])
         self.assertSameVolume(fold_bar(chain, expected), bar.Shape)
         self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
 
@@ -147,21 +149,35 @@ class FoldedBarObjectTest(FoldedBarFixture):
         chain = build_chain(profiles)
 
         # The key goes first: the bars without it fold faster.
-        for prop, value, options in (
-            ("Key", False, dict(key=False)),
-            ("InsideRadius", 4.0, dict(radius=4.0, key=False)),
-            ("CornerRadii", [0.0, 5.0, 0.0], dict(radius=4.0, corner_radii={1: 5.0}, key=False)),
+        for prop, value, corners in (
+            ("Key", False, bend(key=False)),
+            ("InsideRadius", 4.0, bend(radius=4.0, key=False)),
+            ("CornerRadii", [0.0, 5.0, 0.0], [bend(radius=r, key=False) for r in (4.0, 5.0, 4.0)]),
         ):
             with self.subTest(prop=prop):
                 setattr(bar, prop, value)
                 self.doc.recompute()
                 self.assertOneSolid(bar)
-                # fold(chain, STEEL, **options) is fold_bar of this unfold.
-                expected = unfold(chain, STEEL, **options)
+                # fold(chain, corners) is fold_bar of this unfold.
+                expected = unfold(chain, corners)
                 self.assertSameVolume(fold_bar(chain, expected), bar.Shape)
                 self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
                 self.assertOneSolid(unfolded)
                 self.assertSameVolume(expected.shape, unfolded.Shape)
+
+    def test_wall_thickness_comes_from_the_profile_not_the_configuration(self):
+        # odd/tasks/folded-corners.md S7: a configuration for 3 mm walls folds the 2 mm tube with its radius and
+        # K-factor; the outer radius is the inside radius plus the 2 mm wall of the tube.
+        profiles = self.frame()
+        configuration = BendConfiguration("Alu 3", "Aluminium", 3.0, 4.0, 0.33)
+
+        bar = make_folded_bar(profiles, configuration, key=False)
+
+        self.assertOneSolid(bar)
+        expected = unfold(build_chain(profiles), bend(radius=4.0, k_factor=0.33, key=False))
+        self.assertEqual([4.0] * 3, [corner.inside_radius for corner in expected.corners])
+        self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
+        self.assertSameVolume(fold_bar(build_chain(profiles), expected), bar.Shape)
 
     def test_selection_that_cannot_fold_leaves_the_bar_in_error_with_the_chain_message(self):
         bottom, right, top, left = self.frame()
@@ -178,7 +194,7 @@ class FoldedBarObjectTest(FoldedBarFixture):
     def test_settings_that_cannot_unfold_leave_the_bar_in_error_with_the_unfold_message(self):
         profiles, bar = self.make_bar(**PLAIN)
         with self.assertRaises(UnfoldError) as raised:
-            unfold(build_chain(profiles), STEEL, radius=1.0, **PLAIN)
+            unfold(build_chain(profiles), bend(radius=1.0, **PLAIN))
 
         bar.InsideRadius = 1.0
         self.doc.recompute()
@@ -207,7 +223,7 @@ class FoldedBarObjectTest(FoldedBarFixture):
         profiles, bar = self.make_bar(container=part, **PLAIN)
 
         self.assertIn(bar, part.Group)
-        expected = fold(build_chain(profiles), STEEL, **PLAIN)
+        expected = fold(build_chain(profiles), bend(**PLAIN))
         found = placed(bar.Shape, container_placement(bar))
         self.assertSameVolume(expected, found)
         self.assertLess((expected.BoundBox.Center - found.BoundBox.Center).Length, LENGTH_TOLERANCE)
@@ -298,7 +314,7 @@ class SegmentsRefreshTest(FoldedBarFixture):
         self.assertFalse(hole.Visibility)
         self.assertAlmostEqual(length, bar.DevelopedLength.Value, places=9)
         self.assertAlmostEqual(volume - math.pi * 5**2 * 2.0, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
-        self.assertSameVolume(fold(build_chain([bottom, hole, top, left]), STEEL, **PLAIN), bar.Shape)
+        self.assertSameVolume(fold(build_chain([bottom, hole, top, left]), bend(**PLAIN)), bar.Shape)
 
 
 class UnfoldedBarObjectTest(FoldedBarFixture):
@@ -307,7 +323,7 @@ class UnfoldedBarObjectTest(FoldedBarFixture):
 
         unfolded = make_unfolded_bar(bar)
 
-        expected = unfold(build_chain(profiles), STEEL, **PLAIN)
+        expected = unfold(build_chain(profiles), bend(**PLAIN))
         self.assertOneSolid(unfolded)
         self.assertEqual(bar, unfolded.FoldedBar)
         self.assertSameVolume(expected.shape, unfolded.Shape)
