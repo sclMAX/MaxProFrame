@@ -34,6 +34,9 @@ per task; push, PR and merge stay the user's decisions.
 - T6 [S3] Profile Pattern with a whole Folded Bar. route=worker (parallel); commit=(T6 commit) [x]
 - T7 [S1-S5] docs (tutorial, README, CHANGELOG), translations, full suite, verify. route=worker (docs) + parent; commit=(T7 docs commit)
 
+- T8 [S4] deleting a miter/trim or cutout from the tree releases it (the bar keeps its tube, hidden), plus the
+  verifier's regression tests (reopen untouched, release no-op, End Miter undo/redo). route=worker; commit=
+
 ## Log
 - L1 (2026-11-13) user, with a screenshot of End Miter ("Ingletes") listing only Profile_TC80x40x1.5_000 next to a
   3-tube Folded Bar: "end mitter no fuinciona con esta estructura, solo me deja seleccionar el perfil suelto."
@@ -88,3 +91,10 @@ per task; push, PR and merge stay the user's decisions.
   (append to FOLDED_MITER_TEXTS). RED test_folded_bar_translations 1 failure; GREEN 7; translation/drill/pattern/cutout
   modules OK. ru left for @c0n5t: 6 entries. Follow-up: Cutout prompt/tooltip and "Select a planar face of a profile,
   a trimmed profile or a cutout." do not mention a folded bar.
+- L12 Independent verify (gentle-ai-verify mweyh8tj-b-zpsk): S1-S5 pass; new modules 8/9/14/12/12/6/7 OK; differential
+  base 7ddca7c vs HEAD equal (end miter panel 14, drill hole panel 99, extend cut panel 45, profile pattern 26, cutout
+  direct 3, drill hole rebase 4, folded bar 35); observer cheap (2000 objects x10: 0.021 s), reopened file untouched.
+  Flagged: ru shows 4 reworded texts in English (parent: accepted follow-up for @c0n5t, repo convention, 83 ru entries
+  already unfinished). Pre-existing at 7ddca7c but now easy to hit: deleting a miter/trim or cutout from the tree drops
+  its tube from the bar (trimmed_profile.py onDelete, extruded_cutout.py onDelete do not release) -> T8; undo after a
+  recompute outside the transaction drops a tube (panels recompute inside it; follow-up).
