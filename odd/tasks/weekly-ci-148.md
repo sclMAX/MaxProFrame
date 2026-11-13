@@ -19,7 +19,7 @@ were authorized by the user for this work ("push pr y merge directo, luego ataqu
   CI shard 2 (PR #149 run 43439486380) but passes alone: order-dependent; fix the leak or the test.
 
 ## Tasks
-- T1 [S2, S3] folded bar panel hang and cancel-with-undo-disabled on weekly. route=worker; commit=
+- T1 [S2, S3] folded bar panel hang and cancel-with-undo-disabled on weekly. route=worker; commit=(T1 commit) [x]
 - T2 [S4] cutout loose-tube test order dependence on weekly. route=worker (parallel); commit=
 - T3 [S1] PR, CI weekly green (both shards), merge. route=parent; commit=
 
@@ -32,3 +32,13 @@ were authorized by the user for this work ("push pr y merge directo, luego ataqu
   ExpressionTest.test_cancel_of_a_new_bar_with_an_expression_leaves_the_document_unchanged. Artifacts downloaded to
   /tmp/gpPaNK8J/tmp.tg7dGx5S2Z (tests.log, python-stacks.log per shard). Local weekly full suite on 697450a also hung
   in the latter test until the 3600 s timeout (folded-bar-tools L15).
+- L3 T1 evidence (worker mwf2abnc-e-g2pz): S2 root cause: the panel's S15 guard covered only its own recomputes; a
+  setExpression starts the preview timer, the test's doc.recompute() runs, weekly pumps Qt events inside the OCC
+  boolean (unfolded_geometry.py:620 bar.cut), update_preview runs ("Recursive calling of recompute" in both CI
+  shards' stderr) and _corner_shape's OCC common (create_folded_bar_tool.py:1168) waits forever: the L23 deadlock of
+  folded-corners. Fix: `_busy()` also honors doc.Recomputing; `_wait`/`_defer` queue work; `_RecomputeEnd` observer
+  (slotRecomputedDocument) resumes from the event loop, 300 ms check as fallback; `_run_waiting` factored out. S3:
+  weekly ignores doc.UndoMode = 0 and abortTransaction rolls back, so the "undo disabled" tests take the abort path and
+  objects stay Touched; tests adapted (`assertShapeBack`: not Invalid, one solid, same volume before and after a
+  recompute). RED: 2 new NoFreezeTest tests failed on both runtimes, S2 test hung on weekly; GREEN test_folded_bar_panel
+  79 OK on weekly (205 s, 0 "Recursive calling") and stable (220 s); parent re-run ExpressionTest 5 OK on weekly.
