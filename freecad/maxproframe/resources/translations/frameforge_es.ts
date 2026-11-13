@@ -1478,6 +1478,17 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Tubes picked: {}</source><translation>Tubos elegidos: {}</translation></message>
     <message><source>Click a straight part of the folded bar.</source><translation>Hacé clic en una parte recta de la barra plegada.</translation></message>
     <message><source>{} does not fold into a valid solid: check the cuts on its tubes (a hole or cutout touching an edge or another cut).</source><translation>{} no se pliega en un sólido válido: revisá los cortes de sus tubos (un agujero o calado que toca un borde u otro corte).</translation></message>
+    <message><source>Joint</source><translation>Unión</translation></message>
+    <message><source>Miter</source><translation>Inglete</translation></message>
+    <message><source>Stepped</source><translation>Escalonada</translation></message>
+    <message><source>How the inner wall is cut: Miter, at half the bend angle (a bevel cut); Stepped, an interlock of straight cuts only, for any tube laser</source><translation>Cómo se corta la pared interior: Inglete, a la mitad del ángulo de plegado (un corte biselado); Escalonada, un encastre solo de cortes rectos, para cualquier láser de tubos</translation></message>
+    <message><source>Step depth</source><translation>Profundidad del escalón</translation></message>
+    <message><source>Depth of the step of a Stepped joint across the bent wall; Automatic: the larger of the wall thickness and the outer corner radius of the tube</source><translation>Profundidad del escalón de una unión escalonada, perpendicular a la pared doblada; Automático: el mayor entre el espesor de pared y el radio exterior de las aristas del tubo</translation></message>
+    <message><source>Flip step</source><translation>Invertir escalón</translation></message>
+    <message><source>Swap the tubes of a Stepped joint: the other one covers the step</source><translation>Intercambia los tubos de una unión escalonada: el otro cubre el escalón</translation></message>
+    <message><source>{} · stepped</source><translation>{} · escalonada</translation></message>
+    <message><source>The step depth of the corner between {} and {} must be between {min:g} and {max:g} mm.</source><translation>La profundidad del escalón de la esquina entre {} y {} tiene que estar entre {min:g} y {max:g} mm.</translation></message>
+    <message><source>The step of the corner between {} and {} does not fit at this angle: make the step depth smaller.</source><translation>El escalón de la esquina entre {} y {} no entra con este ángulo: achicá la profundidad del escalón.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_FoldedBar</name>
@@ -1503,5 +1514,8 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Folded Corner objects of the bar in chain order from its start, then the open corner of a closed frame</source><translation>Objetos Esquina plegada de la barra en el orden de la cadena desde su inicio, y después la esquina abierta de un marco cerrado</translation></message>
     <message><source>Length of the unfolded bar: the length to cut</source><translation>Longitud de la barra desplegada: la longitud a cortar</translation></message>
     <message><source>The folded bar this is the straight bar of</source><translation>La barra plegada de la que esta es la barra recta</translation></message>
+    <message><source>How the inner wall is cut: Miter, at half the bend angle (a bevel cut); Stepped, an interlock of straight cuts only</source><translation>Cómo se corta la pared interior: Inglete, a la mitad del ángulo de plegado (un corte biselado); Escalonada, un encastre solo de cortes rectos</translation></message>
+    <message><source>Depth of the step of a Stepped joint across the bent wall; 0: automatic, the larger of the wall thickness and the outer corner radius of the tube</source><translation>Profundidad del escalón de una unión escalonada, perpendicular a la pared doblada; 0: automático, el mayor entre el espesor de pared y el radio exterior de las aristas del tubo</translation></message>
+    <message><source>Swap the tubes of a Stepped joint: the other one covers the step</source><translation>Intercambia los tubos de una unión escalonada: el otro cubre el escalón</translation></message>
 </context>
 </TS>

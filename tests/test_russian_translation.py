@@ -155,6 +155,40 @@ FOLDED_MITER_TEXTS = (
         "sense, inverted or symmetric) or between two faces with equal gaps. A change to the piece shows on every "
         "copy; the BOM counts them with its ID. Double-click the pattern to edit it.",
     ),
+    # odd/tasks/stepped-corners.md: the joint of each Folded Corner.
+    ("MaxProFrame", "Joint"),
+    ("MaxProFrame", "Miter"),
+    ("MaxProFrame", "Stepped"),
+    (
+        "MaxProFrame",
+        "How the inner wall is cut: Miter, at half the bend angle (a bevel cut); Stepped, an interlock of straight "
+        "cuts only, for any tube laser",
+    ),
+    ("MaxProFrame", "Step depth"),
+    (
+        "MaxProFrame",
+        "Depth of the step of a Stepped joint across the bent wall; Automatic: the larger of the wall thickness and "
+        "the outer corner radius of the tube",
+    ),
+    ("MaxProFrame", "Flip step"),
+    ("MaxProFrame", "Swap the tubes of a Stepped joint: the other one covers the step"),
+    ("MaxProFrame", "{} · stepped"),
+    ("MaxProFrame", "The step depth of the corner between {} and {} must be between {min:g} and {max:g} mm."),
+    (
+        "MaxProFrame",
+        "The step of the corner between {} and {} does not fit at this angle: make the step depth smaller.",
+    ),
+    (
+        "App::Property",
+        "How the inner wall is cut: Miter, at half the bend angle (a bevel cut); Stepped, an interlock of straight "
+        "cuts only",
+    ),
+    (
+        "App::Property",
+        "Depth of the step of a Stepped joint across the bent wall; 0: automatic, the larger of the wall thickness "
+        "and the outer corner radius of the tube",
+    ),
+    ("App::Property", "Swap the tubes of a Stepped joint: the other one covers the step"),
 )
 
 

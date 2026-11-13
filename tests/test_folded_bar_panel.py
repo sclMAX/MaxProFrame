@@ -32,7 +32,7 @@ except ImportError:
 from test_end_miter_geometry import polar
 from test_expression_fields import assert_readable, use_dark_theme
 from test_extend_cut_preview import keep_auto_preview, scene_graph
-from test_folded_bar import FoldedBarFixture, corner_values
+from test_folded_bar import FoldedBarFixture, corner_values, joint_values
 from test_folded_chain import RECTANGLE
 from test_unfolded_geometry import PLAIN, bend
 
@@ -57,6 +57,15 @@ CORNER_PARAMS = (
     ("Float", "Folded Corner Key Diameter"),
     ("Float", "Folded Corner K-Factor"),
 )
+# odd/tasks/stepped-corners.md S6: the joint values last set, for the next corner.
+JOINT_PARAMS = (
+    ("String", "Folded Corner Joint"),
+    ("Float", "Folded Corner Step Depth"),
+    ("Bool", "Folded Corner Step Flip"),
+)
+# stepped-corners S5: 50 mm deep tube, 2 mm walls, at 90 degrees the step depth goes from the wall thickness to
+# below half the depth.
+STEP_RANGE = "The step depth of the corner between Profile and Profile001 must be between 2 and 24.9 mm."
 # The fields that take an expression (S9), and the corner property each one is bound to.
 FX_FIELDS = (
     ("spin_outer_radius", "OuterRadius"),
@@ -227,9 +236,9 @@ class FoldedPanelFixture(FoldedBarFixture):
         use_language(self, "English", "en_US")
         keep_auto_preview(self, AUTO_PREVIEW)
         # Every test starts from the first-ever values of a corner.
-        keep_params(self, CORNER_PARAMS)
+        keep_params(self, CORNER_PARAMS + JOINT_PARAMS)
         param = get_param_group(writable=True)
-        for kind, name in CORNER_PARAMS:
+        for kind, name in CORNER_PARAMS + JOINT_PARAMS:
             getattr(param, f"Rem{kind}")(name)
         self.doc.UndoMode = 1
         App.setActiveDocument(self.doc.Name)
@@ -2057,6 +2066,315 @@ class DarkThemeTest(FoldedPanelFixture):
         seven = self.picture(spin)
         spin.setValue(6.0)
         self.assertFalse(seven == self.picture(spin))
+
+
+class SteppedCornerPanelTest(FoldedPanelFixture):
+    """odd/tasks/stepped-corners.md S6 (S1, S5 from the panel): the joint, step depth and step flip of each corner,
+    with the rules of the other corner fields (folded-corners S3, S5, S9, S15); the open corner edits its joint, step
+    and clearance."""
+
+    def joint_fields(self, form):
+        return form.combo_joint, form.spin_step_depth, form.cb_step_flip
+
+    def shown(self, form):
+        """(Joint, step depth, flip) the fields show."""
+        return form.combo_joint.currentData(), form.spin_step_depth.value(), form.cb_step_flip.isChecked()
+
+    def enabled(self, form):
+        """Which Corner fields are enabled, by name."""
+        names = (
+            "spin_outer_radius",
+            "spin_clearance",
+            "cb_key",
+            "spin_key_diameter",
+            "spin_k_factor",
+            "combo_joint",
+            "spin_step_depth",
+            "cb_step_flip",
+        )
+        return {name for name in names if getattr(form, name).isEnabled()}
+
+    def choose_joint(self, form, joint):
+        form.combo_joint.setCurrentIndex(form.combo_joint.findData(joint))
+        self.events()
+
+    def opened(self, bar):
+        (corner,) = [corner for corner in bar.Corners if corner.Open]
+        return corner
+
+    def test_the_joint_fields_show_the_selected_corner_and_the_step_needs_stepped(self):
+        _, bar = self.make_bar(
+            corners=[bend(joint="Stepped", step_depth=4.0, step_flip=True, **PLAIN), bend(**PLAIN), bend(**PLAIN)]
+        )
+        panel = self.edit(bar)
+        form = panel.form
+        layout = form.groupBox_corner.layout()
+        self.assertEqual("Joint", layout.labelForField(form.combo_joint).text())
+        self.assertEqual("Step depth", layout.labelForField(form.spin_step_depth).text())
+        self.assertEqual("Flip step", form.cb_step_flip.text())
+        self.assertEqual(["Miter", "Stepped"], [form.combo_joint.itemText(i) for i in range(form.combo_joint.count())])
+        self.assertEqual(["Miter", "Stepped"], [form.combo_joint.itemData(i) for i in range(form.combo_joint.count())])
+        self.assertEqual("Automatic", form.spin_step_depth.specialValueText())
+        for widget in self.joint_fields(form):
+            self.assertTrue(widget.toolTip(), widget)
+        self.assertEqual("1 · Profile → Profile001 · R 5 mm · no key · clearance 0 mm · stepped", self.rows(panel)[0])
+        self.assertEqual("2 · Profile001 → Profile002 · R 5 mm · no key · clearance 0 mm", self.rows(panel)[1])
+        # Nothing selected: nothing to edit.
+        self.assertEqual(set(), self.enabled(form))
+
+        self.pick(panel, 0)
+
+        self.assertEqual(("Stepped", 4.0, True), self.shown(form))
+        self.assertTrue({"combo_joint", "spin_step_depth", "cb_step_flip"} <= self.enabled(form))
+        self.pick(panel, 1)
+        self.assertEqual(("Miter", 0.0, False), self.shown(form))
+        self.assertEqual("Automatic", form.spin_step_depth.text())
+        # A Miter corner has no step.
+        self.assertIn("combo_joint", self.enabled(form))
+        self.assertFalse(form.spin_step_depth.isEnabled())
+        self.assertFalse(form.cb_step_flip.isEnabled())
+        self.choose_joint(form, "Stepped")
+        self.assertTrue(form.spin_step_depth.isEnabled() and form.cb_step_flip.isEnabled())
+        self.assertEqual(
+            "2 · Profile001 → Profile002 · R 5 mm · no key · clearance 0 mm · stepped", self.rows(panel)[1]
+        )
+        panel.update_preview()
+        self.assertEqual(
+            [("Stepped", 4.0, True), ("Stepped", 0.0, False), ("Miter", 0.0, False)],
+            [joint_values(corner) for corner in self.folded_corners(bar)],
+        )
+        self.assertOneSolid(bar)
+
+    def test_a_joint_chosen_goes_to_every_selected_corner_and_differing_ones_show_mixed(self):
+        _, bar = self.make_bar(**PLAIN)
+        panel = self.edit(bar)
+        form = panel.form
+        self.pick(panel, 0, 1)
+
+        self.choose_joint(form, "Stepped")
+        form.spin_step_depth.setValue(4.0)
+        form.cb_step_flip.setChecked(True)
+
+        self.assertFalse(form.combo_joint.property("mixedValues"))
+        self.pick(panel, 1, 2)
+        # Mixed: the step fields stay enabled, they may go to the Stepped corners.
+        self.assertTrue(form.combo_joint.property("mixedValues"))
+        self.assertTrue(form.spin_step_depth.property("mixedValues"))
+        self.assertTrue(form.cb_step_flip.property("mixedValues"))
+        self.assertEqual("Flip step — Mixed values", form.cb_step_flip.text())
+        self.assertTrue(form.spin_step_depth.isEnabled() and form.cb_step_flip.isEnabled())
+        # The joint shown under Mixed values chosen again goes to every selected corner.
+        form.combo_joint.activated.emit(form.combo_joint.currentIndex())
+        self.events()
+        self.assertFalse(form.combo_joint.property("mixedValues"))
+        self.assertEqual("Flip step — Mixed values", form.cb_step_flip.text())
+        form.cb_step_flip.setChecked(True)
+        self.assertEqual("Flip step", form.cb_step_flip.text())
+        panel.update_preview()
+
+        self.assertEqual(
+            [("Stepped", 4.0, True), ("Stepped", 4.0, True), ("Stepped", 0.0, True)],
+            [joint_values(corner) for corner in self.folded_corners(bar)],
+        )
+        self.assertTrue(panel.accept())
+        self.assertOneSolid(bar)
+
+    def test_a_step_depth_out_of_range_shows_the_range_and_disables_ok(self):
+        _, bar = self.make_bar(**PLAIN)
+        panel = self.edit(bar)
+        form = panel.form
+        self.pick(panel, 0)
+        self.choose_joint(form, "Stepped")
+
+        form.spin_step_depth.setValue(25.0)
+
+        self.assertRefused(panel, STEP_RANGE)
+        form.spin_step_depth.setValue(1.5)
+        self.assertRefused(panel, STEP_RANGE)
+        form.spin_step_depth.setValue(4.0)
+        self.assertAccepts(panel)
+        # A Miter corner ignores its step depth.
+        form.spin_step_depth.setValue(25.0)
+        self.choose_joint(form, "Miter")
+        self.assertAccepts(panel)
+
+    def test_the_open_row_edits_its_joint_step_and_clearance_only(self):
+        _, bar = self.make_bar(**PLAIN)
+        panel = self.edit(bar)
+        form = panel.form
+        allowed = {"spin_clearance", "combo_joint"}
+
+        self.pick(panel, 3)
+
+        self.assertEqual(allowed, self.enabled(form))
+        self.assertEqual(("Miter", 0.0, False), self.shown(form))
+        self.choose_joint(form, "Stepped")
+        self.assertEqual(allowed | {"spin_step_depth", "cb_step_flip"}, self.enabled(form))
+        self.assertEqual("Open · Profile003 → Profile · stepped", self.rows(panel)[3])
+        # With a folded corner too: still only the fields of the open corner.
+        self.pick(panel, 0, 3)
+        self.assertEqual(allowed | {"spin_step_depth", "cb_step_flip"}, self.enabled(form))
+        self.assertTrue(form.combo_joint.property("mixedValues"))
+        form.spin_clearance.setValue(0.3)
+        self.pick(panel, 3)
+        form.spin_step_depth.setValue(4.0)
+        form.cb_step_flip.setChecked(True)
+        self.pick(panel, 0)
+        self.assertEqual(
+            {"spin_outer_radius", "spin_clearance", "cb_key", "spin_k_factor", "combo_joint"}, self.enabled(form)
+        )
+
+        self.assertTrue(panel.accept())
+
+        opened = self.opened(bar)
+        self.assertEqual(("Stepped", 4.0, True), joint_values(opened))
+        self.assertEqual(0.3, round(opened.Clearance.Value, 9))
+        self.assertEqual([("Miter", 0.0, False)] * 3, [joint_values(corner) for corner in self.folded_corners(bar)])
+        self.assertEqual([0.3, 0.0, 0.0], [round(c.Clearance.Value, 9) for c in self.folded_corners(bar)])
+        # The open corner keeps the sizes of the first one.
+        self.assertEqual((5.0, 0.3, False, 0.0, 0.4), corner_values(opened))
+        self.assertOneSolid(bar)
+
+    def test_ok_keeps_a_stepped_open_corner_and_cancel_puts_the_joint_back(self):
+        _, bar = self.make_bar(**PLAIN)
+        opened = self.opened(bar)
+        opened.Joint = "Stepped"
+        opened.StepDepth = 4.0
+        self.doc.recompute()
+        self.assertOneSolid(bar)
+
+        # Editing another corner keeps the open corner's own joint (it no longer takes the first corner's).
+        panel = self.edit(bar)
+        self.assertEqual("Open · Profile003 → Profile · stepped", self.rows(panel)[3])
+        self.pick(panel, 1)
+        form = panel.form
+        form.spin_k_factor.setValue(0.42)
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+
+        self.assertEqual(("Stepped", 4.0, False), joint_values(opened))
+        self.assertEqual(["Miter"] * 3, [corner.Joint for corner in self.folded_corners(bar)])
+        self.assertEqual(0.42, round(self.folded_corners(bar)[1].KFactor, 9))
+        self.assertOneSolid(bar)
+
+        # Cancel with undo off puts every joint property back by hand.
+        self.doc.UndoMode = 0
+        volume = bar.Shape.Volume
+        before = [joint_values(corner) for corner in bar.Corners]
+        panel = self.edit(bar)
+        form = panel.form
+        self.pick(panel, 0, 3)
+        self.choose_joint(form, "Stepped")
+        form.spin_step_depth.setValue(5.0)
+        form.cb_step_flip.setChecked(True)
+        panel.update_preview()
+        self.assertEqual(("Stepped", 5.0, True), joint_values(self.folded_corners(bar)[0]))
+        self.assertEqual(("Stepped", 5.0, True), joint_values(opened))
+
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+
+        self.assertEqual(before, [joint_values(corner) for corner in bar.Corners])
+        self.assertShapeBack(bar, volume)
+
+    def test_a_new_corner_starts_with_the_joint_last_set_and_ok_remembers_it(self):
+        bottom, right, top, left = self.frame()
+        panel = self.run_command(bottom, right)
+        form = panel.form
+        self.assertEqual(("Miter", 0.0, False), self.shown(form))
+        self.pick(panel, 0)
+        self.choose_joint(form, "Stepped")
+        form.spin_step_depth.setValue(4.0)
+        form.cb_step_flip.setChecked(True)
+
+        Gui.Selection.addSelection(self.doc.Name, top.Name, "Face1")
+        self.events()
+
+        self.assertEqual(
+            "2 · Profile001 → Profile002 · R 10 mm · key · clearance 0.5 mm · stepped", self.rows(panel)[1]
+        )
+        self.pick(panel, 1)
+        self.assertEqual(("Stepped", 4.0, True), self.shown(form))
+        form.spin_step_depth.setValue(3.0)
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        (bar,) = self.bars()
+        self.assertEqual([("Stepped", 4.0, True), ("Stepped", 3.0, True)], [joint_values(c) for c in bar.Corners])
+        param = get_param_group()
+        self.assertEqual(
+            ("Stepped", 3.0, True),
+            (
+                param.GetString("Folded Corner Joint"),
+                param.GetFloat("Folded Corner Step Depth"),
+                param.GetBool("Folded Corner Step Flip"),
+            ),
+        )
+
+        # The next bar starts with them.
+        others = self.frame()
+        panel = self.run_command(*others[:3])
+        self.assertEqual(
+            [
+                "1 · Profile004 → Profile005 · R 10 mm · key · clearance 0.5 mm · stepped",
+                "2 · Profile005 → Profile006 · R 10 mm · key · clearance 0.5 mm · stepped",
+            ],
+            self.rows(panel),
+        )
+        self.pick(panel, 0)
+        self.assertEqual(("Stepped", 3.0, True), self.shown(panel.form))
+
+    def test_the_step_depth_takes_an_expression_on_the_one_corner_selected_the_open_one_too(self):
+        _, bar = self.make_bar(**PLAIN)
+        panel = self.edit(bar)
+        form = panel.form
+        corner, opened = self.folded_corners(bar)[0], self.opened(bar)
+        self.pick(panel, 0)
+        self.assertTrue(self.fx_shown(form.spin_step_depth))
+        self.pick(panel, 0, 1)
+        self.assertFalse(self.fx_shown(form.spin_step_depth))
+
+        self.pick(panel, 3)
+        # The open corner: its clearance and step depth, nothing else.
+        self.assertTrue(self.fx_shown(form.spin_clearance))
+        self.assertTrue(self.fx_shown(form.spin_step_depth))
+        self.assertFalse(self.fx_shown(form.spin_outer_radius))
+        self.choose_joint(form, "Stepped")
+        opened.setExpression("StepDepth", "2 * 2 mm")
+        self.doc.recompute()
+        self.events()
+        self.pick(panel, 0)
+        self.pick(panel, 3)
+
+        self.assertTrue(Gui.ExpressionBinding(form.spin_step_depth).hasExpression())
+        self.assertEqual(("Stepped", 4.0, False), self.shown(form))
+        self.assertTrue(panel.accept())
+        self.assertEqual({"StepDepth": "2 * 2 mm"}, dict(opened.ExpressionEngine))
+        self.assertEqual(("Stepped", 4.0, False), joint_values(opened))
+        self.assertEqual("Miter", corner.Joint)
+        self.assertOneSolid(bar)
+
+    def test_the_joint_texts_go_through_translate(self):
+        def marked(context, text, *args):
+            return f"<{text}>"
+
+        with patch.object(create_folded_bar_tool, "translate", marked):
+            _, bar = self.make_bar(corners=[bend(joint="Stepped", **PLAIN), bend(**PLAIN), bend(**PLAIN)])
+            panel = self.edit(bar)
+            form = panel.form
+            layout = form.groupBox_corner.layout()
+
+            self.assertEqual("<Joint>", layout.labelForField(form.combo_joint).text())
+            self.assertEqual("<Step depth>", layout.labelForField(form.spin_step_depth).text())
+            self.assertEqual("<Flip step>", form.cb_step_flip.text())
+            self.assertEqual(
+                ["<Miter>", "<Stepped>"], [form.combo_joint.itemText(i) for i in range(form.combo_joint.count())]
+            )
+            self.assertEqual(["Miter", "Stepped"], [form.combo_joint.itemData(i) for i in range(2)])
+            self.assertEqual("<Automatic>", form.spin_step_depth.specialValueText())
+            for widget in self.joint_fields(form):
+                self.assertTrue(widget.toolTip().startswith("<") and widget.toolTip().endswith(">"), widget)
+            row = self.rows(panel)[0]
+            self.assertTrue(row.startswith("<<1 · ") and row.endswith("> · stepped>"), row)
 
 
 class OutputCommandsTest(FoldedPanelFixture):

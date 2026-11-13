@@ -44,15 +44,17 @@ s = step depth, g = clearance. A = the tab piece, B = the socket piece.
 - T0 [-] Unfolded Bar label from its frame (L4-L5, separate request). route=inline; commit=6a35bee [x]
 - T1 [S2, S3, S5] unfolded_geometry: CornerSettings `joint`, `step_depth`, `step_flip`; stepped band regions for
   folded corners (clearance, automatic depth, refusals, key below the band); fold-back check (one solid, no overlap,
-  60°/90°/120°, wedge sizes). route=inline; commit=(T1) [ ]
+  60°/90°/120°, wedge sizes); fold_bar splits along the step (flip too). route=worker; commit=baa6226, 85697ac [x]
 - T2 [S4, S5] open corner stepped cut on both ends of a closed frame (both bands), replacing the ends' End Miter.
-  route=inline; commit=(T2) [ ]
+  route=worker; commit=6043270 [x] (open question L12 pending: outer bump at non-90°)
+- T2b [S4, L13] open corner outer band: notch instead of bump (nothing past the outer face planes).
+  route=worker; commit=117719f [x]
 - T3 [S1, S5, S6] FoldedCorner `Joint`/`StepDepth`/`StepFlip`, restore of older documents, bar settings incl. the open
-  corner. route=inline; commit=(T3) [ ]
+  corner. route=worker; commit=41846fa [x]
 - T4 [S6] Folded Bar panel: joint combo, step depth, flip, open row editable, Mixed, remembered values.
-  route=inline; commit=(T4) [ ]
+  route=worker; commit=f958487 [x]
 - T5 [S1-S6] docs (tutorial, README, CHANGELOG incl. T0), Spanish translations, full native suite (pinned stable),
-  verify. route=inline + gentle-ai-verify if a high-risk item applies; commit=(T5) [ ]
+  verify. route=worker (docs, i18n) + parent (suite); commit=207c696 (docs, i18n) [x]
 
 ## Log
 - L1 (2026-11-13) "Bien, tengo una duda, si la maquina laser tiene cabezal rotatorio (bevel) o si es solo corte recto
@@ -86,3 +88,40 @@ s = step depth, g = clearance. A = the tab piece, B = the socket piece.
   accepted: T' clipped at B's end, "does not fit at this angle" also when A's band end passes B's flank at the band
   bottom, one range message for the step depth, `RadiusLarge` used regardless of `MakeFillet`. Open: `fold_bar` splits
   at B's flank, so `step_flip` folds wrong -> fixed inside T1 (folded_geometry.py added to the surfaces).
+- L10 T1 done: `UnfoldedCorner.step_split` tells fold_bar where the band divides; flipped fold test RED (overlap /
+  2 solids) then GREEN; pinned 1.1.4: test_unfolded_geometry 53 OK, test_folded_geometry 14 OK, test_folded_bar 42 OK.
+  Slice boundary: slice 1 = 6a35bee..85697ac (T0, T1, ~774 lines); delivery becomes chained slices on this branch.
+- L11 Decision (T2 design): the open corner is computed in the folded configuration around the virtual sharp of the
+  outer faces (y measured from the outer face, inner band y ∈ [d - s, d], outer band y ∈ [0, s]); the side walls
+  between keep the miter plane through the sharp; the inner overlap is solved as in L8 with A = the last tube, the
+  outer overlap with the roles swapped (B = the first tube covers it), `step_flip` swaps both. Each end of the bar is
+  rebuilt from the base section extended past the joint, then cut by the joint mapped onto that end; whatever the
+  tip changes inside that end zone (its End Miter) is dropped there, cuts outside the zone stay.
+- L12 T2 done (6043270): unfold/check_settings take `open_corner`; Miter/None byte-identical; rectangle and rhombus
+  (60°/120°) fold into one sound solid, also with g = 1 and flip; pinned 1.1.4: unfolded 62 OK, folded 16 OK,
+  folded_bar 42 OK. Messages name (first, last) piece. Open: (1) at a convex open corner ≠ 90° the covering outer
+  band sticks out up to s·|cos θ| past the other tube's outer face (cover) - the alternative is a notch; (2) any tip
+  change within ~d·tan(θ/2) of the sharp is dropped, not only the End Miter; (3) no guard for an end tube so short
+  that the end zone reaches its folded corner. Slice 2 = 6043270 (~530 lines).
+- L13 (2026-11-13) Asked: at a convex open corner ≠ 90°, cover (outer bump) or notch (recess)? User: "2" -> notch:
+  no material past either tube's outer face plane; the gap left at the outer edge is a weld groove. T2b reopens T2.
+- L14 T3 done (uncommitted): Joint/StepDepth/StepFlip in the Notch group, restore of older documents, helpers
+  open_settings/unfold_bar; pinned 1.1.4: test_folded_bar 48 OK, panel 81 OK, translations 7 OK. At 90° g = 0 a
+  Stepped corner folds into the same solid as a Miter one (only the unfolded cuts differ). Found for T4:
+  update_corners resets an existing Open corner to the first corner's settings on panel OK -> T4 passes the open
+  corner's own settings (folded_bar.py added to T4's surfaces).
+- L15 T2b done (117719f): the covering outer band starts at max(0, -s cot θ) + g/2 past the sharp; RED 6 subtests
+  (71.6 / 177.8 mm³ outside the outer faces at 120° / 60°) -> GREEN; 90° rectangle length and volume unchanged;
+  pinned 1.1.4: unfolded 64 OK, folded 17 OK, folded_bar 48 OK. Notch at s = 4: ~6.9 mm (120°), ~4.6 mm (60°)
+  along the last tube's outer face. Possible follow-up (not done): let the other outer band grow into the notch
+  without passing either face plane, for a smaller groove. T3 and T4 share folded_bar.py / test_folded_bar.py in
+  the worktree: committed after T4, split by file if clean.
+- L16 T4 done (f958487; T3 = 41846fa, split by file cleanly): panel Joint combo, Step depth (0 = Automatic, Fx),
+  Flip step; open row edits Joint/StepDepth/StepFlip/Clearance; a new bar's open row follows the first corner until
+  edited. Pinned 1.1.4: panel 89 OK, folded_bar 48 OK, translations 7 OK, tools 13 OK. New "MaxProFrame" strings:
+  Joint, Miter, Stepped, Step depth, Flip step, "{} · stepped" and three tooltips (Automatic reused).
+  Delivery slices: S1 = 6a35bee..85697ac (T0, T1), S2 = 6043270..117719f (T2, T2b), S3 = 41846fa..f958487 + T5.
+- L17 T5 done (207c696): tutorial section "Miter or stepped joint", README, CHANGELOG, Spanish for 14 texts (Unión,
+  Inglete, Escalonada, Profundidad del escalón, Invertir escalón...), Russian unfinished, .qm rebuilt with
+  compile_translations.py. Full native suite, pinned FreeCAD 1.1.4, 4 shards: 505 + 504 + 504 + 504 tests, all
+  succeeded. Weekly and Windows targets not run locally (CI). Assess vs origin/main: medium, reviewDue false.

@@ -2,9 +2,12 @@
 
 See odd/tasks/folded-miter.md, T6, and odd/tasks/folded-corners.md, T4. The panel lists the corners of the bar in
 chain order, corner 1 at its start and the open corner of a closed frame last (S1). The selected corners show in the
-3D view and fill the Corner fields with their outer radius, clearance, key, key diameter and K-factor: a field whose
-value differs between them shows it is mixed, and a value typed goes to every selected corner (S2, S3). With one
-corner selected, once its Folded Corner object exists, the number fields take expressions bound to it (S9). Remove
+3D view and fill the Corner fields with their outer radius, clearance, key, key diameter, K-factor and joint (Miter or
+Stepped, with the step depth and flip of a Stepped one; odd/tasks/stepped-corners.md, S6): a field whose value differs
+between them shows it is mixed, and a value typed goes to every selected corner (S2, S3). The open corner of a closed
+frame has its own joint, step and clearance, the ones of the bar's ends there; its other fields are the first
+corner's, disabled while it is selected. With one corner selected, once its Folded Corner object exists, the number
+fields take expressions bound to it (S9). Remove
 takes off the end tube of the first or last corner of an open bar, or opens a closed frame at the selected corner
 (S4). A new corner starts with the values last set in the panel, remembered in the MaxProFrame parameters on OK (S5).
 The selected corners of the preview are drawn over the 3D view, each as the part of the bar around its vertex, in the
@@ -71,23 +74,39 @@ from freecad.maxproframe.folded_chain import (
 from freecad.maxproframe.folded_corner import SETTINGS_PROPERTIES, corner_key, corner_settings, make_folded_corner
 from freecad.maxproframe.profile_pattern import container_placement, newest_piece, placed
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, is_alive, keep_alive_until_destroyed
-from freecad.maxproframe.unfolded_geometry import CornerSettings, UnfoldError, check_settings
+from freecad.maxproframe.unfolded_geometry import JOINTS, MITER, STEPPED, CornerSettings, UnfoldError, check_settings
 
 # Remembered state of the panel's "Update automatically" check box.
 AUTO_PREVIEW_PARAM = "Folded Bar Auto Preview"
 # Largest radius, clearance or key size the fields take (mm).
 MAX_SIZE = 1000.0
 # Corner object properties the panel sets; of the bar it sets Segments and Corners.
-PROPERTIES = ("PieceA", "PieceB", "OuterRadius", "Clearance", "Key", "KeyDiameter", "KFactor", "Open")
+PROPERTIES = (
+    "PieceA",
+    "PieceB",
+    "OuterRadius",
+    "Clearance",
+    "Key",
+    "KeyDiameter",
+    "KFactor",
+    "Joint",
+    "StepDepth",
+    "StepFlip",
+    "Open",
+)
 # Corner object properties the number fields bind to, for the expression editor (S9).
-EXPRESSION_PROPERTIES = ("OuterRadius", "Clearance", "KeyDiameter", "KFactor")
+EXPRESSION_PROPERTIES = ("OuterRadius", "Clearance", "KeyDiameter", "KFactor", "StepDepth")
 # The number fields of the Corner group: (field, CornerSettings field, corner object property).
 NUMBER_FIELDS = (
     ("spin_outer_radius", "outer_radius", "OuterRadius"),
     ("spin_clearance", "clearance", "Clearance"),
     ("spin_key_diameter", "key_diameter", "KeyDiameter"),
     ("spin_k_factor", "k_factor", "KFactor"),
+    ("spin_step_depth", "step_depth", "StepDepth"),
 )
+# The CornerSettings fields the open corner of a closed frame has of its own, the ones of the bar's ends there
+# (stepped-corners S4, S6); its other fields are the first corner's.
+OPEN_FIELDS = ("clearance", "joint", "step_depth", "step_flip")
 # CornerSettings field -> corner object property.
 PROPERTY_OF = {field: prop for prop, field in SETTINGS_PROPERTIES.items()}
 # The values last set in the panel, given to the next corner (S5): (parameter, kind, CornerSettings field).
@@ -97,9 +116,22 @@ LAST_VALUE_PARAMS = (
     ("Folded Corner Key", "Bool", "key"),
     ("Folded Corner Key Diameter", "Float", "key_diameter"),
     ("Folded Corner K-Factor", "Float", "k_factor"),
+    ("Folded Corner Joint", "String", "joint"),
+    ("Folded Corner Step Depth", "Float", "step_depth"),
+    ("Folded Corner Step Flip", "Bool", "step_flip"),
 )
-# A corner before any value was ever set: outer radius 10 mm, clearance 0.5 mm, the key of default size, automatic K.
-FIRST_VALUES = CornerSettings(outer_radius=10.0, clearance=0.5, key=True, key_diameter=0.0, k_factor=0.0)
+# A corner before any value was ever set: outer radius 10 mm, clearance 0.5 mm, the key of default size, automatic K,
+# a Miter joint (with an automatic step, not flipped, once Stepped).
+FIRST_VALUES = CornerSettings(
+    outer_radius=10.0,
+    clearance=0.5,
+    key=True,
+    key_diameter=0.0,
+    k_factor=0.0,
+    joint=MITER,
+    step_depth=0.0,
+    step_flip=False,
+)
 # The selected corners drawn over the 3D view (S13): room added around a corner (mm), transparency of the faces, width
 # of the edges and tolerance of the drawn faces and edges (mm).
 OVERLAY_MARGIN = 0.5
@@ -122,6 +154,8 @@ def last_values():
     values = {}
     for name, kind, field in LAST_VALUE_PARAMS:
         values[field] = getattr(param, f"Get{kind}")(name, getattr(FIRST_VALUES, field))
+    if values["joint"] not in JOINTS:
+        values["joint"] = FIRST_VALUES.joint
     return CornerSettings(**values)
 
 
@@ -129,8 +163,17 @@ def remember_values(settings):
     """Keep ``settings`` as the values the next corner starts with, between sessions."""
     param = get_param_group(writable=True)
     for name, kind, field in LAST_VALUE_PARAMS:
-        value = getattr(settings, field)
-        getattr(param, f"Set{kind}")(name, bool(value) if kind == "Bool" else float(value))
+        getattr(param, f"Set{kind}")(name, _setting(field, getattr(settings, field)))
+
+
+def _setting(field, value):
+    """``value`` (a property value or a plain one) as the ``CornerSettings`` ``field`` takes it."""
+    value = value.Value if hasattr(value, "Value") else value
+    if field in ("key", "step_flip"):
+        return bool(value)
+    if field == "joint":
+        return str(value)
+    return float(value)
 
 
 def _plain(value):
@@ -305,7 +348,7 @@ class _FinishOnEnter(QtCore.QObject):
 
 
 class FoldedBarTaskPanel:
-    """The corners of a Folded Bar, each with its outer radius, clearance, key and K-factor, previewed.
+    """The corners of a Folded Bar, each with its outer radius, clearance, key, K-factor and joint, previewed.
 
     Without ``edited`` the preview is the Folded Bar OK keeps, made from the pieces ``selection`` (the first one
     starts the bar) inside one transaction that Cancel aborts. With ``edited`` the bar itself is the preview: OK keeps
@@ -354,6 +397,9 @@ class FoldedBarTaskPanel:
         self._open_pair = None
         # The values of each corner, by the names of its two profiles: a corner met first gets the values last set.
         self._values = {}
+        # The values of the open corner, by its key, once it has its own (loaded with the bar or set in the panel):
+        # until then it takes the first corner's (stepped-corners S6).
+        self._open_values = {}
         self._last = self._loaded = last_values()
         self._rows = []
         # The expressions of the corners of a dropped preview, by corner: the next preview takes them back.
@@ -374,8 +420,8 @@ class FoldedBarTaskPanel:
                 self._open_pair = [opened.PieceA, opened.PieceB]
             for obj in edited.Corners:
                 key = corner_key(obj) if obj is not None else None
-                if key is not None and not obj.Open:
-                    self._values.setdefault(key, corner_settings(obj))
+                if key is not None:
+                    (self._open_values if obj.Open else self._values).setdefault(key, corner_settings(obj))
         self._timer = QtCore.QTimer()
         self._timer.setSingleShot(True)
         self._timer.setInterval(GAP_DELAY_MS)
@@ -464,9 +510,37 @@ class FoldedBarTaskPanel:
             )
         )
         corner.addRow(translate("MaxProFrame", "K-factor"), form.spin_k_factor)
+        # The joint (stepped-corners S1, S5, S6): the stored values stay Miter and Stepped, whatever the language.
+        form.combo_joint = QtWidgets.QComboBox()
+        form.combo_joint.addItem(translate("MaxProFrame", "Miter"), MITER)
+        form.combo_joint.addItem(translate("MaxProFrame", "Stepped"), STEPPED)
+        form.combo_joint.setToolTip(
+            translate(
+                "MaxProFrame",
+                "How the inner wall is cut: Miter, at half the bend angle (a bevel cut); Stepped, an interlock of "
+                "straight cuts only, for any tube laser",
+            )
+        )
+        corner.addRow(translate("MaxProFrame", "Joint"), form.combo_joint)
+        form.spin_step_depth = length_field(0.0, MAX_SIZE, 0.0)
+        form.spin_step_depth.setSpecialValueText(translate("MaxProFrame", "Automatic"))
+        form.spin_step_depth.setToolTip(
+            translate(
+                "MaxProFrame",
+                "Depth of the step of a Stepped joint across the bent wall; Automatic: the larger of the wall "
+                "thickness and the outer corner radius of the tube",
+            )
+        )
+        corner.addRow(translate("MaxProFrame", "Step depth"), form.spin_step_depth)
+        form.cb_step_flip = QtWidgets.QCheckBox(translate("MaxProFrame", "Flip step"))
+        form.cb_step_flip.setToolTip(
+            translate("MaxProFrame", "Swap the tubes of a Stepped joint: the other one covers the step")
+        )
+        corner.addRow(form.cb_step_flip)
         layout.addWidget(form.groupBox_corner)
         # A field whose value differs between the selected corners says so, as in Create Profile.
         self._mixed = {name: _MixedPresentation(getattr(form, name)) for name, _, _ in NUMBER_FIELDS}
+        self._mixed["combo_joint"] = _MixedPresentation(form.combo_joint, combo=True)
         for name, _, _ in NUMBER_FIELDS:
             # A value typed applies once the field is done, not at every key (S15).
             getattr(form, name).setKeyboardTracking(False)
@@ -497,6 +571,10 @@ class FoldedBarTaskPanel:
             spin.lineEdit().textEdited.connect(lambda _text, name=name: self._mixed_edits.add(name))
             spin.editingFinished.connect(lambda name=name, field=field: self._finish_mixed(name, field))
         form.cb_key.toggled.connect(lambda checked: self._field_changed("key", bool(checked)))
+        form.combo_joint.currentIndexChanged.connect(self._joint_changed)
+        # The joint shown under Mixed values chosen again: no index change, it goes to every corner all the same.
+        form.combo_joint.activated.connect(self._joint_activated)
+        form.cb_step_flip.toggled.connect(lambda checked: self._field_changed("step_flip", bool(checked)))
         form.cb_auto_update.toggled.connect(self._on_auto_update_toggled)
 
     # Corner list.
@@ -504,21 +582,28 @@ class FoldedBarTaskPanel:
     def _rows_of(self, chain):
         rows = [Row(_corner_key(chain, corner), corner.before, corner.after, False) for corner in chain.corners]
         if chain.closed:
-            last = len(chain.segments) - 1
-            key = frozenset((chain.segments[last].profile.Name, chain.segments[0].profile.Name))
-            rows.append(Row(key, last, 0, True))
+            rows.append(Row(self._open_key(chain), len(chain.segments) - 1, 0, True))
         return rows
+
+    @staticmethod
+    def _open_key(chain):
+        """The key of the open corner of the closed ``chain``: its last segment meets its first one there."""
+        return frozenset((chain.segments[-1].profile.Name, chain.segments[0].profile.Name))
 
     def _row_text(self, number, row):
         segments = self._chain.segments
         before, after = segments[row.before].profile.Label, segments[row.after].profile.Label
+        values = self._row_values(row)
         if row.open:
-            return translate("MaxProFrame", "Open · {} → {}").format(before, after)
-        values = self._corner_values(row.key)
-        key = translate("MaxProFrame", "key") if values.key else translate("MaxProFrame", "no key")
-        return translate("MaxProFrame", "{} · {} → {} · R {} · {} · clearance {}").format(
-            number, before, after, length_text(values.outer_radius), key, length_text(values.clearance)
-        )
+            text = translate("MaxProFrame", "Open · {} → {}").format(before, after)
+        else:
+            key = translate("MaxProFrame", "key") if values.key else translate("MaxProFrame", "no key")
+            text = translate("MaxProFrame", "{} · {} → {} · R {} · {} · clearance {}").format(
+                number, before, after, length_text(values.outer_radius), key, length_text(values.clearance)
+            )
+        if values.joint == STEPPED:
+            text = translate("MaxProFrame", "{} · stepped").format(text)
+        return text
 
     def _hint(self):
         """What the list says while the listed pieces fold no corner."""
@@ -560,9 +645,9 @@ class FoldedBarTaskPanel:
         indexes = sorted(widget.row(item) for item in widget.selectedItems())
         return [self._rows[index] for index in indexes if index < len(self._rows)]
 
-    def _field_keys(self):
-        """The folded corners the fields edit: the selected ones."""
-        return [row.key for row in self._selected() if not row.open]
+    def _field_rows(self):
+        """The corners the fields edit: the selected ones, the open one too (its OPEN_FIELDS only)."""
+        return self._selected()
 
     def _show_tube(self):
         """The material and the wall thickness of the tubes, read from their profile (S7)."""
@@ -598,33 +683,75 @@ class FoldedBarTaskPanel:
                 return obj
         return None
 
-    def _corner_values(self, key):
-        """The ``CornerSettings`` of the corner ``key``: the panel's, but where an expression drives its object."""
-        values = self._values.get(key, self._last)
+    def _driven(self, key, fields):
+        """{CornerSettings field: value} of ``fields`` an expression drives on the object of the corner ``key``."""
         obj = self._corner_object(key)
-        if obj is None or obj.Open:
-            return values
-        driven = {}
-        for prop, field in SETTINGS_PROPERTIES.items():
-            if expression_of(obj, prop) is not None:
-                value = getattr(obj, prop)
-                value = value.Value if hasattr(value, "Value") else value
-                driven[field] = bool(value) if field == "key" else float(value)
+        if obj is None:
+            return {}
+        return {
+            field: _setting(field, getattr(obj, prop))
+            for prop, field in SETTINGS_PROPERTIES.items()
+            if field in fields and expression_of(obj, prop) is not None
+        }
+
+    def _corner_values(self, key):
+        """The ``CornerSettings`` of the folded corner ``key``: the panel's, but where an expression drives its
+        object."""
+        values = self._values.get(key, self._last)
+        driven = self._driven(key, SETTINGS_PROPERTIES.values())
         if driven:
             values = replace(values, **driven)
             self._values[key] = values
         return values
 
+    def _open_values_of(self, chain, key):
+        """The ``CornerSettings`` of the open corner ``key`` of ``chain``: the first corner's, with the OPEN_FIELDS of
+        its own once it has them, and where an expression drives its object (stepped-corners S6)."""
+        values = self._corner_values(_corner_key(chain, chain.corners[0])) if chain.corners else self._last
+        own = self._open_values.get(key)
+        if own is not None:
+            values = replace(values, **{field: getattr(own, field) for field in OPEN_FIELDS})
+        driven = self._driven(key, OPEN_FIELDS)
+        if driven:
+            values = replace(values, **driven)
+            self._open_values[key] = values
+        return values
+
+    def _row_values(self, row):
+        """The ``CornerSettings`` of the corner of ``row``."""
+        if row.open:
+            return self._open_values_of(self._chain, row.key)
+        return self._corner_values(row.key)
+
     def _settings(self, chain):
         """The ``CornerSettings`` of each folded corner of ``chain``."""
         return [self._corner_values(_corner_key(chain, corner)) for corner in chain.corners]
 
+    def _open_settings(self, chain):
+        """The ``CornerSettings`` of the open corner of ``chain`` when it is closed, else None."""
+        return self._open_values_of(chain, self._open_key(chain)) if chain.closed else None
+
+    def _present_check(self, box, text, column):
+        """Show ``column`` (the values of the selected corners) in the check ``box`` labelled ``text``: unchecked and
+        Mixed values when they differ. (checked, mixed)."""
+        mixed = len({bool(value) for value in column}) > 1
+        checked = not mixed and bool(column[0])
+        if box.isChecked() != checked:
+            box.setChecked(checked)
+        box.setProperty("mixedValues", mixed)
+        box.setText(f"{text} — {translate('frameforge', 'Mixed values')}" if mixed else text)
+        return checked, mixed
+
     def _present_fields(self):
-        """The fields show the values of the selected corners, mixed where they differ; disabled with none."""
+        """The fields show the values of the selected corners, mixed where they differ; disabled with none. With the
+        open corner selected only its OPEN_FIELDS are enabled; the step only for a Stepped joint (or mixed)."""
         form = self.form
-        keys = self._field_keys()
-        values = [self._corner_values(key) for key in keys] or [self._last]
-        enabled = bool(keys)
+        rows = self._field_rows()
+        values = [self._row_values(row) for row in rows] or [self._last]
+        enabled = bool(rows)
+        folded_only = not any(row.open for row in rows)
+        joints = {value.joint for value in values}
+        stepped = STEPPED in joints
         previous, self._filling = self._filling, True
         try:
             for name, field, _ in NUMBER_FIELDS:
@@ -633,51 +760,71 @@ class FoldedBarTaskPanel:
                 if abs(spin.value() - column[0]) > VALUE_TOLERANCE:
                     spin.setValue(column[0])
                 self._mixed[name].set_mixed(max(column) - min(column) > VALUE_TOLERANCE)
-                spin.setEnabled(enabled)
-            mixed = len({bool(value.key) for value in values}) > 1
-            checked = not mixed and bool(values[0].key)
-            if form.cb_key.isChecked() != checked:
-                form.cb_key.setChecked(checked)
-            form.cb_key.setProperty("mixedValues", mixed)
-            text = translate("MaxProFrame", "Interlocking key")
-            form.cb_key.setText(f"{text} — {translate('frameforge', 'Mixed values')}" if mixed else text)
-            form.cb_key.setEnabled(enabled)
-            form.spin_key_diameter.setEnabled(enabled and (checked or mixed))
+                spin.setEnabled(enabled and (folded_only or field in OPEN_FIELDS))
+            checked, mixed = self._present_check(
+                form.cb_key, translate("MaxProFrame", "Interlocking key"), [value.key for value in values]
+            )
+            form.cb_key.setEnabled(enabled and folded_only)
+            form.spin_key_diameter.setEnabled(enabled and folded_only and (checked or mixed))
+            index = form.combo_joint.findData(values[0].joint)
+            if form.combo_joint.currentIndex() != index:
+                form.combo_joint.setCurrentIndex(index)
+            self._mixed["combo_joint"].set_mixed(len(joints) > 1)
+            form.combo_joint.setEnabled(enabled)
+            self._present_check(
+                form.cb_step_flip, translate("MaxProFrame", "Flip step"), [value.step_flip for value in values]
+            )
+            form.spin_step_depth.setEnabled(enabled and stepped)
+            form.cb_step_flip.setEnabled(enabled and stepped)
         finally:
             self._filling = previous
-        self._bind_fields(keys)
+        self._bind_fields(rows)
 
-    def _bind_fields(self, keys):
-        """Bind the number fields to the one corner selected, once its object exists; else no expression editor."""
-        obj = self._corner_object(keys[0]) if len(keys) == 1 else None
-        bound = (obj.Name, obj.ID) if obj is not None else None
+    def _bind_fields(self, rows):
+        """Bind the number fields to the one corner selected, once its object exists; else no expression editor. The
+        open corner binds its OPEN_FIELDS only."""
+        row = rows[0] if len(rows) == 1 else None
+        obj = self._corner_object(row.key) if row is not None else None
+        bound = (obj.Name, obj.ID, row.open) if obj is not None else None
         if bound == self._bound:
             return
         self._bound = bound
-        for name, _, prop in NUMBER_FIELDS:
+        for name, field, prop in NUMBER_FIELDS:
             spin = getattr(self.form, name)
-            if obj is None or not bind(spin, obj, prop):
+            if obj is None or (row.open and field not in OPEN_FIELDS) or not bind(spin, obj, prop):
                 unbind(spin)
 
     def _field_changed(self, field, value):
         """A value typed or chosen: it goes to every selected corner and to the next new one."""
         if self._filling or not self._active():
             return
-        keys = self._field_keys()
-        if not keys:
+        rows = self._field_rows()
+        if not rows or (field not in OPEN_FIELDS and any(row.open for row in rows)):
             return
         prop = PROPERTY_OF[field]
         driven = 0
-        for key in keys:
-            obj = self._corner_object(key)
+        for row in rows:
+            obj = self._corner_object(row.key)
             if obj is not None and expression_of(obj, prop) is not None:
                 # The expression drives it: the field only shows its value.
                 driven += 1
                 continue
-            self._values[key] = replace(self._corner_values(key), **{field: value})
-        if driven < len(keys):
+            if row.open:
+                self._open_values[row.key] = replace(self._row_values(row), **{field: value})
+            else:
+                self._values[row.key] = replace(self._corner_values(row.key), **{field: value})
+        if driven < len(rows):
             self._last = replace(self._last, **{field: value})
         self._changed()
+
+    def _joint_changed(self, index):
+        joint = self.form.combo_joint.itemData(index)
+        if joint in JOINTS:
+            self._field_changed("joint", joint)
+
+    def _joint_activated(self, index):
+        if self.form.combo_joint.property("mixedValues"):
+            self._joint_changed(index)
 
     def _finish_mixed(self, name, field):
         edited = name in self._mixed_edits
@@ -780,7 +927,7 @@ class FoldedBarTaskPanel:
             self._values.setdefault(_corner_key(chain, corner), self._last)
         problems = [cut_at_fold_message(chain, cut) for cut in cuts_at_folds(chain)]
         try:
-            check_settings(chain, self._settings(chain))
+            check_settings(chain, self._settings(chain), open_corner=self._open_settings(chain))
         except UnfoldError as error:
             problems.append(str(error))
         return problems, chain
@@ -852,7 +999,14 @@ class FoldedBarTaskPanel:
             (tuple(sorted(_corner_key(chain, corner))), tuple(_plain(value) for value in vars(settings).values()))
             for corner, settings in zip(chain.corners, self._settings(chain))
         )
-        opened = (chain.segments[0].profile.Name, chain.segments[-1].profile.Name) if chain.closed else None
+        opened = None
+        if chain.closed:
+            settings = self._open_settings(chain)
+            opened = (
+                chain.segments[0].profile.Name,
+                chain.segments[-1].profile.Name,
+                tuple(_plain(value) for value in vars(settings).values()),
+            )
         return (("Segments", tips), ("Corners", corners), ("Open", opened))
 
     def update_preview(self, *args, force=False):
@@ -967,14 +1121,16 @@ class FoldedBarTaskPanel:
         self._syncing = True
         try:
             settings = self._settings(self._chain)
+            opened = self._open_settings(self._chain)
             if self.obj is None or not _alive(self.obj):
-                self.obj = make_folded_bar(self.selection, settings, open_corner=self._chain_pair)
+                self.obj = make_folded_bar(self.selection, settings, open_corner=self._chain_pair, open_settings=opened)
                 self._restore_kept_expressions()
             else:
                 # The bar follows the chain of the list: the pieces clicked or removed since, its start.
                 self._apply(self.obj, {"Segments": [segment.tip for segment in self._chain.segments]})
-                # The corner objects follow the chain and the fields; the open one is where the chain opens.
-                update_corners(self.obj, self._chain, settings)
+                # The corner objects follow the chain and the fields; the open one is where the chain opens, with
+                # its own joint, step and clearance.
+                update_corners(self.obj, self._chain, settings, open_settings=opened)
                 self.doc.recompute()
             self._error = _failures([self.obj])
         except Exception as error:
