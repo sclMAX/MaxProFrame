@@ -6,7 +6,7 @@ import FreeCADGui as Gui
 import Part
 from PySide import QtCore, QtGui
 
-from freecad.maxproframe._utils import is_extrudedcutout, is_profile, is_trimmedbody
+from freecad.maxproframe._utils import is_extrudedcutout, is_foldedbar, is_profile, is_trimmedbody
 from freecad.maxproframe.create_end_miter_tool import (
     GAP_DELAY_MS,
     _alive,
@@ -27,6 +27,8 @@ from freecad.maxproframe.ff_tools import (
     get_param_group,
     translate,
 )
+from freecad.maxproframe.folded_bar import bar_chain, release_piece, segment_at
+from freecad.maxproframe.folded_chain import base_profile
 from freecad.maxproframe.miter_geometry import TOLERANCE
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
 from freecad.maxproframe.trimmed_profile import (
@@ -96,6 +98,20 @@ def _selected_items():
     return [(obj, tuple(subs)) for obj, subs in items.values()]
 
 
+def _picked_point(obj, sub):
+    """The global point picked on the sub-element ``sub`` of ``obj`` in the selection, or None."""
+    try:
+        for sel in Gui.Selection.getSelectionEx("*"):
+            if sel.Object != obj:
+                continue
+            for name, point in zip(sel.SubElementNames, sel.PickedPoints):
+                if name == sub:
+                    return point
+    except Exception:
+        pass
+    return None
+
+
 def trimmed_body_problem(fp, obj):
     """Why ``obj`` cannot be the body trimmed by ``fp`` (None while creating), or None when it can."""
     if not (is_profile(obj) or is_trimmedbody(obj) or is_extrudedcutout(obj)):
@@ -148,8 +164,57 @@ def _already_cut(body, target, joint):
 
 
 def _related(a, b):
-    """Whether ``a`` and ``b`` are the same body or one is built on the other."""
-    return a in _trim_chain(b) or b in _trim_chain(a)
+    """Whether ``a`` and ``b`` are the same body or one is built on the other.
+
+    A Folded Bar is built on the tubes it folds: a trim of one of them against the bar, or against anything made
+    from the bar, would have the bar depend on itself.
+    """
+    return a in _trim_chain(b) or b in _trim_chain(a) or _folds(a, b) or _folds(b, a)
+
+
+def _folds(obj, piece):
+    """Whether ``obj`` is, or is made from, a Folded Bar folding a tube of the profile of ``piece``."""
+    profile = base_profile(piece) if _alive(piece) else None
+    if profile is None or not _alive(obj):
+        return False
+    try:
+        objects = [obj, *obj.OutListRecursive]
+    except Exception:
+        return False
+    return any(is_foldedbar(dep) and profile in _bar_profiles(dep) for dep in objects)
+
+
+def _bar_profiles(bar):
+    """The profiles of the tubes the Folded Bar ``bar`` folds, in its order."""
+    return [base_profile(segment) for segment in bar.Segments if _alive(segment)]
+
+
+def _folded_pairs(bar):
+    """The (profile, profile) pairs meeting at a folded corner of ``bar``: not at the open corner of a closed frame."""
+    try:
+        chain = bar_chain(bar)
+    except Exception:
+        # The bar does not fold now: its tubes still meet in their order, one after the other.
+        profiles = _bar_profiles(bar)
+        return list(zip(profiles, profiles[1:]))
+    return [(chain.segments[c.before].profile, chain.segments[c.after].profile) for c in chain.corners]
+
+
+def fold_problem(body, target):
+    """Why ``body`` cannot be cut against the object ``target``: they meet at a folded corner of a Folded Bar
+    (folded_chain.cuts_at_folds, folded-miter S12), where the bar bends and keeps both. None when it can."""
+    profile, other = base_profile(body), base_profile(target)
+    if profile is None or other is None or profile == other:
+        return None
+    for bar in profile.InListRecursive:
+        if not is_foldedbar(bar) or profile not in _bar_profiles(bar):
+            continue
+        for pair in _folded_pairs(bar):
+            if {getattr(p, "Name", None) for p in pair} == {profile.Name, other.Name}:
+                return translate("frameforge", "{} cannot be cut at its folded corner with {}.").format(
+                    profile.Label, other.Label
+                )
+    return None
 
 
 def _profile_axis(obj):
@@ -232,10 +297,16 @@ class ExtendCutTaskPanel:
 
     Flip side keeps the other piece of the selected profiles when the target crosses them: their
     KeepEnd becomes the other end, or Auto again when that is the piece Auto keeps.
+
+    A click on a Folded Bar stands for its tube under the clicked point (``_from_bar``), and a trim of a
+    tube of a bar is folded into the bar at once, its preview included (odd/tasks/folded-bar-tools.md).
+    A cut that would have a bar depend on itself or cut a tube at its folded corner is refused.
     """
 
     joint = "Extend Cut"
     has_gap = True
+    # A target clicked on a Folded Bar is a face of the tube under the point: a click on a bend is refused.
+    face_target = True
     # Remembered state of the "Update automatically" check box, and its value until first changed.
     auto_preview_param = "Extend Cut Auto Preview"
     auto_preview_default = True
@@ -322,9 +393,11 @@ class ExtendCutTaskPanel:
             # The expression editor (Fx) changes the edited trim at once: inside the edit transaction.
             self._open_edit_transaction()
         elif selection:
-            messages += self._set_target(*selection[0])
-            for obj, _ in selection[1:]:
-                messages += self._add_profile(obj)
+            obj, subs, problem = self._from_bar(*selection[0], None, True)
+            messages += [problem] if problem else self._set_target(obj, subs)
+            for obj, subs in selection[1:]:
+                obj, subs, problem = self._from_bar(obj, subs, None, False)
+                messages += [problem] if problem else self._add_profile(obj)
         self._show(messages)
         self.form.sb_gap.valueChanged.connect(self._changed)
         # Editing previews like creating: the same remembered check box for this joint.
@@ -373,6 +446,25 @@ class ExtendCutTaskPanel:
             return tuple(faces[:1]), None
         return (), trimmed_body_problem(None, obj)
 
+    def _from_bar(self, obj, subs, point, target):
+        """(object, sub-element names, problem or None) the pick of ``subs`` of ``obj`` at ``point`` stands for.
+
+        On a Folded Bar it is the tube under the point (``folded_bar.segment_at``; without a point, the one picked in
+        the selection, else the center of the sub-element): a target face is that tube's own face, refused on a bend;
+        a profile to cut, or a whole-profile target, is the tube under the point or the nearest one. A pick on
+        anything else stands for itself.
+        """
+        if not is_foldedbar(obj):
+            return obj, subs, None
+        sub = next((sub for sub in subs if sub), "")
+        if point is None:
+            point = _picked_point(obj, sub)
+        pick = segment_at(obj, sub, point, nearest=not (target and self.face_target))
+        if pick.reason is not None:
+            return None, (), pick.reason
+        # A tube cut by a preview is the profile the preview stands for.
+        return self._profile_of(pick.tip), (pick.face or "",), None
+
     def _set_target(self, obj, subs):
         """Make ``obj``, with the faces _target_faces keeps, the target; return the problems."""
         faces, problem = self._target_faces(obj, subs)
@@ -381,6 +473,9 @@ class ExtendCutTaskPanel:
         if any(_related(obj, profile) for profile in self.profiles):
             return [translate("frameforge", "{} cannot trim itself").format(obj.Label)]
         for profile in self.profiles:
+            problem = fold_problem(profile, obj)
+            if problem is not None:
+                return [problem]
             if self.edited is None and _already_cut(profile, (obj, faces), self.joint):
                 return [self._already_cut_message(profile)]
             problem = parallel_problem(profile, (obj, faces))
@@ -402,6 +497,9 @@ class ExtendCutTaskPanel:
             return [translate("frameforge", "{} is not a profile").format(obj.Label)]
         if self.target is not None and _related(obj, self.target[0]):
             return [translate("frameforge", "{} cannot trim itself").format(obj.Label)]
+        problem = fold_problem(obj, self.target[0]) if self.target is not None else None
+        if problem is not None:
+            return [problem]
         if self.target is not None and _already_cut(obj, self.target, self.joint):
             return [self._already_cut_message(obj)]
         problem = parallel_problem(obj, self.target) if self.target is not None else None
@@ -741,15 +839,23 @@ class ExtendCutTaskPanel:
         return found
 
     def _drop_preview(self, name):
-        """Remove the preview of profile ``name`` and show the bodies it hid as they were before."""
+        """Remove the preview of profile ``name`` and show the bodies it hid as they were before.
+
+        Returns whether a Folded Bar folded it: the bar folds the piece under it again at the next recompute.
+        """
         preview = self._previews.pop(name, None)
         if preview is None:
-            return
+            return False
+        folded = False
         if _alive(preview.obj):
+            folded = any(is_foldedbar(obj) for obj in preview.obj.InList)
+            # No bar may link a removed object: it gets the piece under the preview back first.
+            release_piece(preview.obj)
             preview.obj.Document.removeObject(preview.obj.Name)
         for body, visible in preview.visibility:
             if _alive(body):
                 body.ViewObject.Visibility = visible
+        return folded
 
     def _discard_preview(self):
         """Abort the preview transaction; leftovers (undo disabled) are removed by hand."""
@@ -762,8 +868,12 @@ class ExtendCutTaskPanel:
                 except Exception:
                     pass
             self._transaction_open = False
+            folded = False
             for name in list(self._previews):
-                self._drop_preview(name)
+                folded = self._drop_preview(name) or folded
+            if folded and _alive_document(self.doc):
+                # A bar given its tube back folds it again, as before the preview.
+                self.doc.recompute()
         finally:
             self._syncing = False
         self._previewed = ()
@@ -863,11 +973,16 @@ class ExtendCutTaskPanel:
             return
         # The preview hides its profile: a click on the preview stands for the profile.
         source = self._profile_of(source)
-        if self.edited is not None or self.target is None:
-            messages = self._set_target(source, (sub,))
+        targeting = self.edited is not None or self.target is None or self._picking_target()
+        # A click on a Folded Bar stands for its tube under the clicked point.
+        source, subs, problem = self._from_bar(source, (sub,), other, targeting)
+        if problem is not None:
+            messages = [problem]
+        elif self.edited is not None or self.target is None:
+            messages = self._set_target(source, subs)
         elif self._picking_target():
             before = self.target
-            messages = self._set_target(source, (sub,))
+            messages = self._set_target(source, subs)
             # Picked: accepted without a problem, or the target changed (whatever the messages say).
             if not messages or self.target != before:
                 # The target is picked: clicks add profiles again.
