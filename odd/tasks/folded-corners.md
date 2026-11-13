@@ -243,3 +243,11 @@ one commit per task (each about one review slice; T3 and T4 may each pass 400 li
   profile edit state 12, unified custom profile editor 15. Differential (base vs change, stable): same results except
   the new tests. Weekly: test_folded_bar_panel 3 failures `'Valid' != 'Touched'` (cancel with undo disabled) also on
   the base commit: pre-existing on weekly 27.1, follow-up. black/isort clean (parent). Not seen in a windowed session.
+- L26 independent verify of 00a1652 (gentle-ai-verify mwervnfc-6-aueq, escalated risk item 3): S14 met, S3 met,
+  shared contract pass, no blockers; 6 panel modules green; light theme pixel-identical to base with an active
+  window; keepers die with their fields; no recursion. Follow-ups applied by the parent (tests only): F1 the Mixed
+  test in test_task_panel_edge_properties passed on base -> now checks the field looks the same whatever value lies
+  under the label (RED on 02d32ad, GREEN 42 OK); light-theme text invariant and keeper lifetime added to
+  TestExpressionFieldColors (8 OK). Not fixed: F2 inactive-window text after clearing an expression is now the theme
+  text instead of light gray (intended); F3 a field a panel makes read-only is skipped (unreachable today). Not
+  verified: pixels in an active windowed session, weekly runtime for the verifier's own runs.

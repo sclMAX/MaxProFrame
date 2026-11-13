@@ -1112,6 +1112,13 @@ class TestTaskPanelEdgeProperties(unittest.TestCase):
         self.app.processEvents()
         self.assertTrue(width.property("mixedValues"))
         self.assertEqual(["Mixed values"], mixed_label())
+        # The label covers the value: the field looks the same whatever value lies under it.
+        before = width.grab().toImage()
+        width.blockSignals(True)
+        width.setValue(width.value() + 1)
+        width.blockSignals(False)
+        self.app.processEvents()
+        self.assertTrue(before == width.grab().toImage())
         panel.edge_list_widget.list_widget.item(1).setSelected(False)
         self.app.processEvents()
         self.assertFalse(width.property("mixedValues"))

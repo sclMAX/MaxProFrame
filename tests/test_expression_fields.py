@@ -168,6 +168,28 @@ class TestExpressionFieldColors(ExpressionFieldFixture):
         self.events()
         assert_readable(self, spin)
 
+    def test_the_light_theme_keeps_the_text_color_of_the_field(self):
+        spin = self.show_bound()
+
+        def text():
+            return spin.lineEdit().palette().color(QtGui.QPalette.Active, QtGui.QPalette.Text).name()
+
+        theme = spin.palette().color(QtGui.QPalette.Active, QtGui.QPalette.Text).name()
+        self.assertEqual(theme, text())
+        unbind(spin)
+        self.events()
+        self.assertEqual(theme, text())
+
+    def test_the_theme_text_keeper_goes_with_its_field(self):
+        import shiboken6
+
+        spin = self.show_bound()
+        (keeper,) = spin.findChildren(QtCore.QObject, "maxproframe_theme_text")
+        spin.setParent(None)
+        spin.deleteLater()
+        QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+        self.assertFalse(shiboken6.isValid(keeper))
+
 
 class TestExpressionUnbind(ExpressionFieldFixture):
     """unbind takes the expression editor away from a field until it is bound again."""
