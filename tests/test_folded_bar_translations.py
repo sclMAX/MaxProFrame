@@ -174,6 +174,16 @@ class TestFoldedBarToolMessagesSpanish(unittest.TestCase):
                 "Profile001", "Profile002"
             ),
         )
+        # T9: a bar whose cuts break the fold says why.
+        self.assertEqual(
+            "FoldedBar no se pliega en un sólido válido: revisá los cortes de sus tubos (un agujero o calado que toca "
+            "un borde u otro corte).",
+            translate(
+                "MaxProFrame",
+                "{} does not fold into a valid solid: check the cuts on its tubes (a hole or cutout touching an edge "
+                "or another cut).",
+            ).format("FoldedBar"),
+        )
 
 
 if __name__ == "__main__":

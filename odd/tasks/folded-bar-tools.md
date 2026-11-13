@@ -128,3 +128,11 @@ per task; push, PR and merge stay the user's decisions.
   39, drill hole folded bar 19, folded bar tools 13, folded/unfolded geometry 11/41, folded bar panel 77, cutout
   folded bar 12; parent re-run end miter/extend cut/profile pattern folded bar 10/12/6 and the 5 pattern tests OK.
   "BRepAdaptor_Curve::No geometry" itself not reproduced headless: user to confirm on PruebaLaserCut (weekly).
+- L18 (2026-11-13) user, manual test of 494f0b7: "Bien el patron ahora funciona ok," -> T9 confirmed. Translation of
+  the T9 message: es "{} no se pliega en un sólido válido: revisá los cortes de sus tubos (un agujero o calado que toca
+  un borde u otro corte)."; ru unfinished (FOLDED_MITER_TEXTS). RED test_folded_bar_translations 1 failure; GREEN 7;
+  test_russian_translation 6, test_compile_translations 3, test_toolbar_translations 4 OK. Status: all tasks done;
+  push/PR left to the user. Follow-ups: ru for @c0n5t (7 texts), Cutout prompt/tooltip and "Select a planar face of a
+  profile, a trimmed profile or a cutout." without folded bar, corner list "0.3" vs field "0,3", undo after a
+  recompute outside the transaction drops a tube, whole bar preselected from the tree adds nothing in End Miter /
+  Extend Cut, issue #148.

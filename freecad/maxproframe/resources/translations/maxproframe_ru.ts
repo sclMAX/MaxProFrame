@@ -3029,6 +3029,10 @@ All files and sketches on disk will be kept intact.</source>
         <source>Click a straight part of the folded bar.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>{} does not fold into a valid solid: check the cuts on its tubes (a hole or cutout touching an edge or another cut).</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>MaxProFrame_FoldedBar</name>

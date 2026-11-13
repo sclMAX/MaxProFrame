@@ -130,6 +130,11 @@ FOLDED_MITER_TEXTS = (
     ),
     # odd/tasks/folded-bar-tools.md: the tools that work on a Folded Bar.
     ("MaxProFrame", "Click a straight part of the folded bar."),
+    (
+        "MaxProFrame",
+        "{} does not fold into a valid solid: check the cuts on its tubes (a hole or cutout touching an edge or "
+        "another cut).",
+    ),
     ("frameforge", "{} cannot be cut at its folded corner with {}."),
     ("frameforge", "Click a planar face of a profile, a trimmed profile, a cutout or a folded bar."),
     (

@@ -1477,6 +1477,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Click the next tube, after {}.</source><translation>Hacé clic en el tubo siguiente, después de {}.</translation></message>
     <message><source>Tubes picked: {}</source><translation>Tubos elegidos: {}</translation></message>
     <message><source>Click a straight part of the folded bar.</source><translation>Hacé clic en una parte recta de la barra plegada.</translation></message>
+    <message><source>{} does not fold into a valid solid: check the cuts on its tubes (a hole or cutout touching an edge or another cut).</source><translation>{} no se pliega en un sólido válido: revisá los cortes de sus tubos (un agujero o calado que toca un borde u otro corte).</translation></message>
 </context>
 <context>
     <name>MaxProFrame_FoldedBar</name>
