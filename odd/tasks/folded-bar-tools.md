@@ -26,11 +26,11 @@ per task; push, PR and merge stay the user's decisions.
 - T1 [S4, S5] shared: `folded_bar.segment_at(bar, sub, point)` -> (tube tip, tip face or None) or a reason; bar-follow
   before every recompute (NewestPieceObserver precedent, profile_pattern.py:661-720); relink helper before a preview
   piece is removed; Folded Bar panel `_member_at` reuses it. route=worker; commit=(this commit) [x]
-- T2 [S1, S4] End Miter. route=worker (parallel); commit=
+- T2 [S1, S4] End Miter. route=worker (parallel); commit=(T2 commit) [x]
 - T3 [S2, S4, S5] Drill Hole. route=worker (parallel); commit=
 - T4 [S3, S4, S5] Cutout (panel and direct face+sketch path). route=worker (parallel); commit=(T4 commit) [x]
 - T5 [S3, S4, S5] Extend Cut and Notch (target face on a bar, profiles from a bar, no dependency loop, no cut at a
-  folded corner). route=worker (parallel); commit=
+  folded corner). route=worker (parallel); commit=(T5 commit) [x]
 - T6 [S3] Profile Pattern with a whole Folded Bar. route=worker (parallel); commit=(T6 commit) [x]
 - T7 [S1-S5] docs (tutorial, README, CHANGELOG), full suite, verify. route=parent; commit=
 
@@ -64,3 +64,14 @@ per task; push, PR and merge stay the user's decisions.
   whole-document recompute inside "Create Cutout" when a bar folds the tube); `release_piece` in `_delete_cutout`.
   RED 11 of 12; GREEN test_cutout_folded_bar 12 (stable, weekly; parent re-run 12 OK); 10 existing cutout/drill
   modules OK. Slice boundary: T1 c8e8633 (487 lines) and T6 f3009d4 + T4 are separate review slices per task commit.
+- L8 T2 evidence (worker mwexmcmd-5-c4kx): create_end_miter_tool.py `_clicked_piece`, `_preselected`, bar mapping in
+  addSelection/removeSelection (nearest tube), `release_piece` in `_drop_preview`, `_discard_preview` recomputes when a
+  bar folded a preview. RED 9 of 9 (bar refused), then 4 (Segments lost a piece, bar Touched after Cancel); GREEN
+  test_end_miter_folded_bar 9 (stable, weekly; parent re-run 9 OK); end miter panel/preview/edit/extend_gap/
+  translations 14/26/6/6/4, folded bar tools/panel 8/77 OK. Open: a whole bar preselected from the tree adds nothing.
+- L9 T5 evidence (worker mwexmcy3-8-waa2): create_extend_cut_tool.py bar mapping (target -> tube face, profiles ->
+  nearest tube, Notch `face_target = False`), `_related` knows bars (loop refused with "{} cannot trim itself"), new
+  `fold_problem` message "{} cannot be cut at its folded corner with {}." (frameforge context; T7 translations),
+  `release_piece` in `_drop_preview`, recompute in `_discard_preview`. RED 12 of 12 (+ refusals re-proved with the
+  rules disabled: 2 failures); GREEN test_extend_cut_folded_bar 12 (stable, weekly; parent re-run 12 OK); extend cut
+  panel/preview/polish/lost-face 45/22/31/10, notch panel/preview 30/9, keep end 22 OK.
