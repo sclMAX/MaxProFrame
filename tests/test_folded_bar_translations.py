@@ -159,5 +159,32 @@ class TestFoldedBarPanelSpanish(FoldedPanelFixture):
         )
 
 
+class TestFoldedBarToolMessagesSpanish(unittest.TestCase):
+    def test_the_folded_bar_tool_messages_are_spanish(self):
+        # odd/tasks/folded-bar-tools.md, S5 and T5: the refusals of the tools on a Folded Bar speak Spanish.
+        use_language(self, "Spanish", "es_ES")
+
+        self.assertEqual(
+            "Hacé clic en una parte recta de la barra plegada.",
+            translate("MaxProFrame", "Click a straight part of the folded bar."),
+        )
+        self.assertEqual(
+            "Profile001 no se puede cortar en su esquina plegada con Profile002.",
+            translate("frameforge", "{} cannot be cut at its folded corner with {}.").format(
+                "Profile001", "Profile002"
+            ),
+        )
+        # T9: a bar whose cuts break the fold says why.
+        self.assertEqual(
+            "FoldedBar no se pliega en un sólido válido: revisá los cortes de sus tubos (un agujero o calado que toca "
+            "un borde u otro corte).",
+            translate(
+                "MaxProFrame",
+                "{} does not fold into a valid solid: check the cuts on its tubes (a hole or cutout touching an edge "
+                "or another cut).",
+            ).format("FoldedBar"),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

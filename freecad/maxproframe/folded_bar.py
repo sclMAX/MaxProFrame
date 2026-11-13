@@ -7,23 +7,209 @@ clearance, key and K-factor, and the open corner of a closed frame; the bar keep
 wall thickness is the one of its tubes. It hides the segment tips and is one piece for the BOM, the cut list and the
 IDs, as long as its developed length. The Unfolded Bar is its straight solid from X = 0 along +X, the one exported
 (STEP, IGES, BREP) for a tube laser. See odd/tasks/folded-miter.md, "T5 design".
+
+The click-to-add tools work on a bar through its tubes (odd/tasks/folded-bar-tools.md, T1): ``segment_at`` names the
+tube under a click on the bar and that tube's own face, a piece made later on a tube is folded into the bar before
+every recompute of its document (``follow_new_pieces``), and ``release_piece`` gives a piece back to the piece under
+it before a tool removes it.
 """
 
 import os
+from collections import namedtuple
 
 import FreeCAD as App
+import Part
 
+from freecad.maxproframe._utils import is_foldedbar, piece_stack
 from freecad.maxproframe.ff_tools import ICONPATH, get_param_group, place_in_container_of, translate
-from freecad.maxproframe.folded_chain import ChainError, build_chain
+from freecad.maxproframe.folded_chain import ChainError, base_profile, build_chain
 from freecad.maxproframe.folded_corner import corner_key, corner_settings, make_folded_corner, set_corner_settings
 from freecad.maxproframe.folded_geometry import fold_bar
-from freecad.maxproframe.profile_pattern import container_placement
-from freecad.maxproframe.unfolded_geometry import CornerSettings, UnfoldError, unfold
+from freecad.maxproframe.profile_pattern import (
+    container_placement,
+    global_element,
+    global_shape,
+    is_planar_face,
+    newest_piece,
+    placed,
+)
+from freecad.maxproframe.unfolded_geometry import CornerSettings, UnfoldError, sound_solid, unfold
 from freecad.maxproframe.version import __version__ as ff_version
 
 # Where the Create BOM panel keeps the stock length of the cut list, and its default (mm).
 STOCK_LENGTH_PARAM = "Stock Length"
 DEFAULT_STOCK_LENGTH = 6000.0
+# A clicked point this close to a face of a tube lies on it (mm): the 3D view picks in single precision.
+PICK_TOLERANCE = 1e-2
+# Squared sine below which two face normals are parallel.
+NORMAL_TOLERANCE = 1e-10
+
+
+BarPick = namedtuple("BarPick", ("tip", "face", "point", "reason"))
+BarPick.__doc__ = """What a click on a Folded Bar stands for (``segment_at``).
+
+``tip``: the current tip of the tube (its newest piece, the one the bar folds), None when refused. ``face``: the name
+of the face of ``tip`` under the point ("Face3"), None when there is no single one. ``point``: the clicked point in
+global coordinates, None when there is none. ``reason``: None, or the translated message to show when refused.
+"""
+
+
+def straight_part_message():
+    """What a tool needing a face or a point says about a click on a bend of a Folded Bar (S5)."""
+    return translate("MaxProFrame", "Click a straight part of the folded bar.")
+
+
+def pick_point(obj, sub, point=None):
+    """The global point a click on ``obj`` stands for, or None.
+
+    ``point`` is the clicked point the 3D view gives (global; the origin means none); without it, the center of the
+    sub-element ``sub`` of ``obj`` (its point for a vertex).
+    """
+    try:
+        if point is not None and App.Vector(*point).Length > 0:
+            return App.Vector(*point)
+        if sub:
+            element = obj.Shape.getElement(sub)
+            center = element.Point if hasattr(element, "Point") else element.CenterOfMass
+            return container_placement(obj).multVec(center)
+    except Exception:
+        pass
+    return None
+
+
+def nearest_piece(pieces, point):
+    """The piece of ``pieces`` whose shape (where it is) is nearest to the global ``point``; None without either."""
+    pieces = list(pieces)
+    if point is None or not pieces:
+        return None
+    vertex = Part.Vertex(point)
+
+    def distance(piece):
+        try:
+            return vertex.distToShape(placed(piece.Shape, container_placement(piece)))[0]
+        except Exception:
+            return float("inf")
+
+    return min(pieces, key=distance)
+
+
+def bar_tips(bar):
+    """The current tip of each tube of ``bar``, in its order: the newest piece of each profile it folds.
+
+    As ``build_chain`` takes them; a removed entry of ``Segments`` is skipped.
+    """
+    tips = []
+    for segment in bar.Segments:
+        if _alive(segment):
+            tips.append(newest_piece(base_profile(segment) or segment))
+    return tips
+
+
+def _clicked_normal(bar, sub):
+    """(is a face, normal): the normal of the clicked face of ``bar`` when it is planar, else None."""
+    element = global_element(bar, sub) if sub else None
+    if not isinstance(element, Part.Face):
+        return False, None
+    return True, (element.Surface.Axis if is_planar_face(element) else None)
+
+
+def _faces_under(tip, point, normal):
+    """Names of the planar faces of ``tip`` (where it is) ``point`` lies on, parallel to ``normal`` when given."""
+    try:
+        shape = global_shape(tip)
+    except Exception:
+        return []
+    vertex = Part.Vertex(point)
+    if shape.isNull() or shape.distToShape(vertex)[0] > PICK_TOLERANCE:
+        return []
+    names = []
+    for index, face in enumerate(shape.Faces, 1):
+        if not is_planar_face(face):
+            continue
+        axis = face.Surface.Axis
+        if normal is not None and axis.cross(normal).Length ** 2 > NORMAL_TOLERANCE:
+            continue
+        if abs((point - face.Surface.Position).dot(axis)) > PICK_TOLERANCE:
+            continue
+        if face.distToShape(vertex)[0] <= PICK_TOLERANCE:
+            names.append(f"Face{index}")
+    return names
+
+
+def segment_at(bar, sub, point=None, nearest=False):
+    """The tube of the Folded Bar ``bar`` a click on it stands for, as a ``BarPick``.
+
+    ``sub`` is the clicked sub-element of the bar ("Face12"), ``point`` the clicked point (global, as the 3D view and
+    ``Gui.Selection`` give it); without a point the center of ``sub`` is taken. The side walls of a bar span several
+    tubes, so the point, not the face name, picks the tube.
+
+    Default (tools that need a face or a point: Drill Hole, Cutout, an Extend Cut target): the point must lie on
+    exactly one planar face of one tube tip, parallel to the clicked face of the bar; the result names that tip and
+    its face. Anywhere else (a bend, where two tubes meet at a corner, a round wall) it is refused: ``tip`` and
+    ``face`` are None and ``reason`` is "Click a straight part of the folded bar." (``straight_part_message``).
+
+    ``nearest=True`` (whole-profile tools: End Miter, the profiles of an Extend Cut): never refused for a bend; the
+    tip is the one under the point, else the nearest one, and ``face`` its face under the point or None.
+
+    Typical use::
+
+        pick = segment_at(bar, sub, point)
+        if pick.reason:
+            show(pick.reason)
+        else:
+            use(pick.tip, pick.face)
+    """
+    target = pick_point(bar, sub, point)
+    tips = bar_tips(bar)
+    on_face, normal = _clicked_normal(bar, sub)
+    found = []
+    if target is not None and (normal is not None or not on_face):
+        found = [(tip, name) for tip in tips for name in _faces_under(tip, target, normal)]
+    if len(found) == 1:
+        return BarPick(found[0][0], found[0][1], target, None)
+    if nearest:
+        tip = nearest_piece(tips, target)
+        if tip is not None:
+            return BarPick(tip, None, target, None)
+    return BarPick(None, None, target, straight_part_message())
+
+
+def follow_new_pieces(doc):
+    """Have every Folded Bar of ``doc`` fold the newest piece of each of its tubes; relinked bars recompute next.
+
+    A trim, cutout or drill hole made on a tube of a bar later links the tube, not the bar: run before every
+    recompute of the document (``NewPieceObserver``), the bar then recomputes after the new piece in that same
+    recompute, folds it and hides it. A removed entry of ``Segments`` is dropped.
+    """
+    for obj in list(doc.Objects):
+        try:
+            if not is_foldedbar(obj):
+                continue
+            tips = bar_tips(obj)
+            if [tip.Name for tip in tips] != [segment.Name for segment in obj.Segments if segment is not None]:
+                obj.Segments = tips
+        except Exception as error:
+            App.Console.PrintWarning(f"MaxProFrame: {getattr(obj, 'Label', obj)} does not follow its pieces: {error}\n")
+
+
+def release_piece(piece):
+    """Give ``piece`` back to the piece under it in every Folded Bar folding it: call it before removing ``piece``.
+
+    A tool that removes a preview piece outside an aborted transaction calls it first, so no bar links a removed
+    object (removing a linked object would shrink ``Segments``): the bar folds the piece ``piece`` was made from again.
+    Recompute the document after the removal: the bar then folds that piece again and hides it, also when the
+    removed piece's ViewProvider ``onDelete`` (or the tool) showed it. Nothing changes for a piece no bar folds or a
+    piece made from nothing.
+    """
+    if not _alive(piece):
+        return
+    stack = list(piece_stack(piece))
+    if len(stack) < 2:
+        return
+    base = stack[1]
+    for bar in list(piece.InList):
+        if is_foldedbar(bar) and piece in bar.Segments:
+            bar.Segments = [base if segment == piece else segment for segment in bar.Segments]
 
 
 def _add(obj, kind, name, group, tooltip, value=None, read_only=False):
@@ -171,6 +357,24 @@ def _one_solid(shape):
     return shape is not None and not shape.isNull() and len(shape.Solids) == 1
 
 
+def _sound(bar, shape):
+    """``shape`` of the Folded Bar ``bar``, fixed when it needs it (``sound_solid``); UnfoldError when it stays broken.
+
+    A broken solid (not valid, an edge without its curve) is never drawn: the bar is in error, saying why
+    (odd/tasks/folded-bar-tools.md, T9, S4).
+    """
+    sound = sound_solid(shape)
+    if sound is None:
+        raise UnfoldError(
+            translate(
+                "MaxProFrame",
+                "{} does not fold into a valid solid: check the cuts on its tubes (a hole or cutout touching an edge "
+                "or another cut).",
+            ).format(bar.Label)
+        )
+    return sound
+
+
 class FoldedBar:
     def __init__(self, obj):
         self.add_properties(obj)
@@ -222,6 +426,7 @@ class FoldedBar:
             raise UnfoldError(
                 translate("MaxProFrame", "{} does not fold into one solid: change its bend settings.").format(obj.Label)
             )
+        folded = _sound(obj, folded)
         # The recompute puts the shape at the bar's Placement: its geometry is moved into the bar's own frame.
         local = folded.copy()
         local.transformShape(container_placement(obj).multiply(obj.Placement).inverse().toMatrix(), True)
@@ -275,6 +480,18 @@ class FoldedBar:
         return None
 
 
+class NewPieceObserver:
+    """Has every Folded Bar fold the newest piece of each of its tubes at each recompute of a document (S4)."""
+
+    def slotBeforeRecomputeDocument(self, doc):
+        follow_new_pieces(doc)
+
+
+if "_NEW_PIECE_OBSERVER" not in globals():
+    _NEW_PIECE_OBSERVER = NewPieceObserver()
+    App.addDocumentObserver(_NEW_PIECE_OBSERVER)
+
+
 class UnfoldedBar:
     def __init__(self, obj):
         self.add_properties(obj)
@@ -305,7 +522,7 @@ class UnfoldedBar:
                     bar.Label
                 )
             )
-        obj.Shape = unfolded.shape.Solids[0].copy()
+        obj.Shape = _sound(bar, unfolded.shape.Solids[0]).copy()
 
     def dumps(self):
         return None

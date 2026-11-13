@@ -14,6 +14,7 @@ from freecad.maxproframe._utils import (
     get_readable_cutting_angles,
     get_trimmed_profile_all_cutting_angles,
     get_trimmedprofile_from_extrudedcutout,
+    is_foldedbar,
     length_along_normal,
     restore_custom_profile_link,
     restore_length,
@@ -558,8 +559,14 @@ class ViewProviderExtrudedCutout:
         pass
 
     def onDelete(self, fp, sub):
-        if self.Object.baseObject:
-            self.Object.baseObject[0].ViewObject.Visibility = True
+        """Show the base and the sketch again; in a Folded Bar the bar folds the base again and keeps it hidden."""
+        from freecad.maxproframe.folded_bar import release_piece
+
+        obj = self.Object
+        folded = any(is_foldedbar(parent) and obj in parent.Segments for parent in obj.InList)
+        release_piece(obj)
+        if obj.baseObject and not folded:
+            obj.baseObject[0].ViewObject.Visibility = True
         if self.Object.Sketch:
             self.Object.Sketch.ViewObject.Visibility = True
         return True

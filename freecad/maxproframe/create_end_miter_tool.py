@@ -5,7 +5,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtGui, QtWidgets
 
-from freecad.maxproframe._utils import is_extrudedcutout, is_profile, is_trimmedbody
+from freecad.maxproframe._utils import is_extrudedcutout, is_foldedbar, is_profile, is_trimmedbody
 from freecad.maxproframe.create_profiles_tool import place_in_container_of
 from freecad.maxproframe.ff_tools import (
     ICONPATH,
@@ -15,6 +15,7 @@ from freecad.maxproframe.ff_tools import (
     get_param_group,
     translate,
 )
+from freecad.maxproframe.folded_bar import release_piece, segment_at
 from freecad.maxproframe.miter_geometry import Member, real_stretch
 from freecad.maxproframe.miter_joints import find_joints
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
@@ -45,6 +46,31 @@ def _base_profile(obj):
         else:
             return None
     return None
+
+
+def _clicked_piece(obj, sub="", point=None):
+    """The piece a click on ``obj`` stands for: on a Folded Bar, the current piece of its tube under the clicked
+    point (else the nearest one), as a click on that tube would; ``obj`` itself otherwise.
+
+    The bar hides its tubes: a miter is made on a tube, against tubes, and the bar folds it.
+    """
+    if obj is not None and is_foldedbar(obj):
+        return segment_at(obj, sub, point, nearest=True).tip
+    return obj
+
+
+def _preselected():
+    """The pieces selected before the command: on a Folded Bar, the tube nearest each selected point of it."""
+    pieces = []
+    for selection in Gui.Selection.getSelectionEx():
+        obj = selection.Object
+        if not is_foldedbar(obj):
+            pieces.append(obj)
+            continue
+        points = list(selection.PickedPoints)
+        for index, sub in enumerate(selection.SubElementNames):
+            pieces.append(_clicked_piece(obj, sub, points[index] if index < len(points) else None))
+    return pieces
 
 
 def _built_on(obj):
@@ -394,17 +420,31 @@ class EndMiterTaskPanel:
         self._show_messages()
 
     def _drop_preview(self, name):
-        """Remove the preview of member ``name`` and show the member as it was before."""
+        """Remove the preview of member ``name`` and show the member as it was before.
+
+        A Folded Bar folding the preview gets the member back first, so it never links a removed object: it folds
+        the member again at the next recompute of the document.
+        """
         preview = self._previews.pop(name, None)
         if preview is None:
             return
         if _alive(preview.obj):
+            release_piece(preview.obj)
             preview.obj.Document.removeObject(preview.obj.Name)
         if preview.visible is not None and _alive(preview.member):
             preview.member.ViewObject.Visibility = preview.visible
 
+    def _folding_bars(self):
+        """The Folded Bars folding a preview of this session."""
+        shown = [preview.obj for preview in self._previews.values() if _alive(preview.obj)]
+        return [bar for obj in shown for bar in obj.InList if is_foldedbar(bar)]
+
     def _discard_preview(self):
-        """Abort the preview transaction; leftovers (undo disabled) are removed by hand."""
+        """Abort the preview transaction; leftovers (undo disabled) are removed by hand.
+
+        A Folded Bar that folded a preview then folds its tube again, recomputed at once.
+        """
+        bars = self._folding_bars()
         # Aborting deletes selected previews: those deselections are not the user's.
         self._syncing = True
         try:
@@ -416,6 +456,8 @@ class EndMiterTaskPanel:
             self._transaction_open = False
             for name in list(self._previews):
                 self._drop_preview(name)
+            if _alive_document(self.doc) and any(_alive(bar) for bar in bars):
+                self.doc.recompute()
         finally:
             self._syncing = False
         self._previewed = ()
@@ -495,11 +537,13 @@ class EndMiterTaskPanel:
         shown = [member] + ([preview.obj] if preview is not None else [])
         return any(selection.Object in shown for selection in Gui.Selection.getSelectionEx("*"))
 
-    def addSelection(self, doc, obj, sub, other):
+    def addSelection(self, doc, obj, sub, point=None):
         if self._syncing or not self._active() or self.edited is not None:
             return
         document = App.getDocument(doc)
         source = document.getObject(getattr(obj, "Name", obj)) if document else None
+        # A Folded Bar stands for its tube under the point; that tube's piece may be a preview miter of this session.
+        source = _clicked_piece(source, sub, point)
         # The preview hides its member: a click on the preview stands for the member.
         source = self._member_of(source)
         if source is None or _base_profile(source) is None:
@@ -525,7 +569,9 @@ class EndMiterTaskPanel:
         if self._syncing or not self._active() or self.edited is not None:
             return
         document = App.getDocument(doc)
-        source = self._member_of(document.getObject(getattr(obj, "Name", obj)) if document else None)
+        source = document.getObject(getattr(obj, "Name", obj)) if document else None
+        # No point here: on a Folded Bar the tube nearest the center of the deselected face.
+        source = self._member_of(_clicked_piece(source, sub))
         if source in self.members and not self._still_selected(source):
             self.members.remove(source)
             self._plan()
@@ -643,7 +689,7 @@ class CreateEndMiterCommand:
         return App.ActiveDocument is not None
 
     def Activated(self):
-        panel = EndMiterTaskPanel([selection.Object for selection in Gui.Selection.getSelectionEx()])
+        panel = EndMiterTaskPanel(_preselected())
         Gui.Control.showDialog(panel)
         Gui.Selection.addObserver(panel)
 

@@ -14,7 +14,7 @@ import FreeCAD as App
 import Part
 
 from freecad.maxproframe.profile_pattern import placed
-from freecad.maxproframe.unfolded_geometry import _polygon, _prism, unfold
+from freecad.maxproframe.unfolded_geometry import _polygon, _prism, refine, unfold
 
 X_AXIS = App.Vector(1, 0, 0)
 Z_AXIS = App.Vector(0, 0, 1)
@@ -91,7 +91,7 @@ def fold_bar(chain, unfolded):
         pieces.append(placed(piece, placement))
 
     folded = pieces[0].fuse(pieces[1:] + revolved) if len(pieces) + len(revolved) > 1 else pieces[0]
-    folded = folded.removeSplitter()
+    folded = refine(folded)
     if len(folded.Solids) == 1:
         return folded.Solids[0]
     return folded

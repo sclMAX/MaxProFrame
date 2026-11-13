@@ -1646,6 +1646,10 @@ All files and sketches on disk will be kept intact.</source>
         <translation>{} не может обрезать само себя</translation>
     </message>
     <message>
+        <source>{} cannot be cut at its folded corner with {}.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Extend / Cut: the target face {} of {} is not planar.</source>
         <translation>Продление / Обрезка: целевая грань {} объекта {} не является плоской.</translation>
     </message>
@@ -1770,6 +1774,10 @@ All files and sketches on disk will be kept intact.</source>
     <message>
         <source>Click a planar face of a profile, a trimmed profile or a cutout.</source>
         <translation>Щелкните по плоской грани профиля, обрезанного профиля или выреза.</translation>
+    </message>
+    <message>
+        <source>Click a planar face of a profile, a trimmed profile, a cutout or a folded bar.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Select a planar face of a profile, a trimmed profile or a cutout.</source>
@@ -2489,7 +2497,11 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>Select the piece to repeat: click a profile, a trimmed profile, a cutout or a drill hole.</source>
-        <translation>Выберите элемент для повторения: щелкните по профилю, обрезанному профилю, вырезу или отверстию.</translation>
+        <translation type="vanished">Выберите элемент для повторения: щелкните по профилю, обрезанному профилю, вырезу или отверстию.</translation>
+    </message>
+    <message>
+        <source>Select the piece to repeat: click a profile, a trimmed profile, a cutout, a drill hole or a folded bar.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Click a straight edge for the direction of the copies.</source>
@@ -2641,7 +2653,11 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>&lt;b&gt;Drill Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile or a cutout, then one of its nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the offsets from that point: one, or a pattern on both sides of it along and across the profile, with a diameter and a depth.</source>
-        <translation>&lt;b&gt;Сверление отверстия&lt;/b&gt;&lt;br&gt;&lt;br&gt;Выберите плоскую грань профиля, обрезанного профиля или выреза, а затем укажите одну из девяти точек (вершину, середину ребра или центр), от которой будет производиться отсчет. В заданных смещениях от этой точки — в одном месте или в виде массива по обе стороны от нее (вдоль и поперек профиля) — создаются круглые отверстия с указанными диаметром и глубиной.</translation>
+        <translation type="vanished">&lt;b&gt;Сверление отверстия&lt;/b&gt;&lt;br&gt;&lt;br&gt;Выберите плоскую грань профиля, обрезанного профиля или выреза, а затем укажите одну из девяти точек (вершину, середину ребра или центр), от которой будет производиться отсчет. В заданных смещениях от этой точки — в одном месте или в виде массива по обе стороны от нее (вдоль и поперек профиля) — создаются круглые отверстия с указанными диаметром и глубиной.</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Drill Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile, a cutout or a folded bar, then one of its nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the offsets from that point: one, or a pattern on both sides of it along and across the profile, with a diameter and a depth.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>&lt;b&gt;Drill Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile or a cutout, then one of its nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the offsets from that point, one or a row of them, with a diameter and a depth.</source>
@@ -2656,7 +2672,11 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>&lt;b&gt;Profile Pattern&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a profile, a trimmed profile, a cutout or a drill hole and click a straight edge for the direction: the copies are Links placed by count and pitch (in the edge&apos;s sense, inverted or symmetric) or between two faces with equal gaps. A change to the piece shows on every copy; the BOM counts them with its ID. Double-click the pattern to edit it.</source>
-        <translation>&lt;b&gt;Массив профилей&lt;/b&gt;&lt;br&gt;&lt;br&gt;Выберите профиль, обрезанный профиль, вырез или отверстие, а затем укажите прямолинейное ребро для определения направления. Копии могут быть созданы как связанные элементы (с заданным количеством и шагом — в направлении ребра, в обратном направлении или симметрично) либо размещены между двумя гранями с равными промежутками. Любое изменение исходного элемента отражается на всех его копиях; в спецификации (BOM) они учитываются под своим идентификатором. Чтобы отредактировать массив, дважды щелкните по нему.</translation>
+        <translation type="vanished">&lt;b&gt;Массив профилей&lt;/b&gt;&lt;br&gt;&lt;br&gt;Выберите профиль, обрезанный профиль, вырез или отверстие, а затем укажите прямолинейное ребро для определения направления. Копии могут быть созданы как связанные элементы (с заданным количеством и шагом — в направлении ребра, в обратном направлении или симметрично) либо размещены между двумя гранями с равными промежутками. Любое изменение исходного элемента отражается на всех его копиях; в спецификации (BOM) они учитываются под своим идентификатором. Чтобы отредактировать массив, дважды щелкните по нему.</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Profile Pattern&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a profile, a trimmed profile, a cutout, a drill hole or a folded bar and click a straight edge for the direction: the copies are Links placed by count and pitch (in the edge&apos;s sense, inverted or symmetric) or between two faces with equal gaps. A change to the piece shows on every copy; the BOM counts them with its ID. Double-click the pattern to edit it.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -3003,6 +3023,14 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>Tubes picked: {}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click a straight part of the folded bar.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} does not fold into a valid solid: check the cuts on its tubes (a hole or cutout touching an edge or another cut).</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

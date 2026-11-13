@@ -1102,6 +1102,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>{}: a sketch cannot be the target</source><translation>{}: un croquis no puede ser el destino</translation></message>
     <message><source>{} runs parallel to the target: it cannot reach it</source><translation>{} es paralelo al destino: no puede alcanzarlo</translation></message>
     <message><source>{} cannot trim itself</source><translation>{} no puede recortarse a sí mismo</translation></message>
+    <message><source>{} cannot be cut at its folded corner with {}.</source><translation>{} no se puede cortar en su esquina plegada con {}.</translation></message>
     <message><source>Extend / Cut: the target face {} of {} is not planar.</source><translation>Extender / cortar: la cara destino {} de {} no es plana.</translation></message>
     <message><source>Extend / Cut: the target plane is parallel to the profile axis.</source><translation>Extender / cortar: el plano destino es paralelo al eje del perfil.</translation></message>
     <message><source>Extend / Cut: the profile axis crosses no face of {}.</source><translation>Extender / cortar: el eje del perfil no atraviesa ninguna cara de {}.</translation></message>
@@ -1135,6 +1136,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Edit sketch</source><translation>Editar croquis</translation></message>
     <message><source>Only the last face clicked is used: a cutout takes one face.</source><translation>Solo se usa la última cara en la que hiciste clic: un calado lleva una sola cara.</translation></message>
     <message><source>Click a planar face of a profile, a trimmed profile or a cutout.</source><translation>Hacé clic en una cara plana de un perfil, un perfil recortado o un calado.</translation></message>
+    <message><source>Click a planar face of a profile, a trimmed profile, a cutout or a folded bar.</source><translation>Hacé clic en una cara plana de un perfil, un perfil recortado, un calado o una barra plegada.</translation></message>
     <message><source>Select a planar face of a profile, a trimmed profile or a cutout.</source><translation>Seleccioná una cara plana de un perfil, un perfil recortado o un calado.</translation></message>
     <message><source>{}: pick one of its faces</source><translation>{}: elegí una de sus caras</translation></message>
     <message><source>{}: {} is not planar</source><translation>{}: {} no es plana</translation></message>
@@ -1314,7 +1316,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Press Change next to the faces to pick two other faces.</source><translation>Tocá Cambiar junto a las caras para elegir otras dos caras.</translation></message>
     <message><source>Click the piece itself, not a copy of a pattern.</source><translation>Hacé clic en la pieza misma, no en una copia de un patrón.</translation></message>
     <message><source>The former piece stays where Between faces placed it.</source><translation>La pieza anterior queda donde la ubicó Entre caras.</translation></message>
-    <message><source>Select the piece to repeat: click a profile, a trimmed profile, a cutout or a drill hole.</source><translation>Seleccioná la pieza a repetir: hacé clic en un perfil, un perfil recortado, un calado o un agujero.</translation></message>
+    <message><source>Select the piece to repeat: click a profile, a trimmed profile, a cutout, a drill hole or a folded bar.</source><translation>Seleccioná la pieza a repetir: hacé clic en un perfil, un perfil recortado, un calado, un agujero o una barra plegada.</translation></message>
     <message><source>Click a straight edge for the direction of the copies.</source><translation>Hacé clic en una arista recta para la dirección de las copias.</translation></message>
     <message><source>Click the frame, not a copy of the pattern.</source><translation>Hacé clic en el marco, no en una copia del patrón.</translation></message>
     <message><source>The faces must not be on the piece: it moves between them.</source><translation>Las caras no pueden ser de la pieza: la pieza se mueve entre ellas.</translation></message>
@@ -1359,12 +1361,12 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
 <context>
     <name>MaxProFrame_DrillHole</name>
     <message><source>Drill Hole</source><translation>Agujero</translation></message>
-    <message><source>&lt;b&gt;Drill Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile or a cutout, then one of its nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the offsets from that point: one, or a pattern on both sides of it along and across the profile, with a diameter and a depth.</source><translation>&lt;b&gt;Agujero&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego en uno de sus nueve círculos para medir desde ahí: una esquina, el medio de un borde o el centro. Se perforan agujeros redondos a las distancias indicadas desde ese punto: uno solo, o un patrón a ambos lados, a lo largo y a lo ancho del perfil, con un diámetro y una profundidad.</translation></message>
+    <message><source>&lt;b&gt;Drill Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile, a cutout or a folded bar, then one of its nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the offsets from that point: one, or a pattern on both sides of it along and across the profile, with a diameter and a depth.</source><translation>&lt;b&gt;Agujero&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en una cara plana de un perfil, un perfil recortado, un calado o una barra plegada y luego en uno de sus nueve círculos para medir desde ahí: una esquina, el medio de un borde o el centro. Se perforan agujeros redondos a las distancias indicadas desde ese punto: uno solo, o un patrón a ambos lados, a lo largo y a lo ancho del perfil, con un diámetro y una profundidad.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ProfilePattern</name>
     <message><source>Profile Pattern</source><translation>Patrón de perfiles</translation></message>
-    <message><source>&lt;b&gt;Profile Pattern&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a profile, a trimmed profile, a cutout or a drill hole and click a straight edge for the direction: the copies are Links placed by count and pitch (in the edge's sense, inverted or symmetric) or between two faces with equal gaps. A change to the piece shows on every copy; the BOM counts them with its ID. Double-click the pattern to edit it.</source><translation>&lt;b&gt;Patrón de perfiles&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná un perfil, un perfil recortado, un calado o un agujero y hacé clic en una arista recta para la dirección: las copias son enlaces ubicados por cantidad y paso (en el sentido de la arista, invertido o simétrico) o entre dos caras con el mismo hueco. Un cambio en la pieza se ve en todas las copias; la lista de materiales las cuenta con su ID. Doble clic en el patrón para editarlo.</translation></message>
+    <message><source>&lt;b&gt;Profile Pattern&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a profile, a trimmed profile, a cutout, a drill hole or a folded bar and click a straight edge for the direction: the copies are Links placed by count and pitch (in the edge's sense, inverted or symmetric) or between two faces with equal gaps. A change to the piece shows on every copy; the BOM counts them with its ID. Double-click the pattern to edit it.</source><translation>&lt;b&gt;Patrón de perfiles&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná un perfil, un perfil recortado, un calado, un agujero o una barra plegada y hacé clic en una arista recta para la dirección: las copias son enlaces ubicados por cantidad y paso (en el sentido de la arista, invertido o simétrico) o entre dos caras con el mismo hueco. Un cambio en la pieza se ve en todas las copias; la lista de materiales las cuenta con su ID. Doble clic en el patrón para editarlo.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_Link</name>
@@ -1474,6 +1476,8 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Click the tube where the bar starts.</source><translation>Hacé clic en el tubo donde empieza la barra.</translation></message>
     <message><source>Click the next tube, after {}.</source><translation>Hacé clic en el tubo siguiente, después de {}.</translation></message>
     <message><source>Tubes picked: {}</source><translation>Tubos elegidos: {}</translation></message>
+    <message><source>Click a straight part of the folded bar.</source><translation>Hacé clic en una parte recta de la barra plegada.</translation></message>
+    <message><source>{} does not fold into a valid solid: check the cuts on its tubes (a hole or cutout touching an edge or another cut).</source><translation>{} no se pliega en un sólido válido: revisá los cortes de sus tubos (un agujero o calado que toca un borde u otro corte).</translation></message>
 </context>
 <context>
     <name>MaxProFrame_FoldedBar</name>

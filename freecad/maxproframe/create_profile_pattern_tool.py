@@ -8,6 +8,7 @@ from PySide import QtCore, QtGui
 from freecad.maxproframe._utils import (
     get_profile_from_trimmedbody,
     is_extrudedcutout,
+    is_foldedbar,
     is_group,
     is_part,
     is_pattern_link,
@@ -91,8 +92,11 @@ class ReferenceLabel(QtGui.QLabel):
 
 
 def is_piece(obj):
-    """A piece a pattern repeats: a profile, a trimmed profile, a cutout or a drill hole."""
-    return is_profile(obj) or is_trimmedbody(obj) or is_extrudedcutout(obj)
+    """A piece a pattern repeats: a profile, a trimmed profile, a cutout, a drill hole or a whole Folded Bar.
+
+    A Folded Bar is repeated whole (odd/tasks/folded-bar-tools.md S3): its copies link the bar, not a hidden tube of it.
+    """
+    return is_profile(obj) or is_trimmedbody(obj) or is_extrudedcutout(obj) or is_foldedbar(obj)
 
 
 def picked(obj, sub):
@@ -414,7 +418,8 @@ class ProfilePatternTaskPanel:
     @staticmethod
     def _piece_hint():
         return translate(
-            "frameforge", "Select the piece to repeat: click a profile, a trimmed profile, a cutout or a drill hole."
+            "frameforge",
+            "Select the piece to repeat: click a profile, a trimmed profile, a cutout, a drill hole or a folded bar.",
         )
 
     @staticmethod
@@ -814,9 +819,9 @@ class ProfilePatternCommand:
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_ProfilePattern", "Profile Pattern"),
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_ProfilePattern",
-                "<b>Profile Pattern</b><br><br>Select a profile, a trimmed profile, a cutout or a drill hole and "
-                "click a straight edge for the direction: the copies are Links placed by count and pitch (in the "
-                "edge's sense, inverted or symmetric) or between two faces with equal gaps. A change to the piece "
+                "<b>Profile Pattern</b><br><br>Select a profile, a trimmed profile, a cutout, a drill hole or a folded "
+                "bar and click a straight edge for the direction: the copies are Links placed by count and pitch (in "
+                "the edge's sense, inverted or symmetric) or between two faces with equal gaps. A change to the piece "
                 "shows on every copy; the BOM counts them with its ID. Double-click the pattern to edit it.",
             ),
         }

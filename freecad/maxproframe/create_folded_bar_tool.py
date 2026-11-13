@@ -52,7 +52,14 @@ from freecad.maxproframe.expression_fields import (
     unbind,
 )
 from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, get_param_group, translate
-from freecad.maxproframe.folded_bar import make_folded_bar, make_unfolded_bar, open_corner, update_corners
+from freecad.maxproframe.folded_bar import (
+    make_folded_bar,
+    make_unfolded_bar,
+    nearest_piece,
+    open_corner,
+    pick_point,
+    update_corners,
+)
 from freecad.maxproframe.folded_chain import (
     ChainError,
     base_profile,
@@ -1018,28 +1025,11 @@ class FoldedBarTaskPanel:
         return source
 
     def _member_at(self, bar, sub, point):
-        """The listed piece nearest to the clicked point of the preview (else to the clicked sub-element)."""
-        target = None
-        try:
-            if point is not None and App.Vector(*point).Length > 0:
-                target = App.Vector(*point)
-            elif sub:
-                element = bar.Shape.getElement(sub)
-                center = element.Point if hasattr(element, "Point") else element.CenterOfMass
-                target = container_placement(bar).multVec(center)
-        except Exception:
-            target = None
-        if target is None or not self.selection:
-            return None
-        vertex = Part.Vertex(target)
+        """The listed piece nearest to the clicked point of the preview (else to the clicked sub-element).
 
-        def distance(member):
-            try:
-                return vertex.distToShape(placed(member.Shape, container_placement(member)))[0]
-            except Exception:
-                return float("inf")
-
-        return min(self.selection, key=distance)
+        As ``folded_bar.segment_at`` in its nearest mode, among the listed pieces: the preview may still fold others.
+        """
+        return nearest_piece(self.selection, pick_point(bar, sub, point))
 
     def _still_selected(self, member):
         """Whether ``member`` keeps an entry in the selection."""

@@ -11,6 +11,7 @@ from freecad.maxproframe._utils import (
     get_profile_from_trimmedbody,
     get_readable_cutting_angles,
     get_trimmed_profile_all_cutting_angles,
+    is_foldedbar,
     is_profile,
     length_along_normal,
     restore_custom_profile_link,
@@ -849,8 +850,14 @@ class ViewProviderTrimmedProfile:
         pass
 
     def onDelete(self, fp, sub):
-        if self.Object.TrimmedBody:
-            self.Object.TrimmedBody.ViewObject.Visibility = True
+        """Show the trimmed body again; in a Folded Bar the bar folds it again instead and keeps it hidden."""
+        from freecad.maxproframe.folded_bar import release_piece
+
+        obj = self.Object
+        folded = any(is_foldedbar(parent) and obj in parent.Segments for parent in obj.InList)
+        release_piece(obj)
+        if obj.TrimmedBody and not folded:
+            obj.TrimmedBody.ViewObject.Visibility = True
         return True
 
     def getIcon(self):

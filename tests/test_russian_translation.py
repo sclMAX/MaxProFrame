@@ -128,6 +128,33 @@ FOLDED_MITER_TEXTS = (
         "<b>Unfold Bar</b><br><br>Select a Folded Bar: its straight bar with every cut is made from X = 0 along X, to "
         "export with File > Export (STEP, IGES, BREP) for a tube laser.",
     ),
+    # odd/tasks/folded-bar-tools.md: the tools that work on a Folded Bar.
+    ("MaxProFrame", "Click a straight part of the folded bar."),
+    (
+        "MaxProFrame",
+        "{} does not fold into a valid solid: check the cuts on its tubes (a hole or cutout touching an edge or "
+        "another cut).",
+    ),
+    ("frameforge", "{} cannot be cut at its folded corner with {}."),
+    ("frameforge", "Click a planar face of a profile, a trimmed profile, a cutout or a folded bar."),
+    (
+        "frameforge",
+        "Select the piece to repeat: click a profile, a trimmed profile, a cutout, a drill hole or a folded bar.",
+    ),
+    (
+        "MaxProFrame_DrillHole",
+        "<b>Drill Hole</b><br><br>Click a planar face of a profile, a trimmed profile, a cutout or a folded bar, then "
+        "one of its nine circles to measure from: a corner, the middle of an edge or the center. Round holes are "
+        "drilled at the offsets from that point: one, or a pattern on both sides of it along and across the profile, "
+        "with a diameter and a depth.",
+    ),
+    (
+        "MaxProFrame_ProfilePattern",
+        "<b>Profile Pattern</b><br><br>Select a profile, a trimmed profile, a cutout, a drill hole or a folded bar and "
+        "click a straight edge for the direction: the copies are Links placed by count and pitch (in the edge's "
+        "sense, inverted or symmetric) or between two faces with equal gaps. A change to the piece shows on every "
+        "copy; the BOM counts them with its ID. Double-click the pattern to edit it.",
+    ),
 )
 
 

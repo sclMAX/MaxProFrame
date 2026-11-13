@@ -31,7 +31,7 @@ CORNER = (-50, -25, 25)
 FAR_CORNER = (350, 25, 25)
 BOTTOM_CORNER = (-50, -25, -25)
 WARNING = "The reference vertex changed: check the hole."
-NO_FACE = "Click a planar face of a profile, a trimmed profile or a cutout."
+NO_FACE = "Click a planar face of a profile, a trimmed profile, a cutout or a folded bar."
 NO_VERTEX = "Click a vertex of the face."
 # Remembered state of the Update automatically check box of the Drill Hole panel.
 AUTO_PREVIEW_PARAM = "Drill Hole Auto Preview"
@@ -276,10 +276,10 @@ class TestDrillHoleCommand(DrillHolePanelFixture):
         self.assertEqual(resources["MenuText"], "Drill Hole")
         self.assertEqual(
             resources["ToolTip"],
-            "<b>Drill Hole</b><br><br>Click a planar face of a profile, a trimmed profile or a cutout, then one of its "
-            "nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the "
-            "offsets from that point: one, or a pattern on both sides of it along and across the profile, with a "
-            "diameter and a depth.",
+            "<b>Drill Hole</b><br><br>Click a planar face of a profile, a trimmed profile, a cutout or a folded bar, "
+            "then one of its nine circles to measure from: a corner, the middle of an edge or the center. Round holes "
+            "are drilled at the offsets from that point: one, or a pattern on both sides of it along and across the "
+            "profile, with a diameter and a depth.",
         )
         self.assertEqual(os.path.basename(resources["Pixmap"]), "drill-hole.svg")
         self.assertTrue(os.path.isfile(resources["Pixmap"]))
@@ -1970,10 +1970,10 @@ class TestDrillHoleSpanish(DrillHolePanelFixture):
         self.assertEqual(
             App.Qt.translate("MaxProFrame_DrillHole", resources["ToolTip"]),
             (
-                "<b>Agujero</b><br><br>Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego "
-                "en uno de sus nueve círculos para medir desde ahí: una esquina, el medio de un borde o el centro. Se "
-                "perforan agujeros redondos a las distancias indicadas desde ese punto: uno solo, o un patrón a ambos "
-                "lados, a lo largo y a lo ancho del perfil, con un diámetro y una profundidad."
+                "<b>Agujero</b><br><br>Hacé clic en una cara plana de un perfil, un perfil recortado, un calado o una "
+                "barra plegada y luego en uno de sus nueve círculos para medir desde ahí: una esquina, el medio de un "
+                "borde o el centro. Se perforan agujeros redondos a las distancias indicadas desde ese punto: uno solo, "
+                "o un patrón a ambos lados, a lo largo y a lo ancho del perfil, con un diámetro y una profundidad."
             ),
         )
         panel = self.run_command()
@@ -2004,7 +2004,8 @@ class TestDrillHoleSpanish(DrillHolePanelFixture):
             "el centro. Un clic en la cara toma el círculo más cercano.",
         )
         self.assertEqual(
-            form.face_label.text(), "Hacé clic en una cara plana de un perfil, un perfil recortado o un calado."
+            form.face_label.text(),
+            "Hacé clic en una cara plana de un perfil, un perfil recortado, un calado o una barra plegada.",
         )
         self.assertEqual(form.vertex_label.text(), "Hacé clic en un vértice de la cara.")
         self.assertEqual(self.status(panel), "Sin previsualización")

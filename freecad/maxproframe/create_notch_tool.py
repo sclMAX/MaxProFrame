@@ -29,6 +29,8 @@ class NotchTaskPanel(ExtendCutTaskPanel):
     """
 
     joint = "Notch"
+    # The target is a whole profile: a click on a Folded Bar, a bend included, picks its nearest tube.
+    face_target = False
     auto_preview_param = "Notch Auto Preview"
     # A notch is a heavy boolean: its preview waits until asked for.
     auto_preview_default = False
