@@ -1371,6 +1371,39 @@ class SteppedOpenCornerUnfoldTest(UnfoldFixture):
         )
         self.solid(unfold(chain, bend(**PLAIN), open_corner=bend(joint="Stepped", step_depth=19.0)))
 
+    def test_rectangle_open_corner_keeps_its_90_degree_joint(self):
+        # L13: at 90 degrees the first tube's outer band starts at the sharp, flush with the last tube's outer face:
+        # nothing sticks out and nothing is left open, so the bar stays as T2 made it (values measured on 6043270).
+        chain = self.rectangle()
+        for options, length, volume in (
+            ({}, 1183.9070781254618, 383367.5308141934),
+            (dict(clearance=1.0), 1182.9070781254618, 382905.8571492765),
+            (dict(step_flip=True), 1183.9070781254618, 383367.5308141934),
+            (dict(step_flip=True, clearance=1.0), 1182.9070781254618, 382905.8571492765),
+        ):
+            with self.subTest(options=options):
+                bar = unfold(chain, bend(**PLAIN), open_corner=bend(**STEPPED, **options))
+
+                self.assertAlmostEqual(length, bar.length, places=9)
+                self.assertAlmostEqual(volume, bar.shape.Volume, delta=1e-6)
+
+    def test_outer_band_of_the_first_tube_stops_at_the_outer_face_of_the_last(self):
+        # L13: away from 90 degrees the first tube's outer band starts where its cross-section still lies inside the
+        # last tube's outer face plane: at the sharp at 60 degrees, s cot(60) past it at 120 degrees. The last tube's
+        # outer band ends before the overlap as before (s / sin(60), s tan(60) short of the sharp).
+        for open_at_60, start, end in (
+            (True, 0.0, -S / math.sin(math.radians(60))),
+            (False, S / math.tan(math.radians(60)), -S * math.tan(math.radians(60))),
+        ):
+            chain = self.rhombus(open_at_60)
+            for g in (0.0, 1.0):
+                with self.subTest(open_at_60=open_at_60, clearance=g):
+                    bar = unfold(chain, bend(**PLAIN), open_corner=bend(clearance=g, **STEPPED))
+
+                    self.solid(bar)
+                    outer = (end - g / 2, start + g / 2)
+                    self.assertOpenEnds(chain, bar, {(T / 2, 0.0): outer, ((S + T) / 2, SIDE_WALL): outer})
+
     def test_open_corner_in_line_is_refused_when_stepped(self):
         # A closed frame open in the middle of a side: its two ends are in line, there is no corner to step.
         edges = (((0, 0, 0), (150, 0, 0)), ((150, 0, 0), (300, 0, 0))) + RECTANGLE[1:]

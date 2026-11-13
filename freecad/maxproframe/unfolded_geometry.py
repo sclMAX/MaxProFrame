@@ -18,9 +18,10 @@ tube laser cuts it.
 The cuts made on each segment (its trims, cutouts and drill holes) move with it. The bar starts at X = 0 at the
 open-corner end of the first segment. A closed frame whose open corner is ``Stepped`` gets that joint at both ends of
 the bar instead of the ends' own cuts there: around the virtual sharp of the outer faces the last segment covers the
-overlap of the inner wall bands and the first one the overlap of the outer wall bands (v from 0 to s), the side walls
+overlap of the inner wall bands and the first one the overlap of the outer wall bands (v from 0 to s) as far as
+nothing passes the other tube's outer face (a notch is left at the outer edge away from 90 degrees), the side walls
 between keep the miter. See odd/tasks/folded-miter.md, section "T3 design", odd/tasks/folded-corners.md (S6 outer
-radius, S7 thickness from the profile, S8 automatic K-factor) and odd/tasks/stepped-corners.md (S2-S5, L8, L11).
+radius, S7 thickness from the profile, S8 automatic K-factor) and odd/tasks/stepped-corners.md (S2-S5, L8, L11, L13).
 """
 
 import math
@@ -668,7 +669,8 @@ class _OpenStep:
     (toward the corner on A, away from it on B) from the sharp, y inward from its outer face; B's frame is A's turned
     by the corner's angle about the sharp. The inner band (y from d - s to d) is the one of a folded corner (L8, A
     covers the overlap, B ends past it, B gives way where A's band past the miter line folds onto it); the outer band
-    (y from 0 to s) the same with the roles swapped (B covers it); the side walls between keep the miter plane
+    (y from 0 to s) the same with the roles swapped (B covers it, as far as nothing of it passes A's outer face plane:
+    away from 90 degrees a notch is left at the outer edge, L13); the side walls between keep the miter plane
     through the sharp, each moved back half the clearance. ``step_flip`` swaps A and B: mirrored about the miter line.
     """
 
@@ -692,14 +694,23 @@ class _OpenStep:
     @cached_property
     def _ends(self):
         """(A's inner end, B's inner start, A's outer end, B's outer start) along their tubes, from the sharp, each
-        moved back half the clearance; and the overlaps (``_overlap``) of the inner and of the outer bands."""
+        moved back half the clearance; the overlap (``_overlap``) of the inner bands; and B's outer start without
+        clearance.
+
+        B's outer band covers the overlap of the outer bands only as far as its cross-section stays inside A's outer
+        face plane (L13): A's y = x' sin + y' cos must not be negative for y' in [0, s], so B starts at the sharp
+        (x' = 0) up to 90 degrees and at -s cot(theta) past it above; at 90 degrees that covers the whole overlap,
+        else a notch is left at the outer edge (a weld groove). Nothing of A past the miter line reaches past B's
+        outer face plane."""
         g, s, d = self.clearance, self.step_depth, self.corner.depth
+        theta = math.radians(self.corner.bend_angle)
         inner = _overlap(self.corner.bend_angle, d - s, d)
         outer = _overlap(self.corner.bend_angle, 0.0, s)
+        b_start = max(0.0, -s * math.cos(theta) / math.sin(theta))
         return (
-            (max(inner[0]) - g / 2, max(inner[1]) + g / 2, min(outer[0]) - g / 2, min(outer[1]) + g / 2),
+            (max(inner[0]) - g / 2, max(inner[1]) + g / 2, min(outer[0]) - g / 2, b_start + g / 2),
             inner,
-            outer,
+            b_start,
         )
 
     @cached_property
@@ -709,11 +720,11 @@ class _OpenStep:
         clearance, where it folds into B, up to B's inner start (as at a folded corner, L8)."""
         g, t, s, d = self.clearance, self.thickness, self.step_depth, self.corner.depth
         tangent = math.tan(self.half)
-        (_, b_inner, a_outer, _), inner, outer = self._ends
+        (_, b_inner, a_outer, _), inner, b_start = self._ends
         a_tab = _past_miter(d - s - g / 2, d + t, max(inner[0]) + g / 2, tangent)
         b_trim = _clip_right(self._turned(a_tab), b_inner)
         # Mirrored about the miter line, B's outer band is the covering one and A's frame B's.
-        b_tab = _past_miter(-t, s + g / 2, -min(outer[1]) + g / 2, tangent)
+        b_tab = _past_miter(-t, s + g / 2, -b_start + g / 2, tangent)
         a_trim = _mirrored(_clip_right(self._turned(b_tab), -a_outer))
         return tuple(
             points if len(points) >= 3 and _area(points) > AREA_TOLERANCE else [] for points in (a_trim, b_trim)
@@ -983,6 +994,7 @@ def unfold(chain, corners, open_corner=None):
     or ``Miter`` the ends of the bar are the segments' own tips there (their End Miter, if any); with ``Stepped``
     both ends get the stepped joint (S4, L11) and lose whatever their tips change from where it starts on (the End
     Miter): the last segment covers the overlap of the inner bands and the first one the overlap of the outer bands
+    as far as nothing passes the last one's outer face, leaving a notch at the outer edge away from 90 degrees (L13)
     (swapped with ``step_flip``), the side walls between keep the miter through the virtual sharp of the outer faces,
     the clearance moves each end back half of it; only its joint, clearance and step settings are read.
     Raises UnfoldError when the radius, the K-factor, the step or the key of a corner do not suit the tube, or when a
