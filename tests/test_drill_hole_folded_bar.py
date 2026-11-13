@@ -5,8 +5,12 @@ straight wall of the bar in the Drill Hole panel drills the tube under the click
 bar folds the hole at once (preview and after OK) and the tube and the hole stay hidden. Cancel, or a preview dropped
 for another face, leaves the bar as before and linking no removed object. A click on a bend adds nothing and the panel
 says "Click a straight part of the folded bar."
+
+A pattern across the wall (T9, L14) leaves the bar a sound solid with every hole, also where a hole is tangent to
+the edge of the wall or to the next hole.
 """
 
+import math
 import unittest
 from unittest.mock import patch
 
@@ -17,8 +21,9 @@ from PySide import QtWidgets
 from test_drill_hole_panel import AUTO_PREVIEW_PARAM, keep_remembered_diameter
 from test_extend_cut_preview import keep_auto_preview, wait
 from test_folded_bar_tools import BEND_MESSAGE, FoldedBarToolsFixture, face_at, global_shape
+from test_unfolded_geometry import PLAIN, bend
 
-from freecad.maxproframe import create_drill_hole_tool
+from freecad.maxproframe import create_drill_hole_tool, folded_bar
 from freecad.maxproframe.create_drill_hole_tool import DrillHoleCommand, DrillHoleTaskPanel
 
 # A point on the outer wall of the right tube of the bar (+X), one on its top wall (+Z), and one on the outer wall of
@@ -30,6 +35,14 @@ BOTTOM_WALL = App.Vector(150, -25, 0)
 # The corner of the right tube at the free end of the bar, on its outer wall.
 FREE_END_CORNER = App.Vector(325, 0, 25)
 VOLUME_TOLERANCE = 1e-3
+# L14: the user's TC80x40x1.5 tubes, 40 across the frame and 80 high, and the center of the side wall (+Z, 40 wide)
+# of the top tube and of the loose bottom tube.
+TC_TUBE = dict(family="Rectangular Hollow", width=40.0, height=80.0, thickness=1.5)
+TC_TOP_SIDE = App.Vector(150, 200, 40)
+TC_BOTTOM_SIDE = App.Vector(150, 0, 40)
+HOLE_DIAMETER = 10.0
+# A hole through the 1.5 mm wall.
+HOLE_VOLUME = math.pi * (HOLE_DIAMETER / 2) ** 2 * TC_TUBE["thickness"]
 
 
 class DrillHoleFoldedBarFixture(FoldedBarToolsFixture):
@@ -301,6 +314,111 @@ class DrillHoleLooseTubeTest(DrillHoleFoldedBarFixture):
         self.doc.recompute()
         self.assertEqual([right, top, left], list(bar.Segments))
         self.assertAlmostEqual(volume, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
+
+
+class DrillHoleTransversalPatternTest(DrillHoleFoldedBarFixture):
+    """L14: 10 mm holes at the center of the side wall of the top tube, One wall, 1 back and 1 forward along at 50 mm,
+    then 1 across backward: 15 mm puts that row tangent to the edge of the 40 mm wall (15 + 5 = 20), 10 mm puts it
+    tangent to the holes at the point (pitch = diameter), 12 mm is clear of both."""
+
+    def tc_legs(self):
+        """(bottom, right, top, left), bar, the bar's volume: the user's layout with TC80x40x1.5 tubes."""
+        tubes = self.frame(**TC_TUBE)
+        bar = folded_bar.make_folded_bar(tubes[1:], bend(**PLAIN))
+        self.doc.recompute()
+        self.doc.clearUndos()
+        self.assertSound(bar.Shape)
+        return tubes, bar, bar.Shape.Volume
+
+    def drill_pattern(self, obj, point, across_pitch):
+        """The Drill Hole panel on ``obj`` clicked at ``point`` (the center of the face) with the user's pattern."""
+        panel = self.run_command()
+        self.click_at(obj, point)
+        form = panel.form
+        form.spin_diameter.setValue(HOLE_DIAMETER)
+        form.combo_cut_type.setCurrentIndex(form.combo_cut_type.findData("One wall"))
+        form.groupBox_pattern.setChecked(True)
+        for side, count, pitch in (
+            ("along_backward", 1, 50.0),
+            ("along_forward", 1, 50.0),
+            ("across_backward", 1, across_pitch),
+        ):
+            getattr(form, f"spin_{side}_count").setValue(count)
+            getattr(form, f"spin_{side}_pitch").setValue(pitch)
+        self.events()
+        wait()
+        return panel
+
+    def assertSound(self, shape):
+        """One valid solid FreeCAD can draw: the geometry check finds nothing and every edge has its curve."""
+        self.assertFalse(shape.isNull())
+        self.assertTrue(shape.isValid())
+        self.assertEqual(1, len(shape.Solids))
+        try:
+            shape.check(True)
+        except Exception as error:
+            self.fail(f"the geometry check fails: {error}")
+        for index, edge in enumerate(shape.Edges, 1):
+            try:
+                edge.Curve
+            except Exception as error:
+                self.fail(f"Edge{index} has no curve: {error}")
+
+    def assertBarHasTheHoles(self, bar, tube, hole, volume):
+        """``bar`` folds ``hole`` into a sound solid, less what the holes take from ``tube``."""
+        self.assertEqual("Valid", hole.getStatusString())
+        self.assertSound(hole.Shape)
+        self.assertEqual("Valid", bar.getStatusString())
+        self.assertIn(hole, bar.Segments)
+        self.assertSound(bar.Shape)
+        drilled = tube.Shape.Volume - hole.Shape.Volume
+        self.assertGreaterEqual(drilled, 6 * HOLE_VOLUME - VOLUME_TOLERANCE)
+        self.assertAlmostEqual(volume - drilled, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
+
+    def check_bar_pattern(self, pitch):
+        (_, right, top, left), bar, volume = self.tc_legs()
+        before = self.names()
+        panel = self.drill_pattern(bar, TC_TOP_SIDE, pitch)
+
+        hole = self.preview(before)
+        self.assertEqual((top, face_at(top, TC_TOP_SIDE)), panel.face)
+        # The preview shows in the bar, and so does the hole after OK.
+        self.assertBarHasTheHoles(bar, top, hole, volume)
+        self.assertTrue(panel.accept())
+        self.doc.recompute()
+        self.assertEqual([right, hole, left], list(bar.Segments))
+        self.assertBarHasTheHoles(bar, top, hole, volume)
+        return bar, volume
+
+    def test_a_row_across_tangent_to_the_edge_of_the_wall_keeps_the_bar_sound_with_every_hole(self):
+        self.check_bar_pattern(15.0)
+
+    def test_a_row_across_tangent_to_the_holes_at_the_point_keeps_the_bar_sound_with_every_hole(self):
+        self.check_bar_pattern(10.0)
+
+    def test_a_row_across_clear_of_the_edge_keeps_the_bar_sound_with_every_hole(self):
+        bar, volume = self.check_bar_pattern(12.0)
+
+        # Clear of the edge and of each other: six whole holes through the wall.
+        self.assertAlmostEqual(volume - 6 * HOLE_VOLUME, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
+
+    def check_loose_pattern(self, pitch):
+        (bottom, *_), bar, volume = self.tc_legs()
+        before = self.names()
+
+        self.drill_pattern(bottom, TC_BOTTOM_SIDE, pitch)
+
+        hole = self.preview(before)
+        self.assertEqual("Valid", hole.getStatusString())
+        self.assertSound(hole.Shape)
+        self.assertGreaterEqual(bottom.Shape.Volume - hole.Shape.Volume, 6 * HOLE_VOLUME - VOLUME_TOLERANCE)
+        self.assertAlmostEqual(volume, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
+
+    def test_the_pattern_tangent_to_the_edge_on_the_loose_tube_leaves_it_sound(self):
+        self.check_loose_pattern(15.0)
+
+    def test_the_pattern_tangent_to_the_holes_on_the_loose_tube_leaves_it_sound(self):
+        self.check_loose_pattern(10.0)
 
 
 class DrillHoleDeleteTest(DrillHoleFoldedBarFixture):

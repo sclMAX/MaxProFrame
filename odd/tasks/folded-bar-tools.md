@@ -36,6 +36,9 @@ per task; push, PR and merge stay the user's decisions.
 
 - T8 [S4] deleting a miter/trim or cutout from the tree releases it (the bar keeps its tube, hidden), plus the
   verifier's regression tests (reopen untouched, release no-op, End Miter undo/redo). route=worker; commit=(T8 commit) [x]
+- T9 [S2, S4] Drill Hole pattern with transversal holes on a Folded Bar tube breaks the bar shape ("Cannot compute
+  Inventor representation ... BRepAdaptor_Curve::No geometry"): reproduce, fix the root cause, the bar never shows a
+  broken shape silently. route=worker; commit=(T9 commit) [x]
 
 ## Log
 - L1 (2026-11-13) user, with a screenshot of End Miter ("Ingletes") listing only Profile_TC80x40x1.5_000 next to a
@@ -103,3 +106,25 @@ per task; push, PR and merge stay the user's decisions.
   (stable, weekly), test_end_miter_folded_bar 10 (undo/redo on and off auto preview), cutout/extend cut folded bar
   12/12, end miter panel/edit 14/6, extend cut panel 45, cutout flow/depth 19/14, drill hole folded bar 14, trimmed
   profile pid 2, folded bar 35 OK. Full suites (job-12/13) stopped: the tree changed under them; re-run after T8.
+- L14 (2026-11-13) user, manual test on the branch (FreeCAD 27.1 weekly, document PruebaLaserCut), Drill Hole on
+  "Profile_TC80x40x1.5_002 (Profile_002) Face3" of a Folded Bar, centre of the face, diameter 10 mm, pattern
+  longitudinal 1 back + 1 forward at 50 mm (3 holes, fine), then "Transversal <- atrás" 1 at 15 mm (6 holes), cut
+  type "Una pared", depth 1,5 mm: "al hacer un patron transversal se rompe todo"; the bar renders as broken stray
+  edges and the report view shows "<Part> ViewProviderExt.cpp(1545): Cannot compute Inventor representation for the
+  shape of PruebaLaserCut#FoldedBar: BRepAdaptor_Curve::No geometry" (3 times). Full suite stable on 697450a:
+  1955 tests OK (job-14).
+- L15 Full suite weekly on 697450a (job-15): killed at the 3600 s timeout (exit 124) inside the known issue #148 hang
+  (test_folded_bar_panel ExpressionTest.test_cancel_of_a_new_bar_with_an_expression_leaves_the_document_unchanged);
+  859 tests ok before it, 1 failure = the known #148 test_cancel_with_undo_disabled_puts_the_corners_back...; the
+  modules after test_folded_bar_panel did not run on weekly (stable ran them all: 1955 OK).
+- L16 (2026-11-13) user: "no corras la suite, lo pruebo primero" -> no full suite after T9; the user tests first.
+- L17 T9 evidence (worker mwf0m7hg-d-qssc): root cause removeSplitter() at the end of unfold() and fold_bar() also
+  merges edges; a hole tangent to its wall edge (pitch 15 + radius 5 = 20 on a 40 mm wall) or to the next hole (pitch
+  10) gives self-intersecting faces ("BOPAlgo SelfIntersect"); pre-existing at 7ddca7c; loose tube fine. Fix:
+  unfolded_geometry.refine() merges faces only (UnifySameDomain(shape, False, True, False)); guard sound_solid() +
+  folded_bar._sound(): an unsound fold raises UnfoldError "{} does not fold into a valid solid: check the cuts on its
+  tubes (a hole or cutout touching an edge or another cut)." (es/ru translations pending). RED
+  DrillHoleTransversalPatternTest 2 of 5, SoundShapeTest 4 of 4; GREEN 5 and 4 (stable and weekly); test_folded_bar
+  39, drill hole folded bar 19, folded bar tools 13, folded/unfolded geometry 11/41, folded bar panel 77, cutout
+  folded bar 12; parent re-run end miter/extend cut/profile pattern folded bar 10/12/6 and the 5 pattern tests OK.
+  "BRepAdaptor_Curve::No geometry" itself not reproduced headless: user to confirm on PruebaLaserCut (weekly).

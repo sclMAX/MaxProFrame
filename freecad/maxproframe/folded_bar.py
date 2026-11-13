@@ -33,7 +33,7 @@ from freecad.maxproframe.profile_pattern import (
     newest_piece,
     placed,
 )
-from freecad.maxproframe.unfolded_geometry import CornerSettings, UnfoldError, unfold
+from freecad.maxproframe.unfolded_geometry import CornerSettings, UnfoldError, sound_solid, unfold
 from freecad.maxproframe.version import __version__ as ff_version
 
 # Where the Create BOM panel keeps the stock length of the cut list, and its default (mm).
@@ -357,6 +357,24 @@ def _one_solid(shape):
     return shape is not None and not shape.isNull() and len(shape.Solids) == 1
 
 
+def _sound(bar, shape):
+    """``shape`` of the Folded Bar ``bar``, fixed when it needs it (``sound_solid``); UnfoldError when it stays broken.
+
+    A broken solid (not valid, an edge without its curve) is never drawn: the bar is in error, saying why
+    (odd/tasks/folded-bar-tools.md, T9, S4).
+    """
+    sound = sound_solid(shape)
+    if sound is None:
+        raise UnfoldError(
+            translate(
+                "MaxProFrame",
+                "{} does not fold into a valid solid: check the cuts on its tubes (a hole or cutout touching an edge "
+                "or another cut).",
+            ).format(bar.Label)
+        )
+    return sound
+
+
 class FoldedBar:
     def __init__(self, obj):
         self.add_properties(obj)
@@ -408,6 +426,7 @@ class FoldedBar:
             raise UnfoldError(
                 translate("MaxProFrame", "{} does not fold into one solid: change its bend settings.").format(obj.Label)
             )
+        folded = _sound(obj, folded)
         # The recompute puts the shape at the bar's Placement: its geometry is moved into the bar's own frame.
         local = folded.copy()
         local.transformShape(container_placement(obj).multiply(obj.Placement).inverse().toMatrix(), True)
@@ -503,7 +522,7 @@ class UnfoldedBar:
                     bar.Label
                 )
             )
-        obj.Shape = unfolded.shape.Solids[0].copy()
+        obj.Shape = _sound(bar, unfolded.shape.Solids[0]).copy()
 
     def dumps(self):
         return None

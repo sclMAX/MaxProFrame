@@ -19,13 +19,14 @@ import FreeCAD as App
 import Part
 from test_unfolded_geometry import PLAIN, UnfoldFixture, bend
 
+from freecad.maxproframe import folded_bar
 from freecad.maxproframe._utils import get_profiles_and_links_from_document, get_profiles_and_links_from_object
 from freecad.maxproframe.best_fit import CutPart, best_fit_decreasing
 from freecad.maxproframe.create_bom import make_cut_list, traverse_assembly
 from freecad.maxproframe.create_end_miter_tool import make_end_miter_profile
 from freecad.maxproframe.drill_hole import make_drill_hole
 from freecad.maxproframe.ff_tools import get_param_group
-from freecad.maxproframe.folded_bar import make_folded_bar, make_unfolded_bar
+from freecad.maxproframe.folded_bar import bar_chain, make_folded_bar, make_unfolded_bar
 from freecad.maxproframe.folded_chain import ChainError, build_chain
 from freecad.maxproframe.folded_corner import is_folded_corner
 from freecad.maxproframe.folded_geometry import fold, fold_bar
@@ -50,6 +51,11 @@ REMOVED_BAR_PROPERTIES = (
     "Key",
     "KeyDiameter",
 )
+# odd/tasks/folded-bar-tools.md T9 (S4): what the bar says when its folded solid is broken.
+BROKEN_MESSAGE = (
+    "{} does not fold into a valid solid: check the cuts on its tubes (a hole or cutout touching an edge or another "
+    "cut)."
+)
 CORNER_PROPERTIES = {
     "PieceA": "App::PropertyLink",
     "PieceB": "App::PropertyLink",
@@ -60,6 +66,11 @@ CORNER_PROPERTIES = {
     "KFactor": "App::PropertyFloat",
     "Open": "App::PropertyBool",
 }
+
+
+def open_box():
+    """A solid whose shell misses a face: not valid, and no fix makes it a solid again."""
+    return Part.Solid(Part.Shell(Part.makeBox(10, 10, 10).Faces[:-1]))
 
 
 def corner_values(corner):
@@ -506,6 +517,113 @@ class SegmentsRefreshTest(FoldedBarFixture):
         self.assertAlmostEqual(length, bar.DevelopedLength.Value, places=9)
         self.assertAlmostEqual(volume - math.pi * 5**2 * 2.0, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
         self.assertSameVolume(fold(build_chain([bottom, hole, top, left]), bend(**PLAIN)), bar.Shape)
+
+
+class SoundShapeTest(FoldedBarFixture):
+    """T9 (S2, S4, L14): holes tangent to the edge of a wall or to each other fold into a sound solid, and a bar that
+    would fold into a broken one is in error, saying why, instead of drawing it."""
+
+    def drill_tangent_row(self, right):
+        """10 mm holes across the top wall of ``right`` at its center: one at the point, one 10 mm back (tangent to it)
+        and one 20 mm forward (tangent to the edge of the 50 mm wall)."""
+        face = next(
+            index
+            for index, found in enumerate(right.Shape.Faces, 1)
+            if isinstance(found.Surface, Part.Plane) and found.normalAt(0, 0).z > 1 - 1e-9 and found.BoundBox.ZMin > 24
+        )
+        vertex = next(
+            f"Vertex{index}"
+            for index, found in enumerate(right.Shape.Vertexes, 1)
+            if found.Point.isEqual(App.Vector(275, 0, 25), 1e-6)
+        )
+        hole = make_drill_hole((right, (f"Face{face}",)), vertex)
+        hole.CenterAlong = True
+        hole.CenterAcross = True
+        hole.Diameter = 10.0
+        hole.CutType = "One wall"
+        hole.AcrossBackwardCount = 1
+        hole.AcrossBackwardPitch = 10.0
+        hole.AcrossForwardCount = 1
+        hole.AcrossForwardPitch = 20.0
+        self.doc.recompute()
+        self.assertEqual("Valid", hole.getStatusString())
+        self.assertSound(hole.Shape)
+        return hole
+
+    def assertSound(self, shape):
+        """One valid solid FreeCAD can draw: the geometry check finds nothing and every edge has its curve."""
+        self.assertTrue(shape.isValid())
+        self.assertEqual(1, len(shape.Solids))
+        try:
+            shape.check(True)
+        except Exception as error:
+            self.fail(f"the geometry check fails: {error}")
+        for index, edge in enumerate(shape.Edges, 1):
+            try:
+                edge.Curve
+            except Exception as error:
+                self.fail(f"Edge{index} has no curve: {error}")
+
+    def test_holes_tangent_to_the_edge_and_to_each_other_unfold_and_fold_into_sound_solids(self):
+        bottom, right, top, left = self.frame()
+        plain = unfold(build_chain([bottom, right, top, left]), bend(**PLAIN))
+        hole = self.drill_tangent_row(right)
+        drilled = right.Shape.Volume - hole.Shape.Volume
+        chain = build_chain([bottom, hole, top, left])
+
+        unfolded = unfold(chain, bend(**PLAIN))
+        folded = fold_bar(chain, unfolded)
+
+        self.assertSound(unfolded.shape)
+        self.assertSound(folded)
+        self.assertAlmostEqual(plain.shape.Volume - drilled, unfolded.shape.Volume, delta=VOLUME_TOLERANCE)
+
+    def test_a_bar_made_after_tangent_holes_and_its_unfolded_bar_are_sound(self):
+        bottom, right, top, left = self.frame()
+        hole = self.drill_tangent_row(right)
+
+        bar = make_folded_bar([bottom, hole, top, left], bend(**PLAIN))
+        unfolded = make_unfolded_bar(bar)
+
+        self.assertOneSolid(bar)
+        self.assertSound(bar.Shape)
+        self.assertOneSolid(unfolded)
+        self.assertSound(unfolded.Shape)
+
+    def test_a_fold_that_breaks_the_solid_leaves_the_bar_in_error_and_its_shape_as_before(self):
+        profiles, bar = self.make_bar(**PLAIN)
+        volume = bar.Shape.Volume
+
+        with mock.patch.object(folded_bar, "fold_bar", return_value=open_box()):
+            bar.touch()
+            self.doc.recompute()
+
+        self.assertIn("Invalid", bar.State)
+        self.assertEqual(BROKEN_MESSAGE.format(bar.Label), bar.getStatusString())
+        self.assertAlmostEqual(volume, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
+        self.assertTrue(bar.Shape.isValid())
+        for tip in profiles:
+            self.assertFalse(tip.Visibility, tip.Label)
+        # Folded again, it is sound.
+        bar.touch()
+        self.doc.recompute()
+        self.assertOneSolid(bar)
+        self.assertAlmostEqual(volume, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
+
+    def test_an_unfold_that_breaks_the_solid_leaves_the_unfolded_bar_in_error(self):
+        _, bar = self.make_bar(**PLAIN)
+        unfolded = make_unfolded_bar(bar)
+        volume = unfolded.Shape.Volume
+        broken = unfold(bar_chain(bar), bend(**PLAIN))
+        broken.shape = open_box()
+
+        with mock.patch.object(bar.Proxy, "unfolded_bar", return_value=broken):
+            unfolded.touch()
+            self.doc.recompute()
+
+        self.assertIn("Invalid", unfolded.State)
+        self.assertEqual(BROKEN_MESSAGE.format(bar.Label), unfolded.getStatusString())
+        self.assertAlmostEqual(volume, unfolded.Shape.Volume, delta=VOLUME_TOLERANCE)
 
 
 class UnfoldedBarObjectTest(FoldedBarFixture):

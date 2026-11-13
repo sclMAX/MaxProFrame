@@ -35,6 +35,8 @@ VOLUME_TOLERANCE = 1e-6
 END_MARGIN = 1.0
 # How close the key slides to whatever keeps it from the middle of the miter line (mm).
 KEY_STEP = 1e-3
+# The largest tolerance the fix of a broken bar may give its edges and faces (mm).
+FIX_TOLERANCE = 1e-3
 # The largest outer radius is rounded down to it, so the range in the message is accepted whole (mm).
 RADIUS_STEP = 0.1
 X_AXIS = App.Vector(1, 0, 0)
@@ -114,6 +116,49 @@ def _box(shape):
         return shape.optimalBoundingBox()
     except Exception:
         return shape.BoundBox
+
+
+def refine(shape):
+    """``shape`` with the faces lying on one surface merged (the seams the booleans leave); its edges stay as they are.
+
+    ``removeSplitter`` also merges the edges: where a cut touches an edge of a wall or another cut (a hole tangent to
+    the edge of its wall or to the next hole) it joins edges across that point into a face that crosses itself, and on
+    OCC 8 its merged edges leave the faces they bound (odd/tasks/folded-bar-tools.md, T9).
+    """
+    unify = Part.ShapeUpgrade.UnifySameDomain(shape, False, True, False)
+    unify.build()
+    return unify.shape()
+
+
+def _sound(shape):
+    """Whether ``shape`` is one valid closed solid with volume whose edges all have their curve: one FreeCAD draws."""
+    try:
+        if shape.isNull() or not shape.isValid() or len(shape.Solids) != 1:
+            return False
+        if not all(shell.isClosed() for shell in shape.Shells) or shape.Volume <= VOLUME_TOLERANCE:
+            return False
+        for edge in shape.Edges:
+            if not edge.Degenerated:
+                edge.Curve
+    except Exception:
+        return False
+    return True
+
+
+def sound_solid(shape):
+    """``shape`` when it is a sound solid (``_sound``), else a fixed copy of it when the fix makes it one and keeps its
+    volume, else None: the caller says the shape is broken instead of drawing it (S4 of folded-bar-tools)."""
+    if _sound(shape):
+        return shape
+    try:
+        volume = shape.Volume
+        fixed = shape.copy()
+        fixed.fix(SIZE_TOLERANCE, SIZE_TOLERANCE, FIX_TOLERANCE)
+    except Exception:
+        return None
+    if not _sound(fixed) or abs(fixed.Volume - volume) > VOLUME_TOLERANCE * max(1.0, abs(volume)):
+        return None
+    return fixed.Solids[0] if fixed.ShapeType != "Solid" else fixed
 
 
 def _polygon(points):
@@ -573,7 +618,7 @@ def unfold(chain, corners):
         if sizes not in removed_by_sizes:
             removed_by_sizes[sizes] = bend.removed(reach)
         bar = bar.cut(placed(removed_by_sizes[sizes], frame))
-    bar = bar.removeSplitter()
+    bar = refine(bar)
     if len(bar.Solids) == 1:
         bar = bar.Solids[0]
     shift = App.Vector(-x_min, 0, 0)
