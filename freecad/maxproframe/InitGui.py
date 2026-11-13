@@ -36,8 +36,8 @@ class MaxProFrame(Gui.Workbench):
         "MaxProFrame_ProfilePattern",
     ]
 
-    # Folded miters: one tube folded at its corners, its straight bar, and the bend configurations.
-    toolbox_folded = ["MaxProFrame_FoldedBar", "MaxProFrame_UnfoldBar", "MaxProFrame_BendConfigurations"]
+    # Folded miters: one tube folded at its corners, and its straight bar.
+    toolbox_folded = ["MaxProFrame_FoldedBar", "MaxProFrame_UnfoldBar"]
 
     toolbox_group = ["Std_Group", "Std_Part"]
 
@@ -72,7 +72,6 @@ class MaxProFrame(Gui.Workbench):
                 # Without it only its borrowed commands are missing: the workbench still opens.
                 App.Console.PrintWarning(f"MaxProFrame: {module} is not available: {error}\n")
         from freecad.maxproframe import (
-            bend_config_dialog,
             create_bom_tool,
             create_drill_hole_tool,
             create_edit_balloons_tool,

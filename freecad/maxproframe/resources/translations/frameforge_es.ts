@@ -1474,29 +1474,25 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Pending changes</source><translation>Cambios pendientes</translation></message>
     <message><source>Preview updated</source><translation>Previsualización actualizada</translation></message>
     <message><source>No preview</source><translation>Sin previsualización</translation></message>
-    <message><source>Bend Configurations</source><translation>Configuraciones de plegado</translation></message>
-    <message><source>New</source><translation>Nueva</translation></message>
-    <message><source>Delete</source><translation>Eliminar</translation></message>
-    <message><source>Where the neutral axis sits in the wall: 0 inside face, 1 outside face</source><translation>Dónde está la fibra neutra en la pared: 0 cara interior, 1 cara exterior</translation></message>
-    <message><source>Name</source><translation>Nombre</translation></message>
-    <message><source>Material</source><translation>Material</translation></message>
-    <message><source>Wall thickness</source><translation>Espesor de pared</translation></message>
-    <message><source>Inside bend radius</source><translation>Radio interior de plegado</translation></message>
     <message><source>K-factor</source><translation>Factor K</translation></message>
-    <message><source>Save</source><translation>Guardar</translation></message>
-    <message><source>There is already a configuration called {}.</source><translation>Ya hay una configuración llamada {}.</translation></message>
-    <message><source>Delete the bend configuration {}? The bars made with it keep their copy.</source><translation>¿Eliminar la configuración de plegado {}? Las barras hechas con ella conservan su copia.</translation></message>
-    <message><source>The configuration name must not be empty.</source><translation>El nombre de la configuración no puede estar vacío.</translation></message>
-    <message><source>The material must not be empty.</source><translation>El material no puede estar vacío.</translation></message>
-    <message><source>The wall thickness must be greater than 0 mm.</source><translation>El espesor de pared tiene que ser mayor que 0 mm.</translation></message>
-    <message><source>The inside bend radius must be at least the wall thickness ({} mm).</source><translation>El radio interior de plegado tiene que ser al menos el espesor de pared ({} mm).</translation></message>
-    <message><source>The K-factor must be between 0 and 1.</source><translation>El factor K tiene que estar entre 0 y 1.</translation></message>
-    <message><source>Bend configuration "{}" does not exist.</source><translation>La configuración de plegado "{}" no existe.</translation></message>
-    <message><source>'configurations' must be a list.</source><translation>'configurations' tiene que ser una lista.</translation></message>
-    <message><source>Bend configurations file '{}' has version {}; this MaxProFrame reads version {}.</source><translation>El archivo de configuraciones de plegado '{}' tiene la versión {}; este MaxProFrame lee la versión {}.</translation></message>
-    <message><source>each configuration must be an object.</source><translation>cada configuración tiene que ser un objeto.</translation></message>
-    <message><source>Corrupt bend configurations file '{}': {}</source><translation>Archivo de configuraciones de plegado dañado '{}': {}</translation></message>
     <message><source>Folded Miters</source><translation>Ingletes plegados</translation></message>
+    <message><source>Tube</source><translation>Tubo</translation></message>
+    <message><source>Material and wall thickness of the tubes, from their profile</source><translation>Material y espesor de pared de los tubos, tomados de su perfil</translation></message>
+    <message><source>Corners from the start of the bar: click, Ctrl+click or Shift+click to select the ones to edit</source><translation>Esquinas desde el inicio de la barra: hacé clic, Ctrl+clic o Mayús+clic para seleccionar las que vas a editar</translation></message>
+    <message><source>Remove</source><translation>Quitar</translation></message>
+    <message><source>Open bar: take off the end tube of the first or last corner selected. Closed frame: open the frame at the selected corner.</source><translation>Barra abierta: quita el tubo del extremo de la primera o la última esquina seleccionada. Marco cerrado: abre el marco en la esquina seleccionada.</translation></message>
+    <message><source>Corner</source><translation>Esquina</translation></message>
+    <message><source>Radius seen outside the bend: the inside radius is it less the wall thickness</source><translation>Radio que se ve por fuera del plegado: el radio interior es este menos el espesor de pared</translation></message>
+    <message><source>Outer radius</source><translation>Radio exterior</translation></message>
+    <message><source>Automatic</source><translation>Automático</translation></message>
+    <message><source>Where the neutral axis sits in the wall, 0 &lt; K &lt;= 1; Automatic: from DIN 6935, by the inside radius and the wall thickness</source><translation>Dónde está la fibra neutra en la pared, 0 &lt; K &lt;= 1; Automático: según DIN 6935, por el radio interior y el espesor de pared</translation></message>
+    <message><source>Open · {} → {}</source><translation>Abierta · {} → {}</translation></message>
+    <message><source>key</source><translation>llave</translation></message>
+    <message><source>no key</source><translation>sin llave</translation></message>
+    <message><source>{} · {} → {} · R {} · {} · clearance {}</source><translation>{} · {} → {} · R {} · {} · holgura {}</translation></message>
+    <message><source>Click the tube where the bar starts.</source><translation>Hacé clic en el tubo donde empieza la barra.</translation></message>
+    <message><source>Click the next tube, after {}.</source><translation>Hacé clic en el tubo siguiente, después de {}.</translation></message>
+    <message><source>Tubes picked: {}</source><translation>Tubos elegidos: {}</translation></message>
 </context>
 <context>
     <name>MaxProFrame_FoldedBar</name>
@@ -1507,10 +1503,5 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <name>MaxProFrame_UnfoldBar</name>
     <message><source>Unfold Bar</source><translation>Desplegar barra</translation></message>
     <message><source>&lt;b&gt;Unfold Bar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a Folded Bar: its straight bar with every cut is made from X = 0 along X, to export with File &gt; Export (STEP, IGES, BREP) for a tube laser.</source><translation>&lt;b&gt;Desplegar barra&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná una barra plegada: se crea su barra recta con todos los cortes, desde X = 0 a lo largo de X, para exportarla con Archivo &gt; Exportar (STEP, IGES, BREP) a un láser de tubos.</translation></message>
-</context>
-<context>
-    <name>MaxProFrame_BendConfigurations</name>
-    <message><source>Bend Configurations</source><translation>Configuraciones de plegado</translation></message>
-    <message><source>&lt;b&gt;Bend Configurations&lt;/b&gt;&lt;br&gt;&lt;br&gt;Add, edit and delete the saved bend configurations of folded bars: material, wall thickness, inside bend radius and K-factor.</source><translation>&lt;b&gt;Configuraciones de plegado&lt;/b&gt;&lt;br&gt;&lt;br&gt;Agregá, editá y eliminá las configuraciones de plegado guardadas de las barras plegadas: material, espesor de pared, radio interior de plegado y factor K.</translation></message>
 </context>
 </TS>

@@ -3006,95 +3006,79 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Bend Configurations</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>New</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Delete</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Where the neutral axis sits in the wall: 0 inside face, 1 outside face</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Name</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Material</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Wall thickness</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Inside bend radius</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>K-factor</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Save</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>There is already a configuration called {}.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Delete the bend configuration {}? The bars made with it keep their copy.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>The configuration name must not be empty.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>The material must not be empty.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>The wall thickness must be greater than 0 mm.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>The inside bend radius must be at least the wall thickness ({} mm).</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>The K-factor must be between 0 and 1.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Bend configuration "{}" does not exist.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>'configurations' must be a list.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Bend configurations file '{}' has version {}; this MaxProFrame reads version {}.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>each configuration must be an object.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Corrupt bend configurations file '{}': {}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Folded Miters</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tube</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Material and wall thickness of the tubes, from their profile</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Corners from the start of the bar: click, Ctrl+click or Shift+click to select the ones to edit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open bar: take off the end tube of the first or last corner selected. Closed frame: open the frame at the selected corner.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Corner</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Radius seen outside the bend: the inside radius is it less the wall thickness</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Outer radius</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Automatic</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Where the neutral axis sits in the wall, 0 &lt; K &lt;= 1; Automatic: from DIN 6935, by the inside radius and the wall thickness</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open · {} → {}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>no key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} · {} → {} · R {} · {} · clearance {}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click the tube where the bar starts.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click the next tube, after {}.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tubes picked: {}</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3117,17 +3101,6 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>&lt;b&gt;Unfold Bar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a Folded Bar: its straight bar with every cut is made from X = 0 along X, to export with File &gt; Export (STEP, IGES, BREP) for a tube laser.</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>MaxProFrame_BendConfigurations</name>
-    <message>
-        <source>Bend Configurations</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;Bend Configurations&lt;/b&gt;&lt;br&gt;&lt;br&gt;Add, edit and delete the saved bend configurations of folded bars: material, wall thickness, inside bend radius and K-factor.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

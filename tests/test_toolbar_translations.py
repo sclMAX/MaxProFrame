@@ -7,7 +7,6 @@ from miter_helpers import use_language
 from PySide import QtWidgets
 
 from freecad.maxproframe import (  # noqa: F401  (importing registers the commands)
-    bend_config_dialog,
     create_bom_tool,
     create_drill_hole_tool,
     create_edit_balloons_tool,
@@ -83,11 +82,6 @@ EXPECTED = {
         "Unfold Bar",
         "Desplegar barra",
         "para exportarla con Archivo > Exportar (STEP, IGES, BREP) a un láser de tubos",
-    ),
-    "MaxProFrame_BendConfigurations": (
-        "Bend Configurations",
-        "Configuraciones de plegado",
-        "Agregá, editá y eliminá las configuraciones de plegado guardadas de las barras plegadas",
     ),
     "MaxProFrame_Link": (
         "Attached Link",

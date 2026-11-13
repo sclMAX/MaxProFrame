@@ -2,7 +2,7 @@
 Rework of the Folded Bar (feature folded-miter, PR #145/#146, not released): every corner is a `FoldedCorner` object
 with its own outer radius, clearance, key and K-factor (Fx), the panel lists corners instead of tubes, and bend
 configurations go away (thickness and material come from the profile). Branch feat/folded-corners. Delivery: one PR,
-one commit per task (each about one review slice; T3 and T4 may each pass 400 lines). Status: T1-T2 done, T3 next.
+one commit per task (each about one review slice; T3 and T4 may each pass 400 lines). Status: T1-T4 done, T5 next.
 
 ## Specs
 - S1 Corner list (L1): "cambiamos esa lista para que muestre las esquinas, con la opcion de quitar" -> the
@@ -63,7 +63,8 @@ one commit per task (each about one review slice; T3 and T4 may each pass 400 li
   lifecycle, `make_folded_bar(selection, corners, open_corner)`; every bend property leaves the bar; the current panel
   only gets the glue to create and edit corner objects - worker (context backstop) - done, commit below (L11).
 - T4 S1-S5 S7 S9 panel: corner list with multi-selection, highlight, Remove, open corner, per-corner fields with Fx,
-  last used values; configuration widgets removed; remove bend_config, dialog, command, icon and their tests - pending.
+  last used values; configuration widgets removed; remove bend_config, dialog, command, icon and their tests - worker
+  (context backstop) - done, commit below (L12).
 - T5 S1-S11 tutorial, README, CHANGELOG, es/ru translations and .qm - inline - pending.
 
 ## Log
@@ -124,3 +125,19 @@ one commit per task (each about one review slice; T3 and T4 may each pass 400 li
   expectation updated. GREEN (parent): test_folded_bar_translations 6, test_folded_bar 35, test_folded_bar_panel 45,
   test_unfolded_geometry 41, test_folded_geometry 11, test_folded_chain 23, test_russian_translation 6,
   test_compile_translations 3 OK.
+- L12 T4 evidence (worker mwe8wq3x-4-w2ol, parent check): panel rewritten in create_folded_bar_tool.py: corner list
+  (QListWidget, extended selection; rows "1 · Profile → Profile001 · R 10 mm · key · clearance 0.5 mm", open corner
+  last "Open · A → B"; hints "Click the tube where the bar starts." / "Click the next tube, after {}."), Corner group
+  (Outer radius, Clearance, Interlocking key, Key diameter "Default", K-factor "Automatic"), mixed state through
+  create_profiles_tool._MixedPresentation ("Mixed values"), Remove (open bar: end corners take off the end tube, middle
+  disabled; closed frame: opens the corner and reorders the tubes), highlight of the selected corners' tubes (preview
+  faces wholly in them, else the tubes), Fx bound with exactly one corner selected, last values in the MaxProFrame
+  parameters (defaults 10 / 0.5 / key / 0 / 0, saved on OK when changed), read-only "Tube" row (material · thickness).
+  Bend configurations removed (parent ran git rm on bend_config.py, bend_config_dialog.py, BendConfigurations.svg,
+  test_bend_config.py, test_bend_config_dialog.py at the worker's request; InitGui entry, catalogs updated, 17 new es
+  texts, ru unfinished). RED: test_folded_bar_panel import error (bend_config gone); translations 3 failures before
+  the .qm recompile. GREEN (parent): test_folded_bar_panel 60, test_folded_bar_translations 5, test_folded_bar 35,
+  test_shortcuts 5, test_toolbar_translations 4, test_russian_translation 6, test_compile_translations 3,
+  test_expression_fields 4, test_unfolded_geometry 41, test_folded_geometry 11, test_folded_chain 23,
+  test_library_translations 3, test_create_profile_apply 11 OK. Known limits: preview faces spanning other tubes are
+  not highlighted; old panel texts still in the catalogs (T5).
