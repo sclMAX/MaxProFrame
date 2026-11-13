@@ -3033,6 +3033,50 @@ All files and sketches on disk will be kept intact.</source>
         <source>{} does not fold into a valid solid: check the cuts on its tubes (a hole or cutout touching an edge or another cut).</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Joint</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Miter</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stepped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>How the inner wall is cut: Miter, at half the bend angle (a bevel cut); Stepped, an interlock of straight cuts only, for any tube laser</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Step depth</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Depth of the step of a Stepped joint across the bent wall; Automatic: the larger of the wall thickness and the outer corner radius of the tube</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Flip step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Swap the tubes of a Stepped joint: the other one covers the step</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} · stepped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The step depth of the corner between {} and {} must be between {min:g} and {max:g} mm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The step of the corner between {} and {} does not fit at this angle: make the step depth smaller.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>MaxProFrame_FoldedBar</name>
@@ -3104,6 +3148,18 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>The folded bar this is the straight bar of</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>How the inner wall is cut: Miter, at half the bend angle (a bevel cut); Stepped, an interlock of straight cuts only</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Depth of the step of a Stepped joint across the bent wall; 0: automatic, the larger of the wall thickness and the outer corner radius of the tube</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Swap the tubes of a Stepped joint: the other one covers the step</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

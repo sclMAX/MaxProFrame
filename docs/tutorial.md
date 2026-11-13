@@ -440,7 +440,7 @@ A trim, cutout or drill hole made from the piece after the pattern shows on ever
 
 ## Folded miters
 
-A **folded corner** joins two tubes without cutting them apart: the tube is one bar, the laser cuts a V notch through the walls on the inside of the corner, and the wall on the outside of the corner stays whole and is bent. Folding the bar closes the V. MaxProFrame draws the folded bar with its real bend radius and unfolds it into one straight solid with every cut, which you export for a CNC tube laser.
+A **folded corner** joins two tubes without cutting them apart: the tube is one bar, the laser cuts a V notch through the walls on the inside of the corner, and the wall on the outside of the corner stays whole and is bent. Folding the bar closes the V. MaxProFrame draws the folded bar with its real bend radius and unfolds it into one straight solid with every cut, which you export for a CNC tube laser. Each corner chooses how its inner wall is cut: a **Miter**, tilted, for a laser with a bevel head, or a **Stepped** joint made of straight cuts only, for any tube laser (see [Miter or stepped joint](#miter-or-stepped-joint)).
 
 The commands are on the **Folded Miters** toolbar and menu (Spanish *Ingletes plegados*): **Folded Bar** (*Barra plegada*) and **Unfold Bar** (*Desplegar barra*).
 
@@ -450,7 +450,7 @@ Draw the frame as usual: a sketch with its lines and **Create Profiles** on them
 
 The wall thickness and the material of the bar are the ones of the profile of its tubes: there is nothing else to set up before folding.
 
-Holes and cutouts made on the profiles (**Cutout / Hole**, **Drill Hole**) and the **End Miter** of the open corner and of the free ends are part of the bar: they are carried to the unfolded bar. A corner that folds must have no miter or trim of its own: the panel says which one cuts there, to delete it or to make that corner the open one.
+Holes and cutouts made on the profiles (**Cutout / Hole**, **Drill Hole**) and the **End Miter** of the open corner and of the free ends are part of the bar: they are carried to the unfolded bar. An open corner with a **Stepped** joint replaces the End Miter of its two ends with its own cut (see [The open corner of a closed frame](#the-open-corner-of-a-closed-frame)). A corner that folds must have no miter or trim of its own: the panel says which one cuts there, to delete it or to make that corner the open one.
 
 ### Folded and open corners
 
@@ -464,7 +464,7 @@ The first tube you select is where the bar starts. In a closed frame the bar ope
 2. Click the tubes in the 3D view in order around the frame, the first one where the bar starts. Each one clicked joins the end of the bar, and the corners, the messages and the preview follow; a trimmed profile, cutout or drill hole made from a listed tube takes its place. **Ctrl+click** a listed tube (or the preview over it), or deselect it, to drop it. Clicking anything that is not a tube does nothing. Tubes selected before clicking **Folded Bar** are listed already, in the order they were selected.
 3. The **Corners** group (Spanish *Esquinas*) shows the bar:
    - **Tube**: the material and the wall thickness of the tubes, read from their profile, for example `Steel · 2 mm`. It is only shown: to change it, change the profile.
-   - The **corner list**: one row per folded corner, from the start of the bar, naming its two tubes and its values, for example `1 · Profile → Profile001 · R 10 mm · key · clearance 0.5 mm`. A closed frame ends the list with its open corner, `Open · Profile003 → Profile`, which does not fold and has no values. Until two tubes meet end to end the list says what to do: "Click the tube where the bar starts.", then "Click the next tube, after Profile.", or the tubes picked so far when they fold no corner yet, while the bottom of the panel says why (for example "Select at least two profiles that meet end to end.") and **OK** stays disabled.
+   - The **corner list**: one row per folded corner, from the start of the bar, naming its two tubes and its values, for example `1 · Profile → Profile001 · R 10 mm · key · clearance 0.5 mm`; a corner with a **Stepped** joint ends its row with `· stepped`. A closed frame ends the list with its open corner, `Open · Profile003 → Profile`, which does not fold: selecting it edits only its **Joint**, **Step depth**, **Flip step** and **Clearance**, the other fields stay disabled. Until two tubes meet end to end the list says what to do: "Click the tube where the bar starts.", then "Click the next tube, after Profile.", or the tubes picked so far when they fold no corner yet, while the bottom of the panel says why (for example "Select at least two profiles that meet end to end.") and **OK** stays disabled.
 4. Click a row to select that corner: the 3D view draws it over the preview, in the selection color and semitransparent, so it stays visible behind other shapes: the part of the bar around the corner, the whole bend and a stretch of each tube. The open corner is drawn at both ends of the bar. This drawing is not a FreeCAD selection: nothing is selected while a corner is drawn, and it goes when you select another corner, clear the list selection, or press **OK** or **Cancel**. While the preview does not fold the corner yet, its two tubes are selected instead. The **Corner** group shows its values. A value you change goes to that corner only. **Ctrl+click** or **Shift+click** selects several corners: every selected corner is drawn, a field whose value is the same in all of them shows it, a field that differs shows **Mixed values** (Spanish *Varios*), and a value you type or check goes to every selected corner. To give all the corners the same value, select every row and set it. With no corner selected the fields are disabled.
 5. The **Corner** group (Spanish *Esquina*) holds the values of the selected corners. A value you type applies once the field is done, with Enter (the panel stays open: press **OK** to finish), Tab or a click elsewhere; the arrows and the mouse wheel apply it at once.
    - **Outer radius** (Spanish *Radio exterior*): the radius seen outside the bend, the one the design shows. MaxProFrame bends the wall with the inside radius, the outer radius less the wall thickness: an outer radius of 30 mm on a 1.5 mm tube bends with an inside radius of 28.5 mm. The outer radius is at least twice the wall thickness (an inside radius of at least the wall thickness).
@@ -472,10 +472,13 @@ The first tube you select is where the bar starts. In a closed frame the bar ope
    - **Interlocking key**: a half circle centered on the miter line (where the two flanks meet when the corner folds), at the middle of that line as seen on the side of the folded bar, from the gap of the round relief cut to the inside corner. With a large radius that middle falls below the bend axis, inside the round part of the side wall the relief keeps. When the key does not fit at the middle (the V is too narrow there, or the key would reach the relief or the inner wall), it slides along the miter line to the nearest place where it fits. It stands out of one flank of the V and fits a half-circle socket cut into the other flank, so the folded corner locks in place. Uncheck it to cut the V without a key.
    - **Key diameter**: the diameter of the key. **Default** uses a quarter of the tube size across the bent wall; type a value to change it on this corner.
    - **K-factor** (Spanish *Factor K*): where the neutral axis of the wall sits, which gives the length the bend takes (see [Developed length and K-factor](#developed-length-and-k-factor)). **Automatic**, the default, takes it from DIN 6935; a value above 0 up to 1 replaces it on this corner.
+   - **Joint** (Spanish *Unión*): how the inner wall is cut, **Miter** (*Inglete*) or **Stepped** (*Escalonada*); see [Miter or stepped joint](#miter-or-stepped-joint).
+   - **Step depth** (Spanish *Profundidad del escalón*), only for a Stepped joint: how deep the step goes into the tube, across the bent wall. **Automatic**, the default, is the larger of the wall thickness and the outer corner radius of the tube.
+   - **Flip step** (Spanish *Invertir escalón*), only for a Stepped joint: swaps the two tubes, so the other one covers the step.
 
-   A new corner starts with the values last set in the panel: if you made a corner with an outer radius of 30 mm and a clearance of 0.2 mm, the next corner you add has them too. The values are remembered when you press **OK**, also after restarting FreeCAD; the first time they are an outer radius of 10 mm, a clearance of 0.5 mm, the key on with its **Default** diameter and an **Automatic** K-factor.
+   A new corner starts with the values last set in the panel: if you made a corner with an outer radius of 30 mm and a clearance of 0.2 mm, the next corner you add has them too. The values are remembered when you press **OK**, also after restarting FreeCAD; the first time they are an outer radius of 10 mm, a clearance of 0.5 mm, the key on with its **Default** diameter, an **Automatic** K-factor and a **Miter** joint (with an **Automatic** step depth and the step not flipped). The open corner of a new frame takes the joint of the first corner until you change it on its own row.
 
-   With one corner selected, **Outer radius**, **Clearance**, **Key diameter** and **K-factor** take FreeCAD expressions: click the **Fx** icon at the right of the field, or type `=` (see [Expressions in panel fields](#expressions-in-panel-fields)). The expression goes on the Folded Corner object of that corner (see [Folded Corner objects](#folded-corner-objects)), so it appears once the preview exists. With several corners selected the fields take plain values only.
+   With one corner selected, **Outer radius**, **Clearance**, **Key diameter**, **K-factor** and **Step depth** take FreeCAD expressions: click the **Fx** icon at the right of the field, or type `=` (see [Expressions in panel fields](#expressions-in-panel-fields)). The expression goes on the Folded Corner object of that corner (see [Folded Corner objects](#folded-corner-objects)), so it appears once the preview exists. With several corners selected the fields take plain values only.
 
    Every notch also gets a round relief at the bottom of the V, next to the wall that bends, so the walls do not collide while bending. It is always cut and has no setting: its radius is the inside radius of its corner, so the round part of the side wall it keeps folds around the bend axis and meets the bent wall with no gap and no overlap.
 6. **Remove** (Spanish *Quitar*) acts on the selected corner:
@@ -490,7 +493,35 @@ What keeps the bar from folding is shown at the bottom of the panel, and **OK** 
 - **Tube too short**: along the outer wall, each tube must hold the rounds of the folded corners at its ends. Each folded corner takes outer radius × tan(angle / 2) of it, measured from the outer corner of the frame as drawn; an open end of the chain takes nothing. Some straight outer wall must be left between them: when they take the whole tube or more, the panel names the tube, for example "Profile001 is too short for the radius of its corners.": a 50x50x2 frame with 200 mm sides (250 mm outside) holds two 90 degree corners with an outer radius of 122 mm (2 × 122 = 244 mm), not 132 (2 × 132 = 264 mm). Make the outer radius of one of those corners smaller.
 - **The key does not fit** anywhere on the miter line: "The key does not fit in the notch between Profile and Profile001: make it smaller." Make it smaller, or turn it off; with a clearance of half the key diameter or more, the key cannot stand out of its flank either. When not even the smallest key fits (its socket taller than the side wall wherever it sits, which a very large clearance causes, or a radius near the largest, where the miter line is only a millimeter or two long), the panel says "The key does not fit in the notch between Profile and Profile001 with this radius: make the radius smaller or turn the key off."
 - A **K-factor** set in the property editor out of its range: "The K-factor of the corner between Profile and Profile001 must be between 0 and 1."
+- A **step depth** out of its range, on a Stepped corner: "The step depth of the corner between Profile and Profile001 must be between 2 and 24.9 mm." (see [Miter or stepped joint](#miter-or-stepped-joint)), or a step that does not fit at the angle of its corner: "The step of the corner between Profile and Profile001 does not fit at this angle: make the step depth smaller."
 - The tubes do not form one chain, are not the same tube, or do not continue each other: the panel names them.
+
+### Miter or stepped joint
+
+The **Joint** of a corner says how the laser cuts its inner wall, the wall opposite the one that bends:
+
+- **Miter** (the default, and the joint of every corner made before): the flanks of the V go through the inner wall too, tilted at half the bend angle. It is a bevel cut: the laser needs a head that tilts.
+- **Stepped**: the inner wall gets an interlock made only of straight cuts, square to the tube, so any tube laser cuts it. Below the inner wall the side walls keep their V. Across the inner wall, from the inner face to the step depth, one tube ends straight and covers the step, and the other ends straight past it, so when the corner folds its end rests on the first one. The side walls of the second tube give way where the end of the first one folds into them. The folded corner is one solid with no overlap between the tubes.
+
+The step is computed for the angle of each corner:
+
+- At 90 degrees the end of the covering tube is flush with the inner face of the other one, and the other one rests on it over the whole wall: full contact.
+- Under 90 degrees a small wedge-shaped groove opens on the inside of the corner, between the end of one tube and the face of the other, step depth × cot(angle) wide (1.2 mm at 60 degrees with a 2 mm step): a weld groove.
+- Over 90 degrees no gap shows: the tip of the covering tube ends hidden inside the other one.
+
+**Step depth** is how deep the step goes into the tube, measured across the bent wall from the inner face. **Automatic** (0) takes the larger of the wall thickness and the outer corner radius of the tube, so the tilted flanks below the step never cross the rounded edge of the stepped wall. A value of your own must be at least the wall thickness and less than half the tube size across the bent wall, and it must leave the relief clear: on a 50x50x2 tube it goes from 2 to 24.9 mm, only up to 18 mm with an outer radius of 32 mm. The key stays below the step: with a deep step it slides along the miter line, or does not fit (see the messages above). At a sharp angle a deep step may reach the other tube's side of the V: the panel says "The step of the corner between Profile and Profile001 does not fit at this angle: make the step depth smaller."
+
+**Flip step** swaps the two tubes: by default the tube before the corner (in the order of the bar) covers the step, flipped the tube after it does. The **Clearance** of the corner also opens the faces of the step, half on each side, as it opens the flanks of the V.
+
+#### The open corner of a closed frame
+
+The open corner of a closed frame does not fold: the bar starts and ends there. With a **Miter** joint (the default) its two ends keep their own **End Miter**, as before. With a **Stepped** joint MaxProFrame cuts both ends of the bar itself, so they interlock when the frame is closed and replaces the End Miter of those two ends there (any other cut of the end tubes stays):
+
+- the inner wall is stepped as at a folded corner, and the outer wall gets a step too, the same depth deep from the outer face, the other way round: the last tube covers the step of the inner wall and the first tube the step of the outer wall, so each end holds the other. **Flip step** swaps both.
+- the side walls between the two steps keep the miter.
+- at an open corner that is not square, nothing sticks out past the outer faces of the tubes: the step of the outer wall leaves a notch at the outer edge of the corner, a groove for the weld (about 7 mm along the outer face at 120 degrees with a 4 mm step, about 5 mm at 60 degrees).
+
+In the panel, select the open row to set its **Joint**, **Step depth**, **Flip step** and **Clearance**; with folded corners selected too, only those fields can be changed. The row ends with `· stepped` too, for example `Open · Profile003 → Profile · stepped`.
 
 ### Developed length and K-factor
 
@@ -509,7 +540,7 @@ Your shop's tools and material may stretch the wall differently. To use your own
 
 Each corner of a Folded Bar is a **Folded Corner** object of its own, shown under the bar in the tree after its tubes and labelled after its two tubes, for example `Corner_Profile_Profile001`. A closed frame also has one for its open corner, last, with **Open** set: it does not fold.
 
-Its values are properties you can change in the property editor, or drive with an expression (a **VarSet**, a spreadsheet): **Outer Radius** and **K Factor** (0: automatic) under **Bend**, **Clearance**, **Key** and **Key Diameter** (0: the default one) under **Notch**, and under **Corner** the two tubes meeting there (**Piece A**, **Piece B**) and **Open**. Changing one recomputes the bar. A corner is found by its two tubes, so its values and expressions stay with it when other corners are removed or the frame opens at another corner. Removing a corner in the panel deletes its object; deleting the bar deletes its corners.
+Its values are properties you can change in the property editor, or drive with an expression (a **VarSet**, a spreadsheet): **Outer Radius** and **K Factor** (0: automatic) under **Bend**, **Clearance**, **Key**, **Key Diameter** (0: the default one), **Joint** (`Miter` or `Stepped`), **Step Depth** (0: automatic) and **Step Flip** under **Notch**, and under **Corner** the two tubes meeting there (**Piece A**, **Piece B**) and **Open**. Changing one recomputes the bar. A corner is found by its two tubes, so its values and expressions stay with it when other corners are removed or the frame opens at another corner. Removing a corner in the panel deletes its object; deleting the bar deletes its corners.
 
 ### Edit the bar
 
@@ -527,7 +558,9 @@ A Folded Bar hides its tubes and shows one solid, but the other tools work on it
 
 ### Unfold and export
 
-Select the Folded Bar and click **Unfold Bar**. It creates the Unfolded Bar: one straight solid with every cut (the V notches with their keys and reliefs, the holes and cutouts of the tubes and the end miters), at the document origin, from X = 0 along X, starting at the open corner (or the free end) of the first tube. It follows the Folded Bar when you change it.
+Select the Folded Bar and click **Unfold Bar**. It creates the Unfolded Bar: one straight solid with every cut (the V notches with their keys and reliefs, or their steps, the holes and cutouts of the tubes and the end miters, or the stepped ends of a Stepped open corner), at the document origin, from X = 0 along X, starting at the open corner (or the free end) of the first tube. It follows the Folded Bar when you change it.
+
+The Unfolded Bar is labelled after its Folded Bar: `Frame_Unfolded` for a bar labelled `Frame`. Renaming the Folded Bar renames it too (`Frame2` gives `Frame2_Unfolded`), unless you renamed the Unfolded Bar yourself: then it keeps your name.
 
 To send it to the tube laser, select the Unfolded Bar and use FreeCAD's **File > Export**, choosing STEP, IGES or BREP (or another format your CAM reads). MaxProFrame does not write a machine format of its own.
 
@@ -545,7 +578,7 @@ The number fields of the panels that edit one object take FreeCAD expressions, a
 - **Drill Hole**: every field (**Offset along**, **Offset across**, **Diameter**, the **Holes per side** and **Pitch** of each **Pattern** row, **Depth**). When creating a drill hole the **Fx** icon appears once a face and a point are picked and the preview exists; an expression stays when you pick another face or point.
 - **Cutout / Hole**: **Depth**, and the **Cutouts per side** and **Pitch** of each **Pattern** row.
 - **Profile Pattern**: **Copies** (or **Pieces**) and **Pitch**. When creating, the **Fx** icon appears once the preview exists.
-- **Folded Bar**: **Outer radius**, **Clearance**, **Key diameter** and **K-factor**, with one corner selected in the list; the expression goes on that corner's Folded Corner object. When creating, the **Fx** icon appears once the preview exists. With several corners selected the fields are plain.
+- **Folded Bar**: **Outer radius**, **Clearance**, **Key diameter**, **K-factor** and **Step depth**, with one corner selected in the list; the expression goes on that corner's Folded Corner object. When creating, the **Fx** icon appears once the preview exists. With several corners selected the fields are plain.
 - **Extend / Cut** and **Notch**: **Gap**, while editing (double-click the trim). When creating, one trim is made for each profile, so the Gap is a plain field there.
 - **Edit Profile**: the section sizes, **Length**, the weight, the price and the offsets. Choosing another material, family or size fills the section sizes from the catalog again and removes their expressions; the expressions of the other fields stay. The rotation is a list and takes no expression in the panel.
 

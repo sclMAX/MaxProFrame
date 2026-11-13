@@ -10,6 +10,7 @@ import FreeCADGui as Gui
 from miter_helpers import use_language
 from PySide import QtWidgets
 from test_folded_bar_panel import FoldedPanelFixture
+from test_unfolded_geometry import PLAIN, bend
 
 from freecad.maxproframe.ff_tools import translate
 
@@ -124,6 +125,39 @@ class TestFoldedBarPanelSpanish(FoldedPanelFixture):
         panel.form.spin_outer_radius.setValue(132.0)
         self.assertRefused(panel, "Profile001 es demasiado corto para el radio de sus esquinas.")
 
+    def test_the_joint_fields_are_spanish(self):
+        # odd/tasks/stepped-corners.md, S6 and T5: the joint of a corner, its step depth and flip speak Spanish.
+        _, bar = self.make_bar(corners=[bend(joint="Stepped", **PLAIN), bend(**PLAIN), bend(**PLAIN)])
+        panel = self.edit(bar)
+
+        form = panel.form
+        corner = form.groupBox_corner
+        self.assertEqual("Unión", field_label(corner, form.combo_joint))
+        self.assertEqual(
+            ["Inglete", "Escalonada"], [form.combo_joint.itemText(i) for i in range(form.combo_joint.count())]
+        )
+        # The stored values stay in English, whatever the language.
+        self.assertEqual(["Miter", "Stepped"], [form.combo_joint.itemData(i) for i in range(form.combo_joint.count())])
+        self.assertEqual(
+            "Cómo se corta la pared interior: Inglete, a la mitad del ángulo de plegado (un corte biselado); "
+            "Escalonada, un encastre solo de cortes rectos, para cualquier láser de tubos",
+            form.combo_joint.toolTip(),
+        )
+        self.assertEqual("Profundidad del escalón", field_label(corner, form.spin_step_depth))
+        self.assertEqual("Automático", form.spin_step_depth.specialValueText())
+        self.assertEqual(
+            "Profundidad del escalón de una unión escalonada, perpendicular a la pared doblada; Automático: el mayor "
+            "entre el espesor de pared y el radio exterior de las aristas del tubo",
+            form.spin_step_depth.toolTip(),
+        )
+        self.assertEqual("Invertir escalón", form.cb_step_flip.text())
+        self.assertEqual(
+            "Intercambia los tubos de una unión escalonada: el otro cubre el escalón", form.cb_step_flip.toolTip()
+        )
+        self.assertEqual(
+            "1 · Profile → Profile001 · R 5 mm · sin llave · holgura 0 mm · escalonada", self.rows(panel)[0]
+        )
+
     def test_the_folded_corner_property_tooltips_are_spanish(self):
         # odd/tasks/folded-corners.md, T5: the property editor of a Folded Corner speaks Spanish.
         self.assertEqual(
@@ -139,6 +173,29 @@ class TestFoldedBarPanelSpanish(FoldedPanelFixture):
         self.assertEqual(
             "Longitud de la barra desplegada: la longitud a cortar",
             translate("App::Property", "Length of the unfolded bar: the length to cut"),
+        )
+        # odd/tasks/stepped-corners.md, T5: Joint, StepDepth and StepFlip.
+        self.assertEqual(
+            "Cómo se corta la pared interior: Inglete, a la mitad del ángulo de plegado (un corte biselado); "
+            "Escalonada, un encastre solo de cortes rectos",
+            translate(
+                "App::Property",
+                "How the inner wall is cut: Miter, at half the bend angle (a bevel cut); Stepped, an interlock of "
+                "straight cuts only",
+            ),
+        )
+        self.assertEqual(
+            "Profundidad del escalón de una unión escalonada, perpendicular a la pared doblada; 0: automático, el "
+            "mayor entre el espesor de pared y el radio exterior de las aristas del tubo",
+            translate(
+                "App::Property",
+                "Depth of the step of a Stepped joint across the bent wall; 0: automatic, the larger of the wall "
+                "thickness and the outer corner radius of the tube",
+            ),
+        )
+        self.assertEqual(
+            "Intercambia los tubos de una unión escalonada: el otro cubre el escalón",
+            translate("App::Property", "Swap the tubes of a Stepped joint: the other one covers the step"),
         )
 
     def test_the_command_tooltip_says_to_click_the_tubes_in_spanish(self):
@@ -183,6 +240,26 @@ class TestFoldedBarToolMessagesSpanish(unittest.TestCase):
                 "{} does not fold into a valid solid: check the cuts on its tubes (a hole or cutout touching an edge "
                 "or another cut).",
             ).format("FoldedBar"),
+        )
+
+    def test_the_step_refusals_are_spanish(self):
+        # odd/tasks/stepped-corners.md, S5 and T5: a step that does not fit names the corner in Spanish.
+        use_language(self, "Spanish", "es_ES")
+
+        self.assertEqual(
+            "La profundidad del escalón de la esquina entre Profile y Profile001 tiene que estar entre 2 y 24.9 mm.",
+            translate(
+                "MaxProFrame",
+                "The step depth of the corner between {} and {} must be between {min:g} and {max:g} mm.",
+            ).format("Profile", "Profile001", min=2.0, max=24.9),
+        )
+        self.assertEqual(
+            "El escalón de la esquina entre Profile y Profile001 no entra con este ángulo: achicá la profundidad del "
+            "escalón.",
+            translate(
+                "MaxProFrame",
+                "The step of the corner between {} and {} does not fit at this angle: make the step depth smaller.",
+            ).format("Profile", "Profile001"),
         )
 
 
