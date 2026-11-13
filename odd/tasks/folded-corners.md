@@ -2,7 +2,7 @@
 Rework of the Folded Bar (feature folded-miter, PR #145/#146, not released): every corner is a `FoldedCorner` object
 with its own outer radius, clearance, key and K-factor (Fx), the panel lists corners instead of tubes, and bend
 configurations go away (thickness and material come from the profile). Branch feat/folded-corners. Delivery: one PR,
-one commit per task (each about one review slice; T3 and T4 may each pass 400 lines). Status: T1-T5 done; T6-T8 from the user's manual test (L14-L15).
+one commit per task (each about one review slice; T3 and T4 may each pass 400 lines). Status: all tasks done; merged as PR #147 (ef7d72b), weekly CI follow-up issue #148 (L29).
 
 ## Specs
 - S1 Corner list (L1): "cambiamos esa lista para que muestre las esquinas, con la opcion de quitar" -> the
@@ -280,3 +280,9 @@ one commit per task (each about one review slice; T3 and T4 may each pass 400 li
   test_folded_bar_translations 6, test_profile_edit_state 12, test_unified_custom_profile_editor 15; weekly
   test_folded_bar_panel only the 3 known L25 failures. Unverified: focus hide on the Create Profile panel offscreen,
   first painted frame before the deferred refresh, a windowed session.
+- L29 (2026-11-13) user: "merge y push". PR #147 opened; required checks green (Native FreeCAD stable 2/2 shards,
+  Black & isort); weekly red: shard 2 the cancel-with-undo-disabled failures (L25), shard 1 timed out at 540 s in
+  ExpressionTest.test_cancel_of_a_new_bar_with_an_expression_leaves_the_document_unchanged (faulthandler: main thread
+  in miter_geometry `_slice`). main's weekly was green before (those tests are new). User chose "Mergear ya" over
+  fixing first; merged with a merge commit ef7d72b; follow-up issue #148. Not done: the End Miter / Extend Cut /
+  Drill Hole recompute pattern review (L23), a windowed check of the overlay and dark-theme fields.
