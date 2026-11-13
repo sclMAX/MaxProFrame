@@ -1964,6 +1964,33 @@ class RecomputeElsewhereTest(FoldedPanelFixture):
         self.assertEqual(observers.added, observers.removed)
         self.assertIsNone(panel._recompute_end)
 
+    def test_work_queued_during_a_recompute_of_another_document_runs_once_after_it(self):
+        # On FreeCAD 27 any recompute pumps Qt events: one of another open document holds an OCC boolean too.
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+        other = App.newDocument("OtherDocument")
+        self.addCleanup(App.closeDocument, other.Name)
+        App.setActiveDocument(self.doc.Name)
+        observers = Observers(self)
+        runs = []
+
+        def work():
+            runs.append(bool(other.Recomputing))
+
+        def during():
+            self.assertTrue(panel._wait(work))
+            QtTest.QTest.qWait(GAP_DELAY_MS * 2)
+
+        Elsewhere(other.addObject("App::FeaturePython", "Elsewhere"), during)
+        other.recompute()
+        self.assertEqual([], runs)
+
+        QtTest.QTest.qWait(GAP_DELAY_MS * 4)
+        self.events()
+
+        self.assertEqual([False], runs)
+        self.assertEqual(observers.added, observers.removed)
+
 
 class DarkThemeTest(FoldedPanelFixture):
     """folded-corners S14 and S3 in FreeCAD's dark theme: the values of one corner read, a mixed value is hidden."""

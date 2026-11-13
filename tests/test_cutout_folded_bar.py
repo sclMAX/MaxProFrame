@@ -345,7 +345,8 @@ class FixtureIsolationTest(unittest.TestCase):
     def test_the_sketch_made_by_ok_is_not_opened_once_the_test_has_ended(self):
         result = unittest.TestResult()
         with patch.object(create_extruded_cutout_tool, "_edit_sketch") as after_the_test:
-            CutoutPanelOnFoldedBarTest("test_a_loose_tube_still_takes_its_own_face").run(result)
+            # Through a suite, as the runner does: the class fixtures of the nested test run too.
+            unittest.TestSuite([CutoutPanelOnFoldedBarTest("test_a_loose_tube_still_takes_its_own_face")]).run(result)
             QtWidgets.QApplication.processEvents()
 
         self.assertEqual([], [text for _, text in result.failures + result.errors])
