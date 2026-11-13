@@ -2,7 +2,7 @@
 Rework of the Folded Bar (feature folded-miter, PR #145/#146, not released): every corner is a `FoldedCorner` object
 with its own outer radius, clearance, key and K-factor (Fx), the panel lists corners instead of tubes, and bend
 configurations go away (thickness and material come from the profile). Branch feat/folded-corners. Delivery: one PR,
-one commit per task (each about one review slice; T3 and T4 may each pass 400 lines). Status: T1-T5 done; waiting for the user's manual test in FreeCAD.
+one commit per task (each about one review slice; T3 and T4 may each pass 400 lines). Status: T1-T5 done; T6-T8 from the user's manual test (L14-L15).
 
 ## Specs
 - S1 Corner list (L1): "cambiamos esa lista para que muestre las esquinas, con la opcion de quitar" -> the
@@ -54,6 +54,17 @@ one commit per task (each about one review slice; T3 and T4 may each pass 400 li
 - S12 Decimal separator (L5 "Actiovo la opcion.", L6 "Agrega la nota.") -> no code: the tutorial explains FreeCAD's
   Edit > Preferences > General > Substitute decimal separator for the keypad period.
 
+- S13 Highlight the corner (L14 "como podemos hacer para que se resalte en el 3D la esquina seleccionada?", "Si")
+  -> the corners selected in the list are drawn over the 3D view (overlay, not FreeCAD selection) as the part of the
+  bar around each corner's vertex (bend zone and a stretch of each tube), in the selection color, always visible; an
+  open corner marks both ends. The overlay is removed on another selection, OK, Cancel or closing the panel.
+- S14 Fields of the selected corner (L14, screenshot: corner 3 "R 30 mm" selected, Esquina fields empty) -> selecting
+  one corner shows its outer radius, clearance, key diameter and K-factor in the fields.
+- S15 No freeze while typing (L15 "si cambio el gap un par de veces se quedo congelado cuando escribi "0." quisas
+  flata algun debounce para evitar recalculos analizalo.") -> typing in a corner field (e.g. "0." on the way to
+  "0.5") never freezes FreeCAD; intermediate values do not trigger a recompute storm (debounce or equivalent, from
+  the analysis).
+
 ## Tasks
 - T1 S12 tutorial note on the decimal separator - inline - done, c71d918.
 - T2 S6 S7 S8 geometry per corner: `unfold`/`_bends` take per-corner settings (outer radius, clearance, key, key
@@ -67,6 +78,10 @@ one commit per task (each about one review slice; T3 and T4 may each pass 400 li
   (context backstop) - done, commit below (L12).
 - T5 S1-S11 tutorial, README, CHANGELOG, es/ru translations and .qm - worker (context backstop) - done, commit below
   (L13).
+- T6 S13 corner highlight overlay in the 3D view - worker (context backstop) - done, commit below (L21).
+- T7 S14 selected corner shows its values - real on committed code (L18); not reproduced offscreen in Spanish with the light theme (L19); next: the user's theme and click-into-field check, then explorer.
+- T9 S3 the Mixed label ("Varios") is drawn over the value instead of hiding it when several corners are selected (L19) - pending.
+- T8 S15 freeze while typing a corner field - not reproduced (L16); possibly code edited while the user tested (L17); blocked: user retest on committed code after T6, gdb dump if it recurs.
 
 ## Log
 - L1 (2026-11-12) "Si para darle funcionalidad, cambiamos esa lista para que muestre las esquinas, con la opcion de
@@ -151,3 +166,41 @@ one commit per task (each about one review slice; T3 and T4 may each pass 400 li
   (RED before the .qm recompile). GREEN (parent): test_russian_translation 6, test_compile_translations 3,
   test_folded_bar_translations 6, test_library_translations 3, test_toolbar_translations 4, test_folded_bar_panel 60,
   test_folded_bar 35 OK. Full suite not run (CI runs it on the PR).
+- L14 (2026-11-13) "como podemos hacer para que se resalte en el 3D la esquina seleccionada?" with a screenshot
+  (closed 80x40 frame, corner 3 "R 30 mm" selected, nothing highlighted, Esquina fields empty); parent analysis:
+  `faces_of_tubes` keeps only faces lying wholly in the two tubes, so continuous walls never qualify; proposal coin
+  overlay of `bar.Shape.common(box around the vertex)` and the empty fields as a bug; user: "Si".
+- L15 (2026-11-13) "Si, otro problema aleatorio es que si cambio el gap un par de veces se quedo congelado cuando
+  escribi "0." quisas flata algun debounce para evitar recalculos analizalo."
+- L16 T7/T8 analysis (explorer mwepmq5p-1-olny + parent probes, offscreen FreeCAD stable, throwaway test removed):
+  geometry is not the freeze: closed 80x40x1.5 frame, outer radii 10/20/30, key on/off, clearance 0, 0.01-30 ->
+  check 0.03 s, unfold 0.2-0.4 s, fold 0.5-0.7 s, valid single solid (clearance 15 and 30 with key refused "The key
+  does not fit"); the only loops (`_fitting_along` bisection, `_walk`) are bounded. Panel typing probe (edit, corner
+  1, QTest keyClicks "0", ".", "5" and "0", ".", "3", six rounds) never stalled (longest pause 1.08 s, one preview).
+  Found: in a comma-decimal locale the main-keyboard "." is a group separator, "0.5" gives 5 mm (S12 territory).
+  Empty fields not reproduced: after pick, mouse click and forced preview the four fields show their values
+  (e.g. 8,00 mm / 0,20 mm / Default / 0,450); the Mixed label hides with one corner. Hypothesis: the screenshot was
+  taken during the freeze (no repaint). Weak leads kept: keystrokes during a recompute run `_refresh` in a nested
+  event loop; a timer firing while `_recomputing` drops that preview without rescheduling.
+- L17 (2026-11-13) answers to "screenshot during the freeze? / killed or recovered? / numpad or main key, which
+  corner?": "1. no, 2. tuve que matar, 3. numpad no recuerdo que esquina. Nota: estabamos trabajando pudo haber sido
+  un achivo que estabas modificando mientra yo probaba."
+- L18 (2026-11-13) "Campos vacíos (T7) cuando saque la captura no estabamos modificando archivos, estabamos en pruebas
+  luego"
+- L19 T7 probe on a clean worktree of b6c4069 (removed after), Spanish (es_ES), edit three-corner bar, form rendered
+  with grab(): one corner by click -> 8,00 mm / 0,20 mm / Predeterminado / 0,450 drawn, Fx shown; not reproduced with
+  the default light theme (user's screenshot: dark theme; no StyleSheet param found in ~/.config/FreeCAD/*/user.cfg).
+  New finding: Ctrl+click two corners -> the "Varios" label is painted over the value text ("Varios" on "7,00 mm"),
+  its geometry set once (3, 2, 105, 24) while the field is narrower.
+- L20 (2026-11-13) user's environment (screenshots): FreeCAD 27.1.0dev weekly 20261110 (e140bd8), Linux Mint 22.3,
+  Español, number format "Sistema operativo", "Sustituir separador decimal" on, theme "FreeCAD Dark", "Recálculo de
+  grano fino (experimental)" on, overlay panels on, OpenPreferences pack listed.
+- L21 T6 evidence (worker mwepyhbq-2-8zt1, parent check): selected corners drawn as an SoAnnotation overlay of
+  `bar.Shape.common(corner_box)` (box at the meeting of the tube axes, half-size (outer radius + tube/2) x tan(turn/2)
+  + tube + 0.5 mm; open corner around `open_point`), SelectionColor, transparency 0.5, edges 2 px; removed through
+  `clean()` on OK, Cancel, closed and form destroyed; cache by bar, shape hash, placement and box. Decision (worker
+  query, parent answer B): while a corner is drawn the FreeCAD selection is cleared with `_select([])`, new-bar member
+  highlight back with no corner selected. Fallback for corners the preview does not fold kept (tube selection).
+  `faces_of_tubes` and helpers removed. RED: test_folded_bar_panel failures=2 errors=6 (5 new overlay tests). GREEN:
+  test_folded_bar_panel 64 OK, test_folded_bar 35 OK; black/isort (ci/requirements-format.txt) clean (parent).
+  Not checked by eye in a real 3D view.

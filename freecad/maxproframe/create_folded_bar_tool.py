@@ -7,6 +7,8 @@ value differs between them shows it is mixed, and a value typed goes to every se
 corner selected, once its Folded Corner object exists, the number fields take expressions bound to it (S9). Remove
 takes off the end tube of the first or last corner of an open bar, or opens a closed frame at the selected corner
 (S4). A new corner starts with the values last set in the panel, remembered in the MaxProFrame parameters on OK (S5).
+The selected corners of the preview are drawn over the 3D view, each as the part of the bar around its vertex, in the
+selection color (S13).
 The wall thickness and the material are the profile's, shown read-only (S7). Whatever keeps the chain from folding is
 shown and keeps OK disabled: the chain messages, an own miter at a folded corner (S12) and the unfold messages of the
 corners (S9, S15).
@@ -33,6 +35,8 @@ from freecad.maxproframe.create_end_miter_tool import (
     _built_on,
     _ctrl_held,
     _failures,
+    remove_overlay,
+    scene_graph,
 )
 from freecad.maxproframe.create_profiles_tool import _MixedPresentation
 from freecad.maxproframe.expression_fields import (
@@ -86,8 +90,15 @@ LAST_VALUE_PARAMS = (
 )
 # A corner before any value was ever set: outer radius 10 mm, clearance 0.5 mm, the key of default size, automatic K.
 FIRST_VALUES = CornerSettings(outer_radius=10.0, clearance=0.5, key=True, key_diameter=0.0, k_factor=0.0)
-# Room around a tube within which a face of the preview counts as part of it (mm).
-HIGHLIGHT_MARGIN = 0.5
+# The selected corners drawn over the 3D view (S13): room added around a corner (mm), transparency of the faces, width
+# of the edges and tolerance of the drawn faces and edges (mm).
+OVERLAY_MARGIN = 0.5
+OVERLAY_TRANSPARENCY = 0.5
+OVERLAY_LINE_WIDTH = 2.0
+OVERLAY_TOLERANCE = 0.1
+# FreeCAD's selection color: its preference, else its default (packed RGBA).
+VIEW_PARAMS = "User parameter:BaseApp/Preferences/View"
+DEFAULT_SELECTION_COLOR = 0x1CAD1C00
 VALUE_TOLERANCE = 1e-9
 
 # A row of the corner list: the corner by the names of its two profiles, the indexes of the chain segments meeting
@@ -160,46 +171,88 @@ def _plain_snapshot(snapshot):
     )
 
 
-def _overhang(corner):
-    """How far the miter of a folded corner reaches past the end of a path, at the outer wall."""
-    return corner.depth / 2 * math.tan(math.radians(min(corner.bend_angle, 170.0)) / 2)
+def selection_color():
+    """FreeCAD's selection color, (red, green, blue) from 0 to 1."""
+    packed = App.ParamGet(VIEW_PARAMS).GetUnsigned("SelectionColor", DEFAULT_SELECTION_COLOR)
+    return tuple(((packed >> shift) & 0xFF) / 255.0 for shift in (24, 16, 8))
 
 
-def _tube_axis(chain, index):
-    """(start, direction, low, high, reach): the axis of the tube of segment ``index`` from ``low`` to ``high`` along
-    ``direction`` (past its path ends by the miters of its corners), and how far from it the tube reaches."""
-    segment = chain.segments[index]
-    square = max(segment.width, segment.height) / 2
-    if index > 0:
-        low = -_overhang(chain.corners[index - 1])
-    else:
-        low = -square if chain.closed else 0.0
-    if index < len(chain.corners):
-        high = segment.length + _overhang(chain.corners[index])
-    else:
-        high = segment.length + (square if chain.closed else 0.0)
-    reach = math.hypot(segment.width, segment.height) / 2 + HIGHLIGHT_MARGIN
-    start = segment.start + section_offset(segment)
-    return start, segment.direction, low - HIGHLIGHT_MARGIN, high + HIGHLIGHT_MARGIN, reach
+def _axes_meet(first, second):
+    """Where the axes of the tubes of the segments ``first`` and ``second`` meet, midway between them when skew."""
+    p1, d1 = first.start + section_offset(first), first.direction
+    p2, d2 = second.start + section_offset(second), second.direction
+    w = p1 - p2
+    b, d, e = d1.dot(d2), d1.dot(w), d2.dot(w)
+    denominator = 1.0 - b * b
+    if denominator < 1e-12:
+        # In line: the end of the first one.
+        return first.end + section_offset(first)
+    t = (b * e - d) / denominator
+    s = (e - b * d) / denominator
+    return (p1 + d1 * t + p2 + d2 * s) * 0.5
 
 
-def _within(point, axis):
-    start, direction, low, high, reach = axis
-    along = min(max((point - start).dot(direction), low), high)
-    return (point - (start + direction * along)).Length <= reach
+def corner_box(chain, row, radius):
+    """The box around the corner ``row`` of ``chain`` folded with the outer ``radius`` (0 for the open corner): the
+    whole bend, and past it a stretch of each tube as long as the tube is deep (S13). Global coordinates."""
+    first, second = chain.segments[row.before], chain.segments[row.after]
+    size = max(first.width, first.height)
+    turn = min(math.degrees(first.direction.getAngle(second.direction)), 170.0)
+    half = (radius + size / 2) * math.tan(math.radians(turn) / 2) + size + OVERLAY_MARGIN
+    # Square to the tube before the corner: square to both at a right angle.
+    x = App.Vector(first.direction).normalize()
+    z = x.cross(second.direction)
+    if z.Length < 1e-9:
+        z = x.cross(App.Vector(0, 0, 1)) if abs(x.z) < 0.9 else x.cross(App.Vector(1, 0, 0))
+    z.normalize()
+    y = z.cross(x)
+    c = _axes_meet(first, second)
+    matrix = App.Matrix(x.x, y.x, z.x, c.x, x.y, y.y, z.y, c.y, x.z, y.z, z.z, c.z, 0, 0, 0, 1)
+    box = Part.makeBox(2 * half, 2 * half, 2 * half, App.Vector(-half, -half, -half))
+    box.Placement = App.Placement(matrix)
+    return box
 
 
-def faces_of_tubes(bar, chain, indexes):
-    """Names of the faces of the folded ``bar`` (of ``chain``) lying in the tubes of the segments ``indexes``."""
-    placement = container_placement(bar)
-    axes = [_tube_axis(chain, index) for index in indexes]
-    names = []
-    for number, face in enumerate(bar.Shape.Faces, 1):
-        points = [placement.multVec(vertex.Point) for vertex in face.Vertexes]
-        points.append(placement.multVec(face.CenterOfMass))
-        if all(any(_within(point, axis) for axis in axes) for point in points):
-            names.append(f"Face{number}")
-    return names
+def _overlay_group(shape, color):
+    """A Coin group drawing ``shape``: its faces in ``color``, semitransparent, and its edges."""
+    from pivy import coin
+
+    group = coin.SoSeparator()
+    material = coin.SoMaterial()
+    material.diffuseColor.setValue(*color)
+    material.emissiveColor.setValue(*(value * 0.5 for value in color))
+    material.transparency.setValue(OVERLAY_TRANSPARENCY)
+    points, triangles = shape.tessellate(OVERLAY_TOLERANCE)
+    coordinates = coin.SoCoordinate3()
+    coordinates.point.setValues(0, len(points), [(point.x, point.y, point.z) for point in points])
+    faces = coin.SoIndexedFaceSet()
+    indexes = [index for triangle in triangles for index in (*triangle, -1)]
+    faces.coordIndex.setValues(0, len(indexes), indexes)
+    for child in (material, coordinates, faces):
+        group.addChild(child)
+    lines = []
+    for edge in shape.Edges:
+        try:
+            line = edge.discretize(Deflection=OVERLAY_TOLERANCE)
+        except Exception:
+            continue
+        if len(line) > 1:
+            lines.append(line)
+    if lines:
+        edges = coin.SoSeparator()
+        base_color = coin.SoBaseColor()
+        base_color.rgb.setValue(*color)
+        style = coin.SoDrawStyle()
+        style.lineWidth.setValue(OVERLAY_LINE_WIDTH)
+        edge_points = coin.SoCoordinate3()
+        flat = [(point.x, point.y, point.z) for line in lines for point in line]
+        edge_points.point.setValues(0, len(flat), flat)
+        line_set = coin.SoLineSet()
+        line_set.numVertices.setValues(0, len(lines), [len(line) for line in lines])
+        for child in (base_color, style, edge_points, line_set):
+            edges.addChild(child)
+        group.addChild(edges)
+    return group
 
 
 def show_panel(panel):
@@ -260,6 +313,9 @@ class FoldedBarTaskPanel:
         # (Name, ID) of the corner object the fields are bound to; "" before any binding.
         self._bound = ""
         self._highlighted = False
+        # (scene, node) of the selected corners drawn over the 3D view (S13), and the shapes drawn, by what they are.
+        self._overlay = None
+        self._corner_shapes = {}
         if edited is not None:
             self._before = _snapshot(edited)
             opened = open_corner(edited)
@@ -758,7 +814,7 @@ class FoldedBarTaskPanel:
             self._show_rows()
             self._present_fields()
             self._show_messages()
-            if self._selected():
+            if self._selected() or self._overlay is not None:
                 self._highlight()
         deferred, self._deferred = self._deferred, None
         if deferred is not None and self._active() and deferred():
@@ -987,35 +1043,84 @@ class FoldedBarTaskPanel:
         self._highlighted = bool(targets)
 
     def _highlight(self):
-        """Show the selected corners in the 3D view (S2, S3): the faces of the preview in their tubes, or the tubes
-        themselves while the preview does not fold them. With no corner selected, the listed pieces (new bar)."""
+        """Show the selected corners in the 3D view (S2, S3, S13): the ones the preview folds drawn over it, the bar
+        around each vertex, with nothing selected in FreeCAD; the tubes of the others selected while the preview does
+        not fold them. With no corner selected, the listed pieces (new bar)."""
         if not self._active():
             return
         rows = self._selected()
         if not rows or self._chain is None:
+            self._draw_corners(None, [])
             if self.edited is None:
                 self._highlight_members()
             elif self._highlighted:
                 self._select([])
             return
-        chain = self._chain
-        indexes = sorted({index for row in rows for index in (row.before, row.after)})
         bar = self.obj if self.obj is not None and _alive(self.obj) else None
         folded = self._profiles_of(bar)
-        on_bar = [index for index in indexes if chain.segments[index].profile.Name in folded]
-        targets = []
-        if on_bar:
-            try:
-                faces = faces_of_tubes(bar, chain, on_bar)
-            except Exception:
-                faces = []
-            targets.append((bar, faces or [""]))
+        drawn = [row for row in rows if {self._profile_at(row.before), self._profile_at(row.after)} <= folded]
+        self._draw_corners(bar, drawn)
+        indexes = sorted({index for row in rows if row not in drawn for index in (row.before, row.after)})
         by_profile = {_profile_name(obj): obj for obj in self.selection}
+        targets = []
         for index in indexes:
-            member = by_profile.get(chain.segments[index].profile.Name)
-            if index not in on_bar and member is not None and _alive(member):
+            member = by_profile.get(self._profile_at(index))
+            if self._profile_at(index) not in folded and member is not None and _alive(member):
                 targets.append((member, [""]))
         self._select(targets)
+
+    def _profile_at(self, index):
+        """Name of the profile of the chain segment ``index``."""
+        return self._chain.segments[index].profile.Name
+
+    def _draw_corners(self, bar, rows):
+        """Draw the corners ``rows`` of the folded ``bar`` over the 3D view (S13), in the selection color: the overlay
+        drawn before goes. An annotation is drawn over the shapes, so the corners stay visible."""
+        remove_overlay(self._overlay)
+        self._overlay = None
+        scene = scene_graph(self.doc) if rows else None
+        if scene is None:
+            return  # Nothing to draw, or no 3D view (another view type).
+        from pivy import coin
+
+        color = selection_color()
+        node = coin.SoAnnotation()
+        for row in rows:
+            shape = self._corner_shape(bar, row)
+            if shape is not None:
+                node.addChild(_overlay_group(shape, color))
+        if node.getNumChildren():
+            scene.addChild(node)
+            self._overlay = (scene, node)
+
+    def _corner_shape(self, bar, row):
+        """The part of the folded ``bar`` around the corner ``row``, in global coordinates, or None."""
+        radius = 0.0
+        if not row.open:
+            radius = self._corner_values(row.key).outer_radius
+            obj = self._corner_object(row.key)
+            if obj is not None:
+                # The bar may still show the radius it was folded with.
+                radius = max(radius, float(obj.OuterRadius.Value))
+        try:
+            box = corner_box(self._chain, row, radius)
+            placement = container_placement(bar)
+            shape = bar.Shape
+            key = (
+                bar.Name,
+                shape.hashCode(),
+                tuple(round(value, 9) for value in placement.toMatrix().A),
+                tuple(round(value, 9) for value in box.Placement.toMatrix().A),
+                round(box.BoundBox.DiagonalLength, 9),
+            )
+            if key not in self._corner_shapes:
+                if len(self._corner_shapes) > 64:
+                    self._corner_shapes.clear()
+                common = placed(shape, placement).common(box)
+                self._corner_shapes[key] = None if common.isNull() or not common.Faces else common
+            return self._corner_shapes[key]
+        except Exception:
+            return None
 
     def _highlight_members(self):
         """Show every listed piece selected as a whole object; the ones the preview folds as the preview."""
@@ -1059,6 +1164,10 @@ class FoldedBarTaskPanel:
     def clean(self):
         self._closed = True
         self._timer.stop()
+        # The corners drawn over the 3D view go with the panel (S13).
+        remove_overlay(self._overlay)
+        self._overlay = None
+        self._corner_shapes = {}
         # OK, Cancel or any other close: the panel stops taking the clicks (added by the command only).
         try:
             Gui.Selection.removeObserver(self)

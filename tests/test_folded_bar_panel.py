@@ -1,9 +1,9 @@
 """Folded miter commands and the Folded Bar panel (odd/tasks/folded-miter.md, T6: S1 S2 S8 S9 S12; T9: S22) with the
-corner list of odd/tasks/folded-corners.md, T4 (S1 S2 S3 S4 S5 S7 S9).
+corner list of odd/tasks/folded-corners.md, T4 (S1 S2 S3 S4 S5 S7 S9) and its corner overlay, T6 (S13).
 
 Folded Bar folds the picked tubes, previewed live like End Miter; every reason the chain does not fold, and an own
 miter at a folded corner, is shown and keeps OK disabled. The panel lists the corners of the bar in chain order; the
-selected corners are highlighted in the 3D view and their outer radius, clearance, key, key diameter and K-factor are
+selected corners are drawn over the 3D view (the tubes selected while there is no preview) and their outer radius, clearance, key, key diameter and K-factor are
 edited in the Corner fields (Fx with one corner selected). Remove takes off the end tube of the first or last corner
 of an open bar and opens a closed frame at the selected corner. A new corner starts with the values last set, kept in
 the MaxProFrame parameters. Double-click edits a bar in one Undo step. Unfold Bar makes the straight bar of a selected
@@ -20,9 +20,10 @@ from unittest.mock import patch
 import FreeCAD as App
 import FreeCADGui as Gui
 from miter_helpers import use_language
+from pivy import coin
 from PySide import QtCore, QtWidgets
 from test_end_miter_geometry import polar
-from test_extend_cut_preview import keep_auto_preview
+from test_extend_cut_preview import keep_auto_preview, scene_graph
 from test_folded_bar import FoldedBarFixture, corner_values
 from test_folded_chain import RECTANGLE
 from test_unfolded_geometry import PLAIN, bend
@@ -75,6 +76,7 @@ RECTANGLE_ROWS = [
 ]
 # Four tubes of an open chain: the rectangle without the lower half of its left side.
 OPEN_FOUR = RECTANGLE[:3] + (((0, 200, 0), (0, 100, 0)),)
+VIEW_PARAMS = "User parameter:BaseApp/Preferences/View"
 BOM_PARAMS = (
     ("Bool", "Full Parent Path"),
     ("Bool", "Include Links in BOM"),
@@ -101,6 +103,45 @@ def keep_params(test, entries):
                 getattr(param, f"Rem{kind}")(name)
 
     test.addCleanup(restore)
+
+
+def keep_selection_color(test, color):
+    """Set FreeCAD's selection color (packed RGBA) for ``test``, as it was afterwards."""
+    param = App.ParamGet(VIEW_PARAMS)
+    stored = "SelectionColor" in param.GetUnsigneds()
+    previous = param.GetUnsigned("SelectionColor")
+
+    def restore():
+        if stored:
+            param.SetUnsigned("SelectionColor", previous)
+        else:
+            param.RemUnsigned("SelectionColor")
+
+    test.addCleanup(restore)
+    param.SetUnsigned("SelectionColor", color)
+
+
+def _children(node, kind):
+    return [node.getChild(index) for index in range(node.getNumChildren()) if node.getChild(index).isOfType(kind)]
+
+
+def overlay_points(node):
+    """The points of the faces of each corner drawn by the overlay ``node``, one list per corner."""
+    found = []
+    for group in _children(node, coin.SoSeparator.getClassTypeId()):
+        (coordinates,) = _children(group, coin.SoCoordinate3.getClassTypeId())
+        found.append([App.Vector(*coordinates.point[i].getValue()) for i in range(coordinates.point.getNum())])
+    return found
+
+
+def overlay_materials(node):
+    """((r, g, b), transparency) of the faces of each corner drawn by the overlay ``node``."""
+    found = []
+    for group in _children(node, coin.SoSeparator.getClassTypeId()):
+        (material,) = _children(group, coin.SoMaterial.getClassTypeId())
+        color = tuple(round(value, 3) for value in material.diffuseColor[0].getValue())
+        found.append((color, material.transparency[0]))
+    return found
 
 
 def stored_params():
@@ -220,11 +261,30 @@ class FoldedPanelFixture(FoldedBarFixture):
         """Whether ``spin`` shows its Fx icon: FreeCAD's icon is a label inside the field's line edit."""
         return any(not label.isHidden() for label in spin.lineEdit().findChildren(QtWidgets.QLabel))
 
-    def highlighted(self, bar):
-        """(x, y) of the center of each face of ``bar`` selected in the 3D view."""
-        names = [name for s in Gui.Selection.getSelectionEx() if s.ObjectName == bar.Name for name in s.SubElementNames]
-        centers = [bar.Shape.getElement(name).CenterOfMass for name in names]
-        return [(center.x, center.y) for center in centers]
+    def scene(self):
+        """(scene graph of the 3D view, its number of children now): an overlay added later is the next child."""
+        scene = scene_graph(self, self.doc)
+        return scene, scene.getNumChildren()
+
+    def overlay(self, scene, children):
+        """The corner overlay drawn over the 3D view since ``children`` were counted, or None."""
+        self.assertIn(scene.getNumChildren(), (children, children + 1))
+        if scene.getNumChildren() == children:
+            return None
+        node = scene.getChild(children)
+        # An annotation is drawn over the shapes: always visible.
+        self.assertEqual("Annotation", node.getTypeId().getName())
+        return node
+
+    def assertAround(self, points, vertex, half=100.0):
+        """``points`` span ``vertex`` and stay within ``half`` of it along every axis."""
+        self.assertTrue(points)
+        for axis in "xyz":
+            values = [getattr(point, axis) for point in points]
+            center = getattr(vertex, axis)
+            self.assertLessEqual(min(values), center + 1e-6, axis)
+            self.assertGreaterEqual(max(values), center - 1e-6, axis)
+            self.assertLessEqual(max(abs(value - center) for value in values), half, axis)
 
     def assertRefused(self, panel, message):
         self.assertIn(message, self.messages(panel).split("\n"))
@@ -435,42 +495,116 @@ class CornerSelectionTest(FoldedPanelFixture):
         self.assertEqual("2 · Profile001 → Profile002 · R 9 mm · key · clearance 0.2 mm", self.rows(panel)[1])
         self.assertOneSolid(bar)
 
-    def test_a_selected_corner_highlights_its_two_tubes_on_the_preview(self):
+    def test_a_selected_corner_is_drawn_over_the_preview_around_its_vertex(self):
+        # folded-corners S13: the bend and a stretch of each tube, in the selection color, over the 3D view.
+        keep_selection_color(self, 0x3366CC00)
         bottom, right, top, left = self.frame()
         panel = self.run_command(bottom, right, top, left)
         (bar,) = self.bars()
+        scene, children = self.scene()
+        self.assertIsNone(self.overlay(scene, children))
         self.assertEqual({bar.Name: ()}, self.selected())
 
         # Corner 2: the right tube (x = 300) and the top one (y = 200), 50 mm tubes on their paths.
         self.pick(panel, 1)
 
-        faces = self.highlighted(bar)
-        self.assertEqual([bar.Name], list(self.selected()))
-        self.assertTrue(faces)
-        self.assertEqual([], [(x, y) for x, y in faces if abs(x - 300) > 36 and abs(y - 200) > 36])
-        self.assertTrue(any(abs(x - 300) <= 26 and y < 100 for x, y in faces))
-        self.assertTrue(any(abs(y - 200) <= 26 and x < 150 for x, y in faces))
-        # Several corners: every one of their tubes, here the bottom and the left one with corners 1 and 3.
-        self.pick(panel, 0, 2)
-        faces = self.highlighted(bar)
-        self.assertTrue(any(abs(y) <= 26 and x < 150 for x, y in faces))
-        self.assertTrue(any(abs(x) <= 26 and 50 < y < 150 for x, y in faces))
-        # The selection the panel makes is no click of the user: the tubes stay listed.
+        overlay = self.overlay(scene, children)
+        self.assertIsNotNone(overlay)
+        (points,) = overlay_points(overlay)
+        self.assertAround(points, App.Vector(300, 200, 0))
+        # The whole bend and a stretch of each tube past it.
+        self.assertLessEqual(min(point.y for point in points), 140)
+        self.assertLessEqual(min(point.x for point in points), 240)
+        ((color, transparency),) = overlay_materials(overlay)
+        self.assertEqual((0.2, 0.4, 0.8), color)
+        self.assertTrue(0 < transparency < 1)
+        # The overlay is no FreeCAD selection, and the tubes stay listed.
+        self.assertEqual({}, self.selected())
         self.assertEqual([bottom, right, top, left], panel.selection)
+
+        # Another corner replaces it.
+        self.pick(panel, 0)
+        (points,) = overlay_points(self.overlay(scene, children))
+        self.assertAround(points, App.Vector(300, 0, 0))
+        # No corner selected: no overlay, the listed tubes shown selected as the preview again.
         self.pick(panel)
+        self.assertIsNone(self.overlay(scene, children))
         self.assertEqual({bar.Name: ()}, self.selected())
+        self.assertEqual([bottom, right, top, left], panel.selection)
+
+    def test_several_selected_corners_are_all_drawn(self):
+        bottom, right, top, left = self.frame()
+        panel = self.run_command(bottom, right, top, left)
+        scene, children = self.scene()
+
+        self.pick(panel, 0, 2)
+
+        first, third = overlay_points(self.overlay(scene, children))
+        self.assertAround(first, App.Vector(300, 0, 0))
+        self.assertAround(third, App.Vector(0, 200, 0))
+        self.assertEqual({}, self.selected())
+        self.assertEqual([bottom, right, top, left], panel.selection)
+
+    def test_the_open_corner_is_drawn_at_both_ends_of_the_bar(self):
+        bottom, right, top, left = self.frame()
+        panel = self.run_command(bottom, right, top, left)
+        scene, children = self.scene()
+
+        self.pick(panel, 3)
+
+        (points,) = overlay_points(self.overlay(scene, children))
+        self.assertAround(points, App.Vector(0, 0, 0))
+        # The start of the bottom tube and the end of the left one, both cut at the open corner.
+        self.assertTrue(any(point.x >= 50 and abs(point.y) <= 26 for point in points))
+        self.assertTrue(any(point.y >= 50 and abs(point.x) <= 26 for point in points))
+
+    def test_editing_draws_the_selected_corner_and_leaves_the_selection_empty(self):
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+        scene, children = self.scene()
+        self.assertIsNone(self.overlay(scene, children))
+
+        self.pick(panel, 2)
+
+        (points,) = overlay_points(self.overlay(scene, children))
+        self.assertAround(points, App.Vector(0, 200, 0))
+        self.assertEqual({}, self.selected())
+        self.pick(panel)
+        self.assertIsNone(self.overlay(scene, children))
+
+    def test_ok_cancel_and_closing_remove_the_corner_overlay(self):
+        for close in ("accept", "reject", "closed", "closeDialog"):
+            with self.subTest(close=close):
+                for bar in self.bars():
+                    self.doc.removeObject(bar.Name)
+                panel = self.run_command(*self.frame())
+                scene, children = self.scene()
+                self.pick(panel, 1)
+                self.assertIsNotNone(self.overlay(scene, children))
+
+                if close == "closeDialog":
+                    Gui.Control.closeDialog()
+                else:
+                    self.assertIsNot(False, getattr(panel, close)())
+                self.events()
+
+                self.assertIsNone(self.overlay(scene, children))
+                self.close_dialog()
 
     def test_with_no_preview_a_selected_corner_highlights_the_tubes_themselves(self):
         keep_auto_preview(self, AUTO_PREVIEW, False)
         bottom, right, top, left = self.frame()
         panel = self.run_command(bottom, right, top, left)
         self.assertEqual([], self.bars())
+        scene, children = self.scene()
 
         self.pick(panel, 0)
         self.assertEqual({bottom.Name: (), right.Name: ()}, self.selected())
         self.pick(panel, 3)
         self.assertEqual({left.Name: (), bottom.Name: ()}, self.selected())
         self.assertEqual([bottom, right, top, left], panel.selection)
+        # Nothing folded to draw: no overlay.
+        self.assertIsNone(self.overlay(scene, children))
 
     def test_several_corners_show_their_common_values_and_mixed_ones(self):
         _, bar = self.three_corner_bar()
