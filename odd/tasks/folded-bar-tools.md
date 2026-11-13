@@ -28,7 +28,7 @@ per task; push, PR and merge stay the user's decisions.
   piece is removed; Folded Bar panel `_member_at` reuses it. route=worker; commit=(this commit) [x]
 - T2 [S1, S4] End Miter. route=worker (parallel); commit=
 - T3 [S2, S4, S5] Drill Hole. route=worker (parallel); commit=
-- T4 [S3, S4, S5] Cutout (panel and direct face+sketch path). route=worker (parallel); commit=
+- T4 [S3, S4, S5] Cutout (panel and direct face+sketch path). route=worker (parallel); commit=(T4 commit) [x]
 - T5 [S3, S4, S5] Extend Cut and Notch (target face on a bar, profiles from a bar, no dependency loop, no cut at a
   folded corner). route=worker (parallel); commit=
 - T6 [S3] Profile Pattern with a whole Folded Bar. route=worker (parallel); commit=(T6 commit) [x]
@@ -59,3 +59,8 @@ per task; push, PR and merge stay the user's decisions.
   refused), GREEN test_profile_pattern_folded_bar 6 (stable and weekly); pattern modules 38/26/12/9/15 OK. Follow-ups:
   piece hint/tooltip do not mention a folded bar (T7); a hidden tube of a bar picked from the tree is not mapped to
   its bar.
+- L7 T4 evidence (worker mwexmctu-7-q03t): create_extruded_cutout_tool.py `face_at`, `_picked_point`, `_folded`; bar
+  mapping in `_add_item`, `addSelection`, `_create_from_selection` (bend -> FrameForgeException with the bend message;
+  whole-document recompute inside "Create Cutout" when a bar folds the tube); `release_piece` in `_delete_cutout`.
+  RED 11 of 12; GREEN test_cutout_folded_bar 12 (stable, weekly; parent re-run 12 OK); 10 existing cutout/drill
+  modules OK. Slice boundary: T1 c8e8633 (487 lines) and T6 f3009d4 + T4 are separate review slices per task commit.

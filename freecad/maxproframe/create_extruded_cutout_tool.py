@@ -7,6 +7,7 @@ import FreeCADGui as Gui
 import Part
 from PySide import QtCore, QtGui
 
+from freecad.maxproframe._utils import is_foldedbar
 from freecad.maxproframe.create_end_miter_tool import _alive, _base_profile, _failures
 from freecad.maxproframe.create_extend_cut_tool import _selected_items, show_panel, trimmed_body_problem
 from freecad.maxproframe.create_profiles_tool import place_in_container_of
@@ -38,6 +39,7 @@ from freecad.maxproframe.ff_tools import (
     add_command,
     translate,
 )
+from freecad.maxproframe.folded_bar import release_piece, segment_at
 from freecad.maxproframe.frameforge_exceptions import FrameForgeException
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 
@@ -126,6 +128,39 @@ def face_problem(obj, sub):
         if abs(face.normalAt(0, 0).dot(axis)) > END_FACE_TOLERANCE:
             return translate("frameforge", "{}: {} is an end face (wall thickness)").format(obj.Label, sub)
     return None
+
+
+def face_at(obj, sub, point=None):
+    """(object, face name, problem): what a click on the element ``sub`` of ``obj`` cuts; ``problem``: None or why.
+
+    A click on a Folded Bar stands for the face, under the clicked global ``point``, of the tube the bar folds there
+    (``folded_bar.segment_at``): the sketch and the cutout are made on that tube face, never on the bar, which folds
+    the new cutout at the next recompute of the document. A click on a bend is refused with its reason.
+    """
+    if is_foldedbar(obj):
+        if not sub:
+            return obj, sub, translate("frameforge", "{}: pick one of its faces").format(obj.Label)
+        pick = segment_at(obj, sub, point)
+        if pick.reason:
+            return obj, sub, pick.reason
+        obj, sub = pick.tip, pick.face
+    return obj, sub, face_problem(obj, sub)
+
+
+def _picked_point(obj, sub):
+    """The global point the selection holds for the element ``sub`` of ``obj``, or None."""
+    for item in Gui.Selection.getSelectionEx():
+        if item.Object.Document.Name != obj.Document.Name or item.Object.Name != obj.Name:
+            continue
+        for name, point in zip(item.SubElementNames, item.PickedPoints):
+            if name == sub:
+                return point
+    return None
+
+
+def _folded(piece):
+    """Whether a Folded Bar folds ``piece`` (it hides it)."""
+    return any(is_foldedbar(obj) and piece in obj.Segments for obj in piece.InList)
 
 
 def _edit_sketch(doc_name, name, cutout_name=None, created=True):
@@ -222,16 +257,17 @@ class CutoutTaskPanel:
 
     def _add_item(self, obj, subs):
         """Take the first usable face of ``obj`` among ``subs`` unless one is taken; return the problems."""
-        problem = trimmed_body_problem(None, obj)
-        if problem is not None:
-            return [problem]
+        if not is_foldedbar(obj):
+            problem = trimmed_body_problem(None, obj)
+            if problem is not None:
+                return [problem]
         messages = []
         for sub in subs:
-            problem = face_problem(obj, sub)
+            source, face, problem = face_at(obj, sub, _picked_point(obj, sub) if is_foldedbar(obj) else None)
             if problem is not None:
                 messages.append(problem)
             elif self.face is None:
-                self.face = (obj, sub)
+                self.face = (source, face)
             else:
                 messages.append(
                     translate("frameforge", "{}: {} is not used, a cutout takes one face").format(obj.Label, sub)
@@ -256,7 +292,8 @@ class CutoutTaskPanel:
         source = document.getObject(getattr(obj, "Name", obj)) if document else None
         if source is None:
             return
-        problem = face_problem(source, sub)
+        # ``other`` is the clicked point: on a Folded Bar it picks the tube.
+        source, sub, problem = face_at(source, sub, other)
         if problem is not None:
             self._show([problem])
             return
@@ -634,11 +671,14 @@ class CreateExtrudedCutoutTaskPanel:
         base = self.obj.baseObject[0] if self.obj.baseObject else None
         sketch = self.obj.Sketch
         self.doc.openTransaction("Delete Cutout")
+        # A Folded Bar folding the cutout folds its base again, in this Undo step: it never links a removed object.
+        release_piece(self.obj)
         self.doc.removeObject(self.obj.Name)
         if sketch is not None:
             self.doc.removeObject(sketch.Name)
         self.doc.commitTransaction()
-        if base is not None and getattr(base, "ViewObject", None) is not None:
+        # A base a Folded Bar folds stays hidden: the bar shows it.
+        if base is not None and getattr(base, "ViewObject", None) is not None and not _folded(base):
             base.ViewObject.Visibility = True
 
 
@@ -676,7 +716,11 @@ class AddExtrudedCutoutCommandClass:
             show_panel(CutoutTaskPanel(_selected_items()))
 
     def _create_from_selection(self):
-        """Create an Extruded Cutout object from the selected face and sketch."""
+        """Create an Extruded Cutout object from the selected face and sketch.
+
+        A face of a Folded Bar stands for the face of the tube under the picked point (``segment_at``): the cutout
+        cuts that tube and the bar folds it at once; a face on a bend is refused.
+        """
         # Get the selected object and face.
         selection = Gui.Selection.getSelectionEx()[0]
         # When user select first the sketch
@@ -687,36 +731,45 @@ class AddExtrudedCutoutCommandClass:
             selection = Gui.Selection.getSelectionEx()[1]
             if len(selection.SubObjects) == 0:
                 raise FrameForgeException("No face selected. Please select a face.")
-            # Get selected object.
-            selected_object = selection.Object
-            # Get the selected face.
-            selected_face = [selected_object, selection.SubElementNames[0]]
+            face_selection = selection
         # When user select first the object face.
         else:
             # Check if we have any sub-objects (faces) selected.
             if len(selection.SubObjects) == 0:
                 raise FrameForgeException("No face selected. Please select a face.")
-            # Get selected object.
-            selected_object = selection.Object
-            # Get the selected face.
-            selected_face = [selected_object, selection.SubElementNames[0]]
+            face_selection = selection
             # Get selected sketch.
             selection = Gui.Selection.getSelectionEx()[1]
             cutSketch = selection.Object
+        # Get selected object and face.
+        selected_object = face_selection.Object
+        selected_face = [selected_object, face_selection.SubElementNames[0]]
+        if is_foldedbar(selected_object):
+            points = face_selection.PickedPoints
+            pick = segment_at(selected_object, selected_face[1], points[0] if points else None)
+            if pick.reason:
+                raise FrameForgeException(pick.reason)
+            selected_object, selected_face = pick.tip, [pick.tip, pick.face]
 
         if cutSketch is None or not selected_object.Shape:
             raise FrameForgeException("Both a valid sketch and an object with a shape must be selected.")
 
-        App.ActiveDocument.openTransaction("Create Cutout")
+        doc = App.ActiveDocument
+        doc.openTransaction("Create Cutout")
 
         # The sketch joins the face's container before the cutout links to it: a Part receiving it later would
         # drag in what the cutout links to, up to the profiles of other Parts a trim is cut against.
         place_in_container_of(cutSketch, selected_object)
         obj = make_extruded_cutout(cutSketch, selected_face)
+        folded = _folded(selected_object)
+        if folded:
+            # The bar folds the cutout in this Undo step: only a recompute of the document has it follow.
+            doc.recompute()
 
-        App.ActiveDocument.commitTransaction()
+        doc.commitTransaction()
 
-        obj.recompute()
+        if not folded:
+            obj.recompute()
 
         panel = CreateExtrudedCutoutTaskPanel(obj)
         Gui.Control.showDialog(panel)
