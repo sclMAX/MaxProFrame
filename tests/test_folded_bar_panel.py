@@ -12,6 +12,7 @@ Folded Bar. Create BOM and Populate IDs take a selected Folded Bar.
 
 import importlib.util
 import os
+import sys
 import unittest
 import xml.etree.ElementTree as ElementTree
 from types import SimpleNamespace
@@ -1676,14 +1677,102 @@ class NoFreezeTest(FoldedPanelFixture):
         self.wait_for_preview(panel)
         self.assertEqual(0.5, corner_values(self.folded_corners(bar)[1])[1])
 
-        # Enter completes it too, and FreeCAD's task view takes it as OK: the bar keeps the value.
-        self.type_in(spin, "0" + point + "4")
-        self.assertEqual(0.5, corner_values(self.folded_corners(bar)[1])[1])
-        QtTest.QTest.keyClick(spin, QtCore.Qt.Key_Return)
+        # Enter completes it too, and only that: the panel stays open (FreeCAD's task view would press OK).
+        for key in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter):
+            with self.subTest(key=key):
+                self.type_in(spin, "0" + point + "4")
+                QtTest.QTest.keyClick(spin, key)
+                self.events()
+                self.assertTrue(Gui.Control.activeDialog())
+                self.assertEqual("2 · Profile001 → Profile002 · R 7 mm · key · clearance 0.4 mm", self.rows(panel)[1])
+                self.wait_for_preview(panel)
+                self.assertEqual(0.4, corner_values(self.folded_corners(bar)[1])[1])
+                self.type_in(spin, "0" + point + "5")
+                QtTest.QTest.keyClick(spin, key)
+                self.wait_for_preview(panel)
+        # OK still closes it, the bar keeping the value.
+        self.assertTrue(panel.accept())
         self.events()
         self.assertFalse(Gui.Control.activeDialog())
-        self.assertEqual(0.4, corner_values(self.folded_corners(bar)[1])[1])
+        self.assertEqual(0.5, corner_values(self.folded_corners(bar)[1])[1])
         self.assertOneSolid(bar)
+
+    def test_closing_with_a_mixed_field_focused_reports_no_error(self):
+        # A focused field deleted with its dialog must not run the Mixed values filter on the half-deleted spin box:
+        # "Internal C++ object already deleted", once a crash.
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+        self.show(panel)
+        self.pick(panel, 0, 1)
+        spin = panel.form.spin_outer_radius
+        self.assertTrue(spin.property("mixedValues"))
+        spin.setFocus()
+        self.events()
+        errors = []
+        hook = sys.excepthook
+        sys.excepthook = lambda kind, error, trace: errors.append(f"{kind.__name__}: {error}")
+        self.addCleanup(setattr, sys, "excepthook", hook)
+
+        Gui.Control.closeDialog()
+        QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+        self.events()
+
+        self.assertFalse(Gui.Control.activeDialog())
+        self.assertEqual([], errors)
+
+    def test_enter_elsewhere_still_presses_ok_and_escape_cancels(self):
+        for target, key, values in (
+            ("corner_list", QtCore.Qt.Key_Return, None),
+            ("cb_key", QtCore.Qt.Key_Return, None),
+            ("spin_clearance", QtCore.Qt.Key_Escape, (7.0, 0.2, True, 10.0, 0.0)),
+        ):
+            with self.subTest(target=target):
+                _, bar = self.three_corner_bar()
+                panel = self.edit(bar)
+                self.show(panel)
+                self.pick(panel, 1)
+                widget = getattr(panel.form, target)
+                widget.setFocus()
+                self.events()
+                QtTest.QTest.keyClick(widget, key)
+                self.events()
+                self.assertFalse(Gui.Control.activeDialog())
+                if values:
+                    self.assertEqual(values, corner_values(self.folded_corners(bar)[1]))
+
+    def test_enter_in_every_corner_field_applies_and_keeps_the_panel(self):
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+        self.show(panel)
+        self.pick(panel, 1)
+        point = panel.form.spin_clearance.locale().decimalPoint()
+        for name, index, text, value in (
+            ("spin_outer_radius", 0, "9", 9.0),
+            ("spin_clearance", 1, f"0{point}3", 0.3),
+            ("spin_key_diameter", 3, "8", 8.0),
+            ("spin_k_factor", 4, f"0{point}42", 0.42),
+        ):
+            with self.subTest(field=name):
+                spin = getattr(panel.form, name)
+                self.type_in(spin, text)
+                QtTest.QTest.keyClick(spin, QtCore.Qt.Key_Enter, QtCore.Qt.KeypadModifier)
+                self.events()
+                self.assertTrue(Gui.Control.activeDialog())
+                self.wait_for_preview(panel)
+                self.assertAlmostEqual(value, corner_values(self.folded_corners(bar)[1])[index])
+
+    def test_enter_in_a_mixed_field_applies_to_every_selected_corner(self):
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+        self.show(panel)
+        self.pick(panel, 0, 1)
+        spin = panel.form.spin_outer_radius
+        self.type_in(spin, "9")
+        QtTest.QTest.keyClick(spin, QtCore.Qt.Key_Return)
+        self.events()
+        self.assertTrue(Gui.Control.activeDialog())
+        self.wait_for_preview(panel)
+        self.assertEqual([9.0, 9.0, 8.0], [corner_values(corner)[0] for corner in self.folded_corners(bar)])
 
     def test_an_arrow_key_applies_at_once(self):
         _, bar = self.three_corner_bar()

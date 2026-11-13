@@ -63,7 +63,7 @@ from freecad.maxproframe.folded_chain import (
 )
 from freecad.maxproframe.folded_corner import SETTINGS_PROPERTIES, corner_key, corner_settings, make_folded_corner
 from freecad.maxproframe.profile_pattern import container_placement, newest_piece, placed
-from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
+from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, is_alive, keep_alive_until_destroyed
 from freecad.maxproframe.unfolded_geometry import CornerSettings, UnfoldError, check_settings
 
 # Remembered state of the panel's "Update automatically" check box.
@@ -262,6 +262,30 @@ def show_panel(panel):
     Gui.Control.showDialog(panel)
 
 
+class _FinishOnEnter(QtCore.QObject):
+    """Enter in a corner field finishes the field and nothing else (S15).
+
+    The spin box applies the value and leaves the key unhandled; FreeCAD's task view, an ancestor of the form, would
+    then take it as OK and close the panel. The form stops the key on its way up.
+    """
+
+    KEYS = (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter)
+
+    def __init__(self, form, fields):
+        super().__init__(form)
+        self.fields = fields
+        form.installEventFilter(self)
+
+    def eventFilter(self, watched, event):
+        if event.type() == QtCore.QEvent.KeyPress and event.key() in self.KEYS:
+            focused = QtWidgets.QApplication.focusWidget()
+            for field in self.fields:
+                if is_alive(field) and focused in (field, field.lineEdit()):
+                    event.accept()
+                    return True
+        return False
+
+
 class FoldedBarTaskPanel:
     """The corners of a Folded Bar, each with its outer radius, clearance, key and K-factor, previewed.
 
@@ -424,6 +448,7 @@ class FoldedBarTaskPanel:
         for name, _, _ in NUMBER_FIELDS:
             # A value typed applies once the field is done, not at every key (S15).
             getattr(form, name).setKeyboardTracking(False)
+        form.finish_on_enter = _FinishOnEnter(form, [getattr(form, name) for name, _, _ in NUMBER_FIELDS])
 
         form.groupBox_preview = QtWidgets.QGroupBox(translate("MaxProFrame", "Preview"))
         preview = QtWidgets.QVBoxLayout(form.groupBox_preview)
@@ -1211,8 +1236,8 @@ class FoldedBarTaskPanel:
             pass
 
     def _leave_fields(self):
-        """No field of the panel keeps the focus while the dialog closes (Enter in a field presses OK in FreeCAD's
-        task view): a field that loses the focus as it is deleted runs its focus handlers on a deleted widget."""
+        """No field of the panel keeps the focus while the dialog closes: a field that loses the focus as it is
+        deleted runs its focus handlers on a deleted widget."""
         try:
             focused = QtWidgets.QApplication.focusWidget()
             if focused is not None and self.form is not None and self.form.isAncestorOf(focused):

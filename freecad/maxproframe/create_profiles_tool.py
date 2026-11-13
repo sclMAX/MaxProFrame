@@ -2,6 +2,7 @@ import glob
 import json
 import os
 import re
+import weakref
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from functools import wraps
@@ -37,7 +38,7 @@ from freecad.maxproframe.profile import (
     ViewProviderCustomProfile,
     ViewProviderProfile,
 )
-from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, release_layout_item_wrappers
+from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, is_alive, release_layout_item_wrappers
 from freecad.maxproframe.section_library import find_existing_section_sketch, get_or_import_section_sketch
 from freecad.maxproframe.section_outline import build_section_face
 from freecad.maxproframe.task_panel_widgets import (
@@ -204,6 +205,7 @@ class _MixedPresentation(QtCore.QObject):
         self.widget = widget
         self.combo = combo
         self.label = None
+        self._refresh_due = False
         widget.installEventFilter(self)
         if not combo:
             self.label = _MixedLabel(widget)
@@ -235,8 +237,26 @@ class _MixedPresentation(QtCore.QObject):
             QtCore.QEvent.FocusIn,
             QtCore.QEvent.FocusOut,
         ):
-            self.set_mixed(bool(self.widget.property("mixedValues")))
+            # Once the event is over: a field that loses the focus as it is deleted (its dialog closed) sends
+            # FocusOut from its destructor, when the spin box is half gone.
+            if not self._refresh_due:
+                self._refresh_due = True
+                # A weak reference: PySide keeps the callable of a timer whose receiver is deleted before it fires.
+                presentation = weakref.ref(self)
+                QtCore.QTimer.singleShot(0, self, lambda: _refresh_mixed_label(presentation))
         return False
+
+    def _refresh_label(self):
+        self._refresh_due = False
+        if all(is_alive(obj) for obj in (self, self.widget, self.label)):
+            self.set_mixed(bool(self.widget.property("mixedValues")))
+
+
+def _refresh_mixed_label(presentation):
+    """Refresh the Mixed values label of ``presentation`` (a weak reference) if it still exists."""
+    mixed = presentation()
+    if mixed is not None:
+        mixed._refresh_label()
 
 
 class _TaskPreviewLabel(QtWidgets.QLabel):

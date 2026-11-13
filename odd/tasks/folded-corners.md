@@ -84,8 +84,8 @@ one commit per task (each about one review slice; T3 and T4 may each pass 400 li
 - T6 S13 corner highlight overlay in the 3D view - worker (context backstop) - done, 02d32ad (L21).
 - T7 S14 selected corner shows its values - worker (context backstop) - done, commit below (L25).
 - T9 S3 the Mixed label ("Varios") hides the value in every theme - worker with T7 - done, commit below (L25).
-- T8 S15 freeze while typing a corner field - worker (context backstop) - done, commit below (L27); follow-ups T10.
-- T10 S15 Enter in a corner field finishes the field without pressing OK; `_MixedPresentation.eventFilter` safe on a deleted field (L27) - inline (worker unavailable: auth error) - pending.
+- T8 S15 freeze while typing a corner field - worker (context backstop) - done, 9b9d537 (L27); follow-ups T10.
+- T10 S15 Enter in a corner field finishes the field without pressing OK; `_MixedPresentation` safe on a deleted field - inline (worker unavailable: auth error) - done, commit below (L28).
 
 ## Log
 - L1 (2026-11-12) "Si para darle funcionalidad, cambiamos esa lista para que muestre las esquinas, con la opcion de
@@ -266,3 +266,17 @@ one commit per task (each about one review slice; T3 and T4 may each pass 400 li
   (FreeCAD task view), now the natural way to finish a value; `_MixedPresentation.eventFilter` runs on a deleted
   spin box when a focused field is destroyed ("Internal C++ object already deleted", one SIGSEGV in a run). The
   follow-up worker (mwesiwl4-7-wbrv) failed with an auth error and changed nothing -> T10 inline.
+- L28 T10 evidence (parent inline, independent verify mwestqy1-8-iz0k): `_FinishOnEnter` filter on the Folded Bar form
+  consumes a Return/Enter KeyPress propagated from one of the four corner fields (FreeCAD TaskView::keyPressEvent
+  clicks the default OK button otherwise); `_MixedPresentation` refreshes its label one event pass later through a
+  weak reference and only while presentation, spin box and label are alive (`qt_lifetime.is_alive`). RED on 9b9d537:
+  Enter test `assertTrue(Gui.Control.activeDialog())` failed (keypad Enter: RuntimeError on a deleted
+  QDoubleSpinBox); close test `[] != ['RuntimeError: Internal C++ object (PySide6.QtWidgets.QDoubleSpinBox) already
+  deleted.']`. Verify: S15 (b) pass, shared contract (item 3) pass, crash fix pass, no blockers; Enter on the list
+  and cb_key still OK, Escape still cancels; Mixed label renders hash-identical to HEAD after one event pass;
+  follow-ups applied (weakref timer callback, outdated docstring) plus its 3 regression tests. GREEN stable:
+  test_folded_bar_panel 77, test_task_panel_edge_properties 42, test_profile_edit_expressions 9,
+  test_custom_profile_selected_import 10, test_expression_fields 8; earlier run also test_folded_bar 35,
+  test_folded_bar_translations 6, test_profile_edit_state 12, test_unified_custom_profile_editor 15; weekly
+  test_folded_bar_panel only the 3 known L25 failures. Unverified: focus hide on the Create Profile panel offscreen,
+  first painted frame before the deferred refresh, a windowed session.
