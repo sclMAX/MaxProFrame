@@ -66,3 +66,9 @@ were authorized by the user for this work ("push pr y merge directo, luego ataqu
   nightly max repetitions 20 -> 9 to keep (9+1) x 4 x 480 s + setup within the 355-minute job).
 - L7 T4: ci/targets.json shards 4/4; ci/tests/test_policy.py pins; test_nightly_policy MAX_REPETITIONS = 9;
   nightly.yml limit 1-9 and budget comment; docs/ci.md. ci/tests 210 OK.
+- L8 Native review (RDD) of PR #150: approved and acknowledged (lineage review-a095d5d24709cbdc), 6 non-blocking
+  findings left as follow-ups: the panel waits only for its own document's recomputes; the nightly budget test does not
+  read the workflow's 9-repetition limit; a stale "more shards mostly add setup" sentence in docs/ci.md; runner test
+  fixture fragility; the subtest branch of ImmediateDetailsResult untested; the nested test run bypasses class fixtures.
+- L9 PR #150 CI run 43451741566: all 8 native shards pass (stable 4m12-5m27, weekly 4m45-5m24), gates pass; merged
+  with a merge commit ee0ef4f. Status: done.
