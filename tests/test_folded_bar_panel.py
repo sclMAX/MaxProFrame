@@ -23,6 +23,7 @@ from miter_helpers import use_language
 from pivy import coin
 from PySide import QtCore, QtWidgets
 from test_end_miter_geometry import polar
+from test_expression_fields import assert_readable, use_dark_theme
 from test_extend_cut_preview import keep_auto_preview, scene_graph
 from test_folded_bar import FoldedBarFixture, corner_values
 from test_folded_chain import RECTANGLE
@@ -1466,6 +1467,73 @@ class ExpressionTest(FoldedPanelFixture):
 
         self.assertEqual(before, self.names())
         self.assertTrue(all(tip.Visibility for tip in profiles))
+
+
+class DarkThemeTest(FoldedPanelFixture):
+    """folded-corners S14 and S3 in FreeCAD's dark theme: the values of one corner read, a mixed value is hidden."""
+
+    def setUp(self):
+        super().setUp()
+        use_dark_theme(self)
+
+    def picture(self, widget):
+        """What ``widget`` paints, with its children."""
+        image = QtGui.QImage(widget.size(), QtGui.QImage.Format_ARGB32)
+        image.fill(0)
+        widget.render(image)
+        return image
+
+    def test_one_selected_corner_shows_its_values_readable(self):
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+
+        self.pick(panel, 2)
+
+        for name, _ in FX_FIELDS:
+            spin = getattr(panel.form, name)
+            with self.subTest(field=name):
+                self.assertTrue(self.fx_shown(spin))
+                assert_readable(self, spin)
+
+    def test_a_mixed_field_shows_mixed_values_and_not_the_value_under_it(self):
+        _, bar = self.three_corner_bar()
+        panel = self.edit(bar)
+        spin = panel.form.spin_outer_radius
+        # The panel laid out in an active window, as FreeCAD shows it; the task view may show it a moment later.
+        Gui.Control.showTaskView()
+        window = spin.window()
+        window.show()
+        window.activateWindow()
+        for _ in range(200):
+            if spin.isVisible():
+                break
+            self.events()
+            QtCore.QThread.msleep(10)
+        self.assertTrue(spin.isVisible())
+
+        # The outer radii are 6, 7 and 8 mm: the field holds the value of the first corner selected.
+        self.pick(panel, 0, 1)
+        self.assertTrue(spin.property("mixedValues"))
+        self.assertEqual(6.0, spin.value())
+        six = self.picture(spin)
+        self.pick(panel, 1, 2)
+        self.assertTrue(spin.property("mixedValues"))
+        self.assertEqual(7.0, spin.value())
+
+        # Whatever the value under it, a mixed field paints the same: only Mixed values, light on the dark field.
+        self.assertTrue(six == self.picture(spin))
+        text = six.copy(spin.lineEdit().geometry())
+        lightness = [
+            QtGui.QColor(text.pixel(x, y)).lightness() for x in range(text.width()) for y in range(text.height())
+        ]
+        self.assertGreaterEqual(max(lightness), 200)
+        # Typing in it shows the value.
+        spin.setFocus()
+        self.events()
+        self.assertTrue(spin.hasFocus())
+        seven = self.picture(spin)
+        spin.setValue(6.0)
+        self.assertFalse(seven == self.picture(spin))
 
 
 class OutputCommandsTest(FoldedPanelFixture):

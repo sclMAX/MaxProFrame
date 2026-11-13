@@ -155,28 +155,67 @@ class _TranslatedFamilyLabel(QtCore.QObject):
         return False
 
 
+class _MixedLabel(QtWidgets.QLabel):
+    """Mixed values over the text of a spin box, painted on the field's own background.
+
+    The label paints its background itself: a FreeCAD theme styles every widget, and the style then ignores
+    autoFillBackground, which left the value under the label showing through. It covers the text of the field
+    up to its Fx icon, when one shows.
+    """
+
+    def __init__(self, spin):
+        super().__init__(translate("frameforge", "Mixed values"), spin)
+        self.spin = spin
+        self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+        self.hide()
+
+    def paintEvent(self, event):
+        line = self.spin.lineEdit()
+        # Laid over the line edit: the line edit's coordinates are the label's.
+        area = self.rect()
+        icons = [label.geometry().left() for label in line.findChildren(QtWidgets.QLabel) if not label.isHidden()]
+        if icons:
+            area.setRight(min(icons) - 1)
+        enabled = line.isEnabled()
+        palette = line.palette()
+        # The text of the field as it reads with its window active or not (they differ only while FreeCAD resets it).
+        background = palette.color(QtGui.QPalette.Active if enabled else QtGui.QPalette.Disabled, QtGui.QPalette.Base)
+        foreground = palette.color(QtGui.QPalette.Inactive if enabled else QtGui.QPalette.Disabled, QtGui.QPalette.Text)
+        margins = line.textMargins()
+        text_area = area.adjusted(margins.left() + 2, 0, -margins.right() - 2, 0)
+        painter = QtGui.QPainter(self)
+        painter.fillRect(area, background)
+        painter.setPen(foreground)
+        painter.setFont(line.font())
+        text = line.fontMetrics().elidedText(self.text(), QtCore.Qt.ElideRight, max(0, text_area.width()))
+        painter.drawText(text_area, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, text)
+        painter.end()
+
+
 class _MixedPresentation(QtCore.QObject):
-    """Paint mixed values without changing the catalog keys or spin-box values."""
+    """Paint mixed values without changing the catalog keys or spin-box values.
+
+    A combo box paints Mixed values as its text; a spin box shows them on a label over its text, which hides the
+    value under it until the field takes the focus to be typed in.
+    """
 
     def __init__(self, widget, combo=False):
         super().__init__(widget)
         self.widget = widget
         self.combo = combo
         self.label = None
-        if not combo:
-            self.label = QtWidgets.QLabel(widget)
-            self.label.setText(translate("frameforge", "Mixed values"))
-            self.label.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
-            self.label.setAutoFillBackground(True)
-            self.label.setBackgroundRole(QtGui.QPalette.Base)
-            self.label.hide()
         widget.installEventFilter(self)
+        if not combo:
+            self.label = _MixedLabel(widget)
+            # The line edit moves and resizes once the spin box has handled its own resize.
+            widget.lineEdit().installEventFilter(self)
 
     def set_mixed(self, mixed):
         self.widget.setProperty("mixedValues", mixed)
         if self.label is not None:
-            self.label.setGeometry(3, 2, max(0, self.widget.width() - 24), max(0, self.widget.height() - 4))
+            self.label.setGeometry(self.widget.lineEdit().geometry())
             self.label.setVisible(mixed and not self.widget.hasFocus())
+            self.label.update()
         self.widget.update()
 
     def eventFilter(self, watched, event):
@@ -191,10 +230,12 @@ class _MixedPresentation(QtCore.QObject):
             return True
         if self.label is not None and event.type() in (
             QtCore.QEvent.Resize,
+            QtCore.QEvent.Move,
+            QtCore.QEvent.Show,
             QtCore.QEvent.FocusIn,
             QtCore.QEvent.FocusOut,
         ):
-            self.set_mixed(bool(watched.property("mixedValues")))
+            self.set_mixed(bool(self.widget.property("mixedValues")))
         return False
 
 

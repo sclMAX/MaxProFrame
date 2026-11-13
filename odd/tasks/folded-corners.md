@@ -61,9 +61,12 @@ one commit per task (each about one review slice; T3 and T4 may each pass 400 li
 - S14 Fields of the selected corner (L14, screenshot: corner 3 "R 30 mm" selected, Esquina fields empty) -> selecting
   one corner shows its outer radius, clearance, key diameter and K-factor in the fields.
 - S15 No freeze while typing (L15 "si cambio el gap un par de veces se quedo congelado cuando escribi "0." quisas
-  flata algun debounce para evitar recalculos analizalo.") -> typing in a corner field (e.g. "0." on the way to
-  "0.5") never freezes FreeCAD; intermediate values do not trigger a recompute storm (debounce or equivalent, from
-  the analysis).
+  flata algun debounce para evitar recalculos analizalo."; L24 "creo que deberiamos esperar a completar el campo
+  antes de recalcular") -> (a) while the preview recomputes, the panel runs no geometry (checks, overlay, Remove, key
+  toggle): the change is recorded and handled once the recompute returns, and a preview timer firing meanwhile is
+  rescheduled, never dropped (L23); (b) typing in a corner field of the Folded Bar applies the value only when the
+  field is completed (Enter, Tab or leaving the field); arrows and the mouse wheel apply at once, through the existing
+  preview delay. Other panels' fields are not changed here.
 
 ## Tasks
 - T1 S12 tutorial note on the decimal separator - inline - done, c71d918.
@@ -78,10 +81,10 @@ one commit per task (each about one review slice; T3 and T4 may each pass 400 li
   (context backstop) - done, commit below (L12).
 - T5 S1-S11 tutorial, README, CHANGELOG, es/ru translations and .qm - worker (context backstop) - done, commit below
   (L13).
-- T6 S13 corner highlight overlay in the 3D view - worker (context backstop) - done, commit below (L21).
-- T7 S14 selected corner shows its values - real on committed code (L18); not reproduced offscreen in Spanish with the light theme (L19); next: the user's theme and click-into-field check, then explorer.
-- T9 S3 the Mixed label ("Varios") is drawn over the value instead of hiding it when several corners are selected (L19) - pending.
-- T8 S15 freeze while typing a corner field - not reproduced (L16); possibly code edited while the user tested (L17); blocked: user retest on committed code after T6, gdb dump if it recurs.
+- T6 S13 corner highlight overlay in the 3D view - worker (context backstop) - done, 02d32ad (L21).
+- T7 S14 selected corner shows its values - worker (context backstop) - done, commit below (L25).
+- T9 S3 the Mixed label ("Varios") hides the value in every theme - worker with T7 - done, commit below (L25).
+- T8 S15 freeze while typing a corner field - cause confirmed (L23): OCC thread-pool deadlock from panel checks run inside the recompute's nested event loop - worker after T7/T9 - pending.
 
 ## Log
 - L1 (2026-11-12) "Si para darle funcionalidad, cambiamos esa lista para que muestre las esquinas, con la opcion de
@@ -204,3 +207,39 @@ one commit per task (each about one review slice; T3 and T4 may each pass 400 li
   `faces_of_tubes` and helpers removed. RED: test_folded_bar_panel failures=2 errors=6 (5 new overlay tests). GREEN:
   test_folded_bar_panel 64 OK, test_folded_bar 35 OK; black/isort (ci/requirements-format.txt) clean (parent).
   Not checked by eye in a real 3D view.
+- L22 T7/T9 causes (explorer mweqc6uv-3-j2kh, reasoned from Qt/FreeCAD source, not run): FreeCAD Dark =
+  MainWindow StyleSheet=FreeCAD.qss, Theme=FreeCAD Dark, QtStyle=FreeCAD (field background #323232, text #ffffff).
+  T7: Gui ExpressionWidget saves `defaultPalette` before styling; DoubleSpinBox resize -> updateExpression ->
+  clearExpression sets the line edit's Active Text to that old (probably black) color; `bind()` -> `_place_icon`
+  sends that resize, so only a bound field (one corner) turns dark-on-dark; grab() of an inactive window paints the
+  Inactive group, which is why L19 could not see it. T9: QStyleSheetStyle::polish turns autoFillBackground off on a
+  QFrame/QLabel when the `* {border-style:none}` rule makes it drawable, so the Mixed label is transparent in every
+  FreeCAD theme.
+- L23 (2026-11-13) user reproduced the freeze (screenshots: edit bar, corner 2 R 5 mm with key, Holgura "0,|mm",
+  status bar 55 %, "FreeCAD no está respondiendo"); all 18 threads in futex wait, 0 % CPU. gdb (user ptrace_scope 0,
+  weekly AppImage) main thread, outer to inner: QTimer timeout -> panel update_preview -> App::Document::recompute ->
+  FoldedBar execute (FeaturePython) -> TopoShape.common -> BOPAlgo_Builder::FillIn3DParts -> BOPAlgo_Tools::
+  ClassifyFaces (OSD_ThreadPool) -> Base::SequencerLauncher::setProgress -> Gui::SequencerBar::setProgress ->
+  QEventDispatcherGlib::processEvents -> (IBus) key press -> QLineEdit -> QDoubleSpinBox::valueChanged -> panel slot
+  -> TopoShape.cut -> BOPAlgo_PaveFiller::IntersectVE -> OSD_ThreadPool::Launcher::wait -> pthread_cond_wait
+  (forever). Cause: any OCC boolean run by a panel handler while the recompute pumps events waits on the thread pool
+  the paused outer boolean holds. Fix direction: while `_recomputing`, panel handlers do no geometry (no
+  `_refresh`/check_settings, no overlay `common` from T6, no Remove/key toggle work); they record the change and run
+  it once the recompute returns; a timer firing during the recompute reschedules instead of dropping the preview.
+  Follow-up: End Miter / Extend Cut / Drill Hole panels share the timer + recompute pattern (check for the same risk).
+- L24 (2026-11-13) "Hizo un recalculo cunado puse "0" otro cuando puese "." creo que deberiamos esperar a completar el
+  campo antes de recalcular, que opinas?" -> parent: agree as a complement to the recompute guard; Folded Bar fields
+  only (keyboard tracking off); other panels decided later with the deadlock follow-up.
+- L25 T7/T9 evidence (worker mweqjg32-4-1sxp, parent check): theme applied in tests by MainWindow params +
+  `Gui.runCommand("Std_ReloadStyleSheet")`. T7 confirmed: line edit Active Text #000000 on #323232 (weekly) /
+  #191919 (1.1.4), Inactive #ffffff; also on unbound Gui::DoubleSpinBox after first show. Fix `_ThemeText`
+  (expression_fields.py: on PaletteChange, editable fields copy the spin box's stylesheet Text color into the line
+  edit's Active and Inactive groups; read-only lightGray/red kept), installed by the field factories, bind and unbind.
+  T9: `_MixedLabel` paints the field Base color and "Mixed values" in the Inactive Text color over the line edit
+  geometry (stops at the spin buttons / Fx icon). RED on both runtimes: DarkThemeTest 2 tests, TestExpressionFieldColors
+  2 tests. GREEN stable: test_folded_bar_panel 66, test_expression_fields 6 (parent rerun 6 OK), test_profile_edit_
+  expressions 9, test_task_panel_edge_properties 42, test_folded_bar_translations 6, plus drill hole 99, extend cut 45,
+  cutout pattern 17, profile pattern 38, parametric line 51, task panel preview 22 / usability 12 / widgets 4,
+  profile edit state 12, unified custom profile editor 15. Differential (base vs change, stable): same results except
+  the new tests. Weekly: test_folded_bar_panel 3 failures `'Valid' != 'Touched'` (cancel with undo disabled) also on
+  the base commit: pre-existing on weekly 27.1, follow-up. black/isort clean (parent). Not seen in a windowed session.
