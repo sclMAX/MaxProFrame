@@ -270,16 +270,14 @@ def show_panel(panel):
 
 
 class _RecomputeEnd:
-    """Document observer: once the document ``doc`` ends a recompute, ``callback`` runs from the event loop, outside
-    FreeCAD's observer dispatch."""
+    """Document observer: once a document ends a recompute, ``callback`` runs from the event loop, outside FreeCAD's
+    observer dispatch. Any document: a recompute of another open one pumps Qt events all the same."""
 
-    def __init__(self, doc, callback):
-        self.name = doc.Name
+    def __init__(self, callback):
         self.callback = callback
 
     def slotRecomputedDocument(self, doc):
-        if doc.Name == self.name:
-            QtCore.QTimer.singleShot(0, self.callback)
+        QtCore.QTimer.singleShot(0, self.callback)
 
 
 class _FinishOnEnter(QtCore.QObject):
@@ -893,14 +891,17 @@ class FoldedBarTaskPanel:
         self.update_preview(force=True)
 
     def _busy(self):
-        """Whether the document recomputes: the panel's preview, or a recompute the panel did not start (the user's,
-        the expression editor's), which pumps Qt events all the same (issue #148)."""
+        """Whether a document recomputes: the panel's preview, or a recompute the panel did not start (the user's, the
+        expression editor's, one of another open document), which pumps Qt events all the same (issue #148)."""
         if self._recomputing:
             return True
-        try:
-            return _alive_document(self.doc) and bool(self.doc.Recomputing)
-        except Exception:
-            return False
+        for doc in App.listDocuments().values():
+            try:
+                if doc.Recomputing:
+                    return True
+            except Exception:
+                continue
+        return False
 
     def _wait(self, work):
         """Whether ``work`` waits for the recompute to end, to run once then (S15).
@@ -924,7 +925,7 @@ class FoldedBarTaskPanel:
         if self._recomputing:
             return
         if self._recompute_end is None:
-            self._recompute_end = _RecomputeEnd(self.doc, self._resume)
+            self._recompute_end = _RecomputeEnd(self._resume)
             App.addDocumentObserver(self._recompute_end)
         if not self._resuming:
             self._resuming = True

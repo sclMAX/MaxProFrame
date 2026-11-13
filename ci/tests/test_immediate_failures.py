@@ -26,7 +26,9 @@ class ImmediateFailureDetailsTest(unittest.TestCase):
             "class A(unittest.TestCase):\n"
             " def test_0_fails(self): self.assertEqual('seen', 'expected', 'failure-detail-0')\n"
             " def test_1_errors(self): raise RuntimeError('error-detail-1')\n"
-            " def test_2_passes(self): pass\n"
+            " def test_2_subtest_fails(self):\n"
+            "  with self.subTest(case='subtest-case-2'): self.fail('subtest-detail-2')\n"
+            " def test_3_passes(self): pass\n"
         )
         self.driver = self.work / "macro_driver.py"
         self.driver.write_text(
@@ -50,22 +52,31 @@ class ImmediateFailureDetailsTest(unittest.TestCase):
             capture_output=True,
             text=True,
         )
-        # The fixture suite fails on purpose: the macro exits 1.
-        self.assertEqual((proc.returncode, proc.stderr), (1, ""))
-        return (reports / "tests.log").read_text().splitlines()
+        log = (reports / "tests.log").read_text()
+        # The fixture suite fails on purpose: the macro exits 1 and says why in its log, not on stderr.
+        self.assertEqual(1, proc.returncode, log)
+        self.assertEqual("", proc.stderr)
+        return log.splitlines()
 
     def index(self, lines, text):
-        return next(number for number, line in enumerate(lines) if text in line)
+        """The number of the first line of ``lines`` holding ``text``; a clear failure when none does."""
+        for number, line in enumerate(lines):
+            if text in line:
+                return number
+        self.fail(f"{text!r} is not in tests.log:\n" + "\n".join(lines))
 
     def test_a_failure_and_an_error_are_detailed_before_the_next_test_runs(self):
         lines = self.run_macro()
 
-        passes = self.index(lines, "test_2_passes")
         errors = self.index(lines, "test_1_errors")
+        subtest = self.index(lines, "test_2_subtest_fails")
+        passes = self.index(lines, "test_3_passes")
         self.assertLess(self.index(lines, "failure-detail-0"), errors)
-        self.assertLess(self.index(lines, "error-detail-1"), passes)
+        self.assertLess(self.index(lines, "error-detail-1"), subtest)
+        self.assertLess(self.index(lines, "subtest-detail-2"), passes)
+        self.assertLess(self.index(lines, "subtest-case-2"), passes)
         # The final report still lists them, as unittest always did.
-        self.assertIn("FAILED (failures=1, errors=1)", lines)
+        self.assertIn("FAILED (failures=2, errors=1)", lines)
 
 
 if __name__ == "__main__":
