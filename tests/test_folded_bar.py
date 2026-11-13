@@ -65,7 +65,12 @@ CORNER_PROPERTIES = {
     "KeyDiameter": "App::PropertyLength",
     "KFactor": "App::PropertyFloat",
     "Open": "App::PropertyBool",
+    "Joint": "App::PropertyEnumeration",
+    "StepDepth": "App::PropertyLength",
+    "StepFlip": "App::PropertyBool",
 }
+# odd/tasks/stepped-corners.md S1, S6: the joint properties of a corner, added on restore to a corner saved before.
+JOINT_PROPERTIES = ("Joint", "StepDepth", "StepFlip")
 
 
 def open_box():
@@ -92,6 +97,15 @@ def settings_values(settings):
         round(settings.key_diameter, 9),
         round(settings.k_factor, 9),
     )
+
+
+def joint_values(corner):
+    """(Joint, StepDepth, StepFlip) of a FoldedCorner, rounded (stepped-corners S6)."""
+    return corner.Joint, round(corner.StepDepth.Value, 9), corner.StepFlip
+
+
+def joint_settings(settings):
+    return settings.joint, round(settings.step_depth, 9), settings.step_flip
 
 
 class FoldedBarFixture(UnfoldFixture):
@@ -177,6 +191,7 @@ class FoldedBarObjectTest(FoldedBarFixture):
             [settings_values(chosen) for chosen in settings + settings[:1]],
             [corner_values(corner) for corner in corners],
         )
+        self.assertEqual([("Miter", 0.0, False)] * 4, [joint_values(corner) for corner in corners])
         for corner in corners:
             self.assertEqual("App::FeaturePython", corner.TypeId)
             self.assertNotIn("Shape", corner.PropertiesList)
@@ -479,6 +494,121 @@ class FoldedBarObjectTest(FoldedBarFixture):
             self.assertFalse(inside(579.9, 20.1, w), w)
 
 
+class SteppedCornerObjectTest(FoldedBarFixture):
+    """odd/tasks/stepped-corners.md, T3 (S1, S5, S6): every Folded Corner carries its joint (Miter by default), step
+    depth (0: automatic) and step flip; the bar folds and unfolds with them, the open corner's too."""
+
+    def test_new_corners_are_miter_with_an_automatic_step_and_map_to_their_settings(self):
+        from freecad.maxproframe.folded_corner import corner_settings
+
+        profiles, bar = self.make_bar(**PLAIN)
+
+        for corner in bar.Corners:
+            with self.subTest(corner=corner.Label):
+                self.assertEqual(("Miter", 0.0, False), joint_values(corner))
+                self.assertEqual(["Miter", "Stepped"], corner.getEnumerationsOfProperty("Joint"))
+                for name in JOINT_PROPERTIES:
+                    self.assertEqual(corner.getGroupOfProperty("Clearance"), corner.getGroupOfProperty(name))
+                    self.assertTrue(corner.getDocumentationOfProperty(name), name)
+                self.assertEqual(bend(**PLAIN), corner_settings(corner))
+
+    def test_a_bar_made_with_stepped_corners_gives_them_to_its_corner_objects(self):
+        from freecad.maxproframe.folded_corner import corner_settings
+
+        profiles = self.frame()
+        settings = [bend(joint="Stepped", step_depth=4.0, step_flip=True, **PLAIN), bend(**PLAIN), bend(**PLAIN)]
+
+        bar = make_folded_bar(profiles, settings)
+
+        self.assertOneSolid(bar)
+        # The open corner takes the first corner's settings, its joint too.
+        self.assertEqual(
+            [(settings_values(chosen), joint_settings(chosen)) for chosen in settings + settings[:1]],
+            [(corner_values(corner), joint_values(corner)) for corner in bar.Corners],
+        )
+        self.assertEqual(settings + settings[:1], [corner_settings(corner) for corner in bar.Corners])
+        chain = build_chain(profiles)
+        expected = unfold(chain, settings, open_corner=settings[0])
+        self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
+        self.assertSameVolume(fold_bar(chain, expected), bar.Shape)
+
+    def test_a_stepped_folded_corner_changes_the_bar(self):
+        profiles, bar = self.make_bar(**PLAIN)
+        unfolded = make_unfolded_bar(bar)
+        chain = build_chain(profiles)
+        # At 90 degrees without clearance both joints fold into the same solid: the cuts on the unfolded bar differ.
+        miter = unfolded.Shape.copy()
+        corner = self.folded_corners(bar)[0]
+
+        for change, first in (
+            (dict(Joint="Stepped"), bend(joint="Stepped", **PLAIN)),
+            (dict(StepDepth=4.0, StepFlip=True), bend(joint="Stepped", step_depth=4.0, step_flip=True, **PLAIN)),
+        ):
+            with self.subTest(change=change):
+                for name, value in change.items():
+                    setattr(corner, name, value)
+                self.doc.recompute()
+
+                self.assertOneSolid(bar)
+                expected = unfold(chain, [first, bend(**PLAIN), bend(**PLAIN)])
+                self.assertSameVolume(fold_bar(chain, expected), bar.Shape)
+                self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
+                self.assertOneSolid(unfolded)
+                self.assertSameVolume(expected.shape, unfolded.Shape)
+                self.assertAlmostEqual(0.0, expected.shape.cut(unfolded.Shape).Volume, delta=VOLUME_TOLERANCE)
+                self.assertGreater(miter.cut(unfolded.Shape).Volume, VOLUME_TOLERANCE)
+
+    def test_a_stepped_open_corner_steps_both_ends_of_the_bar(self):
+        # S4 through the object: the open corner's settings reach unfold, its joint replaces the miter of both ends.
+        profiles, bar = self.make_bar(**PLAIN)
+        unfolded = make_unfolded_bar(bar)
+        chain = build_chain(profiles)
+        miter = unfold(chain, bend(**PLAIN))
+        (opened,) = [corner for corner in bar.Corners if corner.Open]
+
+        opened.Joint = "Stepped"
+        self.doc.recompute()
+
+        expected = unfold(chain, bend(**PLAIN), open_corner=bend(joint="Stepped", **PLAIN))
+        self.assertGreater(abs(expected.length - miter.length), LENGTH_TOLERANCE)
+        self.assertOneSolid(bar)
+        self.assertAlmostEqual(expected.length, bar.DevelopedLength.Value, places=6)
+        self.assertSameVolume(fold_bar(chain, expected), bar.Shape)
+        self.assertGreater(abs(fold_bar(chain, miter).Volume - bar.Shape.Volume), VOLUME_TOLERANCE)
+        self.assertOneSolid(unfolded)
+        self.assertSameVolume(expected.shape, unfolded.Shape)
+        # Computed again without the one of the last recompute, the unfolded bar is the stepped one too.
+        bar.Proxy.unfolded = None
+        self.assertAlmostEqual(expected.length, bar.Proxy.unfolded_bar(bar).length, places=6)
+        # Back to Miter: the ends are the tubes' own again.
+        opened.Joint = "Miter"
+        self.doc.recompute()
+        self.assertOneSolid(bar)
+        self.assertAlmostEqual(miter.length, bar.DevelopedLength.Value, places=6)
+        self.assertSameVolume(fold_bar(chain, miter), bar.Shape)
+
+    def test_a_step_depth_out_of_range_leaves_the_bar_in_error_with_the_step_message(self):
+        # S5: the corner's two pieces are named; the open corner names the first and the last tube.
+        profiles, bar = self.make_bar(**PLAIN)
+        folded = self.folded_corners(bar)[0]
+        (opened,) = [corner for corner in bar.Corners if corner.Open]
+
+        for corner, message in (
+            (folded, "The step depth of the corner between Profile and Profile001 must be between 2 and 24.9 mm."),
+            (opened, "The step depth of the corner between Profile and Profile003 must be between 2 and 24.9 mm."),
+        ):
+            with self.subTest(corner=corner.Label):
+                corner.Joint = "Stepped"
+                corner.StepDepth = 25.0
+                self.doc.recompute()
+
+                self.assertIn("Invalid", bar.State)
+                self.assertEqual(message, bar.getStatusString())
+                corner.Joint = "Miter"
+                self.doc.recompute()
+                self.assertOneSolid(bar)
+
+
 class SegmentsRefreshTest(FoldedBarFixture):
     def drill_right(self, right):
         """A 10 mm hole in the top wall of ``right``, 100 mm along it (as in test_unfolded_geometry)."""
@@ -724,6 +854,36 @@ class RestoreTest(FoldedBarFixture):
                     volume, diagonal = saved[obj.Name]
                     self.assertAlmostEqual(volume, obj.Shape.Volume, delta=VOLUME_TOLERANCE)
                     self.assertAlmostEqual(diagonal, obj.Shape.BoundBox.DiagonalLength, delta=LENGTH_TOLERANCE)
+
+    def test_corners_saved_before_the_joint_get_it_on_restore_and_fold_the_same(self):
+        # stepped-corners S1, S6: a corner saved without Joint, StepDepth and StepFlip gets them (Miter, automatic, not
+        # flipped) when the document opens, and the bar recomputes to the same shape.
+        profiles, bar = self.make_bar(**PLAIN)
+        volume, length = bar.Shape.Volume, bar.DevelopedLength.Value
+        for corner in bar.Corners:
+            for name in JOINT_PROPERTIES:
+                corner.removeProperty(name)
+            self.assertEqual([], [name for name in JOINT_PROPERTIES if name in corner.PropertiesList])
+        folder = tempfile.mkdtemp(prefix="mpf_folded_bar_")
+        self.addCleanup(shutil.rmtree, folder, True)
+        path = os.path.join(folder, f"{self.doc.Name}.FCStd")
+        name = bar.Name
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+
+        self.doc = App.openDocument(path)
+
+        bar = self.doc.getObject(name)
+        for corner in bar.Corners:
+            with self.subTest(corner=corner.Label):
+                self.assertEqual(CORNER_PROPERTIES, {n: corner.getTypeIdOfProperty(n) for n in CORNER_PROPERTIES})
+                self.assertEqual(("Miter", 0.0, False), joint_values(corner))
+                self.assertEqual(["Miter", "Stepped"], corner.getEnumerationsOfProperty("Joint"))
+        bar.touch()
+        self.doc.recompute()
+        self.assertOneSolid(bar)
+        self.assertAlmostEqual(volume, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
+        self.assertAlmostEqual(length, bar.DevelopedLength.Value, places=9)
 
     def test_unfolded_bar_recomputes_alone_after_opening(self):
         _, bar = self.make_bar(**PLAIN)

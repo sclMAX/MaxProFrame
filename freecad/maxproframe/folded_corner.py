@@ -3,15 +3,18 @@
 A Folded Corner is where two tubes of a bar meet, named by the two profiles they are made from (``PieceA`` and
 ``PieceB``, ``folded_chain.base_profile``): a trim, cutout or drill hole made on one of them later keeps the corner.
 It holds how that corner bends (``unfolded_geometry.CornerSettings``): its outer radius, the clearance of its notch,
-its key and the key diameter (0: the default one), and its K-factor (0: automatic, DIN 6935). ``Open`` marks the
-corner where a closed frame stays open: the bar starts and ends there, it does not fold. It has no shape; its bar
-links it, so changing it recomputes the bar.
+its key and the key diameter (0: the default one), its K-factor (0: automatic, DIN 6935), and its joint: ``Miter`` or
+``Stepped``, with the step depth (0: automatic) and the step flip (odd/tasks/stepped-corners.md, S1, S5, S6). ``Open``
+marks the corner where a closed frame stays open: the bar starts and ends there, it does not fold; its joint, clearance
+and step settings are the ones of the bar's ends there. It has no shape; its bar links it, so changing it recomputes
+the bar. A corner saved before a property existed gets it, with its default, when its document opens (``Joint``:
+``Miter``, so it folds as before).
 """
 
 import os
 
 from freecad.maxproframe.ff_tools import ICONPATH, place_in_container_of, translate
-from freecad.maxproframe.unfolded_geometry import CornerSettings
+from freecad.maxproframe.unfolded_geometry import JOINTS, MITER, CornerSettings
 from freecad.maxproframe.version import __version__ as ff_version
 
 # Corner property -> CornerSettings field.
@@ -21,6 +24,9 @@ SETTINGS_PROPERTIES = {
     "Key": "key",
     "KeyDiameter": "key_diameter",
     "KFactor": "k_factor",
+    "Joint": "joint",
+    "StepDepth": "step_depth",
+    "StepFlip": "step_flip",
 }
 
 
@@ -57,6 +63,9 @@ def corner_settings(obj):
         key=bool(obj.Key),
         key_diameter=float(obj.KeyDiameter.Value),
         k_factor=float(obj.KFactor),
+        joint=str(obj.Joint),
+        step_depth=float(obj.StepDepth.Value),
+        step_flip=bool(obj.StepFlip),
     )
 
 
@@ -69,6 +78,9 @@ def set_corner_settings(obj, settings):
         if isinstance(value, bool) or isinstance(current, bool):
             if bool(current) != bool(value):
                 setattr(obj, prop, bool(value))
+        elif isinstance(value, str) or isinstance(current, str):
+            if str(current) != str(value):
+                setattr(obj, prop, str(value))
         elif abs(float(current) - float(value)) > 1e-12:
             setattr(obj, prop, float(value))
 
@@ -124,6 +136,30 @@ class FoldedCorner:
                 "Diameter of the key, a half circle on the miter line; 0: a quarter of the tube depth across the "
                 "bent wall",
             ),
+        )  # fmt: skip
+        if "Joint" not in obj.PropertiesList:
+            _add(
+                obj, "App::PropertyEnumeration", "Joint", "Notch",
+                translate(
+                    "App::Property",
+                    "How the inner wall is cut: Miter, at half the bend angle (a bevel cut); Stepped, an interlock of "
+                    "straight cuts only",
+                ),
+                list(JOINTS),
+            )  # fmt: skip
+            obj.Joint = MITER
+        _add(
+            obj, "App::PropertyLength", "StepDepth", "Notch",
+            translate(
+                "App::Property",
+                "Depth of the step of a Stepped joint across the bent wall; 0: automatic, the larger of the wall "
+                "thickness and the outer corner radius of the tube",
+            ),
+        )  # fmt: skip
+        _add(
+            obj, "App::PropertyBool", "StepFlip", "Notch",
+            translate("App::Property", "Swap the tubes of a Stepped joint: the other one covers the step"),
+            False,
         )  # fmt: skip
 
     def onDocumentRestored(self, obj):

@@ -279,6 +279,21 @@ def bar_settings(bar, chain):
     return settings
 
 
+def open_settings(bar, chain):
+    """The ``CornerSettings`` of the open corner object of ``bar`` when ``chain`` is closed, else None.
+
+    ``unfold`` takes them as its ``open_corner``: with ``Stepped`` both ends of the bar get the stepped joint
+    (odd/tasks/stepped-corners.md, S4); without an open corner object, or with ``Miter``, the ends are the tubes' own.
+    """
+    opened = open_corner(bar) if chain.closed else None
+    return corner_settings(opened) if opened is not None else None
+
+
+def unfold_bar(bar, chain):
+    """``unfold`` of ``chain`` with the settings of the corner objects of ``bar``, its open corner's too."""
+    return unfold(chain, bar_settings(bar, chain), open_corner=open_settings(bar, chain))
+
+
 def _per_corner(chain, corners):
     """``corners`` as one ``CornerSettings`` per folded corner of ``chain``; ValueError for a wrong count."""
     if isinstance(corners, CornerSettings):
@@ -289,19 +304,21 @@ def _per_corner(chain, corners):
     return corners
 
 
-def update_corners(bar, chain, corners):
+def update_corners(bar, chain, corners, open_settings=None):
     """Make the corner objects of ``bar`` the corners of ``chain``, bent with ``corners``, and link them in order.
 
     ``corners`` is one ``CornerSettings`` for every folded corner or one per folded corner in chain order. A closed
-    frame also gets its open corner (``Open``, last in ``Corners``) with the sizes of the first corner. The corner
-    objects of ``bar`` are kept by their two profiles (they keep their names, so the expressions on them); missing
-    ones are made, the ones of corners no longer in the chain are removed.
+    frame also gets its open corner (``Open``, last in ``Corners``) with ``open_settings``, by default the settings of
+    the first corner (odd/tasks/stepped-corners.md, S6: the panel gives the open corner its own joint, step and
+    clearance). The corner objects of ``bar`` are kept by their two profiles (they keep their names, so the
+    expressions on them); missing ones are made, the ones of corners no longer in the chain are removed.
     """
     settings = _per_corner(chain, corners)
     wanted = [(_pair(chain, corner), chosen, False) for corner, chosen in zip(chain.corners, settings)]
     if chain.closed and settings:
         # The bar starts at its first segment, at the open corner: the last segment meets it there.
-        wanted.append(((chain.segments[0].profile, chain.segments[-1].profile), settings[0], True))
+        opened = settings[0] if open_settings is None else open_settings
+        wanted.append(((chain.segments[0].profile, chain.segments[-1].profile), opened, True))
     existing = {}
     for obj in bar.Corners:
         key = corner_key(obj)
@@ -436,7 +453,7 @@ class FoldedBar:
         self.unfolded = None
         chain = bar_chain(obj)
         self._follow_tips(obj, chain)
-        unfolded = unfold(chain, bar_settings(obj, chain))
+        unfolded = unfold_bar(obj, chain)
         folded = fold_bar(chain, unfolded) if _one_solid(unfolded.shape) else None
         if not _one_solid(folded):
             raise UnfoldError(
@@ -485,8 +502,7 @@ class FoldedBar:
         """The ``unfold`` result of the bar ``obj``: the one of its last recompute, else computed now."""
         unfolded = getattr(self, "unfolded", None)
         if unfolded is None or "Touched" in obj.State:
-            chain = bar_chain(obj)
-            unfolded = unfold(chain, bar_settings(obj, chain))
+            unfolded = unfold_bar(obj, bar_chain(obj))
         return unfolded
 
     def dumps(self):
@@ -621,14 +637,15 @@ class ViewProviderUnfoldedBar:
         return None
 
 
-def make_folded_bar(selection, corners, open_corner=None):
+def make_folded_bar(selection, corners, open_corner=None, open_settings=None):
     """A Folded Bar of the tube pieces ``selection`` (first = start of the bar), its corners bent with ``corners``.
 
     ``corners`` is one ``CornerSettings`` for every folded corner or a sequence of one per folded corner in chain
     order (ValueError otherwise, before anything is made). ``open_corner``: the pair of pieces meeting where a closed
     frame opens (``build_chain``). A Folded Corner object is made for each folded corner, and for the open corner of a
-    closed frame (``Open``, with the sizes of the first corner). The bar joins the folder or Part holding the first
-    piece and is recomputed: a selection that does not fold leaves it in error with the reason, and without corners.
+    closed frame (``Open``, with ``open_settings``, by default the settings of the first corner). The bar joins the
+    folder or Part holding the first piece and is recomputed: a selection that does not fold leaves it in error with
+    the reason, and without corners.
     """
     selection = list(selection)
     try:
@@ -650,7 +667,7 @@ def make_folded_bar(selection, corners, open_corner=None):
         ViewProviderFoldedBar(obj.ViewObject)
     obj.Segments = segments
     if chain is not None:
-        update_corners(obj, chain, corners)
+        update_corners(obj, chain, corners, open_settings=open_settings)
     doc.recompute()
     return obj
 
