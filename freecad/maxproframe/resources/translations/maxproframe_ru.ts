@@ -2841,10 +2841,6 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>{config} is for {a:g} mm walls; {tube} has {b:g} mm walls.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>The outer radius of the corner between {} and {} must be between {min:g} and {max:g} mm.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2861,15 +2857,7 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>The inside bend radius must be between {min:g} and {max:g} mm.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>The key does not fit in the notch between {} and {}: make it smaller.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>The key does not fit in the notch between {} and {} with this inside radius: make the radius smaller or turn the key off.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2894,47 +2882,7 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Tube pieces, from the start of the bar</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Bend</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Manage configurations</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Configuration</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Inside bend radius of every folded corner</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Inside radius</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Corners</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Open corner</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Where the closed frame stays open: the bar starts there, at the first piece</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Inside radius of each folded corner:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Notch</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2967,30 +2915,6 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>Default</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>{} (copy in the document)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>{}: {:g} mm walls, inside radius {:g} mm, K-factor {:g}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Between {} and {}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Bar radius</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>{} to {}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add a bend configuration: press Manage configurations.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3101,6 +3025,57 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>&lt;b&gt;Unfold Bar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a Folded Bar: its straight bar with every cut is made from X = 0 along X, to export with File &gt; Export (STEP, IGES, BREP) for a tube laser.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>App::Property</name>
+    <message>
+        <source>Profile of one of the two tubes meeting at the corner</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Profile of the other tube meeting at the corner</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Where a closed frame stays open: the bar starts and ends here, unfolded</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Radius seen outside the bend; the inside radius is it less the wall thickness</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Where the neutral axis sits in the wall: 0 &lt; K &lt;= 1; 0: automatic, from DIN 6935</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Gap between the notch flanks and around the key, half on each side</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Interlocking key in the notch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Diameter of the key, a half circle on the miter line; 0: a quarter of the tube depth across the bent wall</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tube pieces folded into the bar, in chain order from its start</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Folded Corner objects of the bar in chain order from its start, then the open corner of a closed frame</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Length of the unfolded bar: the length to cut</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The folded bar this is the straight bar of</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

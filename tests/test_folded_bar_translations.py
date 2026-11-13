@@ -124,6 +124,23 @@ class TestFoldedBarPanelSpanish(FoldedPanelFixture):
         panel.form.spin_outer_radius.setValue(132.0)
         self.assertRefused(panel, "Profile001 es demasiado corto para el radio de sus esquinas.")
 
+    def test_the_folded_corner_property_tooltips_are_spanish(self):
+        # odd/tasks/folded-corners.md, T5: the property editor of a Folded Corner speaks Spanish.
+        self.assertEqual(
+            "Radio que se ve por fuera del plegado; el radio interior es este menos el espesor de pared",
+            translate("App::Property", "Radius seen outside the bend; the inside radius is it less the wall thickness"),
+        )
+        self.assertEqual(
+            "Dónde está la fibra neutra en la pared: 0 < K <= 1; 0: automático, según DIN 6935",
+            translate(
+                "App::Property", "Where the neutral axis sits in the wall: 0 < K <= 1; 0: automatic, from DIN 6935"
+            ),
+        )
+        self.assertEqual(
+            "Longitud de la barra desplegada: la longitud a cortar",
+            translate("App::Property", "Length of the unfolded bar: the length to cut"),
+        )
+
     def test_the_command_tooltip_says_to_click_the_tubes_in_spanish(self):
         # S22: the panel opens at once and takes the tubes clicked.
         tooltip = translate(

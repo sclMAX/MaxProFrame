@@ -2,7 +2,7 @@
 Rework of the Folded Bar (feature folded-miter, PR #145/#146, not released): every corner is a `FoldedCorner` object
 with its own outer radius, clearance, key and K-factor (Fx), the panel lists corners instead of tubes, and bend
 configurations go away (thickness and material come from the profile). Branch feat/folded-corners. Delivery: one PR,
-one commit per task (each about one review slice; T3 and T4 may each pass 400 lines). Status: T1-T4 done, T5 next.
+one commit per task (each about one review slice; T3 and T4 may each pass 400 lines). Status: T1-T5 done; waiting for the user's manual test in FreeCAD.
 
 ## Specs
 - S1 Corner list (L1): "cambiamos esa lista para que muestre las esquinas, con la opcion de quitar" -> the
@@ -65,7 +65,8 @@ one commit per task (each about one review slice; T3 and T4 may each pass 400 li
 - T4 S1-S5 S7 S9 panel: corner list with multi-selection, highlight, Remove, open corner, per-corner fields with Fx,
   last used values; configuration widgets removed; remove bend_config, dialog, command, icon and their tests - worker
   (context backstop) - done, commit below (L12).
-- T5 S1-S11 tutorial, README, CHANGELOG, es/ru translations and .qm - inline - pending.
+- T5 S1-S11 tutorial, README, CHANGELOG, es/ru translations and .qm - worker (context backstop) - done, commit below
+  (L13).
 
 ## Log
 - L1 (2026-11-12) "Si para darle funcionalidad, cambiamos esa lista para que muestre las esquinas, con la opcion de
@@ -141,3 +142,12 @@ one commit per task (each about one review slice; T3 and T4 may each pass 400 li
   test_expression_fields 4, test_unfolded_geometry 41, test_folded_geometry 11, test_folded_chain 23,
   test_library_translations 3, test_create_profile_apply 11 OK. Known limits: preview faces spanning other tubes are
   not highlighted; old panel texts still in the catalogs (T5).
+- L13 T5 evidence (worker mwea5msy-5-s029, parent check): tutorial "## Folded miters" rewritten (corner list,
+  selection, Remove, Corner fields, new "### Developed length and K-factor" citing DIN 6935 with the formula, examples
+  and calibration K = (bend allowance / angle - r) / t, new "### Folded Corner objects"), Folded Bar bullet in
+  "Expressions in panel fields"; README feature line and CHANGELOG Unreleased entry describe the current design.
+  Catalogs: 19 stale MaxProFrame texts removed (es, frameforge_es byte-identical, ru), App::Property context with 12
+  tooltips (es translated, ru unfinished), .qm recompiled; new test_the_folded_corner_property_tooltips_are_spanish
+  (RED before the .qm recompile). GREEN (parent): test_russian_translation 6, test_compile_translations 3,
+  test_folded_bar_translations 6, test_library_translations 3, test_toolbar_translations 4, test_folded_bar_panel 60,
+  test_folded_bar 35 OK. Full suite not run (CI runs it on the PR).
