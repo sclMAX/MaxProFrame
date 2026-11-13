@@ -31,7 +31,7 @@ per task; push, PR and merge stay the user's decisions.
 - T4 [S3, S4, S5] Cutout (panel and direct face+sketch path). route=worker (parallel); commit=
 - T5 [S3, S4, S5] Extend Cut and Notch (target face on a bar, profiles from a bar, no dependency loop, no cut at a
   folded corner). route=worker (parallel); commit=
-- T6 [S3] Profile Pattern with a whole Folded Bar. route=worker (parallel); commit=
+- T6 [S3] Profile Pattern with a whole Folded Bar. route=worker (parallel); commit=(T6 commit) [x]
 - T7 [S1-S5] docs (tutorial, README, CHANGELOG), full suite, verify. route=parent; commit=
 
 ## Log
@@ -54,3 +54,8 @@ per task; push, PR and merge stay the user's decisions.
   piece. RED 8 tests (AttributeError segment_at; bar did not follow the miter), GREEN test_folded_bar_tools 8 (parent
   re-run OK, weekly 8 OK), test_folded_bar 35, test_folded_bar_panel 77, test_end_miter_panel 14, test_drill_hole_panel
   99, profile pattern modules 26/12/38/9/15. Open: Spanish/other translations of the new message (T7).
+- L6 T6 evidence (worker mwexmd5a-9-yyhf): `is_piece` accepts a Folded Bar; copies link the bar; Between faces reuses
+  the existing between_faces_problem message; BOM/Populate IDs count copies as folded bars (qty 3). RED 4 of 5 (bar
+  refused), GREEN test_profile_pattern_folded_bar 6 (stable and weekly); pattern modules 38/26/12/9/15 OK. Follow-ups:
+  piece hint/tooltip do not mention a folded bar (T7); a hidden tube of a bar picked from the tree is not mapped to
+  its bar.

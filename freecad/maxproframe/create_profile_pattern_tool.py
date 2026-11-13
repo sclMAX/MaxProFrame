@@ -8,6 +8,7 @@ from PySide import QtCore, QtGui
 from freecad.maxproframe._utils import (
     get_profile_from_trimmedbody,
     is_extrudedcutout,
+    is_foldedbar,
     is_group,
     is_part,
     is_pattern_link,
@@ -91,8 +92,11 @@ class ReferenceLabel(QtGui.QLabel):
 
 
 def is_piece(obj):
-    """A piece a pattern repeats: a profile, a trimmed profile, a cutout or a drill hole."""
-    return is_profile(obj) or is_trimmedbody(obj) or is_extrudedcutout(obj)
+    """A piece a pattern repeats: a profile, a trimmed profile, a cutout, a drill hole or a whole Folded Bar.
+
+    A Folded Bar is repeated whole (odd/tasks/folded-bar-tools.md S3): its copies link the bar, not a hidden tube of it.
+    """
+    return is_profile(obj) or is_trimmedbody(obj) or is_extrudedcutout(obj) or is_foldedbar(obj)
 
 
 def picked(obj, sub):
