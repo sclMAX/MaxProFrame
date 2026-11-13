@@ -3,7 +3,8 @@
 The folded bar is rebuilt from the unfolded bar: each segment goes back where its profile was drawn and the outer
 wall of each bend zone is revolved around its bend center, so the outside of the frame keeps its size and the outer
 corners are round with the real radius; the notch flanks meet, the key tab fills its socket and the cuts made on the
-segments stay where they were drawn.
+segments stay where they were drawn. A stepped open corner folds with both ends interlocked
+(odd/tasks/stepped-corners.md, T2: S4 S5).
 """
 
 import math
@@ -16,6 +17,7 @@ from test_end_miter_geometry import polar
 from test_unfolded_geometry import (
     DEPTH,
     PLAIN,
+    RHOMBUS,
     STEEL,
     STEPPED,
     K,
@@ -25,6 +27,7 @@ from test_unfolded_geometry import (
     UnfoldFixture,
     bend,
     key_centers,
+    open_frames,
     step_ends,
 )
 
@@ -423,6 +426,76 @@ class SteppedFoldTest(FoldFixture):
                     local = unfolded.placements[1].multVec(tip)
                     local = unfolded.corners[0].frame.inverse().multVec(local)
                     self.assertLess(local.y - R - T, top - S)
+
+
+class SteppedOpenCornerFoldTest(FoldFixture):
+    """odd/tasks/stepped-corners.md, T2 (S4, S5): a closed frame whose open corner is stepped folds into one solid, its
+    two ends interlocked on both bands without overlap."""
+
+    def rhombus(self, open_at_60=False):
+        bottom, right, top, left = self.frame(edges=RHOMBUS)
+        return build_chain([bottom, right, top, left], open_corner=(bottom, right) if open_at_60 else None)
+
+    def assertFoldsWithoutOverlap(self, chain, open_corner):
+        """The folded volume is the unfolded one plus what each outer wall gains revolved (Pappus): nothing of the two
+        ends overlaps (a fuse would lose it)."""
+        unfolded = unfold(chain, bend(**PLAIN), open_corner=open_corner)
+
+        shape = self.solid(fold_bar(chain, unfolded))
+
+        added = sum(math.radians(corner.bend_angle) * (T / 2 - K * T) * DEPTH * T for corner in unfolded.corners)
+        self.assertAlmostEqual(unfolded.shape.Volume + added, shape.Volume, delta=VOLUME_TOLERANCE)
+        for corner in chain.corners:
+            self.assertRoundCorner(shape, corner)
+        return shape
+
+    def beyond_outer_faces(self, shape, chain, reach=80.0):
+        """[volume of ``shape`` past the outer face plane of the last tube, of the first tube], within ``reach`` of the
+        virtual sharp of the open corner."""
+        found = []
+        for end in open_frames(chain):
+            region = Part.makeBox(2 * reach, reach, 2 * reach)
+            region.translate(App.Vector(-reach, -reach, -reach))
+            region.Placement = end.frame.multiply(region.Placement)
+            found.append(self.common(shape, region))
+        return found
+
+    def test_rectangle_folds_with_its_ends_interlocked(self):
+        # At (0, 0) the last tube (left) and the first one (bottom) meet; their outer faces at x = -25 and y = -25.
+        chain = self.rectangle()
+        for options in ({}, dict(clearance=1.0), dict(step_flip=True), dict(step_flip=True, clearance=1.0)):
+            with self.subTest(options=options):
+                shape = self.assertFoldsWithoutOverlap(chain, bend(**STEPPED, **options))
+
+                # The outer and the inner corner of the frame are closed: one end covers each.
+                self.assertTrue(self.inside(shape, (-E + 1, -E + 1, 0)))
+                self.assertTrue(self.inside(shape, (E - 1, E - 1, 0)))
+                # The end that does not cover the outer band ends s (+ g/2) from the other's outer face, and the one
+                # that covers it starts g/2 past it: the clearance opens a gap between them.
+                gap = (-20.75, -24, 0) if options.get("step_flip") else (-24, -20.75, 0)
+                self.assertEqual(not options.get("clearance"), self.inside(shape, gap))
+                for volume in self.beyond_outer_faces(shape, chain):
+                    self.assertAlmostEqual(0.0, volume, delta=VOLUME_TOLERANCE)
+
+    def test_nothing_sticks_out_past_the_outer_faces_at_120_and_60_degrees(self):
+        # L13: at a convex open corner other than 90 degrees the outer band that covers the overlap ends where its
+        # cross-section still lies inside the other tube's outer face plane: no material past either outer face
+        # plane; the corner left open at the outer edge is a weld groove.
+        for open_at_60 in (False, True):
+            chain = self.rhombus(open_at_60)
+            for options in ({}, dict(step_flip=True), dict(step_flip=True, clearance=1.0)):
+                with self.subTest(open_at_60=open_at_60, options=options):
+                    shape = self.assertFoldsWithoutOverlap(chain, bend(**STEPPED, **options))
+
+                    for volume in self.beyond_outer_faces(shape, chain):
+                        self.assertAlmostEqual(0.0, volume, delta=VOLUME_TOLERANCE)
+
+    def test_rhombus_folds_with_its_ends_interlocked_at_120_and_60_degrees(self):
+        for open_at_60 in (False, True):
+            chain = self.rhombus(open_at_60)
+            for options in ({}, dict(clearance=1.0, step_flip=True)):
+                with self.subTest(open_at_60=open_at_60, options=options):
+                    self.assertFoldsWithoutOverlap(chain, bend(**STEPPED, **options))
 
 
 if __name__ == "__main__":

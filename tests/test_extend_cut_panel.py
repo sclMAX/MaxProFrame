@@ -6,7 +6,7 @@ from unittest.mock import patch
 import FreeCAD as App
 import FreeCADGui as Gui
 import Part
-from miter_helpers import use_language
+from miter_helpers import deliver_language_change, use_language
 from PySide import QtCore, QtWidgets
 from test_end_miter_geometry import CENTER
 from test_extend_cut_geometry import FAR, NEAR, ExtendCutFixture
@@ -816,6 +816,40 @@ class TestExtendCutTranslations(PanelFixture):
         self.assertEqual(panel.form.windowTitle(), "Extend / Cut")
         self.assertEqual(panel.form.groupBox_target.title(), "Target")
         self.assertEqual(panel.form.target_label.text(), "Click a face, or select a profile in the tree.")
+
+    def test_a_language_change_keeps_what_the_open_panel_shows(self):
+        # FreeCAD sends LanguageChange to its windows when a language is applied (Preferences, or a switch made
+        # before the panel opened and delivered late): the panel keeps showing its target, profiles and preview
+        # state, never the texts of its form file.
+        target = self.target()
+        body = self.profile(0, 300)
+        face = self.near_face(target)
+        panel = self.run_command((target, face), (body, ""))
+        form = panel.form
+
+        def shown():
+            return {
+                "title": form.windowTitle(),
+                "target": form.target_label.text(),
+                "hint": form.hint_label.text(),
+                "profiles": [form.profiles_list.item(row).text() for row in range(form.profiles_list.count())],
+                "message": form.message_label.text(),
+                "status": form.status_label.text(),
+                "gap": form.gap_label.text(),
+                "change target": form.change_target_button.text(),
+            }
+
+        before = shown()
+        self.assertEqual(f"{target.Label} ({target.Name}) {face}", before["target"])
+        self.assertEqual([f"{body.Label} ({body.Name})"], before["profiles"])
+        self.assertEqual("Preview updated", before["status"])
+
+        use_language(self, "English", "en_US")
+        deliver_language_change()
+
+        self.assertEqual(before, shown())
+        self.assertEqual((target, (face,)), panel.target)
+        self.assertEqual([body], panel.profiles)
 
 
 if __name__ == "__main__":
