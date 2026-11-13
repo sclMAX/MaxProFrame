@@ -412,6 +412,22 @@ class FoldedBar:
         """A bar saved by an older MaxProFrame gets the properties it lacks, with their defaults."""
         self.add_properties(obj)
 
+    def onBeforeChange(self, obj, prop):
+        if prop == "Label":
+            self._label_before = obj.Label
+
+    def onChanged(self, obj, prop):
+        """A renamed bar renames each Unfolded Bar still labelled ``<old label>_Unfolded``; others keep theirs."""
+        if prop != "Label":
+            return
+        before = getattr(self, "_label_before", None)
+        self._label_before = None
+        if not before or before == obj.Label or _restoring(obj):
+            return
+        for user in obj.InList:
+            if isinstance(getattr(user, "Proxy", None), UnfoldedBar) and user.Label == unfolded_label(before):
+                user.Label = unfolded_label(obj.Label)
+
     def unsetupObject(self, obj):
         """The bar leaves the document (not by undo): its corner objects go with it."""
         remove_corners(obj)
@@ -639,10 +655,24 @@ def make_folded_bar(selection, corners, open_corner=None):
     return obj
 
 
+def unfolded_label(bar_label):
+    """The label MaxProFrame gives the Unfolded Bar of a folded bar labelled ``bar_label``."""
+    return "{}_Unfolded".format(bar_label)
+
+
+def _restoring(obj):
+    doc = getattr(obj, "Document", None)
+    return "Restore" in getattr(obj, "State", []) or bool(getattr(doc, "Restoring", False))
+
+
 def make_unfolded_bar(folded_bar):
-    """The Unfolded Bar of ``folded_bar``: its straight solid from X = 0 along +X, at the document origin."""
+    """The Unfolded Bar of ``folded_bar``: its straight solid from X = 0 along +X, at the document origin.
+
+    Its label is the folded bar's label followed by ``_Unfolded`` (see ``FoldedBar.onChanged`` for renames).
+    """
     doc = folded_bar.Document
     obj = doc.addObject("Part::FeaturePython", "UnfoldedBar")
+    obj.Label = unfolded_label(folded_bar.Label)
     UnfoldedBar(obj)
     if getattr(obj, "ViewObject", None) is not None:
         ViewProviderUnfoldedBar(obj.ViewObject)

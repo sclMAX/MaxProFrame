@@ -642,6 +642,35 @@ class UnfoldedBarObjectTest(FoldedBarFixture):
         self.assertAlmostEqual(50.0, box.YLength, delta=LENGTH_TOLERANCE)
         self.assertAlmostEqual(50.0, box.ZLength, delta=LENGTH_TOLERANCE)
 
+    def test_unfolded_bar_takes_the_label_of_its_folded_bar(self):
+        _, bar = self.make_bar(**PLAIN)
+        bar.Label = "LateralDerecho"
+
+        unfolded = make_unfolded_bar(bar)
+
+        self.assertEqual("LateralDerecho_Unfolded", unfolded.Label)
+        self.assertEqual("LateralDerecho", bar.Label)
+
+    def test_renaming_the_folded_bar_renames_an_unfolded_bar_that_keeps_its_given_label(self):
+        _, bar = self.make_bar(**PLAIN)
+        bar.Label = "Marco1"
+        unfolded = make_unfolded_bar(bar)
+
+        bar.Label = "MarcoRenombrado"
+
+        self.assertEqual("MarcoRenombrado_Unfolded", unfolded.Label)
+
+    def test_renaming_the_folded_bar_keeps_an_unfolded_bar_renamed_by_hand(self):
+        _, bar = self.make_bar(**PLAIN)
+        bar.Label = "Marco1"
+        unfolded = make_unfolded_bar(bar)
+        unfolded.Label = "Pieza A"
+
+        bar.Label = "MarcoRenombrado"
+
+        self.assertEqual("Pieza A", unfolded.Label)
+        self.assertEqual("MarcoRenombrado", bar.Label)
+
     def test_step_export_reads_back_one_solid_of_the_same_volume_and_length(self):
         import Import
 
