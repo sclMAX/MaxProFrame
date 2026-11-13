@@ -13,7 +13,20 @@ from types import SimpleNamespace
 import FreeCAD as App
 import Part
 from test_end_miter_geometry import polar
-from test_unfolded_geometry import DEPTH, PLAIN, STEEL, K, R, T, UnfoldFixture, bend, key_centers
+from test_unfolded_geometry import (
+    DEPTH,
+    PLAIN,
+    STEEL,
+    STEPPED,
+    K,
+    R,
+    S,
+    T,
+    UnfoldFixture,
+    bend,
+    key_centers,
+    step_ends,
+)
 
 from freecad.maxproframe.drill_hole import make_drill_hole
 from freecad.maxproframe.folded_chain import build_chain
@@ -311,6 +324,105 @@ class FeatureFoldTest(FoldFixture):
         self.assertTrue(self.inside(plain, (300, 100, 24)))
         self.assertFalse(self.inside(shape, (300, 100, 24)))
         self.assertTrue(self.inside(shape, (300, 110, 24)))
+
+
+class SteppedFoldTest(FoldFixture):
+    """odd/tasks/stepped-corners.md, T1 (S2, S3): the stepped corner folds back into one solid, A's band covering the
+    overlap of both inner bands and B's ending past it."""
+
+    def chain_at(self, angle):
+        corner = tuple(p + q for p, q in zip((200, 0, 0), polar(200, angle)))
+        return build_chain(self.frame(edges=(((0, 0, 0), (200, 0, 0)), ((200, 0, 0), corner))))
+
+    @staticmethod
+    def folded_point(unfolded, x, y, w, after):
+        """Where the point (x, y, w) of A's frame (or of B's, ``after``) goes on the folded bar: x along the piece from
+        its bend axis point, y = v - (r + t)."""
+        corner = unfolded.corners[0]
+        u = corner.bend_allowance + x if after else x
+        straight = corner.frame.multVec(App.Vector(u, R + T + y, w))
+        return unfolded.placements[1 if after else 0].inverse().multVec(straight)
+
+    def test_stepped_corner_folds_into_one_solid_without_overlap(self):
+        # The folded volume is the unfolded one plus what the outer wall gains revolved (Pappus): nothing of A and B
+        # overlaps (a fuse would lose it).
+        for angle in (60, 90, 120):
+            for options in ({}, dict(clearance=1.0)):
+                with self.subTest(angle=angle, options=options):
+                    chain = self.chain_at(angle)
+                    unfolded = unfold(chain, bend(**STEPPED, **options))
+
+                    shape = self.solid(fold_bar(chain, unfolded))
+
+                    added = math.radians(unfolded.corners[0].bend_angle) * (T / 2 - K * T) * DEPTH * T
+                    self.assertAlmostEqual(unfolded.shape.Volume + added, shape.Volume, delta=VOLUME_TOLERANCE)
+                    self.assertRoundCorner(shape, chain.corners[0])
+
+    def test_flipped_step_folds_with_the_tab_on_the_segment_after(self):
+        # S5: StepFlip gives the band covering the overlap to the segment after; the bar still folds into one solid
+        # with the volume of the unflipped case (the joint is mirrored), and the segment after's band reaches as far
+        # toward the corner as the segment before's does without the flip.
+        top = DEPTH - R - T
+        for angle in (60, 90, 120):
+            for g in (0.0, 1.0):
+                with self.subTest(angle=angle, clearance=g):
+                    chain = self.chain_at(angle)
+                    normal = unfold(chain, bend(clearance=g, **STEPPED))
+                    flipped = unfold(chain, bend(clearance=g, step_flip=True, **STEPPED))
+
+                    shape = self.solid(fold_bar(chain, flipped))
+
+                    added = math.radians(flipped.corners[0].bend_angle) * (T / 2 - K * T) * DEPTH * T
+                    self.assertAlmostEqual(normal.shape.Volume, flipped.shape.Volume, delta=VOLUME_TOLERANCE)
+                    self.assertAlmostEqual(flipped.shape.Volume + added, shape.Volume, delta=VOLUME_TOLERANCE)
+                    self.assertRoundCorner(shape, chain.corners[0])
+                    x_a, x_b = step_ends(angle)
+                    # The tip of the segment after's inner wall, and of the segment before's band, folded.
+                    after_tip = self.folded_point(flipped, -(x_a - g / 2) + 0.3, top - T / 2, 0.0, after=True)
+                    before_tip = self.folded_point(flipped, -(x_b + g / 2) - 0.3, top - T / 2, 0.0, after=False)
+                    self.assertTrue(self.inside(shape, after_tip))
+                    self.assertTrue(self.inside(shape, before_tip))
+                    unflipped = fold_bar(chain, normal) if angle == 90 else None
+                    if unflipped is not None:
+                        self.assertFalse(self.inside(unflipped, after_tip))
+
+    def test_steps_meet_as_computed_for_the_angle(self):
+        # S3: at 60 degrees a wedge s cot(theta) wide opens on B's visible face between A's visible face and B's end;
+        # at 90 degrees B's end rests on A's visible face; at 120 degrees no gap shows and A's tip ends inside B.
+        top = DEPTH - R - T
+        for angle in (60, 90, 120):
+            with self.subTest(angle=angle):
+                chain = self.chain_at(angle)
+                unfolded = unfold(chain, bend(**STEPPED))
+                shape = self.solid(fold_bar(chain, unfolded))
+                x_a, x_b = step_ends(angle)
+                meet = top * math.tan(math.radians(angle) / 2)
+                wedge = x_b - meet
+                self.assertAlmostEqual(S / math.tan(math.radians(angle)) if angle < 90 else 0.0, wedge, places=9)
+
+                def on_b(x):
+                    # Just inside B's visible face.
+                    return self.inside(shape, self.folded_point(unfolded, x, top - 0.02, 0.0, after=True))
+
+                self.assertTrue(on_b(x_b + 0.1))
+                self.assertTrue(on_b(meet - 0.1))
+                for part in (0.1, 0.5, 0.9):
+                    if wedge > 0.5:
+                        self.assertFalse(on_b(meet + part * wedge), part)
+                if angle == 90:
+                    # B's band on A's visible face; A's inner wall ends at x_A, flush with B's band.
+                    middle = -(top - S / 2)
+                    self.assertTrue(self.inside(shape, self.folded_point(unfolded, middle, top + 0.02, 0.0, False)))
+                    for x, kept in ((x_a - 0.05, True), (x_a + 0.05, False)):
+                        point = self.folded_point(unfolded, x, top - T / 2, 0.0, after=False)
+                        self.assertEqual(kept, self.inside(shape, point), x)
+                if angle == 120:
+                    # A's tip: inside B's tube, below B's band, between its side walls.
+                    tip = self.folded_point(unfolded, x_a - 0.5, top - T / 2, 0.0, after=False)
+                    self.assertTrue(self.inside(shape, tip))
+                    local = unfolded.placements[1].multVec(tip)
+                    local = unfolded.corners[0].frame.inverse().multVec(local)
+                    self.assertLess(local.y - R - T, top - S)
 
 
 if __name__ == "__main__":
