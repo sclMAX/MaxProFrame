@@ -1391,7 +1391,9 @@ class TestDrillHoleCreation(DrillHolePanelFixture):
         before = self.names()
         panel = self.run_command()
         self.assertFalse(panel.accept())
-        self.assertEqual(self.message(panel), "Select a planar face of a profile, a trimmed profile or a cutout.")
+        self.assertEqual(
+            self.message(panel), "Select a planar face of a profile, a trimmed profile, a cutout or a folded bar."
+        )
         self.click(body, self.face_towards(body, UP))
         self.assertFalse(panel.accept())
         self.assertEqual(self.message(panel), "Select a vertex of the face.")

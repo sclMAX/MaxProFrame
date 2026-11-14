@@ -189,6 +189,17 @@ FOLDED_MITER_TEXTS = (
         "and the outer corner radius of the tube",
     ),
     ("App::Property", "Swap the tubes of a Stepped joint: the other one covers the step"),
+    ("MaxProFrame", "{} is too short for the stepped joint of the open corner."),
+    ("App::Property", "Tube each segment of the bar is made from, in its order"),
+    ("frameforge", "Select a planar face of a profile, a trimmed profile, a cutout or a folded bar."),
+    ("frameforge", "Click a face of the folded bar."),
+    ("frameforge", "{} is closed: click its tubes to add them."),
+    (
+        "MaxProFrame_AddExtrudeCutout",
+        "<b>Cutout / Hole</b><br><br>Click a planar face of a profile, a trimmed profile, a cutout or a folded bar, "
+        "then OK: a sketch holding the face outline is created on the face and opened. Draw the hole and close the "
+        "sketch to cut it.<br><br>Or preselect one face and one sketch to cut with that sketch directly.",
+    ),
 )
 
 

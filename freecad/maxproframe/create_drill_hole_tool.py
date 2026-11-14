@@ -1522,7 +1522,9 @@ class DrillHoleTaskPanel:
 
     def _missing(self):
         if self.face is None:
-            return translate("frameforge", "Select a planar face of a profile, a trimmed profile or a cutout.")
+            return translate(
+                "frameforge", "Select a planar face of a profile, a trimmed profile, a cutout or a folded bar."
+            )
         if self.vertex is None:
             return translate("frameforge", "Select a vertex of the face.")
         return ""

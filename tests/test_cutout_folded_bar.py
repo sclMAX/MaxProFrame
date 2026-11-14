@@ -25,7 +25,7 @@ from freecad.maxproframe.create_extruded_cutout_tool import AddExtrudedCutoutCom
 from freecad.maxproframe.frameforge_exceptions import FrameForgeException
 
 HOLE_RADIUS = 5.0
-NO_FACE = "Click a planar face of a profile, a trimmed profile or a cutout."
+NO_FACE = "Click a planar face of a profile, a trimmed profile, a cutout or a folded bar."
 # The outer wall of the right tube, and the top wall (+Z) of the right tube (a bar face spanning the three tubes).
 RIGHT_OUTER = App.Vector(325, 100, 0)
 RIGHT_TOP = App.Vector(300, 100, 25)

@@ -41,9 +41,9 @@ class TestFoldedBarPanelSpanish(FoldedPanelFixture):
         )
         self.assertEqual(
             [
-                "1 · Profile → Profile001 · R 10 mm · llave · holgura 0.5 mm",
-                "2 · Profile001 → Profile002 · R 10 mm · llave · holgura 0.5 mm",
-                "3 · Profile002 → Profile003 · R 10 mm · llave · holgura 0.5 mm",
+                "1 · Profile → Profile001 · R 10 mm · llave · holgura 0,5 mm",
+                "2 · Profile001 → Profile002 · R 10 mm · llave · holgura 0,5 mm",
+                "3 · Profile002 → Profile003 · R 10 mm · llave · holgura 0,5 mm",
                 "Abierta · Profile003 → Profile",
             ],
             self.rows(panel),
@@ -100,7 +100,7 @@ class TestFoldedBarPanelSpanish(FoldedPanelFixture):
         self.pick(panel, 0, 1)
 
         form = panel.form
-        self.assertEqual("1 · Profile → Profile001 · R 6 mm · sin llave · holgura 0.2 mm", self.rows(panel)[0])
+        self.assertEqual("1 · Profile → Profile001 · R 6 mm · sin llave · holgura 0,2 mm", self.rows(panel)[0])
         self.assertEqual("Llave de encastre — Varios", form.cb_key.text())
         labels = [label.text() for label in form.spin_outer_radius.findChildren(QtWidgets.QLabel)]
         self.assertIn("Varios", labels)
