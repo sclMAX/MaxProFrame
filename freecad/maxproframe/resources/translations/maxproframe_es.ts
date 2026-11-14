@@ -1138,6 +1138,9 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Click a planar face of a profile, a trimmed profile or a cutout.</source><translation>Hacé clic en una cara plana de un perfil, un perfil recortado o un calado.</translation></message>
     <message><source>Click a planar face of a profile, a trimmed profile, a cutout or a folded bar.</source><translation>Hacé clic en una cara plana de un perfil, un perfil recortado, un calado o una barra plegada.</translation></message>
     <message><source>Select a planar face of a profile, a trimmed profile or a cutout.</source><translation>Seleccioná una cara plana de un perfil, un perfil recortado o un calado.</translation></message>
+    <message><source>Select a planar face of a profile, a trimmed profile, a cutout or a folded bar.</source><translation>Seleccioná una cara plana de un perfil, un perfil recortado, un calado o una barra plegada.</translation></message>
+    <message><source>Click a face of the folded bar.</source><translation>Hacé clic en una cara de la barra plegada.</translation></message>
+    <message><source>{} is closed: click its tubes to add them.</source><translation>{} está cerrada: hacé clic en sus tubos para agregarlos.</translation></message>
     <message><source>{}: pick one of its faces</source><translation>{}: elegí una de sus caras</translation></message>
     <message><source>{}: {} is not planar</source><translation>{}: {} no es plana</translation></message>
     <message><source>{}: {} is an end face (wall thickness)</source><translation>{}: {} es una cara de extremo (espesor de pared)</translation></message>
@@ -1357,6 +1360,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <name>MaxProFrame_AddExtrudeCutout</name>
     <message><source>Cutout / Hole</source><translation>Calado</translation></message>
     <message><source>&lt;b&gt;Cutout / Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile or a cutout, then OK: a sketch holding the face outline is created on the face and opened. Draw the hole and close the sketch to cut it.&lt;br&gt;&lt;br&gt;Or preselect one face and one sketch to cut with that sketch directly.</source><translation>&lt;b&gt;Calado&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en una cara plana de un perfil, un perfil recortado o un calado y luego en Aceptar: se crea en la cara un croquis con su contorno y se abre. Dibujá el calado y cerrá el croquis para cortar.&lt;br&gt;&lt;br&gt;O preseleccioná una cara y un croquis para cortar directamente con ese croquis.</translation></message>
+    <message><source>&lt;b&gt;Cutout / Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile, a cutout or a folded bar, then OK: a sketch holding the face outline is created on the face and opened. Draw the hole and close the sketch to cut it.&lt;br&gt;&lt;br&gt;Or preselect one face and one sketch to cut with that sketch directly.</source><translation>&lt;b&gt;Calado&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en una cara plana de un perfil, un perfil recortado, un calado o una barra plegada y luego en Aceptar: se crea en la cara un croquis con su contorno y se abre. Dibujá el calado y cerrá el croquis para cortar.&lt;br&gt;&lt;br&gt;O preseleccioná una cara y un croquis para cortar directamente con ese croquis.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_DrillHole</name>
@@ -1439,6 +1443,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>The corner between {} and {} has no Folded Corner object.</source><translation>La esquina entre {} y {} no tiene objeto Esquina plegada.</translation></message>
     <message><source>The key does not fit in the notch between {} and {}: make it smaller.</source><translation>La llave no entra en la muesca entre {} y {}: achicala.</translation></message>
     <message><source>{} is too short for the radius of its corners.</source><translation>{} es demasiado corto para el radio de sus esquinas.</translation></message>
+    <message><source>{} is too short for the stepped joint of the open corner.</source><translation>{} es demasiado corto para la unión escalonada de la esquina abierta.</translation></message>
     <message><source>{}: its developed length ({:.1f} mm) is longer than the stock length of the cut list ({:.1f} mm).
 </source><translation>{}: su longitud desarrollada ({:.1f} mm) supera la longitud de barra de la lista de cortes ({:.1f} mm).
 </translation></message>
@@ -1511,6 +1516,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Interlocking key in the notch</source><translation>Llave de encastre en la muesca</translation></message>
     <message><source>Diameter of the key, a half circle on the miter line; 0: a quarter of the tube depth across the bent wall</source><translation>Diámetro de la llave, un medio círculo sobre la línea del inglete; 0: un cuarto de la medida del tubo perpendicular a la pared doblada</translation></message>
     <message><source>Tube pieces folded into the bar, in chain order from its start</source><translation>Piezas de tubo plegadas en la barra, en el orden de la cadena desde su inicio</translation></message>
+    <message><source>Tube each segment of the bar is made from, in its order</source><translation>Tubo del que está hecho cada tramo de la barra, en su orden</translation></message>
     <message><source>Folded Corner objects of the bar in chain order from its start, then the open corner of a closed frame</source><translation>Objetos Esquina plegada de la barra en el orden de la cadena desde su inicio, y después la esquina abierta de un marco cerrado</translation></message>
     <message><source>Length of the unfolded bar: the length to cut</source><translation>Longitud de la barra desplegada: la longitud a cortar</translation></message>
     <message><source>The folded bar this is the straight bar of</source><translation>La barra plegada de la que esta es la barra recta</translation></message>

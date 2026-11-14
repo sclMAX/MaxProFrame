@@ -1784,6 +1784,18 @@ All files and sketches on disk will be kept intact.</source>
         <translation>Выберите плоскую грань профиля, усеченного профиля или выреза.</translation>
     </message>
     <message>
+        <source>Select a planar face of a profile, a trimmed profile, a cutout or a folded bar.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click a face of the folded bar.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} is closed: click its tubes to add them.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>{}: pick one of its faces</source>
         <translation>{}: выберите одну из его граней</translation>
     </message>
@@ -2644,6 +2656,10 @@ All files and sketches on disk will be kept intact.</source>
         <source>&lt;b&gt;Cutout / Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile or a cutout, then OK: a sketch holding the face outline is created on the face and opened. Draw the hole and close the sketch to cut it.&lt;br&gt;&lt;br&gt;Or preselect one face and one sketch to cut with that sketch directly.</source>
         <translation>&lt;b&gt;Вырез / Отверстие&lt;/b&gt;&lt;br&gt;&lt;br&gt;Выберите плоскую грань профиля, обрезанного профиля или выреза и нажмите «ОК»: на этой грани будет создан и открыт эскиз, повторяющий её контур. Нарисуйте отверстие и закройте эскиз, чтобы выполнить вырез.&lt;br&gt;&lt;br&gt;Также можно предварительно выбрать грань и эскиз, чтобы сразу выполнить вырез по этому эскизу.</translation>
     </message>
+    <message>
+        <source>&lt;b&gt;Cutout / Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile, a cutout or a folded bar, then OK: a sketch holding the face outline is created on the face and opened. Draw the hole and close the sketch to cut it.&lt;br&gt;&lt;br&gt;Or preselect one face and one sketch to cut with that sketch directly.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>MaxProFrame_DrillHole</name>
@@ -2882,6 +2898,10 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>{} is too short for the radius of its corners.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} is too short for the stepped joint of the open corner.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3136,6 +3156,10 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>Tube pieces folded into the bar, in chain order from its start</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tube each segment of the bar is made from, in its order</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
