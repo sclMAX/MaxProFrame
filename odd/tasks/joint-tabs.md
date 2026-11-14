@@ -51,9 +51,10 @@ s = band depth, g = clearance. A = the segment before the corner, B = the one af
   (context backstop; design L7); commit=d056549 (PR #160, chain 1/4) [x]
 - T2 [S1, S2, S6, S7] `interlock.py`: Interlock object (Kind, finger properties, PieceA/PieceB), FoldedBar
   `Interlocks` and their settings per corner, restore of older documents; tests. route=gentle-ai-worker (context
-  backstop; design L9); commit=feat/joint-tabs-2 (PR chain 2/4, see L10) [x]
+  backstop; design L9); commit=6fe004b (PR #161, chain 2/4) [x]
 - T3 [S1, S6, S7] `create_interlock_tool.py`: command, two-face picking on a Folded Bar resolved to a corner, task
-  panel with the settings and the refusals, edit, toolbar, icon; tests. route=inline; commit=pending [ ]
+  panel with the settings and the refusals, edit, toolbar, icon; tests. route=gentle-ai-worker (context backstop;
+  design L11) + parent (two pinned tests, L12); commit=feat/joint-tabs-3 (PR chain 3/4) [x]
 - T4 [S7] tutorial, README, CHANGELOG, Spanish translation, full native suite. route=inline; commit=pending [ ]
 
 Delivery forecast: about 1500 authored changed lines; chain_strategy=stacked-to-main (default branch verified:
@@ -126,3 +127,24 @@ main): one PR per task, each stacked on the previous one, merged in order (like 
   test_interlock_geometry 8, test_workbench_commands 2 (FreeCAD 1.1.4). Interlock `Clearance` defaults to 0, like the
   Folded Corner property. Edit hook `interlock.EDIT_PANEL(obj)` for T3. Decision (parent): deleting a bar also deletes
   its Interlocks, like its Corners (an Interlock without its bar does nothing) -> T3. PR #160 CI: 12 checks pass.
+- L11 (2026-11-14) T3 design (parent): `create_interlock_tool.py` with the command `MaxProFrame_Interlock` (icon
+  Interlock.svg, on the Folded Miters toolbar after the Folded Bar tools, module imported in InitGui) and an
+  `InterlockTaskPanel`. Picking: two faces of one Folded Bar, read with their picked points (the selection when the
+  command starts, then clicks while the panel is open, like Drill Hole's observer), each resolved with
+  `folded_bar.segment_at` to its segment; valid when the two segments meet at a folded corner of the bar and each face
+  is its segment's inner wall (planar, normal along minus the segment's outer normal of that corner: facing the
+  inside of the corner). Otherwise the panel says what to pick (S6) and creates nothing. A valid pick creates the
+  Interlock (`make_interlock`) in one transaction and previews it on the bar; the settings fields (Kind, Count,
+  FingerWidth, Tip, TipSize, Depth, Clearance, Flip; TipSize enabled only for Chamfer / Round) update it live; a
+  refusal of the bar (T1/T2 messages) shows in the panel and OK stays disabled while the bar is in error; OK commits,
+  Cancel undoes it all. Edit (double click, the `interlock.EDIT_PANEL` hook) opens the same panel on the object with
+  its values, no picking. Last used settings are remembered like the other panels. Deleting a bar deletes its
+  Interlocks (FoldedBar.unsetupObject, L10).
+- L12 (2026-11-14) T3 evidence: worker RED import error, then the bar-delete test failing before
+  `remove_interlocks`, and a mutation of the inner-wall check caught; GREEN test_interlock_panel 10 OK,
+  test_toolbar_translations 4, test_workbench_commands 2, test_interlock 10, test_interlock_geometry 8,
+  test_folded_bar 49, test_folded_bar_tools 14, test_folded_bar_translations 9. Parent: the Folded Miters toolbar
+  test now pins the Folded Bar tools first (test_folded_bar_panel CommandTest 5 OK) and the two Interlock command
+  texts wait for a Russian translator (test_russian_translation 6 OK). Spanish menu text "Encastre". Deviations: a
+  first Interlock starts with 0.5 mm clearance (the first Folded Corner's), no auto-update check box (each change
+  applies at once), refusals for a corner that has an Interlock and for faces on two bars.

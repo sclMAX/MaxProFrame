@@ -200,6 +200,14 @@ FOLDED_MITER_TEXTS = (
         "then OK: a sketch holding the face outline is created on the face and opened. Draw the hole and close the "
         "sketch to cut it.<br><br>Or preselect one face and one sketch to cut with that sketch directly.",
     ),
+    # odd/tasks/joint-tabs.md, T3: the Interlock command.
+    ("MaxProFrame_Interlock", "Interlock"),
+    (
+        "MaxProFrame_Interlock",
+        "<b>Interlock</b><br><br>Click the inner wall faces of the two tubes at a folded corner of a Folded Bar: "
+        "fingers cut by the laser at the inner vertex of the corner locate one tube on the other. Set their count, "
+        "width, tip and clearance in the panel. Double-click the Interlock to edit it.",
+    ),
 )
 
 

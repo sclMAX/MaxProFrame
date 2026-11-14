@@ -417,7 +417,8 @@ class CommandTest(FoldedPanelFixture):
     def test_commands_are_registered_with_their_icons_and_on_a_workbench_toolbar(self):
         known = set(Gui.listCommands())
         self.assertEqual([], [name for name in COMMANDS if name not in known])
-        self.assertEqual(list(COMMANDS), MaxProFrame.toolbox_folded)
+        # The Folded Bar tools lead the toolbar; the Interlock follows them (test_interlock_panel).
+        self.assertEqual(list(COMMANDS), MaxProFrame.toolbox_folded[: len(COMMANDS)])
         icons = {"MaxProFrame_FoldedBar": "FoldedBar.svg", "MaxProFrame_UnfoldBar": "UnfoldedBar.svg"}
         for name, icon in icons.items():
             with self.subTest(command=name):
