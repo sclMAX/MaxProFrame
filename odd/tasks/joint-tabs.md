@@ -54,8 +54,9 @@ s = band depth, g = clearance. A = the segment before the corner, B = the one af
   backstop; design L9); commit=6fe004b (PR #161, chain 2/4) [x]
 - T3 [S1, S6, S7] `create_interlock_tool.py`: command, two-face picking on a Folded Bar resolved to a corner, task
   panel with the settings and the refusals, edit, toolbar, icon; tests. route=gentle-ai-worker (context backstop;
-  design L11) + parent (two pinned tests, L12); commit=feat/joint-tabs-3 (PR chain 3/4) [x]
-- T4 [S7] tutorial, README, CHANGELOG, Spanish translation, full native suite. route=inline; commit=pending [ ]
+  design L11) + parent (two pinned tests, L12); commit=32fc748, 7a7f32d (PR #162, chain 3/4) [x]
+- T4 [S7] tutorial, README, CHANGELOG, Spanish translation, full native suite. route=gentle-ai-worker (docs, i18n)
+  + parent (suite); commit=feat/joint-tabs-4 (PR chain 4/4) [x]
 
 Delivery forecast: about 1500 authored changed lines; chain_strategy=stacked-to-main (default branch verified:
 main): one PR per task, each stacked on the previous one, merged in order (like #155-#157).
@@ -148,3 +149,14 @@ main): one PR per task, each stacked on the previous one, merged in order (like 
   texts wait for a Russian translator (test_russian_translation 6 OK). Spanish menu text "Encastre". Deviations: a
   first Interlock starts with 0.5 mm clearance (the first Folded Corner's), no auto-update check box (each change
   applies at once), refusals for a corner that has an Interlock and for faces on two bars.
+
+- L13 (2026-11-14) T4 evidence (worker): RED test_interlock_translations 5 failures (English shown), GREEN 5 OK after
+  46 Spanish entries (MaxProFrame 35, App::Property 11) and the es .qm rebuild; the same texts unfinished in Russian
+  and listed in FOLDED_MITER_TEXTS (test_russian_translation 6 OK); test_toolbar_translations 4, test_folded_bar_
+  translations 9, test_interlock_panel 10, test_library_translations 3 OK. Spanish "Aletas" for fingers (the user's
+  word, L1), "Uniforme" (Even), tips "Recta / Biselada / Redondeada". test_shortcuts failed on the T3 command: parent
+  added it to WITHOUT_SHORTCUT on the T3 branch (7a7f32d, test_shortcuts 5 OK). Stacked PRs (base not main) run no
+  CI: each runs when retargeted to main after the previous merge.
+- L14 (2026-11-14) Close: full native suite on the T4 tree (T1-T4), FreeCAD 1.1.4: 2087 tests, succeeded (36 min).
+  Not covered by tests: a non-square tube, a folded Round tip, a bar inside a Part, faces on two bars, Cancel with
+  undo disabled; the open corner ignores interlocks. Weekly FreeCAD runs in CI when each PR is retargeted to main.
