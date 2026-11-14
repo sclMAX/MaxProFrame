@@ -28,6 +28,7 @@ from test_unfolded_geometry import (
     bend,
     drilled_mitered_rectangle,
     key_centers,
+    open_corner,
     open_frames,
     second_step,
     step_ends,
@@ -63,6 +64,24 @@ def forget_default(name):
     App.closeDocument(name)
 
 
+def stepped_face_pairs(angle, a, b, g, top, x_a, x_b):
+    """[(label, at, before, after)]: the mating face pairs of a stepped band whose faces are parallel at ``angle``
+    (stepped-corners.md T6): ``at(k)`` is the folded point k across the pair from its contact plane without clearance,
+    from the piece whose material ends ``before`` it to the one whose material starts ``after`` it (before + after =
+    g). ``a`` and ``b`` map (x, y, w) of A's frame (the tab piece) and of B's to the folded bar; the band is
+    y in [``top`` - S, ``top``], A ends at ``x_a`` along A and B at ``x_b`` along B without clearance.
+
+    A's end and the trim of B's side walls under it are both cut: g/2 each. A's step face (the bottom of its band past
+    the flank, below 90 degrees) and A's inner face are faces of A's band that may not move (with s = t they are the
+    faces of the wall): the trim and B's end take all of g."""
+    pairs = [("A's end, B's trim", lambda k: a(x_a + k, top - S / 2, SIDE_WALL), g / 2, g / 2)]
+    if angle < 90:
+        pairs.append(("A's step face, B's trim", lambda k: a(x_a - g / 2 - 0.2, top - S - k, SIDE_WALL), 0.0, g))
+    if angle == 90:
+        pairs.append(("A's inner face, B's end", lambda k: b(x_b + k, top - T / 2, 0.0), 0.0, g))
+    return pairs
+
+
 class FoldFixture(UnfoldFixture):
     # Whether the tests of the class read ``self.default``: the rectangle with the default settings as (chain, unfolded,
     # folded), built once per test module in a document of its own that closes when the module ends.
@@ -94,6 +113,12 @@ class FoldFixture(UnfoldFixture):
 
     def common(self, shape, region):
         return shape.common(region).Volume
+
+    def assertFacePair(self, shape, at, before, after, label):
+        """The material of one piece ends ``before`` the contact plane of a face pair and the other's starts ``after``
+        it (``stepped_face_pairs``), within 0.1 mm."""
+        for k, kept in ((-before - 0.1, True), (-before + 0.1, False), (after - 0.1, False), (after + 0.1, True)):
+            self.assertEqual(kept, self.inside(shape, at(k)), (label, k))
 
     @staticmethod
     def bisector(corner):
@@ -348,6 +373,35 @@ class SteppedFoldTest(FoldFixture):
         straight = corner.frame.multVec(App.Vector(u, R + T + y, w))
         return unfolded.placements[1 if after else 0].inverse().multVec(straight)
 
+    def frame_points(self, unfolded, flip):
+        """(a, b): (x, y, w) of A's frame and of B's (``folded_point``) to the folded bar; with ``step_flip`` A is the
+        segment after, its frame mirrored."""
+        sign = -1 if flip else 1
+
+        def a(x, y, w):
+            return self.folded_point(unfolded, sign * x, y, w, after=flip)
+
+        def b(x, y, w):
+            return self.folded_point(unfolded, sign * x, y, w, after=not flip)
+
+        return a, b
+
+    def test_clearance_opens_every_mating_face_pair_by_all_of_it(self):
+        # S5, T6: the corner's clearance g opens every mating face pair of the stepped band by g, like the flanks:
+        # A's end against the trim of B's side walls (g/2 each), A's step face against that trim below 90 degrees
+        # and A's inner face against B's end at 90 degrees (all of g on B's side), flipped too.
+        g = 1.0
+        top = DEPTH - R - T
+        for angle in (60, 90, 120):
+            chain = self.chain_at(angle)
+            for flip in (False, True):
+                unfolded = unfold(chain, bend(clearance=g, step_flip=flip, **STEPPED))
+                shape = self.solid(fold_bar(chain, unfolded))
+                a, b = self.frame_points(unfolded, flip)
+                for label, at, before, after in stepped_face_pairs(angle, a, b, g, top, *step_ends(angle)):
+                    with self.subTest(angle=angle, flip=flip, pair=label):
+                        self.assertFacePair(shape, at, before, after, label)
+
     def test_stepped_corner_folds_into_one_solid_without_overlap(self):
         # The folded volume is the unfolded one plus what the outer wall gains revolved (Pappus): nothing of A and B
         # overlaps (a fuse would lose it).
@@ -384,7 +438,7 @@ class SteppedFoldTest(FoldFixture):
                     x_a, x_b = step_ends(angle)
                     # The tip of the segment after's inner wall, and of the segment before's band, folded.
                     after_tip = self.folded_point(flipped, -(x_a - g / 2) + 0.3, top - T / 2, 0.0, after=True)
-                    before_tip = self.folded_point(flipped, -(x_b + g / 2) - 0.3, top - T / 2, 0.0, after=False)
+                    before_tip = self.folded_point(flipped, -(x_b + g) - 0.3, top - T / 2, 0.0, after=False)
                     self.assertTrue(self.inside(shape, after_tip))
                     self.assertTrue(self.inside(shape, before_tip))
                     unflipped = fold_bar(chain, normal) if angle == 90 else None
@@ -472,7 +526,7 @@ class SteppedOpenCornerFoldTest(FoldFixture):
                 # The outer and the inner corner of the frame are closed: one end covers each.
                 self.assertTrue(self.inside(shape, (-E + 1, -E + 1, 0)))
                 self.assertTrue(self.inside(shape, (E - 1, E - 1, 0)))
-                # The end that does not cover the outer band ends s (+ g/2) from the other's outer face, and the one
+                # The end that does not cover the outer band ends s (+ g) from the other's outer face, and the one
                 # that covers it starts g/2 past it: the clearance opens a gap between them.
                 gap = (-20.75, -24, 0) if options.get("step_flip") else (-24, -20.75, 0)
                 self.assertEqual(not options.get("clearance"), self.inside(shape, gap))
@@ -527,6 +581,40 @@ class SteppedOpenCornerFoldTest(FoldFixture):
                     for u, kept in ((-(before + 0.05), True), (-(after + 0.05), True), (-(after - 0.05), False)):
                         point = last.frame.multVec(App.Vector(u, 0.05, 0.0))
                         self.assertEqual(kept, self.inside(shape, point), u)
+
+    def open_pairs(self, chain, flip, g):
+        """(angle, pairs) of the stepped open corner of ``chain``: the face pairs of its inner band
+        (``stepped_face_pairs``, A = the last tube), and at 90 degrees the end of A's outer band against B's step face,
+        where B's outer band (y' up to s) covers the overlap of the outer bands: all of g on A's side."""
+        angle = round(open_corner(chain).bend_angle)
+        last, first = open_frames(chain)
+        sign = -1 if flip else 1
+
+        def a(x, y, w):
+            return (first if flip else last).frame.multVec(App.Vector(sign * x, y, w))
+
+        def b(x, y, w):
+            return (last if flip else first).frame.multVec(App.Vector(sign * x, y, w))
+
+        pairs = stepped_face_pairs(angle, a, b, g, DEPTH, *step_ends(angle, r=0.0, t=0.0))
+        if angle == 90:
+            pairs.append(("A's outer end, B's step face", lambda k: a(-S + k, (S + T) / 2, SIDE_WALL), g, 0.0))
+        return angle, pairs
+
+    def test_clearance_opens_every_mating_face_pair_by_all_of_it(self):
+        # S5, T6: as at a folded corner (SteppedFoldTest), on both bands of the open corner at 90, 120 and 60 degrees,
+        # flipped too.
+        g = 1.0
+        for chain in (self.rectangle(), self.rhombus(), self.rhombus(open_at_60=True)):
+            for flip in (False, True):
+                shape = fold_bar(
+                    chain, unfold(chain, bend(**PLAIN), open_corner=bend(clearance=g, step_flip=flip, **STEPPED))
+                )
+                self.solid(shape)
+                angle, pairs = self.open_pairs(chain, flip, g)
+                for label, at, before, after in pairs:
+                    with self.subTest(angle=angle, flip=flip, pair=label):
+                        self.assertFacePair(shape, at, before, after, label)
 
     def test_rhombus_folds_with_its_ends_interlocked_at_120_and_60_degrees(self):
         for open_at_60 in (False, True):

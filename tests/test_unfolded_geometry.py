@@ -140,15 +140,15 @@ def drilled_mitered_rectangle(test):
 def second_step(angle, g=0.0):
     """Where the last tube's outer wall ends along it from the sharp of a stepped open corner of ``angle`` (the bend
     angle), with the clearance ``g`` (pending-followups S3a): its second step, as far as it stays clear of the first
-    tube's outer band grown by g / 2 (past its start, beyond its step face).
+    tube's outer band grown by g / 2 past its start and by g beyond its step face (stepped-corners.md T6).
 
     Above 90 degrees the first tube's band lies across the notch from the last tube's outer face: the outer wall
-    (y in [0, t]) reaches its step face y' = s + g / 2, at x = -(s + g / 2 - t cos theta) / sin theta. Below 90 degrees
-    the band starts at the sharp: the outer wall reaches its start x' = -g / 2, at x = -(g / 2 + t sin theta) / cos theta.
+    (y in [0, t]) reaches its step face y' = s + g, at x = -(s + g - t cos theta) / sin theta. Below 90 degrees the band
+    starts at the sharp: the outer wall reaches its start x' = -g / 2, at x = -(g / 2 + t sin theta) / cos theta.
     """
     theta = math.radians(angle)
     if angle > 90:
-        return -(S + g / 2 - T * math.cos(theta)) / math.sin(theta)
+        return -(S + g - T * math.cos(theta)) / math.sin(theta)
     return -(g / 2 + T * math.sin(theta)) / math.cos(theta)
 
 
@@ -1112,9 +1112,10 @@ class SteppedCornerUnfoldTest(UnfoldFixture):
                 self.assertEqual(kept, self.filled(bar, corner, x, R + T + y, w), w)
                 self.assertEqual(not kept, self.filled(bar, corner, corner.bend_allowance + x_b, R + T + y_b, w), w)
 
-    def test_clearance_opens_the_step_faces_half_of_it_each(self):
-        # S5: A's end moves back g/2 along A, B's end g/2 along B, and B's step face (the top of its side walls under
-        # the band, where A's end rests at 90 degrees) g/2 down.
+    def test_clearance_opens_every_step_face_pair_by_all_of_it(self):
+        # S5, T6: A's end moves back g/2 along A and B's step face (the top of its side walls under the band, where
+        # A's end rests at 90 degrees) g/2 down: g between them; B's end moves back g along B, from A's inner face
+        # (which stays) where it rests at 90 degrees.
         g = 1.0
         chain = self.rectangle()
         tight = unfold(chain, bend(**STEPPED))
@@ -1128,8 +1129,8 @@ class SteppedCornerUnfoldTest(UnfoldFixture):
                 for u, kept in (
                     (x_a - g / 2 - 0.1, True),
                     (x_a - g / 2 + 0.1, False),
-                    (ba + x_b + g / 2 - 0.1, False),
-                    (ba + x_b + g / 2 + 0.1, True),
+                    (ba + x_b + g - 0.1, False),
+                    (ba + x_b + g + 0.1, True),
                 ):
                     self.assertEqual(kept, self.filled(loose, corner, u, v, w), (u, v, w))
                 self.assertTrue(self.filled(tight, tight_corner, x_a - g / 2 + 0.1, v, w))
@@ -1253,9 +1254,11 @@ class SteppedOpenCornerUnfoldTest(UnfoldFixture):
         open corner: on the inner wall, the side walls in the inner band, in the middle, in the outer band, and on the
         outer wall."""
         back = (g / 2) / math.cos(math.radians(45))
-        inner, outer = (-(DEPTH - S) - g / 2, DEPTH + g / 2), (-S - g / 2, g / 2)
+        # T6: the covering band's end moves back g/2 (A's inner end, B's outer start), the other end g, from a face of
+        # the covering band that stays (B's inner start from A's inner face, A's outer end from B's step face).
+        inner, outer = (-(DEPTH - S) - g / 2, DEPTH + g), (-S - g, g / 2)
         if flip:
-            inner, outer = (-DEPTH - g / 2, DEPTH - S + g / 2), (-g / 2, S + g / 2)
+            inner, outer = (-DEPTH - g, DEPTH - S + g / 2), (-g / 2, S + g)
         return {
             (DEPTH - T / 2, 0.0): inner,
             (DEPTH - (S + T) / 2, SIDE_WALL): inner,
@@ -1292,17 +1295,17 @@ class SteppedOpenCornerUnfoldTest(UnfoldFixture):
 
     def test_open_corner_steps_both_bands_at_both_ends(self):
         # S4, S5: A's inner band reaches past the miter line (u = -(v + back) on A, v + back on B) to the end of the
-        # overlap, B's outer band past it from the sharp; A's outer band and B's inner band end before it. Each end
-        # moves back g/2 with the clearance.
+        # overlap, B's outer band past it from the sharp; A's outer band and B's inner band end before it. With the
+        # clearance the covering ends move back g/2, the others g (T6).
         chain = self.rectangle()
         for g in (0.0, 1.0):
             with self.subTest(clearance=g):
                 bar = unfold(chain, bend(**PLAIN), open_corner=bend(clearance=g, **STEPPED))
 
                 self.solid(bar)
-                # From B's outer band (g/2 past the sharp) to A's (s + g/2 short of it): the sharps are 25 mm past the
+                # From B's outer band (g/2 past the sharp) to A's (s + g short of it): the sharps are 25 mm past the
                 # path ends.
-                self.assertLength(developed([300, 200, 300, 200], [90] * 3) + DEPTH - S - g, bar)
+                self.assertLength(developed([300, 200, 300, 200], [90] * 3) + DEPTH - S - 3 * g / 2, bar)
                 self.assertOpenEnds(chain, bar, self.ends(g))
                 last, first = open_frames(chain, bar.placements)
                 back = (g / 2) / math.cos(math.radians(45))
@@ -1464,12 +1467,17 @@ class SteppedOpenCornerUnfoldTest(UnfoldFixture):
     def test_rectangle_open_corner_keeps_its_90_degree_joint(self):
         # L13: at 90 degrees the first tube's outer band starts at the sharp, flush with the last tube's outer face:
         # nothing sticks out and nothing is left open, so the bar stays as T2 made it (values measured on 6043270).
+        # T6: with g = 1 the last tube's outer band ends s + g short of the sharp (not s + g/2) and the first tube's
+        # inner band starts g past the last one's inner face: the bar is g/2 shorter and loses g/2 of the 108 mm2
+        # band section twice (108 mm3), plus 4 - 2 sqrt(2) mm3 in both side walls: the first tube's 0.5 x 0.5 mm
+        # under its band up to its new inner start, and the last tube's triangle of 0.29 mm sides past its miter, both
+        # under the trims grown by g (382905.857 on 6043270).
         chain = self.rectangle()
         for options, length, volume in (
             ({}, 1183.9070781254618, 383367.5308141934),
-            (dict(clearance=1.0), 1182.9070781254618, 382905.8571492765),
+            (dict(clearance=1.0), 1182.4070781254618, 382796.68557640095),
             (dict(step_flip=True), 1183.9070781254618, 383367.5308141934),
-            (dict(step_flip=True, clearance=1.0), 1182.9070781254618, 382905.8571492765),
+            (dict(step_flip=True, clearance=1.0), 1182.4070781254618, 382796.68557640095),
         ):
             with self.subTest(options=options):
                 bar = unfold(chain, bend(**PLAIN), open_corner=bend(**STEPPED, **options))
@@ -1495,13 +1503,13 @@ class SteppedOpenCornerUnfoldTest(UnfoldFixture):
 
                     self.solid(bar)
                     stepped = second_step(angle, g)
-                    self.assertGreater(stepped, end - g / 2 + 0.5)
+                    self.assertGreater(stepped, end - g + 0.5)
                     self.assertOpenEnds(
                         chain,
                         bar,
                         {
                             (T / 2, 0.0): (stepped, start + g / 2),
-                            ((S + T) / 2, SIDE_WALL): (end - g / 2, start + g / 2),
+                            ((S + T) / 2, SIDE_WALL): (end - g, start + g / 2),
                         },
                     )
 
