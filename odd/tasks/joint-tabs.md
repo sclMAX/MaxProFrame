@@ -1,0 +1,104 @@
+# Interlocks: an independent command that adds locating shapes between two faces
+A new command picks two faces of a joint and adds laser-cuttable interlocking shapes so the pieces locate each other.
+First kind: fingers at the inner wall vertex of a Folded Corner. Branch feat/joint-tabs; push, PR and merge stay the
+user's decisions.
+
+## Specs
+Notation (corner frame of unfolded_geometry.py, stepped-corners.md): u along the bar, v across the bent wall from its
+outside face, w along the bend axis; d = tube depth across the bent wall, t = wall thickness, θ = bend angle,
+s = band depth, g = clearance. A = the segment before the corner, B = the one after.
+
+- S1 Independent command (L2): "Pensaba mas en un comando nuevo, que permita seleccionar 2 cara y poder configurar la
+  antidad y forma de aletas. Notch, Miter, etc. seguirian siendo un paso previo independiete." -> a new command
+  `Interlock` takes two picked faces and creates an Interlock object. Notch, End Miter, Extend Cut and the Folded Corner
+  joint (Miter / Stepped) are not changed by it; a document without Interlocks recomputes to the same shapes.
+- S2 Extensible kinds (L5): "a futuro analizaremos otras formas de encastre ganchos, clip, etc. tengamoslo a la hora de
+  armar los objetos o clases." -> the Interlock object has a `Kind`; each kind is one geometry class registered in one
+  registry (settings, checks, solids). This feature ships the kind `Fingers`; hooks, clips, the through tab and slot of
+  a T joint (L1) and the in-plane key of a miter join later as new kinds without changing the object's links, the
+  command's two-face picking or the bar integration.
+- S3 Fingers at the inner vertex of a Folded Corner (L3): "a, [Image#3] en el vertice interno del FolderCorner" -> the
+  two faces picked are the inner wall faces of the two segments of one folded (not open) corner of a Folded Bar. The
+  inner wall band v ∈ [d - s, d] at that corner is split along w into `Count` fingers that alternate which segment owns
+  the overlap of the two inner walls: a finger of A is the stepped geometry of stepped-corners.md S2/S3 (A covers the
+  overlap, B ends past it), a finger of B the same with A and B swapped (StepFlip). Below the band the corner keeps its
+  own joint (Miter or Stepped flanks, key, relief). Every surface the fingers cut is a tube cross-section, a plane
+  w = const, or a tip surface swept along v (perpendicular to the inner wall): a laser without a bevel head cuts it.
+- S4 Finger settings (L4): "ambos configurables y con alternativas de redondeo o bisel para ayudar al centrado." ->
+  `Count` (integer, at least 2, default 3, A owns the first finger), `FingerWidth` (length, 0 = the band's height
+  along w split evenly; otherwise every finger but the two outermost is that wide, centered), `Tip` = `Square` |
+  `Chamfer` | `Round` with `TipSize` (the chamfer leg or the radius of the finger tip corners, in the inner wall
+  plane, to lead the finger in), `Depth` (band depth s, 0 = automatic: the stepped automatic depth), `Clearance`
+  (every mating face pair, finger sides included, opens by all of it: g/2 per piece, as stepped-corners.md T6) and
+  `Flip` (B owns the first finger). A dovetail is not offered at a folded corner: the corner closes by bending, so an
+  undercut cannot pass (agreed, L4-L5).
+- S5 Unfolds and folds (L3): the fingers are cut in the Unfold Bar flat pattern and the Folded Bar folds into one sound
+  solid with no overlap between the segments; each finger closes by the bend like the stepped joint it is made of.
+  `DevelopedLength` does not change.
+- S6 Refusals (L2, L3): two faces that are not the inner walls of the two segments of one folded corner (an open
+  corner, a straight part away from a corner, two bars, a profile) are refused with a message saying what to pick.
+  Fingers that do not fit (fewer than 2, wider than the band, a tip larger than half a finger, a band depth or angle
+  the stepped joint refuses) are refused naming the corner's two pieces, like the other unfold errors.
+- S7 Object, panel, docs (L2, L5): the Interlock object links the corner's two profiles (like the Folded Corner) and
+  the bar lists its Interlocks, so changing one recomputes the bar; it can be edited with a double click; older
+  documents open unchanged. The command sits on the Folded Miters toolbar with its icon. Spanish translation,
+  tutorial, README and CHANGELOG describe it.
+
+## Tasks
+- T1 [S2, S3, S4, S5, S6] geometry: `interlock_geometry.py` (kind registry, `FingerSettings`, finger levels along w,
+  checks) and its use in `unfold` (per-level stepped band, finger side clearance, tips) and `fold_bar` (the split
+  between the segments follows the fingers); tests in tests/test_interlock_geometry.py. route=gentle-ai-worker
+  (context backstop; design L7); commit=pending [ ]
+- T2 [S1, S2, S6, S7] `interlock.py`: Interlock object (Kind, finger properties, PieceA/PieceB), FoldedBar
+  `Interlocks` and their settings per corner, restore of older documents; tests. route=inline; commit=pending [ ]
+- T3 [S1, S6, S7] `create_interlock_tool.py`: command, two-face picking on a Folded Bar resolved to a corner, task
+  panel with the settings and the refusals, edit, toolbar, icon; tests. route=inline; commit=pending [ ]
+- T4 [S7] tutorial, README, CHANGELOG, Spanish translation, full native suite. route=inline; commit=pending [ ]
+
+Delivery forecast: about 1500 authored changed lines; chain_strategy=stacked-to-main (default branch verified:
+main): one PR per task, each stacked on the previous one, merged in order (like #155-#157).
+
+## Log
+- L1 (2026-11-14) "[Image#1: a tube meeting another tube's side at an angle] Si tenemos una union, seria interezante
+  poder crear aletas y cavas (que se puedan cortar con laser) para ubicar los perfiles uno respecto al otro. ENtiendes
+  la idea?"
+- L2 (2026-11-14) "Pensaba mas en un comando nuevo, que permita seleccionar 2 cara y poder configurar la antidad y forma
+  de aletas. Notch, Miter, etc. seguirian siendo un paso previo independiete. De esta manera podria si quiciera agregar
+  una union en el vertice interior [Image#2: a Folded Corner with its key] que sirba para alinear. Que opinas?"
+- L3 (2026-11-14) Asked which vertex. User: "a, [Image#3: the inner vertical edge of a Folded Corner, marked] en el
+  vertice interno del FolderCorner"
+- L4 (2026-11-14) Asked order and finger shapes. User: "1. si 1+2 2. ambos configurables y con alternativas de redondeo
+  o bisel para ayudar al centrado. Que opinas?" Proposed: square / chamfer / round tips in the wall plane; no dovetail
+  at a folded corner (it closes by bending, an undercut cannot pass); dovetail kept for kinds inserted normal to a wall.
+- L5 (2026-11-14) "Si, pero a futuro analizaremos otras formas de encastre ganchos, clip, etc. tengamoslo a la hora de
+  armar los objetos o clases."
+- L6 (2026-11-14) Design from exploration: each finger level is the existing stepped band (A-owner or flipped), so
+  folding needs no new collision proof (the bend turns about w, levels never meet); corner cuts are w-invariant today,
+  so the fingers add w-limited solids in `unfold` and a w-aware split in `fold_bar._after`. The Interlock links the
+  two profiles, not bar faces, so bar -> Interlock has no cycle (Folded Corner pattern).
+- L7 (2026-11-14) T1 design (parent):
+  - `interlock_geometry.py` (no import of unfolded_geometry: avoid a cycle): `FINGERS = "Fingers"`,
+    `SQUARE, CHAMFER, ROUND = TIPS`, frozen hashable `FingerSettings(count=3, finger_width=0.0, tip=SQUARE,
+    tip_size=0.0, depth=0.0, clearance=0.0, flip=False)` with class attribute `kind = FINGERS`; registry
+    `KINDS = {FINGERS: FingerSettings}`; `InterlockError(ValueError)`; `FingerSettings.bounds(span)` -> the count + 1
+    w boundaries from -span/2 to span/2 (width 0 or count 2: even; else inner fingers `finger_width`, the two outer
+    ones share the rest); `FingerSettings.check(names, span)` raises InterlockError (translate("MaxProFrame", ...)):
+    count < 2; a finger not wider than the clearance (inner widths too wide for the span); tip_size > (narrowest
+    finger - clearance) / 2. `_bends` turns InterlockError into UnfoldError.
+  - `CornerSettings.interlock = None` (a FingerSettings). `_Bend` gains `span` (the tube size along w:
+    width + height - depth of the segment before) and `fingers` (None or FingerSettings); `sizes()` keeps them.
+    A `banded` property (stepped or fingers) replaces `stepped` in `_flank_top`, `_key_top`, `check_step`,
+    `check_step_fit`; with fingers: step_depth = fingers.depth or automatic_step_depth, step_flip False, and the band
+    clearance (in `_step_points`, the fit check and the split) is fingers.clearance. `_cut_faces` adds the stepped
+    regions only for a Stepped corner without fingers; `_step_regions(flip)` takes the flip.
+  - `finger_levels()` -> [(w0, w1, flip)], flip = (index odd) != fingers.flip (B owns it). `removed(reach)` adds per
+    level the `_step_regions(flip)` faces extruded over [w0 - g/2, w1 + g/2] (the first from -reach, the last to
+    +reach): neighbouring levels overlap by g at each boundary, which opens every finger side pair by g (g/2 each).
+  - Tips at each interior boundary corner of the owner's finger (tip u = x_a - g/2 for A, allowance - (x_a - g/2)
+    for B; w = boundary +- g/2): Chamfer removes the triangle of legs tip_size in the (u, w) plane, Round the square
+    of side tip_size less the quarter disc of radius tip_size, both extruded along v over the band [d - s, d + t].
+    Margins only past the tip along u, never into the neighbouring level along w (with g = 0 it holds the other
+    piece's finger).
+  - Fold: `UnfoldedCorner.finger_split = None` or (band v, ((w0, w1, middle), ...)), middle as `step_split`'s for
+    that level's flip; `folded_geometry._after` owns below the band as at a stepped corner and, per level, the band
+    from its middle on, as a w-limited prism (outer levels to +-reach); returns a solid placed by the frame.
