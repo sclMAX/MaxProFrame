@@ -48,9 +48,10 @@ s = band depth, g = clearance. A = the segment before the corner, B = the one af
 - T1 [S2, S3, S4, S5, S6] geometry: `interlock_geometry.py` (kind registry, `FingerSettings`, finger levels along w,
   checks) and its use in `unfold` (per-level stepped band, finger side clearance, tips) and `fold_bar` (the split
   between the segments follows the fingers); tests in tests/test_interlock_geometry.py. route=gentle-ai-worker
-  (context backstop; design L7); commit=pending [ ]
+  (context backstop; design L7); commit=d056549 (PR #160, chain 1/4) [x]
 - T2 [S1, S2, S6, S7] `interlock.py`: Interlock object (Kind, finger properties, PieceA/PieceB), FoldedBar
-  `Interlocks` and their settings per corner, restore of older documents; tests. route=inline; commit=pending [ ]
+  `Interlocks` and their settings per corner, restore of older documents; tests. route=gentle-ai-worker (context
+  backstop; design L9); commit=feat/joint-tabs-2 (PR chain 2/4, see L10) [x]
 - T3 [S1, S6, S7] `create_interlock_tool.py`: command, two-face picking on a Folded Bar resolved to a corner, task
   panel with the settings and the refusals, edit, toolbar, icon; tests. route=inline; commit=pending [ ]
 - T4 [S7] tutorial, README, CHANGELOG, Spanish translation, full native suite. route=inline; commit=pending [ ]
@@ -102,3 +103,26 @@ main): one PR per task, each stacked on the previous one, merged in order (like 
   - Fold: `UnfoldedCorner.finger_split = None` or (band v, ((w0, w1, middle), ...)), middle as `step_split`'s for
     that level's flip; `folded_geometry._after` owns below the band as at a stepped corner and, per level, the band
     from its middle on, as a w-limited prism (outer levels to +-reach); returns a solid placed by the frame.
+- L8 (2026-11-14) T1 evidence (worker): RED 8 tests erroring on the missing `CornerSettings.interlock`; GREEN
+  test_interlock_geometry 8 OK, test_unfolded_geometry 66 OK, test_folded_geometry 21 OK, test_folded_bar 49 OK
+  (FreeCAD 1.1.4, .git/ci-policy-runtime); volumes without interlock pinned from the base code; mutation of `_after`
+  caught. Deviations: `_key_fits` and `reach()` see both flips with fingers; the tip range rounds down to 0.1 mm.
+  Not covered: a non-square tube, a folded Round tip, the open corner (ignores interlocks). Native assess: medium,
+  not due (under_budget). Slice boundary: PR #160 = d056549.
+- L9 (2026-11-14) T2 design (parent): `interlock.py` with an `Interlock` proxy for an `App::FeaturePython` without
+  shape, built like `folded_corner.py` (`_add` idempotent properties, restore of missing ones): `PieceA`/`PieceB`
+  (links to the corner's two base profiles, `folded_chain.base_profile`), `Kind` (enumeration of `KINDS`), group
+  `Fingers`: `Count` (integer 3), `FingerWidth` (length 0), `Tip` (TIPS), `TipSize` (length 0), `Depth` (length 0),
+  `Clearance` (length, the Folded Corner's default), `Flip` (bool). `is_interlock`, `interlock_key` (frozenset of the
+  piece names, like `corner_key`), `interlock_settings(obj)` -> FingerSettings, `make_interlock(bar, piece_a,
+  piece_b, **values)` placed in the bar's container and appended to the bar's new `Interlocks` (LinkList, added on
+  restore). FoldedBar.execute gives each folded corner the settings of the Interlock whose key matches it
+  (`CornerSettings.interlock`); an Interlock matching no folded corner of the bar (open corner, pieces not adjacent)
+  or a second one on the same corner is an error naming them. The bar's view provider claims its Interlocks;
+  the Interlock's view provider has an icon (resources/icons/Interlock.svg, new) and opens the T3 panel on double
+  click when it exists (a hook T3 fills).
+- L10 (2026-11-14) T2 evidence (worker): RED import error, then a mutation of `bar_settings` failing 8 checks in 7
+  tests; GREEN test_interlock 10 OK, test_folded_bar 49, test_folded_bar_tools 14, test_folded_bar_panel 90,
+  test_interlock_geometry 8, test_workbench_commands 2 (FreeCAD 1.1.4). Interlock `Clearance` defaults to 0, like the
+  Folded Corner property. Edit hook `interlock.EDIT_PANEL(obj)` for T3. Decision (parent): deleting a bar also deletes
+  its Interlocks, like its Corners (an Interlock without its bar does nothing) -> T3. PR #160 CI: 12 checks pass.
