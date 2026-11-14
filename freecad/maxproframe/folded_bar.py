@@ -16,10 +16,15 @@ it before a tool removes it.
 The bar keeps the tube each segment is made from (``BaseTubes``, odd/tasks/pending-followups.md S4c): a segment whose
 piece is removed without release (undone after a recompute outside its transaction, deleted from a script) falls back
 to its tube, or to the piece left on it, instead of leaving the bar (``bar_tubes``).
+
+The bar lists the Interlock objects on its corners (``Interlocks``, odd/tasks/joint-tabs.md S7): each folded corner
+unfolds and folds with the interlock whose two profiles are its own (``CornerSettings.interlock``); one on no folded
+corner of the bar, or a second one on a corner, leaves the bar in error naming them (``corner_interlocks``).
 """
 
 import os
 from collections import namedtuple
+from dataclasses import replace
 
 import FreeCAD as App
 import Part
@@ -29,6 +34,7 @@ from freecad.maxproframe.ff_tools import ICONPATH, get_param_group, place_in_con
 from freecad.maxproframe.folded_chain import ChainError, build_chain
 from freecad.maxproframe.folded_corner import corner_key, corner_settings, make_folded_corner, set_corner_settings
 from freecad.maxproframe.folded_geometry import fold_bar
+from freecad.maxproframe.interlock import interlock_key, interlock_settings
 from freecad.maxproframe.profile_pattern import (
     container_placement,
     global_element,
@@ -315,10 +321,41 @@ def folded_corners(bar, chain):
     return [by_pair.get(frozenset(profile.Name for profile in _pair(chain, corner))) for corner in chain.corners]
 
 
-def bar_settings(bar, chain):
-    """The ``CornerSettings`` of each folded corner of ``chain`` from the corner objects of ``bar``.
+def corner_interlocks(bar, chain):
+    """The Interlock object of ``bar`` on each folded corner of ``chain``, in chain order; None where it has none.
 
-    Raises UnfoldError naming the two pieces of a corner that has no corner object.
+    An interlock is matched by its two profiles, in either order (odd/tasks/joint-tabs.md, S7); one missing a profile
+    is left out. Raises UnfoldError naming the pieces of an interlock on no folded corner of ``chain`` (the open corner
+    of a closed frame, two tubes that do not meet) and the corner and both interlocks of a corner with two (S6).
+    """
+    index = {frozenset(profile.Name for profile in _pair(chain, corner)): i for i, corner in enumerate(chain.corners)}
+    found = [None] * len(chain.corners)
+    for obj in getattr(bar, "Interlocks", ()):
+        key = interlock_key(obj) if _alive(obj) else None
+        if key is None:
+            continue
+        at = index.get(key)
+        if at is None:
+            raise UnfoldError(
+                translate("MaxProFrame", "The interlock between {} and {} is not on a folded corner of {}.").format(
+                    obj.PieceA.Label, obj.PieceB.Label, bar.Label
+                )
+            )
+        if found[at] is not None:
+            raise UnfoldError(
+                translate("MaxProFrame", "The corner between {} and {} has two interlocks: {} and {}.").format(
+                    *(profile.Label for profile in _pair(chain, chain.corners[at])), found[at].Label, obj.Label
+                )
+            )
+        found[at] = obj
+    return found
+
+
+def bar_settings(bar, chain):
+    """The ``CornerSettings`` of each folded corner of ``chain`` from the corner objects of ``bar``, with the
+    settings of the interlock on it (``corner_interlocks``).
+
+    Raises UnfoldError naming the two pieces of a corner that has no corner object, and as ``corner_interlocks``.
     """
     settings = []
     for corner, obj in zip(chain.corners, folded_corners(bar, chain)):
@@ -329,6 +366,9 @@ def bar_settings(bar, chain):
                 )
             )
         settings.append(corner_settings(obj))
+    for at, obj in enumerate(corner_interlocks(bar, chain)):
+        if obj is not None:
+            settings[at] = replace(settings[at], interlock=interlock_settings(obj))
     return settings
 
 
@@ -473,6 +513,10 @@ class FoldedBar:
                 "Folded Corner objects of the bar in chain order from its start, then the open corner of a closed "
                 "frame",
             ),
+        )  # fmt: skip
+        _add(
+            obj, "App::PropertyLinkList", "Interlocks", "FoldedBar",
+            translate("App::Property", "Interlock objects on the corners of the bar"),
         )  # fmt: skip
         _add(
             obj, "App::PropertyLength", "DevelopedLength", "Structure",
@@ -644,8 +688,9 @@ class ViewProviderFoldedBar:
         return os.path.join(ICONPATH, "FoldedBar.svg")
 
     def claimChildren(self):
-        """Under the bar in the tree: its segments, then its corners."""
-        return [obj for obj in (*self.Object.Segments, *self.Object.Corners) if obj is not None]
+        """Under the bar in the tree: its segments, then its corners, then its interlocks."""
+        bar = self.Object
+        return [obj for obj in (*bar.Segments, *bar.Corners, *getattr(bar, "Interlocks", ())) if obj is not None]
 
     def doubleClicked(self, vobj):
         """Edit the bar: unhandled, the tree starts renaming it instead."""
