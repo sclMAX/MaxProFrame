@@ -270,6 +270,11 @@ FOLDED_MITER_TEXTS = (
     ("App::Property", "Gap between every pair of mating finger faces, half on each side"),
     ("App::Property", "Swap the tubes: the second one owns the first finger"),
     ("App::Property", "Interlock objects on the corners of the bar"),
+    # odd/tasks/extend-folded-bar.md, T3: the extend notices.
+    ("MaxProFrame", "{} meets neither end of the bar."),
+    ("MaxProFrame", "{} is folded by {}: a tube folds into one bar only."),
+    ("MaxProFrame", "{} is another Folded Bar: a tube folds into one bar only."),
+    ("MaxProFrame", "{} is a closed frame: it takes no more tubes."),
 )
 
 
