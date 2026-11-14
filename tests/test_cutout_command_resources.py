@@ -18,6 +18,10 @@ class TestCutoutCommandResources(unittest.TestCase):
         self.assertEqual(self.resources["MenuText"], "Cutout / Hole")
         tool_tip = self.resources["ToolTip"]
         self.assertTrue(tool_tip.startswith("<b>Cutout / Hole</b>"))
+        # odd/tasks/pending-followups.md, S4a: a folded bar takes a cutout too, as Drill Hole says.
+        self.assertIn(
+            "<br><br>Click a planar face of a profile, a trimmed profile, a cutout or a folded bar, then OK:", tool_tip
+        )
         self.assertIn("Draw the hole and close the sketch to cut it.", tool_tip)
         self.assertIn("Or preselect one face and one sketch", tool_tip)
 

@@ -24,6 +24,8 @@ from freecad.maxproframe.ff_tools import get_param_group
 
 FOLD_MESSAGE = "{} cannot be cut at its folded corner with {}."
 SELF_MESSAGE = "{} cannot trim itself"
+FACE_MESSAGE = "Click a face of the folded bar."
+NO_TARGET = "Click a face, or select a profile in the tree."
 # Points on the bar: the outer wall of the right leg (normal +X), the outer wall of the top leg (normal +Y).
 RIGHT_OUTER = App.Vector(325, 100, 0)
 TOP_OUTER = App.Vector(150, 225, 0)
@@ -112,6 +114,12 @@ class ExtendCutBarFixture(FoldedBarToolsFixture):
         ):
             Gui.Selection.addSelection(self.doc.Name, obj.Name, sub, point.x, point.y, point.z)
             QtWidgets.QApplication.processEvents()
+
+    def select_whole(self, obj):
+        """``obj`` selected as a whole in the tree: it replaces the selection."""
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(self.doc.Name, obj.Name)
+        QtWidgets.QApplication.processEvents()
 
     def target_bottom(self):
         """An Extend Cut panel with the outer wall of the loose bottom tube as target, and the bar."""
@@ -281,13 +289,74 @@ class ExtendCutBarRefusalsTest(ExtendCutBarFixture):
         self.assertNotEqual(right, panel.target[0])
 
     def test_the_whole_bar_selected_in_the_tree_is_not_a_target(self):
+        # odd/tasks/pending-followups.md, S4d: it asks for a face, not for a straight part.
         _, bar = self.make_legs()
         Gui.Selection.addSelection(self.doc.Name, bar.Name, "")
 
         panel = self.extend_cut_panel()
 
         self.assertIsNone(panel.target)
-        self.assertEqual(BEND_MESSAGE, self.message(panel))
+        self.assertEqual([], panel.profiles)
+        self.assertEqual(FACE_MESSAGE, self.message(panel))
+        self.assertEqual(NO_TARGET, panel.form.target_label.text())
+
+    def test_the_whole_bar_selected_in_the_tree_while_the_panel_is_open_is_not_a_target(self):
+        _, bar = self.make_legs()
+        panel = self.extend_cut_panel()
+
+        self.select_whole(bar)
+
+        self.assertIsNone(panel.target)
+        self.assertEqual([], panel.profiles)
+        self.assertEqual(FACE_MESSAGE, self.message(panel))
+        self.assertEqual(NO_TARGET, panel.form.target_label.text())
+
+
+class ExtendCutWholeBarTest(ExtendCutBarFixture):
+    """odd/tasks/pending-followups.md, S4d: a whole bar selected in the tree adds the tubes at its free ends."""
+
+    def assertProfiles(self, profiles, panel):
+        self.assertEqual(profiles, panel.profiles)
+        rows = [panel.form.profiles_list.item(row).text() for row in range(panel.form.profiles_list.count())]
+        self.assertEqual([f"{obj.Label} ({obj.Name})" for obj in profiles], rows)
+
+    def test_a_whole_bar_selected_while_the_panel_is_open_adds_the_tubes_at_its_free_ends(self):
+        panel, (bottom, right, _, left), bar = self.target_bottom()
+
+        self.select_whole(bar)
+
+        self.assertEqual(bottom, panel.target[0])
+        self.assertProfiles([right, left], panel)
+        self.assertEqual("", self.message(panel))
+        self.assertTrue(panel.accept())
+        self.assertEqual({right, left}, {trim.TrimmedBody for trim in self.trims()})
+        for trim in self.trims():
+            self.assertEqual("Valid", trim.getStatusString())
+
+    def test_a_whole_bar_preselected_after_the_target_adds_the_tubes_at_its_free_ends(self):
+        (bottom, right, _, left), bar = self.make_legs()
+        Gui.Selection.addSelection(
+            self.doc.Name, bottom.Name, face_at(bottom, BOTTOM_OUTER), BOTTOM_OUTER.x, BOTTOM_OUTER.y, BOTTOM_OUTER.z
+        )
+        Gui.Selection.addSelection(self.doc.Name, bar.Name, "")
+
+        panel = self.extend_cut_panel()
+
+        obj, faces = panel.target
+        self.assertEqual(bottom, obj)
+        self.assertFaceAt(bottom, faces[0], BOTTOM_OUTER)
+        self.assertProfiles([right, left], panel)
+        self.assertEqual("", self.message(panel))
+
+    def test_a_whole_closed_bar_adds_nothing_and_says_to_click_its_tubes(self):
+        panel, (bottom, _, _, _), _ = self.target_bottom()
+        _, closed = self.make_bar()
+
+        self.select_whole(closed)
+
+        self.assertEqual(bottom, panel.target[0])
+        self.assertProfiles([], panel)
+        self.assertEqual(f"{closed.Label} is closed: click its tubes to add them.", self.message(panel))
 
 
 class ExtendCutBarPreselectionTest(ExtendCutBarFixture):

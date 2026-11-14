@@ -195,5 +195,15 @@ def fit_width(spin, longest):
 
 
 def length_text(value):
-    """``value`` in mm as a pattern shows it: up to two decimals, no trailing zeros (12.5 mm)."""
-    return f"{value:.2f}".rstrip("0").rstrip(".") + " mm"
+    """``value`` in mm as a pattern shows it: up to two decimals, no trailing zeros (12.5 mm).
+
+    The decimal separator is the current locale's, as the number fields show it (12,5 mm in Spanish); no group
+    separator.
+    """
+    locale = QtCore.QLocale()
+    locale.setNumberOptions(QtCore.QLocale.OmitGroupSeparator)
+    text = locale.toString(float(value), "f", 2)
+    point = locale.decimalPoint()
+    if point in text:
+        text = text.rstrip("0").rstrip(point)
+    return text + " mm"

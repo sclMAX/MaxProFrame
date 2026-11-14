@@ -28,6 +28,7 @@ from freecad.maxproframe.ff_tools import (
     translate,
 )
 from freecad.maxproframe.folded_bar import bar_chain, release_piece, segment_at
+from freecad.maxproframe.folded_bar_ends import free_end_tubes, is_whole_bar, whole_bar_target_message
 from freecad.maxproframe.folded_chain import base_profile
 from freecad.maxproframe.miter_geometry import TOLERANCE
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
@@ -394,11 +395,11 @@ class ExtendCutTaskPanel:
             # The expression editor (Fx) changes the edited trim at once: inside the edit transaction.
             self._open_edit_transaction()
         elif selection:
-            obj, subs, problem = self._from_bar(*selection[0], None, True)
-            messages += [problem] if problem else self._set_target(obj, subs)
-            for obj, subs in selection[1:]:
-                obj, subs, problem = self._from_bar(obj, subs, None, False)
-                messages += [problem] if problem else self._add_profile(obj)
+            for obj, subs, problem in self._picks(*selection[0], None, True):
+                messages += [problem] if problem else self._set_target(obj, subs)
+            for picked, picked_subs in selection[1:]:
+                for obj, subs, problem in self._picks(picked, picked_subs, None, False):
+                    messages += [problem] if problem else self._add_profile(obj)
         self._show(messages)
         self.form.sb_gap.valueChanged.connect(self._changed)
         # Editing previews like creating: the same remembered check box for this joint.
@@ -446,6 +447,23 @@ class ExtendCutTaskPanel:
                 return (), translate("frameforge", "{}: {} is not a planar face").format(obj.Label, faces[0])
             return tuple(faces[:1]), None
         return (), trimmed_body_problem(None, obj)
+
+    def _picks(self, obj, subs, point, target):
+        """[(object, sub-element names, problem or None)] the pick of ``subs`` of ``obj`` at ``point`` stands for.
+
+        A whole Folded Bar (selected in the tree: no face, no point) is no target: "Click a face of the folded
+        bar."; as profiles it stands for the tubes at its free ends, a closed one for none and says why
+        (odd/tasks/pending-followups.md, S4d). Any other pick is the one ``_from_bar`` gives.
+        """
+        if is_whole_bar(obj, next((sub for sub in subs if sub), ""), point):
+            if target:
+                return [(None, (), whole_bar_target_message())]
+            tubes, problem = free_end_tubes(obj)
+            if problem is not None:
+                return [(None, (), problem)]
+            # A tube cut by a preview is the profile the preview stands for.
+            return [(self._profile_of(tube), ("",), None) for tube in tubes]
+        return [self._from_bar(obj, subs, point, target)]
 
     def _from_bar(self, obj, subs, point, target):
         """(object, sub-element names, problem or None) the pick of ``subs`` of ``obj`` at ``point`` stands for.
@@ -975,27 +993,32 @@ class ExtendCutTaskPanel:
         # The preview hides its profile: a click on the preview stands for the profile.
         source = self._profile_of(source)
         targeting = self.edited is not None or self.target is None or self._picking_target()
-        # A click on a Folded Bar stands for its tube under the clicked point.
-        source, subs, problem = self._from_bar(source, (sub,), other, targeting)
+        # A click on a Folded Bar stands for its tube under the clicked point, the whole bar for its free-end tubes.
+        messages = []
+        for source, subs, problem in self._picks(source, (sub,), other, targeting):
+            messages += self._take_pick(source, subs, problem)
+        self._show(messages)
+        self._changed()
+
+    def _take_pick(self, source, subs, problem):
+        """Use one pick of a click as the target or a profile, as the panel waits for; return the problems."""
         if problem is not None:
-            messages = [problem]
-        elif self.edited is not None or self.target is None:
-            messages = self._set_target(source, subs)
-        elif self._picking_target():
+            return [problem]
+        if self.edited is not None or self.target is None:
+            return self._set_target(source, subs)
+        if self._picking_target():
             before = self.target
             messages = self._set_target(source, subs)
             # Picked: accepted without a problem, or the target changed (whatever the messages say).
             if not messages or self.target != before:
                 # The target is picked: clicks add profiles again.
                 self._set_picking(False)
-        elif _ctrl_held() and source in self.profiles:
+            return messages
+        if _ctrl_held() and source in self.profiles:
             # Ctrl+click toggles: a listed profile leaves the list.
             self.profiles.remove(source)
-            messages = []
-        else:
-            messages = self._add_profile(source)
-        self._show(messages)
-        self._changed()
+            return []
+        return self._add_profile(source)
 
     def removeSelection(self, doc, obj, sub):
         # A profile leaves the list once nothing of it or its preview is selected (a Ctrl+click on a selected face).

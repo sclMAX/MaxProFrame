@@ -220,7 +220,7 @@ class _DepthAfterSketch:
 
 
 class CutoutTaskPanel:
-    """One planar face of a profile, trimmed profile or cutout; OK draws a cut on it.
+    """One planar face of a profile, trimmed profile, cutout or folded bar; OK draws a cut on it.
 
     ``selection`` items are (object, sub-element names): the first usable face is the face to
     cut, every other item is explained. A click picks another face. OK creates, in one Undo
@@ -279,7 +279,9 @@ class CutoutTaskPanel:
         if self.face is not None and not _alive(self.face[0]):
             self.face = None
         if self.face is None:
-            text = translate("frameforge", "Click a planar face of a profile, a trimmed profile or a cutout.")
+            text = translate(
+                "frameforge", "Click a planar face of a profile, a trimmed profile, a cutout or a folded bar."
+            )
         else:
             obj, sub = self.face
             text = f"{obj.Label} ({obj.Name}) {sub}"
@@ -338,7 +340,13 @@ class CutoutTaskPanel:
     def accept(self):
         if self.face is None or not _alive(self.face[0]):
             self.face = None
-            self._show([translate("frameforge", "Select a planar face of a profile, a trimmed profile or a cutout.")])
+            self._show(
+                [
+                    translate(
+                        "frameforge", "Select a planar face of a profile, a trimmed profile, a cutout or a folded bar."
+                    )
+                ]
+            )
             return False
         obj, sub = self.face
         doc = obj.Document
@@ -705,7 +713,7 @@ class AddExtrudedCutoutCommandClass:
             "Accel": "M, H",
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_AddExtrudeCutout",
-                "<b>Cutout / Hole</b><br><br>Click a planar face of a profile, a trimmed profile or a cutout, then OK: a sketch holding the face outline is created on the face and opened. Draw the hole and close the sketch to cut it.<br><br>Or preselect one face and one sketch to cut with that sketch directly.",
+                "<b>Cutout / Hole</b><br><br>Click a planar face of a profile, a trimmed profile, a cutout or a folded bar, then OK: a sketch holding the face outline is created on the face and opened. Draw the hole and close the sketch to cut it.<br><br>Or preselect one face and one sketch to cut with that sketch directly.",
             ),
         }
 

@@ -269,6 +269,55 @@ class EndMiterFoldedBarTest(FoldedBarToolsFixture):
         self.assertListed([self.bottom, self.right, self.left], panel)
         self.assertBothEndsMitered()
 
+    # odd/tasks/pending-followups.md, S4d: the whole bar, selected in the tree, stands for the tubes at its free ends.
+
+    def test_a_whole_bar_preselected_before_the_command_lists_the_tubes_at_its_free_ends(self):
+        self.select(self.bottom)
+        self.select(self.bar)
+
+        panel = self.run_command()
+        self.events()
+
+        self.assertListed([self.bottom, self.right, self.left], panel)
+        self.assertEqual("2 joints will be created.", panel.form.message_label.text())
+        self.assertBothEndsMitered()
+
+    def test_a_whole_bar_selected_while_the_panel_is_open_lists_the_tubes_at_its_free_ends(self):
+        panel = self.open_panel([self.bottom])
+
+        self.click(self.bar)
+
+        self.assertListed([self.bottom, self.right, self.left], panel)
+        self.assertEqual("2 joints will be created.", panel.form.message_label.text())
+        self.assertBothEndsMitered()
+
+    def test_a_whole_closed_bar_lists_nothing_and_says_to_click_its_tubes(self):
+        _, closed = self.make_bar()
+        closed_message = f"{closed.Label} is closed: click its tubes to add them."
+        self.select(self.bottom)
+        self.select(closed)
+
+        panel = self.run_command()
+        self.events()
+
+        self.assertListed([self.bottom], panel)
+        self.assertEqual(
+            "\n".join(["Select two or more profiles to miter.", closed_message]), panel.form.message_label.text()
+        )
+        self.close_panels()
+
+        panel = self.open_panel([self.bottom])
+        self.click(closed)
+
+        self.assertListed([self.bottom], panel)
+        self.assertEqual(
+            "\n".join(["Select two or more profiles to miter.", closed_message]), panel.form.message_label.text()
+        )
+        # The next click explains itself: the note goes.
+        self.click(self.bar, RIGHT_LEG)
+        self.assertListed([self.bottom, self.right], panel)
+        self.assertEqual("1 joint will be created.", panel.form.message_label.text())
+
 
 if __name__ == "__main__":
     unittest.main()

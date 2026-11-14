@@ -192,7 +192,8 @@ class TestCutoutPanel(CutoutFixture):
         panel = self.run_command()
         self.assertIsNone(panel.face)
         self.assertEqual(
-            panel.form.face_label.text(), "Click a planar face of a profile, a trimmed profile or a cutout."
+            panel.form.face_label.text(),
+            "Click a planar face of a profile, a trimmed profile, a cutout or a folded bar.",
         )
         self.click(body, top)
         self.assertEqual(panel.face, (body, top))
@@ -241,7 +242,9 @@ class TestCutoutPanel(CutoutFixture):
         before = self.names()
         panel = self.run_command()
         self.assertFalse(panel.accept())
-        self.assertEqual(self.message(panel), "Select a planar face of a profile, a trimmed profile or a cutout.")
+        self.assertEqual(
+            self.message(panel), "Select a planar face of a profile, a trimmed profile, a cutout or a folded bar."
+        )
         self.assertTrue(Gui.Control.activeDialog())
         self.assertEqual(self.names(), before)
         self.assertEqual(self.doc.UndoCount, 0)
@@ -416,7 +419,8 @@ class TestCutoutTranslations(CutoutFixture):
         self.assertEqual(form.windowTitle(), "Calado")
         self.assertEqual(form.groupBox_face.title(), "Cara")
         self.assertEqual(
-            form.face_label.text(), "Hacé clic en una cara plana de un perfil, un perfil recortado o un calado."
+            form.face_label.text(),
+            "Hacé clic en una cara plana de un perfil, un perfil recortado, un calado o una barra plegada.",
         )
         self.assertEqual(
             form.hint_label.text(),
@@ -424,7 +428,8 @@ class TestCutoutTranslations(CutoutFixture):
         )
         self.assertFalse(panel.accept())
         self.assertEqual(
-            self.message(panel), "Seleccioná una cara plana de un perfil, un perfil recortado o un calado."
+            self.message(panel),
+            "Seleccioná una cara plana de un perfil, un perfil recortado, un calado o una barra plegada.",
         )
         self.click(body, top)
         Gui.Selection.addSelection(self.doc.Name, body.Name, side)

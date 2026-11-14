@@ -16,6 +16,7 @@ from freecad.maxproframe.ff_tools import (
     translate,
 )
 from freecad.maxproframe.folded_bar import release_piece, segment_at
+from freecad.maxproframe.folded_bar_ends import free_end_tubes, is_whole_bar
 from freecad.maxproframe.miter_geometry import Member, real_stretch
 from freecad.maxproframe.miter_joints import find_joints
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
@@ -60,18 +61,35 @@ def _clicked_piece(obj, sub="", point=None):
     return obj
 
 
+def _clicked_pieces(obj, sub="", point=None):
+    """(pieces, note) a pick of ``sub`` of ``obj`` at ``point`` stands for (``_clicked_piece``).
+
+    A whole Folded Bar (selected in the tree: no face, no point) stands for the tubes at its free ends; a closed one
+    for none, and ``note`` says why (odd/tasks/pending-followups.md, S4d). ``note`` is None otherwise.
+    """
+    if is_whole_bar(obj, sub, point):
+        return free_end_tubes(obj)
+    return [_clicked_piece(obj, sub, point)], None
+
+
 def _preselected():
-    """The pieces selected before the command: on a Folded Bar, the tube nearest each selected point of it."""
-    pieces = []
+    """(pieces, notes) of the selection before the command: on a Folded Bar, the tube nearest each selected point
+    of it, or the tubes at its free ends when the whole bar is selected (``_clicked_pieces``)."""
+    pieces, notes = [], []
     for selection in Gui.Selection.getSelectionEx():
         obj = selection.Object
         if not is_foldedbar(obj):
             pieces.append(obj)
             continue
         points = list(selection.PickedPoints)
-        for index, sub in enumerate(selection.SubElementNames):
-            pieces.append(_clicked_piece(obj, sub, points[index] if index < len(points) else None))
-    return pieces
+        picks = [
+            (sub, points[index] if index < len(points) else None) for index, sub in enumerate(selection.SubElementNames)
+        ]
+        for sub, point in picks or [("", None)]:
+            found, note = _clicked_pieces(obj, sub, point)
+            pieces.extend(found)
+            notes.extend([note] if note else [])
+    return pieces, notes
 
 
 def _built_on(obj):
@@ -184,7 +202,7 @@ class EndMiterTaskPanel:
     objects are the End Miters OK keeps, all inside one transaction that Cancel aborts.
     """
 
-    def __init__(self, members=(), edited=None):
+    def __init__(self, members=(), edited=None, notes=()):
         ui_file = os.path.join(UIPATH, "create_end_miter.ui")
         self.form = keep_alive_until_destroyed(load_form(ui_file))
         # FreeCAD may close the dialog without OK, Cancel or closed(): the form is then deleted.
@@ -203,8 +221,9 @@ class EndMiterTaskPanel:
         self._planned = []
         self._previewed = ()
         self._transaction_open = False
-        # Message area: the plan, then the last preview or OK failure.
+        # Message area: the plan, what the last selection explained, then the last preview or OK failure.
         self._lines = []
+        self._notes = list(notes)
         self._error = ""
         # (document point, JOINT or SKIPPED) of the planned markers, and the node drawing them.
         self._markers = []
@@ -340,7 +359,7 @@ class EndMiterTaskPanel:
         self._show_messages()
 
     def _show_messages(self):
-        self.form.message_label.setText("\n".join(self._lines + ([self._error] if self._error else [])))
+        self.form.message_label.setText("\n".join(self._lines + self._notes + ([self._error] if self._error else [])))
 
     def _wanted(self):
         """What the preview must show for the current members, Extend and Gap; () for nothing."""
@@ -543,18 +562,27 @@ class EndMiterTaskPanel:
             return
         document = App.getDocument(doc)
         source = document.getObject(getattr(obj, "Name", obj)) if document else None
-        # A Folded Bar stands for its tube under the point; that tube's piece may be a preview miter of this session.
-        source = _clicked_piece(source, sub, point)
+        # A Folded Bar stands for its tube under the point, the whole bar for the tubes at its free ends; a tube's
+        # piece may be a preview miter of this session.
+        pieces, note = _clicked_pieces(source, sub, point)
         # The preview hides its member: a click on the preview stands for the member.
-        source = self._member_of(source)
-        if source is None or _base_profile(source) is None:
+        pieces = [self._member_of(piece) for piece in pieces]
+        pieces = [piece for piece in pieces if piece is not None and _base_profile(piece) is not None]
+        if not pieces and note is None:
             return
-        if _ctrl_held() and source in self.members:
-            # Ctrl+click toggles: a listed profile leaves the list.
-            self.members.remove(source)
+        self._notes = [note] if note else []
+        changed = False
+        for source in pieces:
+            if _ctrl_held() and source in self.members:
+                # Ctrl+click toggles: a listed profile leaves the list.
+                self.members.remove(source)
+                changed = True
+            elif self.add_member(source):
+                changed = True
+        if changed:
             self._plan()
-        elif self.add_member(source):
-            self._plan()
+        else:
+            self._show_messages()
         # Never change the selection, the document or the 3D view during FreeCAD's observer dispatch.
         QtCore.QTimer.singleShot(0, self._after_selection)
 
@@ -690,7 +718,8 @@ class CreateEndMiterCommand:
         return App.ActiveDocument is not None
 
     def Activated(self):
-        panel = EndMiterTaskPanel(_preselected())
+        pieces, notes = _preselected()
+        panel = EndMiterTaskPanel(pieces, notes=notes)
         Gui.Control.showDialog(panel)
         Gui.Selection.addObserver(panel)
 
