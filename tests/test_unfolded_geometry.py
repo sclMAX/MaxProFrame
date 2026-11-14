@@ -102,6 +102,56 @@ def step_ends(angle, s=S, r=R, t=T, depth=DEPTH):
     return x_a, x_b
 
 
+def drill_top(test, piece, vertex, along, across=DEPTH / 2, diameter=10.0):
+    """A hole of ``diameter`` in the top wall (z = 25) of ``piece``, ``along`` and ``across`` from its ``vertex``."""
+    faces = [
+        (index, face)
+        for index, face in enumerate(piece.Shape.Faces, 1)
+        if isinstance(face.Surface, Part.Plane) and face.normalAt(0, 0).z > 1 - 1e-9
+    ]
+    top_face, _ = max(faces, key=lambda item: item[1].CenterOfMass.z)
+    name = next(
+        f"Vertex{index}"
+        for index, found in enumerate(piece.Shape.Vertexes, 1)
+        if found.Point.isEqual(App.Vector(*vertex), 1e-6)
+    )
+    hole = make_drill_hole((piece, (f"Face{top_face}",)), name)
+    hole.OffsetAlong = along
+    hole.OffsetAcross = across
+    hole.Diameter = diameter
+    test.doc.recompute()
+    test.assertEqual("Valid", hole.getStatusString())
+    return hole
+
+
+def drilled_mitered_rectangle(test):
+    """(chain, holes) of the rectangle End Mitered at its open corner (0, 0) with a 10 mm hole in the top wall of each
+    end inside the joint zone of a stepped open corner: at (10, 0) on the first tube (bottom) and at (0, 10) on the last
+    one (left), clear of the miter plane x = y."""
+    chain, miters = FeatureTransferTest.mitered_rectangle(test)
+    holes = [drill_top(test, miters[0], (300, -25, 25), 290.0), drill_top(test, miters[1], (25, 200, 25), 190.0)]
+    for hole, point in zip(holes, ((10, 0, 24), (0, 10, 24))):
+        test.assertFalse(hole.Shape.isInside(App.Vector(*point), TOLERANCE, True))
+    chain = build_chain([segment.profile for segment in chain.segments])
+    test.assertEqual(holes, [chain.segments[0].tip, chain.segments[-1].tip])
+    return chain, holes
+
+
+def second_step(angle, g=0.0):
+    """Where the last tube's outer wall ends along it from the sharp of a stepped open corner of ``angle`` (the bend
+    angle), with the clearance ``g`` (pending-followups S3a): its second step, as far as it stays clear of the first
+    tube's outer band grown by g / 2 (past its start, beyond its step face).
+
+    Above 90 degrees the first tube's band lies across the notch from the last tube's outer face: the outer wall
+    (y in [0, t]) reaches its step face y' = s + g / 2, at x = -(s + g / 2 - t cos theta) / sin theta. Below 90 degrees
+    the band starts at the sharp: the outer wall reaches its start x' = -g / 2, at x = -(g / 2 + t sin theta) / cos theta.
+    """
+    theta = math.radians(angle)
+    if angle > 90:
+        return -(S + g / 2 - T * math.cos(theta)) / math.sin(theta)
+    return -(g / 2 + T * math.sin(theta)) / math.cos(theta)
+
+
 def bend(radius=None, **changes):
     """``STEEL`` with ``changes``; ``radius`` is the inside radius (the outer radius is ``radius`` + T)."""
     if radius is not None:
@@ -1338,6 +1388,46 @@ class SteppedOpenCornerUnfoldTest(UnfoldFixture):
         self.assertFalse(bar.shape.isInside(first.multVec(App.Vector(200, 0, 24)), TOLERANCE, True))
         self.assertTrue(bar.shape.isInside(first.multVec(App.Vector(210, 0, 24)), TOLERANCE, True))
 
+    def test_holes_inside_the_joint_zone_stay_and_only_the_end_miters_are_replaced(self):
+        # pending-followups S3b: a hole drilled on each mitered end 10 mm from the open corner's paths, inside the zone
+        # the joint rebuilds, stays in the bar; only the End Miters are replaced.
+        plain = unfold(self.rectangle(), bend(**PLAIN), open_corner=bend(**STEPPED))
+        chain, _ = drilled_mitered_rectangle(self)
+
+        bar = unfold(chain, bend(**PLAIN), open_corner=bend(**STEPPED))
+
+        self.solid(bar)
+        self.assertAlmostEqual(plain.length, bar.length, places=9)
+        drilled = math.pi * 5**2 * T
+        self.assertAlmostEqual(plain.shape.Volume - 2 * drilled, bar.shape.Volume, delta=1e-3)
+        self.assertAlmostEqual(2 * drilled, plain.shape.cut(bar.shape).Volume, delta=1e-3)
+        self.assertAlmostEqual(0.0, bar.shape.cut(plain.shape).Volume, delta=1e-3)
+        for placement, hole, kept in (
+            (bar.placements[0], (10, 0, 24), (17, 0, 24)),
+            (bar.placements[-1], (0, 10, 24), (0, 17, 24)),
+        ):
+            self.assertFalse(bar.shape.isInside(placement.multVec(App.Vector(*hole)), TOLERANCE, True))
+            self.assertTrue(bar.shape.isInside(placement.multVec(App.Vector(*kept)), TOLERANCE, True))
+
+    def test_end_tube_the_joint_reaches_the_folded_corner_of_is_refused(self):
+        # pending-followups S3c: at 90 degrees the joint cuts 50 mm into each end from the sharp (the miter plane at the
+        # inner face), the folded corner at the other end of that tube 52 mm from its own sharp (its V, up to the inside
+        # of the inner wall, 47 mm back from the bend start, 5 mm from the sharp): an end tube of 50 mm path (100 mm
+        # outer length) is refused naming it, one of 55 mm (105 mm) unfolds into one solid.
+        def frame(width, height):
+            corners = ((0, 0, 0), (width, 0, 0), (width, height, 0), (0, height, 0))
+            return build_chain(self.frame(edges=tuple(zip(corners, corners[1:] + corners[:1]))))
+
+        for short, long_enough, end in (((300, 50), (300, 55), -1), ((50, 200), (55, 200), 0)):
+            with self.subTest(short=short):
+                chain = frame(*short)
+                label = chain.segments[end].profile.Label
+                message = f"{label} is too short for the stepped joint of the open corner."
+                for options in ({}, dict(step_flip=True), dict(clearance=1.0)):
+                    self.assertRefused(message, chain, bend(**PLAIN), open_corner=bend(**STEPPED, **options))
+                self.solid(unfold(chain, bend(**PLAIN), open_corner=bend(joint="Miter")))
+                self.solid(unfold(frame(*long_enough), bend(**PLAIN), open_corner=bend(**STEPPED)))
+
     def test_automatic_open_step_depth_is_the_wall_or_the_outer_corner_radius(self):
         # S5: 0 = automatic, as at a folded corner: the larger of the wall thickness and the tube's RadiusLarge (0).
         chain = self.rectangle()
@@ -1390,19 +1480,30 @@ class SteppedOpenCornerUnfoldTest(UnfoldFixture):
     def test_outer_band_of_the_first_tube_stops_at_the_outer_face_of_the_last(self):
         # L13: away from 90 degrees the first tube's outer band starts where its cross-section still lies inside the
         # last tube's outer face plane: at the sharp at 60 degrees, s cot(60) past it at 120 degrees. The last tube's
-        # outer band ends before the overlap as before (s / sin(60), s tan(60) short of the sharp).
+        # outer band ends before the overlap as before (s / sin(60), s tan(60) short of the sharp) in its side walls;
+        # pending-followups S3a: its outer wall steps again into the notch (``second_step``): 3.46 mm (60 degrees) and
+        # 5.77 mm (120 degrees) short of the sharp instead of 4.62 and 6.93.
         for open_at_60, start, end in (
             (True, 0.0, -S / math.sin(math.radians(60))),
             (False, S / math.tan(math.radians(60)), -S * math.tan(math.radians(60))),
         ):
             chain = self.rhombus(open_at_60)
+            angle = 60 if open_at_60 else 120
             for g in (0.0, 1.0):
                 with self.subTest(open_at_60=open_at_60, clearance=g):
                     bar = unfold(chain, bend(**PLAIN), open_corner=bend(clearance=g, **STEPPED))
 
                     self.solid(bar)
-                    outer = (end - g / 2, start + g / 2)
-                    self.assertOpenEnds(chain, bar, {(T / 2, 0.0): outer, ((S + T) / 2, SIDE_WALL): outer})
+                    stepped = second_step(angle, g)
+                    self.assertGreater(stepped, end - g / 2 + 0.5)
+                    self.assertOpenEnds(
+                        chain,
+                        bar,
+                        {
+                            (T / 2, 0.0): (stepped, start + g / 2),
+                            ((S + T) / 2, SIDE_WALL): (end - g / 2, start + g / 2),
+                        },
+                    )
 
     def test_open_corner_in_line_is_refused_when_stepped(self):
         # A closed frame open in the middle of a side: its two ends are in line, there is no corner to step.

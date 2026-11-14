@@ -2235,6 +2235,22 @@ class SteppedCornerPanelTest(FoldedPanelFixture):
         self.assertEqual((5.0, 0.3, False, 0.0, 0.4), corner_values(opened))
         self.assertOneSolid(bar)
 
+    def test_an_end_tube_too_short_for_the_stepped_open_corner_is_named_and_disables_ok(self):
+        # pending-followups S3c: in a 300 x 50 rectangle the last tube (left, Profile003) cannot hold both the stepped
+        # open corner and its folded corner.
+        corners = ((0, 0, 0), (300, 0, 0), (300, 50, 0), (0, 50, 0))
+        panel = self.run_command(*self.frame(edges=tuple(zip(corners, corners[1:] + corners[:1]))))
+        form = panel.form
+        self.assertAccepts(panel)
+        self.pick(panel, 3)
+
+        self.choose_joint(form, "Stepped")
+        form.spin_step_depth.setValue(4.0)
+
+        self.assertRefused(panel, "Profile003 is too short for the stepped joint of the open corner.")
+        self.choose_joint(form, "Miter")
+        self.assertAccepts(panel)
+
     def test_ok_keeps_a_stepped_open_corner_and_cancel_puts_the_joint_back(self):
         _, bar = self.make_bar(**PLAIN)
         opened = self.opened(bar)

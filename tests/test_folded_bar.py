@@ -587,6 +587,25 @@ class SteppedCornerObjectTest(FoldedBarFixture):
         self.assertAlmostEqual(miter.length, bar.DevelopedLength.Value, places=6)
         self.assertSameVolume(fold_bar(chain, miter), bar.Shape)
 
+    def test_an_end_tube_too_short_for_the_stepped_open_corner_leaves_the_bar_in_error(self):
+        # pending-followups S3c: a 300 x 50 rectangle; its last tube (left, Profile003) cannot hold both the stepped
+        # open corner and its folded corner.
+        corners = ((0, 0, 0), (300, 0, 0), (300, 50, 0), (0, 50, 0))
+        profiles = self.frame(edges=tuple(zip(corners, corners[1:] + corners[:1])))
+        bar = make_folded_bar(profiles, bend(**PLAIN))
+        self.assertOneSolid(bar)
+        (opened,) = [corner for corner in bar.Corners if corner.Open]
+
+        opened.Joint = "Stepped"
+        opened.StepDepth = 4.0
+        self.doc.recompute()
+
+        self.assertIn("Invalid", bar.State)
+        self.assertEqual("Profile003 is too short for the stepped joint of the open corner.", bar.getStatusString())
+        opened.Joint = "Miter"
+        self.doc.recompute()
+        self.assertOneSolid(bar)
+
     def test_a_step_depth_out_of_range_leaves_the_bar_in_error_with_the_step_message(self):
         # S5: the corner's two pieces are named; the open corner names the first and the last tube.
         profiles, bar = self.make_bar(**PLAIN)
