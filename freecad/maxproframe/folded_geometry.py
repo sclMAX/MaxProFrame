@@ -6,7 +6,8 @@ bend revolved by the bend angle around the bend center, r + t inside the outer f
 the outside of the frame keeps its size. The rest of the bar is split at the notch flanks into its segments, and each
 one goes back where its profile was drawn, so its cuts (miters, cutouts, holes) stay there and the key tab of a
 segment fills the socket of the next one. At a stepped corner the inner wall band is split inside the gap the band
-leaves between both segments instead, so the band that covers the overlap goes with its own segment, flipped or not.
+leaves between both segments instead, so the band that covers the overlap goes with its own segment, flipped or not;
+with fingers that split follows each finger level along w (odd/tasks/joint-tabs.md, L7).
 See odd/tasks/folded-miter.md, section "T4 design", and odd/tasks/stepped-corners.md (L8).
 """
 
@@ -16,7 +17,7 @@ import FreeCAD as App
 import Part
 
 from freecad.maxproframe.profile_pattern import placed
-from freecad.maxproframe.unfolded_geometry import _polygon, _prism, refine, unfold
+from freecad.maxproframe.unfolded_geometry import _polygon, _prism, _prism_between, refine, unfold
 
 X_AXIS = App.Vector(1, 0, 0)
 Z_AXIS = App.Vector(0, 0, 1)
@@ -48,7 +49,8 @@ def _after(corner, thickness, far, reach):
     The flank half plane alone would reach back past the start of the bend (u < 0) when the bend allowance is shorter
     than the outside setback (wide angles), taking the outer wall of the segment before; u >= 0 keeps it there.
     At a stepped corner the segment after owns the stepped band from ``step_split`` on, whichever segment's band
-    reaches past the flanks there.
+    reaches past the flanks there. With fingers (``finger_split``) it owns, in each finger level along w (the outermost
+    ones on past the tube), the band from that level's split on: the levels covered by either segment.
     """
     h = math.radians(corner.bend_angle) / 2
     ba, r, t = corner.bend_allowance, corner.inside_radius, thickness
@@ -58,8 +60,13 @@ def _after(corner, thickness, far, reach):
 
     low, high = -reach, reach
     far = max(far, flank(high)) + reach
-    split = corner.step_split
-    if split is not None:
+    split, fingers = corner.step_split, corner.finger_split
+    levels = ()
+    if fingers is not None:
+        band, levels = fingers
+        far = max([far] + [middle + reach for _, _, middle in levels])
+        high = band
+    elif split is not None:
         band, middle = split
         far = max(far, middle + reach)
         high = band
@@ -69,7 +76,16 @@ def _after(corner, thickness, far, reach):
     if split is not None:
         owned = owned.fuse(_polygon([(middle, band), (far, band), (far, reach), (middle, reach)])).removeSplitter()
         owned = owned.Faces[0] if len(owned.Faces) == 1 else owned
-    return _in_frame(corner, owned, reach)
+    if not levels:
+        return _in_frame(corner, owned, reach)
+    solids = [_prism(owned, reach)]
+    for index, (start, end, middle) in enumerate(levels):
+        start = -reach if index == 0 else start
+        end = reach if index == len(levels) - 1 else end
+        face = _polygon([(middle, band), (far, band), (far, reach), (middle, reach)])
+        solids.append(_prism_between(face, start, end))
+    owned = solids[0].fuse(solids[1:]).removeSplitter()
+    return placed(owned.Solids[0] if len(owned.Solids) == 1 else owned, corner.frame)
 
 
 def fold_bar(chain, unfolded):
