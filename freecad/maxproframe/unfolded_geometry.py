@@ -17,11 +17,13 @@ walls give way where A's band folds onto them. Every cut through the inner wall 
 tube laser cuts it.
 The cuts made on each segment (its trims, cutouts and drill holes) move with it. The bar starts at X = 0 at the
 open-corner end of the first segment. A closed frame whose open corner is ``Stepped`` gets that joint at both ends of
-the bar instead of the ends' own cuts there: around the virtual sharp of the outer faces the last segment covers the
-overlap of the inner wall bands and the first one the overlap of the outer wall bands (v from 0 to s) as far as
-nothing passes the other tube's outer face (a notch is left at the outer edge away from 90 degrees), the side walls
-between keep the miter. See odd/tasks/folded-miter.md, section "T3 design", odd/tasks/folded-corners.md (S6 outer
-radius, S7 thickness from the profile, S8 automatic K-factor) and odd/tasks/stepped-corners.md (S2-S5, L8, L11, L13).
+the bar instead of the ends' End Miter there (their other cuts stay): around the virtual sharp of the outer faces the
+last segment covers the overlap of the inner wall bands and the first one the overlap of the outer wall bands (v from 0
+to s) as far as nothing passes the other tube's outer face (a notch is left at the outer edge away from 90 degrees,
+which the last segment's outer wall narrows with a second step), the side walls between keep the miter. See
+odd/tasks/folded-miter.md, section "T3 design", odd/tasks/folded-corners.md (S6 outer radius, S7 thickness from the
+profile, S8 automatic K-factor), odd/tasks/stepped-corners.md (S2-S5, L8, L11, L13) and odd/tasks/pending-followups.md
+(S3a-S3c).
 """
 
 import math
@@ -31,8 +33,9 @@ from functools import cached_property
 import FreeCAD as App
 import Part
 
+from freecad.maxproframe._utils import is_trimmedbody, piece_stack
 from freecad.maxproframe.ff_tools import translate
-from freecad.maxproframe.folded_chain import ChainError, _corner, section_offset
+from freecad.maxproframe.folded_chain import ChainError, _corner, base_profile, section_offset
 from freecad.maxproframe.profile_pattern import container_placement, placed
 
 # Default key: its diameter as a part of the depth across the bent wall (S20).
@@ -627,15 +630,25 @@ class _Bend:
         if x_a - g / 2 > b_flank + SIZE_TOLERANCE or lowest < max(self.thickness, self._apex()) - SIZE_TOLERANCE:
             raise _step_misfit(self.names)
 
-    def removed(self, reach):
-        """What the corner removes, as a solid of the corner coordinates (u, v, w)."""
+    def _cut_faces(self):
+        """The faces of the (u, v) plane the corner cuts through the side walls and the inner wall, but the relief."""
         cuts = [self.notch(self._flank_top if self.stepped else self.depth + self.thickness)]
         if self.key:
             cuts[0] = cuts[0].cut(self.tab())
             cuts.append(self.socket())
         if self.stepped:
             cuts.extend(self._step_regions())
-        solids = [_prism(face, reach) for face in cuts]
+        return cuts
+
+    def reach(self):
+        """(u_min, u_max): how far the corner cuts along the bar, back into the segment before and on into the one
+        after, from the start of its bend zone (the relief spans the bend zone)."""
+        boxes = [face.BoundBox for face in self._cut_faces()]
+        return min([box.XMin for box in boxes] + [0.0]), max([box.XMax for box in boxes] + [self.allowance])
+
+    def removed(self, reach):
+        """What the corner removes, as a solid of the corner coordinates (u, v, w)."""
+        solids = [_prism(face, reach) for face in self._cut_faces()]
         rectangle, *discs = self.relief_region()
         relief = _prism(rectangle, reach)
         if discs:
@@ -652,7 +665,7 @@ class _OpenEnd:
     """One end of the bar at a stepped open corner: ``frame`` places the (u, v, w) of that end on the bar (origin at
     the virtual sharp, u along +X, v inward from the outer face, w along the corner axis), ``cuts`` are the (u, v)
     polygons it loses, ``kept`` is the X its material reaches, ``zone`` the box from where the joint starts to the
-    end: what the tip changes there is dropped."""
+    end: what the End Miter of that end changes there is dropped (``_segment_changes``)."""
 
     frame: App.Placement
     cuts: list
@@ -670,8 +683,9 @@ class _OpenStep:
     by the corner's angle about the sharp. The inner band (y from d - s to d) is the one of a folded corner (L8, A
     covers the overlap, B ends past it, B gives way where A's band past the miter line folds onto it); the outer band
     (y from 0 to s) the same with the roles swapped (B covers it, as far as nothing of it passes A's outer face plane:
-    away from 90 degrees a notch is left at the outer edge, L13); the side walls between keep the miter plane
-    through the sharp, each moved back half the clearance. ``step_flip`` swaps A and B: mirrored about the miter line.
+    away from 90 degrees a notch is left at the outer edge, L13, which A's outer wall narrows with a second step,
+    ``second_step``); the side walls between keep the miter plane through the sharp, each moved back half the
+    clearance. ``step_flip`` swaps A and B: mirrored about the miter line.
     """
 
     names: tuple
@@ -714,6 +728,38 @@ class _OpenStep:
         )
 
     @cached_property
+    def second_step(self):
+        """Where A's outer wall ends along A from the sharp when it steps again into the notch B's outer band leaves
+        (pending-followups S3a); None when it does not.
+
+        A's outer band ends at a_o = min(overlap x) - g / 2, before the overlap of the outer bands. Its outer wall alone
+        (y in [0, t]: the rectangle x in [a_o, a]) grows on into the notch as far as it stays clear of B's outer band
+        grown by g / 2, the region B's band trims A by (x' >= b - g / 2 and y' <= s + g / 2, b being B's outer start
+        without clearance), with x' = x cos(theta) + y sin(theta) and y' = -x sin(theta) + y cos(theta):
+
+        - beyond B's step face, y' >= s + g / 2 over the whole rectangle (lowest at (a, t) above 90 degrees, at (a, 0)
+          below): a = -(s + g / 2 - min(0, t cos(theta))) / sin(theta);
+        - below 90 degrees, short of B's start, x' <= -g / 2 over the whole rectangle (largest at (a, t)):
+          a = -(g / 2 + t sin(theta)) / cos(theta).
+
+        The second step ends at the larger of both: 5.77 mm from the sharp instead of 6.93 at 120 degrees, 3.46
+        instead of 4.62 at 60 degrees (s = 4, t = 2, g = 0). Its step face y = t contains w and its end x = a is a
+        cross-section of A; it stays inside B's outer face plane (y' >= s there, or x < 0 below 90 degrees, both
+        giving y' > 0). None when a does not pass a_o: at 90 degrees both give a_o, so the joint stays as it was;
+        and with s = t, where the outer band is the outer wall.
+        """
+        g, t, s = self.clearance, self.thickness, self.step_depth
+        theta = math.radians(self.corner.bend_angle)
+        sin, cos = math.sin(theta), math.cos(theta)
+        a_outer = self._ends[0][2]
+        reach = -(s + g / 2 - min(0.0, t * cos)) / sin
+        if cos > SIZE_TOLERANCE:
+            reach = max(reach, -(g / 2 + t * sin) / cos)
+        if s <= t + SIZE_TOLERANCE or reach <= a_outer + SIZE_TOLERANCE:
+            return None
+        return reach
+
+    @cached_property
     def _trims(self):
         """(trim of A, trim of B) as (x, y) points of their frames: B's outer band past the miter line, grown half the
         clearance, where it folds into A, from A's outer end on; A's inner band past the miter line, grown half the
@@ -733,12 +779,17 @@ class _OpenStep:
     def _cuts(self, far):
         """(cuts of the last segment, cuts of the first one): the (u, v) polygons each end loses, ``far`` being past
         everything; with ``step_flip`` each end loses the mirror of what the other one loses unflipped."""
-        g, s, d = self.clearance, self.step_depth, self.corner.depth
+        g, t, s, d = self.clearance, self.thickness, self.step_depth, self.corner.depth
         a_inner, b_inner, a_outer, b_outer = self._ends[0]
         tangent, back = math.tan(self.half), (g / 2) / math.cos(self.half)
         low, high = s * tangent + back, (d - s) * tangent + back
-        a_cut = [(a_outer, -far), (far, -far), (far, far), (a_inner, far), (a_inner, d - s), (-high, d - s)]
+        second = self.second_step
+        a_wall = a_outer if second is None else second
+        a_cut = [(a_wall, -far), (far, -far), (far, far), (a_inner, far), (a_inner, d - s), (-high, d - s)]
         a_cut.extend([(-low, s), (a_outer, s)])
+        if second is not None:
+            # S3a: A's outer wall steps again into the notch, up to its second step.
+            a_cut.extend([(a_outer, t), (second, t)])
         b_cut = [(b_outer, -far), (b_outer, s), (low, s), (high, d - s), (b_inner, d - s), (b_inner, far)]
         b_cut.extend([(-far, far), (-far, -far)])
         a_cuts, b_cuts = ([cut] + ([trim] if trim else []) for cut, trim in zip((a_cut, b_cut), self._trims))
@@ -757,13 +808,15 @@ class _OpenStep:
         if max((v for _, v in a_trim), default=-math.inf) > d - s + SIZE_TOLERANCE:
             raise _step_misfit(self.names)
 
-    def ends(self, chain, placements):
-        """(last, first): the ``_OpenEnd`` of the last segment and of the first one on the bar placed by ``placements``
-        (``_straight_placements``). Each end zone reaches back to the miter plane at the inner face (moved back half
-        the clearance), so the End Miter of that end is dropped whole."""
+    def _placed(self, chain, placements):
+        """(last, first): (side, x, normal, polygons, zone) of the last segment and of the first one on the bar placed
+        by ``placements`` (``_straight_placements``): side 1 when the end is at +X, x the X of the sharp, normal the
+        outer normal of that end, polygons its cuts (``_cuts``), zone how far along u from the sharp the joint reaches
+        into that tube: its farthest cut, at least back to the miter plane at the inner face (moved back half the
+        clearance), so the End Miter of that end is dropped whole. Only numbers: no shape is built."""
         corner, d = self.corner, self.corner.depth
         tangent, back = math.tan(self.half), (self.clearance / 2) / math.cos(self.half)
-        far = 10 * (d + max(abs(value) for value in self._ends[0]) + d * tangent)
+        far = self._far
         cuts = self._cuts(far)
         turned = App.Rotation(corner.axis, corner.bend_angle).multVec(corner.outer_normal)
         found = []
@@ -773,18 +826,42 @@ class _OpenStep:
             # The sharp, where the outer faces meet, is (offset . normal + d / 2) tan(theta / 2) past the path end of
             # the last segment, and as far before the path start of the first one.
             x = placement.multVec(getattr(segment, point)).x + side * (offset.dot(normal) + d / 2) * tangent
-            rotation = placement.Rotation
-            origin = App.Vector(x, 0, 0) + rotation.multVec(offset + normal * (d / 2))
-            axes = (X_AXIS, rotation.multVec(normal * -1), rotation.multVec(corner.axis))
             polygons = cuts[0 if side > 0 else 1]
             near = [u for points in polygons for u, _ in points if abs(u) < far / 2]
             if side > 0:
                 zone = min(near + [-(d * tangent + back)])
+            else:
+                zone = max(near + [d * tangent + back])
+            found.append((side, x, normal, polygons, zone))
+        return found
+
+    @property
+    def _far(self):
+        """A distance along u past everything the joint cuts."""
+        d = self.corner.depth
+        return 10 * (d + max(abs(value) for value in self._ends[0]) + d * math.tan(self.half))
+
+    def reaches(self, chain, placements):
+        """(last, first): the X on the bar placed by ``placements`` up to which the joint reaches into the last segment
+        and into the first one (``_placed``)."""
+        return [x + zone for _, x, _, _, zone in self._placed(chain, placements)]
+
+    def ends(self, chain, placements):
+        """(last, first): the ``_OpenEnd`` of the last segment and of the first one on the bar placed by ``placements``
+        (``_straight_placements``); each end zone is ``_placed``'s."""
+        corner, d, far = self.corner, self.corner.depth, self._far
+        found = []
+        for (side, x, normal, polygons, zone), index in zip(self._placed(chain, placements), (-1, 0)):
+            segment, placement = chain.segments[index], placements[index]
+            offset = section_offset(segment)
+            rotation = placement.Rotation
+            origin = App.Vector(x, 0, 0) + rotation.multVec(offset + normal * (d / 2))
+            axes = (X_AXIS, rotation.multVec(normal * -1), rotation.multVec(corner.axis))
+            if side > 0:
                 section = _polygon([(zone - 1, 0), (far / 2, 0), (far / 2, d), (zone - 1, d)])
                 kept = x + _box(section.cut([_polygon(points) for points in polygons])).XMax
                 box = Part.makeBox(2 * far, 2 * far, 2 * far, App.Vector(x + zone, -far, -far))
             else:
-                zone = max(near + [d * tangent + back])
                 section = _polygon([(-far / 2, 0), (zone + 1, 0), (zone + 1, d), (-far / 2, d)])
                 kept = x + _box(section.cut([_polygon(points) for points in polygons])).XMin
                 box = Part.makeBox(2 * far, 2 * far, 2 * far, App.Vector(x + zone - 2 * far, -far, -far))
@@ -883,8 +960,29 @@ def _open_step(chain, open_corner):
 def check_settings(chain, corners, open_corner=None):
     """Raise what ``unfold`` would raise for ``corners`` and ``open_corner`` (as ``unfold`` takes them), without
     building any shape."""
-    _bends(chain, corners)
-    _open_step(chain, open_corner)
+    bends = _bends(chain, corners)
+    _check_open_lengths(chain, bends, _open_step(chain, open_corner))
+
+
+def _check_open_lengths(chain, bends, step):
+    """Each end tube of a stepped open corner ``step`` holds the joint and its folded corner (pending-followups S3c):
+    along the bar, what the joint cuts into the tube (``_OpenStep.reaches``) stops short of what the folded corner at
+    its other end cuts back into it (``_Bend.reach``: its V, band or key, at least its bend start)."""
+    if step is None:
+        return
+    placements, corners = _straight_placements(chain, bends)
+    last, first = step.reaches(chain, placements)
+    ends = (
+        (chain.segments[0], first, corners[0][0] + bends[0].reach()[0]),
+        (chain.segments[-1], -last, -(corners[-1][0] + bends[-1].reach()[1])),
+    )
+    for segment, joint, folded in ends:
+        if joint >= folded - SIZE_TOLERANCE:
+            raise UnfoldError(
+                translate("MaxProFrame", "{} is too short for the stepped joint of the open corner.").format(
+                    _label(segment.profile)
+                )
+            )
 
 
 def _check_lengths(chain, bends):
@@ -947,15 +1045,38 @@ def _slab(section, start, end):
     return face.extrude(App.Vector(end - start, 0, 0))
 
 
-def _segment_changes(chain, placements, section, x_min, x_max, zones=()):
+def _trims_against(piece, partner):
+    """Whether ``piece`` is a trim against the tube ``partner`` (or a piece made from it): at the open corner, the
+    joint of an end with the other end (its End Miter there)."""
+    return is_trimmedbody(piece) and any(
+        base_profile(link[0]) == partner for link in piece.TrimmingBoundary if link[0] is not None
+    )
+
+
+def _stack_changes(segment, placement, partner):
+    """(removed, added, joint) of each piece of the stack of ``segment``'s tip, from its profile up, on the bar: what
+    that piece changes on the one it is made from, and whether it is a trim against ``partner`` (``_trims_against``)."""
+    pieces = list(piece_stack(segment.tip))[::-1]
+    shapes = [placed(_global_shape(piece), placement) for piece in pieces]
+    return [
+        (below.cut(shape), shape.cut(below), _trims_against(piece, partner))
+        for piece, below, shape in zip(pieces[1:], shapes, shapes[1:])
+    ]
+
+
+def _segment_changes(chain, placements, section, x_min, x_max, zones=None):
     """(removed, added) solids of the cuts made on the segments, on the bar.
 
     Each segment's tip is compared with its base profile; at the ends of the bar the base profile is taken as
-    reaching the bar ends, so whatever of the bar the tip does not fill there is removed too. Nothing is changed
-    inside ``zones`` (solids): the ends a stepped open corner rebuilds.
+    reaching the bar ends, so whatever of the bar the tip does not fill there is removed too. ``zones`` maps the index
+    of an end segment to the solid its stepped open corner rebuilds: on that end the trims against the other end (its
+    End Miter) and the base taken as reaching the bar end change nothing inside it, every other cut of that end
+    (holes, cutouts, other trims) stays whole, inside the zone too (pending-followups S3b). A zone changes nothing
+    of the other segments.
     """
     removed, added = [], []
     last = len(chain.segments) - 1
+    zones = zones or {}
     for index, (segment, placement) in enumerate(zip(chain.segments, placements)):
         base = placed(_global_shape(segment.profile), placement)
         reference = base
@@ -964,14 +1085,25 @@ def _segment_changes(chain, placements, section, x_min, x_max, zones=()):
             reference = reference.fuse(_slab(section, x_min - END_MARGIN, box.XMin))
         if index == last and x_max > box.XMax + SIZE_TOLERANCE:
             reference = reference.fuse(_slab(section, box.XMax, x_max + END_MARGIN))
-        if segment.tip is segment.profile and reference is base:
+        zone = zones.get(index)
+        if zone is not None:
+            partner = chain.segments[last if index == 0 else 0].profile
+            changes = _stack_changes(segment, placement, partner)
+            if reference is not base:
+                changes.insert(0, (reference.cut(base), None, True))
+        elif segment.tip is segment.profile and reference is base:
             continue
-        tip = placed(_global_shape(segment.tip), placement)
-        for found, into in ((reference.cut(tip), removed), (tip.cut(reference), added)):
-            if zones and found.Solids:
-                found = found.cut(list(zones))
-            if found.Solids and found.Volume > VOLUME_TOLERANCE:
-                into.append(found)
+        else:
+            tip = placed(_global_shape(segment.tip), placement)
+            changes = [(reference.cut(tip), tip.cut(reference), False)]
+        for found_removed, found_added, joint in changes:
+            for found, into in ((found_removed, removed), (found_added, added)):
+                if found is None or not found.Solids:
+                    continue
+                if joint:
+                    found = found.cut(zone)
+                if found.Solids and found.Volume > VOLUME_TOLERANCE:
+                    into.append(found)
     return removed, added
 
 
@@ -992,16 +1124,19 @@ def unfold(chain, corners, open_corner=None):
     the tube unless given (``automatic_step_depth``).
     ``open_corner`` is the ``CornerSettings`` of the open corner of a closed chain (ignored on an open one): with None
     or ``Miter`` the ends of the bar are the segments' own tips there (their End Miter, if any); with ``Stepped``
-    both ends get the stepped joint (S4, L11) and lose whatever their tips change from where it starts on (the End
-    Miter): the last segment covers the overlap of the inner bands and the first one the overlap of the outer bands
-    as far as nothing passes the last one's outer face, leaving a notch at the outer edge away from 90 degrees (L13)
-    (swapped with ``step_flip``), the side walls between keep the miter through the virtual sharp of the outer faces,
-    the clearance moves each end back half of it; only its joint, clearance and step settings are read.
+    both ends get the stepped joint (S4, L11) instead of their End Miter there (the trims against the other end);
+    their other cuts (holes, cutouts, other trims) stay, inside the joint too: the last segment covers the overlap of
+    the inner bands and the first one the overlap of the outer bands as far as nothing passes the last one's outer
+    face, leaving a notch at the outer edge away from 90 degrees (L13) that the last one's outer wall narrows with a
+    second step (``_OpenStep.second_step``) (swapped with ``step_flip``), the side walls between keep the miter
+    through the virtual sharp of the outer faces, the clearance moves each end back half of it; only its joint,
+    clearance and step settings are read.
     Raises UnfoldError when the radius, the K-factor, the step or the key of a corner do not suit the tube, or when a
-    tube is too short for the bends at its ends.
+    tube is too short for the bends at its ends or, at a stepped open corner, for that joint and its folded corner.
     """
     bends = _bends(chain, corners)
     step = _open_step(chain, open_corner)
+    _check_open_lengths(chain, bends, step)
     placements, corners = _straight_placements(chain, bends)
     section = _section(chain, placements[0])
     if step is None:
@@ -1015,7 +1150,8 @@ def unfold(chain, corners, open_corner=None):
         x_min, x_max = ends[1].kept, ends[0].kept
         start, end = x_min - END_MARGIN, x_max + END_MARGIN
         bar = _slab(section, start, end)
-        removed, added = _segment_changes(chain, placements, section, start, end, [found.zone for found in ends])
+        zones = {len(chain.segments) - 1: ends[0].zone, 0: ends[1].zone}
+        removed, added = _segment_changes(chain, placements, section, start, end, zones)
     for solid in removed:
         bar = bar.cut(solid)
     for solid in added:

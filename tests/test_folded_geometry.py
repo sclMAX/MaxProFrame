@@ -26,8 +26,10 @@ from test_unfolded_geometry import (
     T,
     UnfoldFixture,
     bend,
+    drilled_mitered_rectangle,
     key_centers,
     open_frames,
+    second_step,
     step_ends,
 )
 
@@ -489,6 +491,42 @@ class SteppedOpenCornerFoldTest(FoldFixture):
 
                     for volume in self.beyond_outer_faces(shape, chain):
                         self.assertAlmostEqual(0.0, volume, delta=VOLUME_TOLERANCE)
+
+    def test_holes_inside_the_joint_zone_stay_where_they_were_drilled(self):
+        # pending-followups S3b: the holes drilled on both mitered ends next to the open corner stay in the folded bar.
+        plain = fold_bar(self.rectangle(), unfold(self.rectangle(), bend(**PLAIN), open_corner=bend(**STEPPED)))
+        chain, _ = drilled_mitered_rectangle(self)
+
+        shape = self.assertFoldsWithoutOverlap(chain, bend(**STEPPED))
+
+        self.assertAlmostEqual(plain.Volume - 2 * math.pi * 5**2 * T, shape.Volume, delta=VOLUME_TOLERANCE)
+        for hole, kept in (((10, 0, 24), (17, 0, 24)), ((0, 10, 24), (0, 17, 24))):
+            self.assertTrue(self.inside(plain, hole))
+            self.assertFalse(self.inside(shape, hole))
+            self.assertTrue(self.inside(shape, kept))
+
+    def test_second_step_makes_the_groove_at_the_outer_edge_smaller(self):
+        # pending-followups S3a: away from 90 degrees the last tube's outer wall steps again into the notch the first
+        # tube's outer band leaves: along the last tube's outer face the groove opens 5.77 mm from the sharp instead of
+        # 6.93 at 120 degrees, 3.46 instead of 4.62 at 60 degrees (s = 4, t = 2). Nothing passes either outer face plane
+        # and the ends fold without overlap, flipped and with clearance too.
+        for open_at_60, before in ((False, S * math.tan(math.radians(60))), (True, S / math.sin(math.radians(60)))):
+            chain = self.rhombus(open_at_60)
+            after = -second_step(60 if open_at_60 else 120)
+            self.assertLess(after, before - 1.0)
+            for options in ({}, dict(clearance=1.0), dict(step_flip=True), dict(step_flip=True, clearance=1.0)):
+                with self.subTest(open_at_60=open_at_60, options=options):
+                    shape = self.assertFoldsWithoutOverlap(chain, bend(**STEPPED, **options))
+
+                    for volume in self.beyond_outer_faces(shape, chain):
+                        self.assertAlmostEqual(0.0, volume, delta=VOLUME_TOLERANCE)
+                    if options:
+                        continue
+                    last, _ = open_frames(chain)
+                    # Just inside the last tube's outer face, in the middle of its outer wall (no side wall there).
+                    for u, kept in ((-(before + 0.05), True), (-(after + 0.05), True), (-(after - 0.05), False)):
+                        point = last.frame.multVec(App.Vector(u, 0.05, 0.0))
+                        self.assertEqual(kept, self.inside(shape, point), u)
 
     def test_rhombus_folds_with_its_ends_interlocked_at_120_and_60_degrees(self):
         for open_at_60 in (False, True):

@@ -51,6 +51,7 @@ from freecad.maxproframe.task_panel_widgets import (
     create_pre_extend_icon,
     create_profile_section_icon,
 )
+from freecad.maxproframe.ui_forms import load_form
 
 
 def _bind_ui_children(form, path):
@@ -74,8 +75,8 @@ def _bind_ui_children(form, path):
 
 
 def load_ui_file(path):
-    if hasattr(Gui, "PySideUic") and hasattr(Gui.PySideUic, "loadUi"):
-        return _bind_ui_children(Gui.PySideUic.loadUi(path), path)
+    if hasattr(Gui, "UiLoader"):
+        return _bind_ui_children(load_form(path), path)
     from PySide import QtCore, QtUiTools, QtWidgets
 
     _ = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])

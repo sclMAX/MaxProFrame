@@ -20,6 +20,7 @@ from freecad.maxproframe.miter_geometry import Member, real_stretch
 from freecad.maxproframe.miter_joints import find_joints
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrimmedProfile
+from freecad.maxproframe.ui_forms import load_form
 
 # Remembered state of the panel's "Update automatically" check box.
 AUTO_PREVIEW_PARAM = "Miter Auto Preview"
@@ -185,7 +186,7 @@ class EndMiterTaskPanel:
 
     def __init__(self, members=(), edited=None):
         ui_file = os.path.join(UIPATH, "create_end_miter.ui")
-        self.form = keep_alive_until_destroyed(Gui.PySideUic.loadUi(ui_file))
+        self.form = keep_alive_until_destroyed(load_form(ui_file))
         # FreeCAD may close the dialog without OK, Cancel or closed(): the form is then deleted.
         self.form.destroyed.connect(self._form_gone)
         self._translate_form()

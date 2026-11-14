@@ -34,11 +34,12 @@ from freecad.maxproframe.ff_tools import (
 )
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
 from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrimmedProfile
+from freecad.maxproframe.ui_forms import load_form
 
 
 class CreateBOMTaskPanel:
     def __init__(self):
-        self.form = keep_alive_until_destroyed(Gui.PySideUic.loadUi(os.path.join(UIPATH, "create_bom.ui")))
+        self.form = keep_alive_until_destroyed(load_form(os.path.join(UIPATH, "create_bom.ui")))
         self._translate_form()
 
         param = get_param_group()

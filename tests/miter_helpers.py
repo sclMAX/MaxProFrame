@@ -9,7 +9,10 @@ from freecad.maxproframe.ff_tools import TRANSLATIONSPATH, get_param_group
 
 
 def use_language(test, language, qt_locale):
-    """Switch the GUI language and the Qt default locale for one test, restoring both afterwards."""
+    """Switch the GUI language and the Qt default locale for one test, restoring both afterwards.
+
+    The LanguageChange the switch posts to the windows is delivered here, not in the next event loop of the test.
+    """
     prefs = App.ParamGet("User parameter:BaseApp/Preferences/General")
     previous, locale, qt_default = prefs.GetString("Language", ""), Gui.getLocale(), QtCore.QLocale()
 
@@ -26,6 +29,7 @@ def use_language(test, language, qt_locale):
     Gui.setLocale(language)
     Gui.updateLocale()
     QtCore.QLocale.setDefault(QtCore.QLocale(qt_locale))
+    deliver_language_change()
 
 
 def deliver_language_change():
