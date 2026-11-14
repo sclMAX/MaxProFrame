@@ -182,18 +182,32 @@ class BarFollowsTest(FoldedBarToolsFixture):
         self.assertAlmostEqual(0.0, bar.Shape.BoundBox.YMin, delta=ON_FACE)
         self.assertFalse(right.Visibility)
 
-    def test_a_segment_removed_without_release_drops_out_of_the_bar_and_the_others_still_recompute(self):
+    def test_a_segment_piece_removed_without_release_gives_the_bar_its_tube_back(self):
         (bottom, right, top, left), bar = self.make_legs()
+        volume = bar.Shape.Volume
         miter = self.miter_right(bottom, right)
         self.doc.recompute()
 
-        # Removed without release (no tool, no tree delete): the bar loses the entry, it does not get the tube back;
-        # the follow before the recompute skips the removed entry and the bar folds the tubes left.
+        # Removed without release (no tool, no tree delete): the bar keeps its base tubes (pending-followups S4c), so
+        # the follow before the recompute gives the segment its tube back.
         self.doc.removeObject(miter.Name)
         self.doc.recompute()
 
         self.assertEqual("Valid", right.getStatusString())
+        self.assertEqual([right, top, left], list(bar.Segments))
+        self.assertOneSolid(bar)
+        self.assertAlmostEqual(volume, bar.Shape.Volume, delta=1e-3)
+        self.assertFalse(right.Visibility)
+
+    def test_a_base_tube_removed_drops_out_of_the_bar_and_the_others_still_recompute(self):
+        (_, right, top, left), bar = self.make_legs()
+
+        # The tube itself removed: nothing is left to fall back to, the bar folds the tubes left.
+        self.doc.removeObject(right.Name)
+        self.doc.recompute()
+
         self.assertEqual([top, left], list(bar.Segments))
+        self.assertEqual([top, left], list(bar.BaseTubes))
         self.assertOneSolid(bar)
 
 

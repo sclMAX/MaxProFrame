@@ -12,6 +12,10 @@ The click-to-add tools work on a bar through its tubes (odd/tasks/folded-bar-too
 tube under a click on the bar and that tube's own face, a piece made later on a tube is folded into the bar before
 every recompute of its document (``follow_new_pieces``), and ``release_piece`` gives a piece back to the piece under
 it before a tool removes it.
+
+The bar keeps the tube each segment is made from (``BaseTubes``, odd/tasks/pending-followups.md S4c): a segment whose
+piece is removed without release (undone after a recompute outside its transaction, deleted from a script) falls back
+to its tube, or to the piece left on it, instead of leaving the bar (``bar_tubes``).
 """
 
 import os
@@ -22,7 +26,7 @@ import Part
 
 from freecad.maxproframe._utils import is_foldedbar, piece_stack
 from freecad.maxproframe.ff_tools import ICONPATH, get_param_group, place_in_container_of, translate
-from freecad.maxproframe.folded_chain import ChainError, base_profile, build_chain
+from freecad.maxproframe.folded_chain import ChainError, build_chain
 from freecad.maxproframe.folded_corner import corner_key, corner_settings, make_folded_corner, set_corner_settings
 from freecad.maxproframe.folded_geometry import fold_bar
 from freecad.maxproframe.profile_pattern import (
@@ -93,16 +97,60 @@ def nearest_piece(pieces, point):
     return min(pieces, key=distance)
 
 
-def bar_tips(bar):
-    """The current tip of each tube of ``bar``, in its order: the newest piece of each profile it folds.
+def base_tube(piece):
+    """The tube ``piece`` is made from: the bottom of its trims and cutouts (``piece_stack``), ``piece`` for a tube."""
+    return list(piece_stack(piece))[-1]
 
-    As ``build_chain`` takes them; a removed entry of ``Segments`` is skipped.
+
+def _in_order(names, within):
+    """Whether the names ``names`` are some of ``within``, in its order."""
+    rest = iter(within)
+    return all(name in rest for name in names)
+
+
+def bar_tubes(bar):
+    """The tubes ``bar`` folds, in its order: the base tube of each segment.
+
+    A removed piece leaves ``Segments`` (FreeCAD drops the link) but its tube stays in ``BaseTubes``: while the tubes
+    of the segments left are some of ``BaseTubes`` in its order, ``BaseTubes`` holds (S4c), so that segment folds its
+    tube again. A removed tube leaves both, its segment drops out. ``Segments`` set to other tubes (another order, a
+    tube not in ``BaseTubes``, a bar saved before ``BaseTubes``) gives the tubes.
     """
-    tips = []
-    for segment in bar.Segments:
-        if _alive(segment):
-            tips.append(newest_piece(base_profile(segment) or segment))
-    return tips
+    current = [base_tube(segment) for segment in bar.Segments if _alive(segment)]
+    stored = [tube for tube in getattr(bar, "BaseTubes", ()) if _alive(tube)]
+    if _in_order([tube.Name for tube in current], [tube.Name for tube in stored]):
+        return stored
+    return current
+
+
+def bar_tips(bar):
+    """The current tip of each tube of ``bar``, in its order: the newest piece of each tube it folds (``bar_tubes``).
+
+    As ``build_chain`` takes them.
+    """
+    return [newest_piece(tube) for tube in bar_tubes(bar)]
+
+
+def _names(objects):
+    return [obj.Name for obj in objects if obj is not None]
+
+
+def set_segments(bar, pieces):
+    """Have ``bar`` fold ``pieces`` (its ``Segments``) and keep the tube of each (its ``BaseTubes``).
+
+    The way to give a bar other pieces or other tubes: ``Segments`` alone set to some of its tubes would get the
+    others back (``bar_tubes``). Returns whether anything changed.
+    """
+    pieces = [piece for piece in pieces if _alive(piece)]
+    tubes = [base_tube(piece) for piece in pieces]
+    changed = False
+    if "BaseTubes" in bar.PropertiesList and _names(bar.BaseTubes) != _names(tubes):
+        bar.BaseTubes = tubes
+        changed = True
+    if _names(bar.Segments) != _names(pieces):
+        bar.Segments = pieces
+        changed = True
+    return changed
 
 
 def _clicked_normal(bar, sub):
@@ -179,15 +227,14 @@ def follow_new_pieces(doc):
 
     A trim, cutout or drill hole made on a tube of a bar later links the tube, not the bar: run before every
     recompute of the document (``NewPieceObserver``), the bar then recomputes after the new piece in that same
-    recompute, folds it and hides it. A removed entry of ``Segments`` is dropped.
+    recompute, folds it and hides it. A segment whose piece was removed folds its tube again, or the piece left on it
+    (``bar_tubes``); one whose tube was removed is dropped.
     """
     for obj in list(doc.Objects):
         try:
             if not is_foldedbar(obj):
                 continue
-            tips = bar_tips(obj)
-            if [tip.Name for tip in tips] != [segment.Name for segment in obj.Segments if segment is not None]:
-                obj.Segments = tips
+            set_segments(obj, bar_tips(obj))
         except Exception as error:
             App.Console.PrintWarning(f"MaxProFrame: {getattr(obj, 'Label', obj)} does not follow its pieces: {error}\n")
 
@@ -212,15 +259,21 @@ def release_piece(piece):
             bar.Segments = [base if segment == piece else segment for segment in bar.Segments]
 
 
-def _add(obj, kind, name, group, tooltip, value=None, read_only=False):
-    """Add the property ``name`` to ``obj`` with ``value`` unless it has it: a bar saved before keeps its values."""
+def _add(obj, kind, name, group, tooltip, value=None, read_only=False, hidden=False):
+    """Add the property ``name`` to ``obj`` with ``value`` unless it has it: a bar saved before keeps its values.
+
+    Returns whether it was added.
+    """
     if name in obj.PropertiesList:
-        return
+        return False
     obj.addProperty(kind, name, group, tooltip)
     if value is not None:
         setattr(obj, name, value)
     if read_only:
         obj.setEditorMode(name, 1)
+    if hidden:
+        obj.setEditorMode(name, 2)
+    return True
 
 
 def _alive(obj):
@@ -241,7 +294,7 @@ def open_corner(bar):
 def bar_chain(bar):
     """The chain of ``bar``: its segments, open where its open corner object says (else where ``build_chain`` does)."""
     opened = open_corner(bar)
-    return build_chain(list(bar.Segments), open_corner=[opened.PieceA, opened.PieceB] if opened else None)
+    return build_chain(bar_tips(bar), open_corner=[opened.PieceA, opened.PieceB] if opened else None)
 
 
 def _pair(chain, corner):
@@ -407,6 +460,11 @@ class FoldedBar:
         _add(
             obj, "App::PropertyLinkList", "Segments", "FoldedBar",
             translate("App::Property", "Tube pieces folded into the bar, in chain order from its start"),
+            read_only=True,
+        )  # fmt: skip
+        _add(
+            obj, "App::PropertyLinkList", "BaseTubes", "FoldedBar",
+            translate("App::Property", "Tube each segment of the bar is made from, in its order"), hidden=True,
         )  # fmt: skip
         _add(
             obj, "App::PropertyLinkList", "Corners", "FoldedBar",
@@ -426,8 +484,21 @@ class FoldedBar:
         _add(obj, "App::PropertyFloat", "Price", "Base", "Profile Price", read_only=True)
 
     def onDocumentRestored(self, obj):
-        """A bar saved by an older MaxProFrame gets the properties it lacks, with their defaults."""
+        """A bar saved by an older MaxProFrame gets the properties it lacks, with their defaults.
+
+        One saved before ``BaseTubes`` gets the tube of each of its segments (S4c): it folds the same, untouched. Its
+        ``Segments`` become read-only, as a new bar's: tubes are added and removed in the Folded Bar panel.
+        """
         self.add_properties(obj)
+        if "ReadOnly" not in obj.getEditorMode("Segments"):
+            obj.setEditorMode("Segments", 1)
+        if not obj.BaseTubes:
+            tubes = [base_tube(segment) for segment in obj.Segments if _alive(segment)]
+            if tubes:
+                touched = "Touched" in obj.State
+                obj.BaseTubes = tubes
+                if not touched:
+                    obj.purgeTouched()
 
     def onBeforeChange(self, obj, prop):
         if prop == "Label":
@@ -481,9 +552,8 @@ class FoldedBar:
         first, so the bar folds its cut.
         """
         tips = [segment.tip for segment in chain.segments]
-        if [tip.Name for tip in tips] == [segment.Name for segment in obj.Segments if segment is not None]:
+        if not set_segments(obj, tips):
             return
-        obj.Segments = tips
         for tip in tips:
             if "Touched" in tip.State or tip.Shape.isNull():
                 tip.recompute()
@@ -665,7 +735,7 @@ def make_folded_bar(selection, corners, open_corner=None, open_settings=None):
     FoldedBar(obj)
     if getattr(obj, "ViewObject", None) is not None:
         ViewProviderFoldedBar(obj.ViewObject)
-    obj.Segments = segments
+    set_segments(obj, segments)
     if chain is not None:
         update_corners(obj, chain, corners, open_settings=open_settings)
     doc.recompute()

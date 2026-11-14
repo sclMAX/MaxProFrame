@@ -56,11 +56,13 @@ from freecad.maxproframe.expression_fields import (
 )
 from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, get_param_group, translate
 from freecad.maxproframe.folded_bar import (
+    bar_tips,
     make_folded_bar,
     make_unfolded_bar,
     nearest_piece,
     open_corner,
     pick_point,
+    set_segments,
     update_corners,
 )
 from freecad.maxproframe.folded_chain import (
@@ -201,11 +203,13 @@ def _profile_name(obj):
 
 
 def _snapshot(bar):
-    """What the panel may change on ``bar``: its Segments and Corners, and the PROPERTIES and the expressions of
-    each corner object."""
+    """What the panel may change on ``bar``: its Segments, BaseTubes and Corners, and the PROPERTIES and the
+    expressions of each corner object; ``Tips``, the pieces it folds (``bar_tips``), is not compared."""
     corners = [obj for obj in bar.Corners if obj is not None]
     return {
         "Segments": list(bar.Segments),
+        "BaseTubes": list(getattr(bar, "BaseTubes", [])),
+        "Tips": bar_tips(bar),
         "Corners": [obj.Name for obj in corners],
         "values": {obj.Name: {prop: getattr(obj, prop) for prop in PROPERTIES} for obj in corners},
         "expressions": {obj.Name: expressions_of(obj, EXPRESSION_PROPERTIES) for obj in corners},
@@ -215,6 +219,7 @@ def _snapshot(bar):
 def _plain_snapshot(snapshot):
     return (
         _plain(snapshot["Segments"]),
+        _plain(snapshot["BaseTubes"]),
         tuple(snapshot["Corners"]),
         tuple(
             (name, tuple((prop, _plain(value)) for prop, value in values.items()))
@@ -367,7 +372,8 @@ class FoldedBarTaskPanel:
         self.obj = edited
         # (piece, Visibility) of what the preview hides: Cancel shows it again, undo or not.
         self._visibility = []
-        self.selection = list(edited.Segments) if edited is not None else []
+        # The pieces the bar folds: a tube it falls back to too (a piece removed, not yet recomputed).
+        self.selection = bar_tips(edited) if edited is not None else []
         if edited is None:
             for obj in selection:
                 self.add_member(obj)
@@ -1126,8 +1132,9 @@ class FoldedBarTaskPanel:
                 self.obj = make_folded_bar(self.selection, settings, open_corner=self._chain_pair, open_settings=opened)
                 self._restore_kept_expressions()
             else:
-                # The bar follows the chain of the list: the pieces clicked or removed since, its start.
-                self._apply(self.obj, {"Segments": [segment.tip for segment in self._chain.segments]})
+                # The bar follows the chain of the list: the pieces clicked or removed since, its start; its base
+                # tubes with them.
+                set_segments(self.obj, [segment.tip for segment in self._chain.segments])
                 # The corner objects follow the chain and the fields; the open one is where the chain opens, with
                 # its own joint, step and clearance.
                 update_corners(self.obj, self._chain, settings, open_settings=opened)
@@ -1165,7 +1172,7 @@ class FoldedBarTaskPanel:
         """Names of the profiles ``bar`` folds."""
         if bar is None or not _alive(bar):
             return set()
-        profiles = (base_profile(segment) for segment in bar.Segments if segment is not None)
+        profiles = (base_profile(segment) for segment in bar_tips(bar))
         return {profile.Name for profile in profiles if profile is not None}
 
     def _profiles_in_bar(self):
@@ -1208,7 +1215,7 @@ class FoldedBarTaskPanel:
     def _show_removed(self):
         """Show the pieces Remove took off the edited bar: it no longer hides them."""
         folded = self._profiles_of(self.obj)
-        for piece in self._before["Segments"]:
+        for piece in self._before["Tips"]:
             if _alive(piece) and not piece.Visibility and _profile_name(piece) not in folded:
                 piece.Visibility = True
 
@@ -1408,12 +1415,6 @@ class FoldedBarTaskPanel:
                 shown.append(obj)
         self._select([(obj, [""]) for obj in shown])
 
-    @staticmethod
-    def _apply(obj, values):
-        for prop, value in values.items():
-            if _plain(getattr(obj, prop)) != _plain(value):
-                setattr(obj, prop, value)
-
     def _open_transaction(self):
         if not self._transaction_open:
             self.doc.openTransaction("Edit Folded Bar" if self.edited is not None else "Create Folded Bar")
@@ -1500,10 +1501,12 @@ class FoldedBarTaskPanel:
                 )
                 changed = True
             corners.append(obj)
-        segments = [obj for obj in before["Segments"] if _alive(obj)]
-        if _plain(list(bar.Segments)) != _plain(segments):
-            bar.Segments = segments
-            changed = True
+        # The links as they were, not set_segments: a bar waiting to fall back to a tube keeps it in BaseTubes.
+        for prop in ("BaseTubes", "Segments"):
+            links = [obj for obj in before[prop] if _alive(obj)]
+            if prop in bar.PropertiesList and _plain(list(getattr(bar, prop))) != _plain(links):
+                setattr(bar, prop, links)
+                changed = True
         if [obj.Name for obj in bar.Corners if obj is not None] != [obj.Name for obj in corners]:
             bar.Corners = corners
             changed = True
