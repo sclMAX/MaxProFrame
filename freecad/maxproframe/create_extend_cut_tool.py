@@ -41,6 +41,7 @@ from freecad.maxproframe.trimmed_profile import (
     in_frame_of,
     is_flat_face,
 )
+from freecad.maxproframe.ui_forms import load_form
 
 # Highlight kinds while the panel is open: the target, the profiles to cut (or their previews),
 # and the pieces the previews cut off.
@@ -272,18 +273,6 @@ def _button_id(button):
     return int(getattr(button, "value", button))
 
 
-def _load_form(ui_file):
-    """The form of ``ui_file``, loaded like ``Gui.PySideUic.loadUi`` but with texts only the panel sets.
-
-    Left on, the loader puts back the texts of the form file on every LanguageChange (a language applied in the
-    Preferences, or a switch delivered late): the target label would say "Click a face" with a target set. The
-    panel translates the texts of the form itself (_translate_form).
-    """
-    loader = Gui.UiLoader()
-    loader.setLanguageChangeEnabled(False)
-    return loader.load(ui_file)
-
-
 def show_panel(panel):
     Gui.Control.showDialog(panel)
     Gui.Selection.addObserver(panel)
@@ -338,7 +327,7 @@ class ExtendCutTaskPanel:
 
     def __init__(self, selection=(), edited=None):
         ui_file = os.path.join(UIPATH, "extend_cut.ui")
-        self.form = keep_alive_until_destroyed(_load_form(ui_file))
+        self.form = keep_alive_until_destroyed(load_form(ui_file))
         # FreeCAD may close the dialog without OK, Cancel or closed(): the form is then deleted.
         self.form.destroyed.connect(self._form_gone)
         self._translate_form()

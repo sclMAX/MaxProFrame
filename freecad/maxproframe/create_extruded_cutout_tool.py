@@ -42,6 +42,7 @@ from freecad.maxproframe.ff_tools import (
 from freecad.maxproframe.folded_bar import release_piece, segment_at
 from freecad.maxproframe.frameforge_exceptions import FrameForgeException
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
+from freecad.maxproframe.ui_forms import load_form
 
 # Cut type of the cutouts made from the face panel: the wall under the face only.
 GUIDED_CUT_TYPE = "One wall"
@@ -228,7 +229,7 @@ class CutoutTaskPanel:
     """
 
     def __init__(self, selection=()):
-        self.form = keep_alive_until_destroyed(Gui.PySideUic.loadUi(os.path.join(UIPATH, "create_cutout.ui")))
+        self.form = keep_alive_until_destroyed(load_form(os.path.join(UIPATH, "create_cutout.ui")))
         # FreeCAD may close the dialog without OK or Cancel: the form is then deleted.
         self.form.destroyed.connect(self._form_gone)
         self._translate_form()

@@ -67,6 +67,7 @@ from freecad.maxproframe.populate_ids import (
     set_profile_pid,
 )
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
+from freecad.maxproframe.ui_forms import load_form
 from freecad.maxproframe.version import __version__ as ff_version
 
 # How long Reset IDs shows its result in the status bar, in milliseconds.
@@ -75,7 +76,7 @@ STATUS_TIMEOUT_MS = 10000
 
 class PopulateIDsTaskPanel:
     def __init__(self):
-        self.form = keep_alive_until_destroyed(Gui.PySideUic.loadUi(os.path.join(UIPATH, "populate_ids.ui")))
+        self.form = keep_alive_until_destroyed(load_form(os.path.join(UIPATH, "populate_ids.ui")))
         self._translate_form()
         self.form.le_first_letter.setValidator(
             QtGui.QRegularExpressionValidator(QtCore.QRegularExpression("[A-Za-z]*"), self.form.le_first_letter)
