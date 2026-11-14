@@ -49,8 +49,8 @@ Delivery: commits per task; push, PR and merge stay the user's decisions. Slices
 - T4 [S4c] Folded Bar base tubes + restore of older bars. Risk item 1 (saved document format). route=gentle-ai-worker;
   verify=gentle-ai-verify; commit=fd18329 [x]
 - T5 [S4a, S4b, S4d] Cutout texts, locale-aware length_text, whole bar in End Miter/Extend Cut. route=gentle-ai-worker;
-  commit=(slice 3, with T6)
-- T6 [S5] CHANGELOG, tutorial, es .ts/.qm, full native suite (pinned stable). route=inline; commit=
+  commit=a46f48e [x]
+- T6 [S5] CHANGELOG, tutorial, es .ts/.qm, full native suite (pinned stable). route=inline; commit=6257d18 [x]
 
 ## Log
 - L1 User (2026-11-14), on the list of pending items: "ataquemos 1, 2, 3 y 6". Items: "1. Revisar los demás paneles
@@ -117,3 +117,7 @@ Delivery: commits per task; push, PR and merge stay the user's decisions. Slices
 - L11 T4 re-verify (gentle-ai-verify): B1/B2 fixed, no blockers; probes P1-P9 pass vs baseline 464eee7; undo of the
   extra "Edit Folded Bar" step after OK while falling back is safe (pinned by test_undo_of_the_ok_step_while_falling_
   back_keeps_the_tube, base_tubes 13 OK). Committed fd18329 (slice 2).
+- L12 User: "si toda esta ok, prs push y merge". Native review assess on 1fe2e3e..HEAD: risk high (item 1 escalated),
+  reviewDue false (under_budget); independent verify of T4 already done (L8, L11).
+- L13 Final full suite on 6257d18 (pinned stable 1.1.4, clean worktree, 4 shards): 513 x 4 = 2052 tests OK. Black/isort
+  clean on the 30 changed .py files (the repo-wide check lists 23 pre-existing files outside this change).
