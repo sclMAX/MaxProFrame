@@ -228,6 +228,19 @@ def segment_at(bar, sub, point=None, nearest=False):
     return BarPick(None, None, target, straight_part_message())
 
 
+def folding_bar(piece, other_than=None):
+    """The Folded Bar, but ``other_than``, that folds the tube of ``piece``: None when no other bar folds it."""
+    tube = base_tube(piece)
+    for obj in (piece, tube, newest_piece(tube)):
+        for parent in obj.InList:
+            if is_foldedbar(parent) and (other_than is None or parent.Name != other_than.Name):
+                if tube.Name in {base_tube(segment).Name for segment in parent.Segments if _alive(segment)} or any(
+                    _alive(base) and base.Name == tube.Name for base in getattr(parent, "BaseTubes", ())
+                ):
+                    return parent
+    return None
+
+
 def follow_new_pieces(doc):
     """Have every Folded Bar of ``doc`` fold the newest piece of each of its tubes; relinked bars recompute next.
 
@@ -723,7 +736,12 @@ class ViewProviderFoldedBar:
             return False
         from freecad.maxproframe import create_folded_bar_tool
 
-        create_folded_bar_tool.show_panel(create_folded_bar_tool.FoldedBarTaskPanel(edited=vobj.Object))
+        panel = create_folded_bar_tool.FoldedBarTaskPanel(edited=vobj.Object)
+        create_folded_bar_tool.show_panel(panel)
+        # The panel editing the bar now: a new-bar panel hands its tubes to it (extend-folded-bar S3).
+        self.panel = panel
+        # A tube clicked while editing joins the bar at the end it meets (extend-folded-bar S2).
+        Gui.Selection.addObserver(panel)
         return True
 
     def unsetEdit(self, vobj, mode):
