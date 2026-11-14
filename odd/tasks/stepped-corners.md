@@ -56,6 +56,10 @@ s = step depth, g = clearance. A = the tab piece, B = the socket piece.
 - T5 [S1-S6] docs (tutorial, README, CHANGELOG incl. T0), Spanish translations, full native suite (pinned stable),
   verify. route=worker (docs, i18n) + parent (suite); commit=207c696 (docs, i18n) [x]
 
+- T6 [S5, L18] every mating face pair of the stepped joint (folded and open corner) gets the full clearance g (g/2 per
+  piece); today the step face gap is g/2 (0.1 mm for 0.2) while the end faces get g. route=gentle-ai-worker;
+  commit=pending
+
 ## Log
 - L1 (2026-11-13) "Bien, tengo una duda, si la maquina laser tiene cabezal rotatorio (bevel) o si es solo corte recto
   (perpendicurar) como podemos resolver el corte ?"
@@ -125,3 +129,22 @@ s = step depth, g = clearance. A = the tab piece, B = the socket piece.
   Inglete, Escalonada, Profundidad del escalón, Invertir escalón...), Russian unfinished, .qm rebuilt with
   compile_translations.py. Full native suite, pinned FreeCAD 1.1.4, 4 shards: 505 + 504 + 504 + 504 tests, all
   succeeded. Weekly and Windows targets not run locally (CI). Assess vs origin/main: medium, reviewDue false.
+- L18 User (2026-11-14), on a folded stepped corner with Holgura 0,2 mm: "porque tiene 0.1mm horizontal (flechas rojas) y
+  0.2 el resto (flechas naranjas)?" [Image#2: red arrows on the step face gap, orange on the end face gap]. Cause:
+  `_step_points` (unfolded_geometry.py:580-583) moves the end faces g/2 on each piece but the step face only on one
+  side (band edge at depth - s, tab grown g/2). User: "si" to fixing it with g/2 per side, g in total on every face.
+- L19 T6 (worker). Measured folded (fold_bar + isInside scan across each pair, s = 4, 50x50x2, flipped and not, same
+  values): A's end vs the trim of B's side walls g at 60/90/120 (g/2 each, fine); short, g/2 only (0.1 / 0.5 mm for
+  g = 0.2 / 1.0): A's step face (bottom of its band past the flank, < 90 degrees) vs the trim bottom (T' grown only g/2
+  below it) and B's end vs A's inner face at 90 degrees (B's end moved g/2, A's inner face is the tube's face). Open
+  corner: same two on the inner band, plus at 90 degrees A's outer end vs B's step face (A's end moved g/2, B's step
+  face stays). Cause: those pairs have one face of the covering band that does not move (with s = t it is the wall's
+  face, a partial-depth cut would not be laser-cuttable), and only g/2 on the other side. The suspected band edge
+  (v = d - s) is not a mating face (B's step face lies under the trim). Fix (g = 0 expressions unchanged): folded
+  B's end and T' clip at x_b + g, T' bottom at D - s - g; open B's inner start + g, A's outer end - g, trims grown g
+  past the step faces (d - s - g, s + g), second step clear of y' <= s + g (so 90 degrees still has none). Per piece:
+  g/2 each where both faces are cut, all of g on the cut side otherwise. After: every pair 0.2 / 1.0. RED
+  test_clearance_opens_every_mating_face_pair_by_all_of_it (SteppedFoldTest 4, SteppedOpenCornerFoldTest 6 failing
+  subtests) -> GREEN. Pins changed: B's end x_b + g (unfolded clearance test, flipped fold tip), open ends inner
+  (.., d + g), outer (-s - g, ..), second_step s + g, 90 degree open bar with g = 1 0.5 mm shorter and 109.17 mm3
+  lighter. Pinned 1.1.4: unfolded 66, folded 21, folded_bar 49, panel 90, drill_hole_folded_bar 19 OK.

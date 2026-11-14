@@ -571,20 +571,24 @@ class _Bend:
 
     def _step_points(self):
         """(band, trim) of the stepped joint as (u, v) points, A being the segment before: the band is the rectangle
-        the inner wall band loses between A's end and B's end, each moved back half the clearance; the trim (T') is A's
-        band past the miter line, grown half the clearance, where it folds into B, in B's coordinates and up to B's
-        end (empty when it does not reach B)."""
+        the inner wall band loses between A's end and B's end; the trim (T') is A's band past the miter line, grown,
+        where it folds into B, in B's coordinates and up to B's end (empty when it does not reach B).
+
+        The clearance g opens every pair of faces that meet folded by all of it (stepped-corners.md T6): A's end
+        moves back g/2 and the trim grows g/2 past it; the trim grows g below A's step face (the bottom of its band
+        past the flank, below 90 degrees) and B's end moves back g from A's inner face (where it rests at 90
+        degrees), since those faces of A's band stay (with s = t they are the faces of the inner wall)."""
         h, g, t, s = self.half, self.clearance, self.thickness, self.step_depth
         ba, depth, c = self.allowance, self.depth, self.radius + self.thickness
         x_a, x_b = self._step_ends
-        band = [(x_a - g / 2, depth - s), (ba + x_b + g / 2, depth - s), (ba + x_b + g / 2, depth + t)]
+        band = [(x_a - g / 2, depth - s), (ba + x_b + g, depth - s), (ba + x_b + g, depth + t)]
         band.append((x_a - g / 2, depth + t))
         # A's band past the miter line (x >= -y tan(theta / 2)), in A's (x, y).
-        tab = _past_miter(depth - c - s - g / 2, depth - c + t, x_a + g / 2, math.tan(h))
+        tab = _past_miter(depth - c - s - g, depth - c + t, x_a + g / 2, math.tan(h))
         theta = math.radians(self.angle)
         sin, cos = math.sin(theta), math.cos(theta)
         trim = [(ba + x * cos + y * sin, c - x * sin + y * cos) for x, y in tab]
-        trim = _clip_right(trim, ba + x_b + g / 2) if trim else []
+        trim = _clip_right(trim, ba + x_b + g) if trim else []
         if len(trim) < 3 or _area(trim) <= AREA_TOLERANCE:
             trim = []
         return band, trim
@@ -686,6 +690,11 @@ class _OpenStep:
     away from 90 degrees a notch is left at the outer edge, L13, which A's outer wall narrows with a second step,
     ``second_step``); the side walls between keep the miter plane through the sharp, each moved back half the
     clearance. ``step_flip`` swaps A and B: mirrored about the miter line.
+
+    The clearance g opens every pair of faces that meet folded by all of it (stepped-corners.md T6): a covering band's
+    end moves back g/2 and the trim of the other tube grows g/2 past it; where a face of the covering band stays (its
+    step face, its inner face: with s = t the faces of the wall), the other side takes all of g: the trim grows g
+    past the step face, B's inner start moves back g from A's inner face and A's outer end g from B's step face.
     """
 
     names: tuple
@@ -707,9 +716,10 @@ class _OpenStep:
 
     @cached_property
     def _ends(self):
-        """(A's inner end, B's inner start, A's outer end, B's outer start) along their tubes, from the sharp, each
-        moved back half the clearance; the overlap (``_overlap``) of the inner bands; and B's outer start without
-        clearance.
+        """(A's inner end, B's inner start, A's outer end, B's outer start) along their tubes, from the sharp, moved
+        back by the clearance: the ends of the covering bands (A's inner end, B's outer start) by half of it, the
+        others by all of it (they meet a face of the covering band that stays); the overlap (``_overlap``) of the inner
+        bands; and B's outer start without clearance.
 
         B's outer band covers the overlap of the outer bands only as far as its cross-section stays inside A's outer
         face plane (L13): A's y = x' sin + y' cos must not be negative for y' in [0, s], so B starts at the sharp
@@ -722,7 +732,7 @@ class _OpenStep:
         outer = _overlap(self.corner.bend_angle, 0.0, s)
         b_start = max(0.0, -s * math.cos(theta) / math.sin(theta))
         return (
-            (max(inner[0]) - g / 2, max(inner[1]) + g / 2, min(outer[0]) - g / 2, b_start + g / 2),
+            (max(inner[0]) - g / 2, max(inner[1]) + g, min(outer[0]) - g, b_start + g / 2),
             inner,
             b_start,
         )
@@ -732,13 +742,13 @@ class _OpenStep:
         """Where A's outer wall ends along A from the sharp when it steps again into the notch B's outer band leaves
         (pending-followups S3a); None when it does not.
 
-        A's outer band ends at a_o = min(overlap x) - g / 2, before the overlap of the outer bands. Its outer wall alone
-        (y in [0, t]: the rectangle x in [a_o, a]) grows on into the notch as far as it stays clear of B's outer band
-        grown by g / 2, the region B's band trims A by (x' >= b - g / 2 and y' <= s + g / 2, b being B's outer start
-        without clearance), with x' = x cos(theta) + y sin(theta) and y' = -x sin(theta) + y cos(theta):
+        A's outer band ends at a_o = min(overlap x) - g, before the overlap of the outer bands. Its outer wall alone
+        (y in [0, t]: the rectangle x in [a_o, a]) grows on into the notch as far as it stays clear of the region B's
+        band trims A by (x' >= b - g / 2 and y' <= s + g, b being B's outer start without clearance: g from B's step
+        face and from B's start), with x' = x cos(theta) + y sin(theta) and y' = -x sin(theta) + y cos(theta):
 
-        - beyond B's step face, y' >= s + g / 2 over the whole rectangle (lowest at (a, t) above 90 degrees, at (a, 0)
-          below): a = -(s + g / 2 - min(0, t cos(theta))) / sin(theta);
+        - beyond B's step face, y' >= s + g over the whole rectangle (lowest at (a, t) above 90 degrees, at (a, 0)
+          below): a = -(s + g - min(0, t cos(theta))) / sin(theta);
         - below 90 degrees, short of B's start, x' <= -g / 2 over the whole rectangle (largest at (a, t)):
           a = -(g / 2 + t sin(theta)) / cos(theta).
 
@@ -752,7 +762,7 @@ class _OpenStep:
         theta = math.radians(self.corner.bend_angle)
         sin, cos = math.sin(theta), math.cos(theta)
         a_outer = self._ends[0][2]
-        reach = -(s + g / 2 - min(0.0, t * cos)) / sin
+        reach = -(s + g - min(0.0, t * cos)) / sin
         if cos > SIZE_TOLERANCE:
             reach = max(reach, -(g / 2 + t * sin) / cos)
         if s <= t + SIZE_TOLERANCE or reach <= a_outer + SIZE_TOLERANCE:
@@ -761,16 +771,17 @@ class _OpenStep:
 
     @cached_property
     def _trims(self):
-        """(trim of A, trim of B) as (x, y) points of their frames: B's outer band past the miter line, grown half the
-        clearance, where it folds into A, from A's outer end on; A's inner band past the miter line, grown half the
-        clearance, where it folds into B, up to B's inner start (as at a folded corner, L8)."""
+        """(trim of A, trim of B) as (x, y) points of their frames: B's outer band past the miter line, grown (half
+        the clearance past its start, all of it past its step face), where it folds into A, from A's outer end on;
+        A's inner band past the miter line, grown the same way, where it folds into B, up to B's inner start (as at a
+        folded corner, L8)."""
         g, t, s, d = self.clearance, self.thickness, self.step_depth, self.corner.depth
         tangent = math.tan(self.half)
         (_, b_inner, a_outer, _), inner, b_start = self._ends
-        a_tab = _past_miter(d - s - g / 2, d + t, max(inner[0]) + g / 2, tangent)
+        a_tab = _past_miter(d - s - g, d + t, max(inner[0]) + g / 2, tangent)
         b_trim = _clip_right(self._turned(a_tab), b_inner)
         # Mirrored about the miter line, B's outer band is the covering one and A's frame B's.
-        b_tab = _past_miter(-t, s + g / 2, -b_start + g / 2, tangent)
+        b_tab = _past_miter(-t, s + g, -b_start + g / 2, tangent)
         a_trim = _mirrored(_clip_right(self._turned(b_tab), -a_outer))
         return tuple(
             points if len(points) >= 3 and _area(points) > AREA_TOLERANCE else [] for points in (a_trim, b_trim)
