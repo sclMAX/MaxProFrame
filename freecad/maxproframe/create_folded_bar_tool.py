@@ -57,6 +57,7 @@ from freecad.maxproframe.expression_fields import (
 from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, get_param_group, translate
 from freecad.maxproframe.folded_bar import (
     bar_tips,
+    folding_bar,
     make_folded_bar,
     make_unfolded_bar,
     nearest_piece,
@@ -359,9 +360,9 @@ class FoldedBarTaskPanel:
     starts the bar) inside one transaction that Cancel aborts. With ``edited`` the bar itself is the preview: OK keeps
     the changes in one Undo step, or none when nothing changed; Cancel puts it back.
 
-    As a selection observer (added by the command, as End Miter's) the new bar takes the pieces clicked while the
-    panel is open; an edited bar keeps its pieces, as an edited End Miter does, though Remove may take off an end
-    tube or open a closed frame at another corner.
+    As a selection observer (added by the command and by the edit) the new bar takes the pieces clicked while the
+    panel is open; an edited bar takes a clicked tube that meets one of its ends (extend-folded-bar S2), and Remove
+    may take off an end tube or open a closed frame at another corner.
     """
 
     auto_preview_param = AUTO_PREVIEW_PARAM
@@ -372,6 +373,9 @@ class FoldedBarTaskPanel:
         self.obj = edited
         # (piece, Visibility) of what the preview hides: Cancel shows it again, undo or not.
         self._visibility = []
+        # Why the last click was not taken (extend-folded-bar S4): shown, OK left as it is. Set before the pieces
+        # selected before the panel are listed: one refused says why.
+        self._notice = ""
         # The pieces the bar folds: a tube it falls back to too (a piece removed, not yet recomputed).
         self.selection = bar_tips(edited) if edited is not None else []
         if edited is None:
@@ -955,7 +959,8 @@ class FoldedBarTaskPanel:
 
     def _show_messages(self):
         error = [self._error] if self._error and not self._pending() else []
-        self.form.message_label.setText("\n".join(self._problems + error))
+        notice = [self._notice] if self._notice else []
+        self.form.message_label.setText("\n".join(self._problems + error + notice))
         if self._pending():
             status = translate("MaxProFrame", "Pending changes")
         elif self.obj is not None and _alive(self.obj):
@@ -1215,7 +1220,8 @@ class FoldedBarTaskPanel:
     def _show_removed(self):
         """Show the pieces Remove took off the edited bar: it no longer hides them."""
         folded = self._profiles_of(self.obj)
-        for piece in self._before["Tips"]:
+        # A tube clicked into the bar and removed again shows too (extend-folded-bar S5).
+        for piece in [*self._before["Tips"], *(piece for piece, _ in self._visibility)]:
             if _alive(piece) and not piece.Visibility and _profile_name(piece) not in folded:
                 piece.Visibility = True
 
@@ -1227,6 +1233,14 @@ class FoldedBarTaskPanel:
             return False
         if any(obj in _built_on(member) for member in self.selection):
             return False
+        preview = self.obj if self.obj is not None and _alive(self.obj) else None
+        other = folding_bar(obj, other_than=preview)
+        if other is not None:
+            # A tube folds into one bar only (extend-folded-bar S3).
+            self._notice = translate("MaxProFrame", "{} is folded by {}: a tube folds into one bar only.").format(
+                obj.Label, other.Label
+            )
+            return False
         replaced = [index for index, member in enumerate(self.selection) if member in _built_on(obj)]
         if replaced:
             # The start of the bar stays where it was.
@@ -1234,11 +1248,99 @@ class FoldedBarTaskPanel:
             self.selection = [member for index, member in enumerate(self.selection) if index not in replaced[1:]]
         else:
             self.selection.append(obj)
-        profile = base_profile(obj)
-        for piece in (obj, newest_piece(profile)):
+        self._keep_visibility(obj)
+        return True
+
+    def _extend(self, source):
+        """Put ``source`` at the end of the edited bar it meets (extend-folded-bar S2): first where it meets the first
+        tube, last where it meets the last one; else say why not (S4). Whether it was taken."""
+        bar = self.edited
+        if source.Name == bar.Name:
+            return False
+        if is_foldedbar(source):
+            return self._refuse(
+                translate("MaxProFrame", "{} is another Folded Bar: a tube folds into one bar only.").format(
+                    source.Label
+                )
+            )
+        profile = base_profile(source)
+        if profile is None or profile.Name in {_profile_name(obj) for obj in self.selection}:
+            return False
+        if self._chain is not None and self._chain.closed:
+            return self._refuse(
+                translate("MaxProFrame", "{} is a closed frame: it takes no more tubes.").format(bar.Label)
+            )
+        other = folding_bar(source, other_than=bar)
+        if other is not None:
+            return self._refuse(
+                translate("MaxProFrame", "{} is folded by {}: a tube folds into one bar only.").format(
+                    source.Label, other.Label
+                )
+            )
+        for pieces in (self.selection + [source], [source] + self.selection):
+            try:
+                build_chain(pieces)
+            except ChainError:
+                continue
+            self.selection = pieces
+            self._notice = ""
+            self._keep_visibility(source)
+            return True
+        return self._refuse(translate("MaxProFrame", "{} meets neither end of the bar.").format(source.Label))
+
+    def _extend_clicked(self, source):
+        """The edited bar takes the clicked ``source`` when it meets one of its ends."""
+        if not self._active() or not _alive(self.edited) or not _alive(source):
+            return
+        if self._wait(lambda: self._extend_clicked(source)):
+            return
+        if self._extend(source):
+            self._members_changed()
+            self._after_selection()
+
+    def _extend_other(self, bar):
+        """Close this new bar and edit ``bar`` instead, with the listed tubes that chain to one of its ends
+        (extend-folded-bar S3); the edit panel says why one is left out."""
+        if not self._active() or not _alive(bar) or self._wait(lambda: self._extend_other(bar)):
+            return
+        tubes = [obj for obj in self.selection if _alive(obj)]
+        self.clean()
+        self._discard()
+        self._close_dialog()
+        gui_doc = Gui.getDocument(bar.Document.Name)
+        if gui_doc is None or not gui_doc.setEdit(bar.Name, 0):
+            return
+        panel = getattr(bar.ViewObject.Proxy, "panel", None)
+        if panel is None or panel.edited is not bar:
+            return
+        panel.extend_with(tubes)
+
+    def extend_with(self, tubes):
+        """Add each of ``tubes`` that chains to an end of the edited bar, in any order."""
+        left = list(tubes)
+        while left:
+            taken = [tube for tube in left if self._extend(tube)]
+            if not taken:
+                break
+            left = [tube for tube in left if tube not in taken]
+            self._members_changed()
+        if left:
+            # The panel says why the first one left out is not taken.
+            self._extend(left[0])
+        if len(left) < len(tubes):
+            QtCore.QTimer.singleShot(0, self._after_selection)
+
+    def _refuse(self, notice):
+        """Show why a click was not taken; False."""
+        self._notice = notice
+        self._show_messages()
+        return False
+
+    def _keep_visibility(self, obj):
+        """Remember how ``obj`` and the newest piece of its tube show: Cancel shows them so again."""
+        for piece in (obj, newest_piece(base_profile(obj))):
             if all(piece.Name != seen.Name for seen, _ in self._visibility):
                 self._visibility.append((piece, piece.Visibility))
-        return True
 
     def _members_changed(self):
         """Show the new list: its chain, corners and messages; the preview follows later."""
@@ -1268,17 +1370,34 @@ class FoldedBarTaskPanel:
 
     def addSelection(self, doc, obj, sub, point=None):
         # The preview syncs while it recomputes: a selection change then is no click to take (S15).
-        if self._syncing or not self._active() or self.edited is not None:
+        if self._syncing or not self._active():
             return
         source = self._clicked(doc, obj, sub, point)
-        if source is None or base_profile(source) is None:
+        if source is None:
             return
+        if self.edited is not None:
+            # Out of FreeCAD's observer dispatch, and not inside a recompute: the chain is geometry (S15).
+            QtCore.QTimer.singleShot(0, lambda: self._extend_clicked(source))
+            return
+        if self.obj is not None and _alive(self.obj) and source.Name == self.obj.Name:
+            # The panel's own bar, not standing for a piece now.
+            return
+        if is_foldedbar(source):
+            # Another bar: the panel goes on extending it (extend-folded-bar S3).
+            QtCore.QTimer.singleShot(0, lambda: self._extend_other(source))
+            return
+        if base_profile(source) is None:
+            return
+        # A new click: the notice of the last one goes, or says why this one is not taken.
+        self._notice = ""
         if _ctrl_held() and source in self.selection:
             # Ctrl+click toggles: a listed piece leaves the list.
             self.selection.remove(source)
             self._members_changed()
         elif self.add_member(source):
             self._members_changed()
+        elif self._notice:
+            self._show_messages()
         # Never change the selection, the document or the 3D view during FreeCAD's observer dispatch.
         QtCore.QTimer.singleShot(0, self._after_selection)
 
@@ -1483,6 +1602,13 @@ class FoldedBarTaskPanel:
             changed = self._restore_edited()
         if changed:
             self.doc.recompute()
+        if self.edited is not None and _alive(self.edited):
+            # A tube clicked into the edited bar shows again as it was (extend-folded-bar S5), but one the bar folds
+            # again (Remove, then a click put it back).
+            folded = self._profiles_of(self.edited)
+            for piece, visible in self._visibility:
+                if _alive(piece) and _profile_name(piece) not in folded and piece.Visibility != visible:
+                    piece.Visibility = visible
 
     def _restore_edited(self):
         """Put the edited bar and its corner objects back as they were, expressions too: the ones removed are made

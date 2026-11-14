@@ -461,7 +461,7 @@ The first tube you select is where the bar starts. In a closed frame the bar ope
 ### Create the Folded Bar
 
 1. Click **Folded Bar**: the panel opens at once, as in **Create Miter Ends**.
-2. Click the tubes in the 3D view in order around the frame, the first one where the bar starts. Each one clicked joins the end of the bar, and the corners, the messages and the preview follow; a trimmed profile, cutout or drill hole made from a listed tube takes its place. **Ctrl+click** a listed tube (or the preview over it), or deselect it, to drop it. Clicking anything that is not a tube does nothing. Tubes selected before clicking **Folded Bar** are listed already, in the order they were selected.
+2. Click the tubes in the 3D view in order around the frame, the first one where the bar starts. Each one clicked joins the end of the bar, and the corners, the messages and the preview follow; a trimmed profile, cutout or drill hole made from a listed tube takes its place. **Ctrl+click** a listed tube (or the preview over it), or deselect it, to drop it. A tube that another Folded Bar folds is not listed, and the panel says why: "Profile004 is folded by FoldedBar: a tube folds into one bar only.". Clicking another Folded Bar extends that bar instead of making a second one: the panel closes and that bar opens for editing (see [Edit the bar](#edit-the-bar)), with the tubes listed so far added at the end of the bar each one meets, in any order; a listed tube that meets neither end is left out, and the panel says why. Clicking anything else that is not a tube does nothing. Tubes selected before clicking **Folded Bar** are listed already, in the order they were selected.
 3. The **Corners** group (Spanish *Esquinas*) shows the bar:
    - **Tube**: the material and the wall thickness of the tubes, read from their profile, for example `Steel · 2 mm`. It is only shown: to change it, change the profile.
    - The **corner list**: one row per folded corner, from the start of the bar, naming its two tubes and its values, for example `1 · Profile → Profile001 · R 10 mm · key · clearance 0.5 mm`; a corner with a **Stepped** joint ends its row with `· stepped`. A closed frame ends the list with its open corner, `Open · Profile003 → Profile`, which does not fold: selecting it edits only its **Joint**, **Step depth**, **Flip step** and **Clearance**, the other fields stay disabled. Until two tubes meet end to end the list says what to do: "Click the tube where the bar starts.", then "Click the next tube, after Profile.", or the tubes picked so far when they fold no corner yet, while the bottom of the panel says why (for example "Select at least two profiles that meet end to end.") and **OK** stays disabled.
@@ -574,7 +574,16 @@ Its values are properties you can change in the property editor, or drive with a
 
 ### Edit the bar
 
-Double-click the Folded Bar: the same panel opens with its corners and their values. Its tubes stay as they are: clicking tubes does not add them, as when editing an End Miter; **Remove** can still take off an end tube or open a closed frame at another corner. **OK** keeps the changes in one Undo step, or none when nothing changed; **Cancel** puts the bar and its corners back. A cutout, drill hole, miter or trim made on one of its tubes after the bar shows folded into it at once (see [Tools on a Folded Bar](#tools-on-a-folded-bar)). Deleting the bar shows its tubes again.
+Double-click the Folded Bar: the same panel opens with its corners and their values.
+
+To extend an open bar, click in the 3D view a tube that meets its first or its last tube: it joins the bar at that end, before the first tube or after the last one, and the corners, the messages and the preview follow. A tube that meets both ends closes the frame, and the open corner is where it meets the first tube. The corners already there keep their Folded Corner objects, their values and their Interlocks; a new corner starts with the values last set in the panel. A click the bar cannot take adds nothing, and the bottom of the panel says why, without disabling **OK**:
+
+- a tube that meets neither end: "Profile004 meets neither end of the bar.";
+- a tube that another Folded Bar folds: "Profile004 is folded by FoldedBar001: a tube folds into one bar only.";
+- another Folded Bar: "FoldedBar001 is another Folded Bar: a tube folds into one bar only.";
+- any tube, when the bar is a closed frame: "FoldedBar is a closed frame: it takes no more tubes.".
+
+**Remove** can still take off an end tube or open a closed frame at another corner. **OK** keeps the changes in one Undo step, or none when nothing changed; **Cancel** puts the bar, its corners and its Interlocks back, and a tube clicked into it shows again as it was. A cutout, drill hole, miter or trim made on one of its tubes after the bar shows folded into it at once (see [Tools on a Folded Bar](#tools-on-a-folded-bar)). Deleting the bar shows its tubes again.
 
 ### Tools on a Folded Bar
 

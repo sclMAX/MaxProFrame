@@ -3237,6 +3237,22 @@ All files and sketches on disk will be kept intact.</source>
         <source>Swap the tubes: the tube after the corner owns the first finger</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>{} meets neither end of the bar.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} is folded by {}: a tube folds into one bar only.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} is another Folded Bar: a tube folds into one bar only.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} is a closed frame: it takes no more tubes.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>MaxProFrame_FoldedBar</name>

@@ -26,7 +26,7 @@ from freecad.maxproframe.create_bom import make_cut_list, traverse_assembly
 from freecad.maxproframe.create_end_miter_tool import make_end_miter_profile
 from freecad.maxproframe.drill_hole import make_drill_hole
 from freecad.maxproframe.ff_tools import get_param_group
-from freecad.maxproframe.folded_bar import bar_chain, make_folded_bar, make_unfolded_bar
+from freecad.maxproframe.folded_bar import bar_chain, folding_bar, make_folded_bar, make_unfolded_bar
 from freecad.maxproframe.folded_chain import ChainError, build_chain
 from freecad.maxproframe.folded_corner import is_folded_corner
 from freecad.maxproframe.folded_geometry import fold, fold_bar
@@ -142,6 +142,16 @@ class FoldedBarFixture(UnfoldFixture):
 
 
 class FoldedBarObjectTest(FoldedBarFixture):
+    def test_folding_bar_names_the_bar_that_folds_a_tube_with_or_without_base_tubes(self):
+        # extend-folded-bar S3: a tube folds into one bar only.
+        profiles, bar = self.make_bar()
+        free = self.frame(edges=(((5000, 0, 0), (5200, 0, 0)),))[0]
+        self.assertIs(bar, folding_bar(profiles[1]))
+        self.assertIsNone(folding_bar(profiles[1], other_than=bar))
+        self.assertIsNone(folding_bar(free))
+        bar.removeProperty("BaseTubes")
+        self.assertIs(bar, folding_bar(profiles[1]))
+
     def test_rectangle_folds_into_one_solid_that_hides_its_tips(self):
         profiles, bar = self.make_bar()
 
