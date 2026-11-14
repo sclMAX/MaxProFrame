@@ -1506,6 +1506,11 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>&lt;b&gt;Unfold Bar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a Folded Bar: its straight bar with every cut is made from X = 0 along X, to export with File &gt; Export (STEP, IGES, BREP) for a tube laser.</source><translation>&lt;b&gt;Desplegar barra&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná una barra plegada: se crea su barra recta con todos los cortes, desde X = 0 a lo largo de X, para exportarla con Archivo &gt; Exportar (STEP, IGES, BREP) a un láser de tubos.</translation></message>
 </context>
 <context>
+    <name>MaxProFrame_Interlock</name>
+    <message><source>Interlock</source><translation>Encastre</translation></message>
+    <message><source>&lt;b&gt;Interlock&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click the inner wall faces of the two tubes at a folded corner of a Folded Bar: fingers cut by the laser at the inner vertex of the corner locate one tube on the other. Set their count, width, tip and clearance in the panel. Double-click the Interlock to edit it.</source><translation>&lt;b&gt;Encastre&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en las caras de pared interior de los dos tubos en una esquina plegada de una barra plegada: aletas cortadas con láser en el vértice interior de la esquina ubican un tubo sobre el otro. Configurá su cantidad, ancho, punta y holgura en el panel. Doble clic en el encastre para editarlo.</translation></message>
+</context>
+<context>
     <name>App::Property</name>
     <message><source>Profile of one of the two tubes meeting at the corner</source><translation>Perfil de uno de los dos tubos que se unen en la esquina</translation></message>
     <message><source>Profile of the other tube meeting at the corner</source><translation>Perfil del otro tubo que se une en la esquina</translation></message>

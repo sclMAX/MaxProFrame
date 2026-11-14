@@ -36,8 +36,8 @@ class MaxProFrame(Gui.Workbench):
         "MaxProFrame_ProfilePattern",
     ]
 
-    # Folded miters: one tube folded at its corners, and its straight bar.
-    toolbox_folded = ["MaxProFrame_FoldedBar", "MaxProFrame_UnfoldBar"]
+    # Folded miters: one tube folded at its corners, its straight bar, and the interlocks of its corners.
+    toolbox_folded = ["MaxProFrame_FoldedBar", "MaxProFrame_UnfoldBar", "MaxProFrame_Interlock"]
 
     toolbox_group = ["Std_Group", "Std_Part"]
 
@@ -79,6 +79,7 @@ class MaxProFrame(Gui.Workbench):
             create_extend_cut_tool,
             create_extruded_cutout_tool,
             create_folded_bar_tool,
+            create_interlock_tool,
             create_link,
             create_notch_tool,
             create_piece_table_tool,

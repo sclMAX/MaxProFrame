@@ -445,6 +445,18 @@ def remove_corners(bar):
             doc.removeObject(obj.Name)
 
 
+def remove_interlocks(bar):
+    """Remove the Interlock objects of ``bar`` that no other bar lists: without its bar one does nothing
+    (odd/tasks/joint-tabs.md, L10)."""
+    doc = bar.Document
+    for obj in list(getattr(bar, "Interlocks", ())):
+        if not _alive(obj):
+            continue
+        others = [parent for parent in obj.InList if parent is not bar and "Interlocks" in parent.PropertiesList]
+        if not others:
+            doc.removeObject(obj.Name)
+
+
 def stock_length():
     """The stock length the cut list fits pieces in (mm)."""
     return get_param_group().GetFloat(STOCK_LENGTH_PARAM, DEFAULT_STOCK_LENGTH)
@@ -561,8 +573,9 @@ class FoldedBar:
                 user.Label = unfolded_label(obj.Label)
 
     def unsetupObject(self, obj):
-        """The bar leaves the document (not by undo): its corner objects go with it."""
+        """The bar leaves the document (not by undo): its corner objects and its Interlocks go with it."""
         remove_corners(obj)
+        remove_interlocks(obj)
 
     def execute(self, obj):
         self.unfolded = None
@@ -722,7 +735,8 @@ class ViewProviderFoldedBar:
         return True
 
     def onDelete(self, vobj, sub):
-        """The pieces of a deleted bar show again; its corners are removed with it (``FoldedBar.unsetupObject``)."""
+        """The pieces of a deleted bar show again; its corners and Interlocks are removed with it
+        (``FoldedBar.unsetupObject``)."""
         for tip in self.Object.Segments:
             if tip is not None:
                 tip.Visibility = True

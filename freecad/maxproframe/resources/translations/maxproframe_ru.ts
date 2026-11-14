@@ -3121,6 +3121,17 @@ All files and sketches on disk will be kept intact.</source>
     </message>
 </context>
 <context>
+    <name>MaxProFrame_Interlock</name>
+    <message>
+        <source>Interlock</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Interlock&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click the inner wall faces of the two tubes at a folded corner of a Folded Bar: fingers cut by the laser at the inner vertex of the corner locate one tube on the other. Set their count, width, tip and clearance in the panel. Double-click the Interlock to edit it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>App::Property</name>
     <message>
         <source>Profile of one of the two tubes meeting at the corner</source>

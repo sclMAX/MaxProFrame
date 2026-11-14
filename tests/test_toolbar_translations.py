@@ -14,6 +14,7 @@ from freecad.maxproframe import (  # noqa: F401  (importing registers the comman
     create_extend_cut_tool,
     create_extruded_cutout_tool,
     create_folded_bar_tool,
+    create_interlock_tool,
     create_link,
     create_notch_tool,
     create_piece_table_tool,
@@ -83,6 +84,11 @@ EXPECTED = {
         "Unfold Bar",
         "Desplegar barra",
         "para exportarla con Archivo > Exportar (STEP, IGES, BREP) a un láser de tubos",
+    ),
+    "MaxProFrame_Interlock": (
+        "Interlock",
+        "Encastre",
+        "Hacé clic en las caras de pared interior de los dos tubos en una esquina plegada de una barra plegada",
     ),
     "MaxProFrame_Link": (
         "Attached Link",
