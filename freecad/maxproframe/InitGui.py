@@ -31,13 +31,14 @@ class MaxProFrame(Gui.Workbench):
         "MaxProFrame_EndMiter",
         "MaxProFrame_ExtendCut",
         "MaxProFrame_Notch",
+        "MaxProFrame_Interlock",
         "MaxProFrame_AddExtrudeCutout",
         "MaxProFrame_DrillHole",
         "MaxProFrame_ProfilePattern",
     ]
 
     # Folded miters: one tube folded at its corners, its straight bar, and the interlocks of its corners.
-    toolbox_folded = ["MaxProFrame_FoldedBar", "MaxProFrame_UnfoldBar", "MaxProFrame_Interlock"]
+    toolbox_folded = ["MaxProFrame_FoldedBar", "MaxProFrame_UnfoldBar"]
 
     toolbox_group = ["Std_Group", "Std_Part"]
 

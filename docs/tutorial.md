@@ -444,7 +444,7 @@ A trim, cutout or drill hole made from the piece after the pattern shows on ever
 
 A **folded corner** joins two tubes without cutting them apart: the tube is one bar, the laser cuts a V notch through the walls on the inside of the corner, and the wall on the outside of the corner stays whole and is bent. Folding the bar closes the V. MaxProFrame draws the folded bar with its real bend radius and unfolds it into one straight solid with every cut, which you export for a CNC tube laser. Each corner chooses how its inner wall is cut: a **Miter**, tilted, for a laser with a bevel head, or a **Stepped** joint made of straight cuts only, for any tube laser (see [Miter or stepped joint](#miter-or-stepped-joint)).
 
-The commands are on the **Folded Miters** toolbar and in the **MaxProFrame > Folded Miters** menu (Spanish *Ingletes plegados*): **Folded Bar** (*Barra plegada*), **Unfold Bar** (*Desplegar barra*) and **Interlock** (*Encastre*, see [Interlock](#interlock)).
+The commands are on the **Folded Miters** toolbar and in the **MaxProFrame > Folded Miters** menu (Spanish *Ingletes plegados*): **Folded Bar** (*Barra plegada*) and **Unfold Bar** (*Desplegar barra*). **Interlock** (*Encastre*, see [Interlock](#interlock)) is on the **MaxProFrame** toolbar and in **MaxProFrame > Profiles and Cuts**, after **End Miter**, **Extend / Cut** and **Notch**, because it also works on straight tubes.
 
 ### Draw the frame
 
@@ -542,7 +542,7 @@ Before the second face, the panel says "Click the inner walls of the two tubes a
 
 **Interlock** adds fingers cut by the laser at the inner vertex of a folded corner, where the inner walls of its two tubes meet, so the two tubes locate each other while the corner is folded and welded. Across the inner wall, from its inner face to the finger depth, the wall is split along the bend axis into fingers that belong to one tube and the other in turn: each finger is a step of the [Stepped joint](#miter-or-stepped-joint), covered by the tube before the corner and then by the tube after it. Below the fingers the corner keeps its own joint (Miter or Stepped, with its key and relief). Every cut is straight, square to the tube or to the inner wall, so any tube laser cuts it. The fingers are cut in the Unfolded Bar, the Folded Bar folds into one solid with them, and the developed length does not change.
 
-1. Click **Interlock** on the Folded Miters toolbar.
+1. Click **Interlock** on the MaxProFrame toolbar (**MaxProFrame > Profiles and Cuts**).
 2. Click the inner wall of each of the two tubes at a folded corner of a Folded Bar: their faces on the inside of the corner. Faces selected before the command count too. The Interlock is made at once and shows on the bar; the **Corner** group (Spanish *Esquina*) names its two tubes, for example `Corner: Profile → Profile001`.
 3. The **Fingers** group (Spanish *Aletas*) sets them; each change shows on the bar at once:
    - **Count** (*Cantidad*): the number of fingers, at least 2. The tube before the corner, in the order of the bar, owns the first one.
