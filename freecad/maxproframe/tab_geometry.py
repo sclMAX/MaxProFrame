@@ -12,16 +12,18 @@ tubes), all known to a TrimmedProfile Extend / Cut and its target:
   the crossbar; it is the flat part of that wall (D4). ``rail_thickness`` (t_r).
 - ``end``: (point, normal) of the plane the trimmed crossbar ends on (the Extend / Cut plane, its gap included); None
   stands for P itself.
+- ``gap``: how far ``end`` stops before the plane the crossbar was trimmed to, the Gap of its Extend / Cut (S8): the
+  joint is checked on the end moved back toward the rail by it, the tabs cross it.
 
 In the crossbar wall plane, with a across the axis and s along d, each tab lies on the flat part of the wall where
 ``TabSettings.bounds`` puts it and runs along d from the crossbar end to the plane ``TabSettings.tab_length`` across
-the rail wall, measured along the normal of P (D3). Every tab face is a face of the wall or swept along its normal,
-the tip corners chamfered or rounded in the wall plane (D2): where the crossbar meets P obliquely across its wall
-thickness, the tip ends at that depth on the shallower face of the wall (so the tab goes all the way through) and the
-root starts at the crossbar end on the face that ends farther back (so the tab fuses with the crossbar end). Each slot
-is the projection along the normal of P of the square tab (its tip corners left square) inside the rail wall, grown by
-the clearance (half on each side, its corners kept sharp) and cut square through the rail wall (D2): at an oblique
-joint it is longer than the tab is thick (S5).
+the rail wall, measured along the normal of P (D3), across the trim gap too when the crossbar ends before P (S8).
+Every tab face is a face of the wall or swept along its normal, the tip corners chamfered or rounded in the wall plane
+(D2): where the crossbar meets P obliquely across its wall thickness, the tip ends at that depth on the shallower face
+of the wall (so the tab goes all the way through) and the root starts at the crossbar end on the face that ends
+farther back (so the tab fuses with the crossbar end). Each slot is the projection along the normal of P of the square
+tab (its tip corners left square) inside the rail wall, grown by the clearance (half on each side, its corners kept
+sharp) and cut square through the rail wall (D2): at an oblique joint it is longer than the tab is thick (S5).
 """
 
 import math
@@ -67,6 +69,7 @@ class TJoint:
     rail_face: object
     rail_thickness: float
     end: tuple = None
+    gap: float = 0.0
 
 
 class TabShapes(NamedTuple):
@@ -126,6 +129,10 @@ class _Layout:
         self.Q = joint.rail_face.CenterOfMass
         end_point, end_normal = (self.Q, self.n_r) if joint.end is None else joint.end
         self.E, self.m = App.Vector(end_point), _unit(end_normal)
+        # The end normal looks back, away from the rail: the end moved by -gap along it is where the trim was.
+        if self.m.dot(self.D) > 0:
+            self.m = -self.m
+        self.gap = float(joint.gap)
         self.L = settings.tab_length(self.t_r)
         self.bounds = settings.bounds(self.span) if int(settings.count) >= 1 else []
 
@@ -155,7 +162,8 @@ class _Layout:
 
     def _check_joint(self):
         """The crossbar axis crosses P toward the rail and the crossbar ends on P: not inside the rail wall, nor
-        farther before it than the rail wall is thick."""
+        farther before it than the rail wall is thick; with a trim gap, its end moved back toward the rail by the gap
+        does (S8)."""
         along = self.D.dot(self.n_r)
         if abs(along) < PARALLEL_TOLERANCE:
             raise InterlockError(
@@ -167,7 +175,8 @@ class _Layout:
             raise self._no_end()
         for a in (-self.span / 2, self.span / 2):
             for z in (0.0, -self.t_c):
-                depth = (self.Q - self._point(a, self._s_end(a, z), z)).dot(self.n_r)
+                trimmed = self._s_on(self.E, self.m, -self.gap, a, z)
+                depth = (self.Q - self._point(a, trimmed, z)).dot(self.n_r)
                 if depth > SIZE_TOLERANCE or depth < -self.t_r - SIZE_TOLERANCE:
                     raise self._no_end()
             if self._s_tip(a) - self._s_far(a) <= SIZE_TOLERANCE:

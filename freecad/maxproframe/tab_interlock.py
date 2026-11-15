@@ -17,10 +17,12 @@ Table and the IDs treat it as one:
 - ``SlotPiece`` (label suffix _Sl): the piece under it cut by the slots, ``Cutout`` True.
 
 Both build the same ``tab_geometry.TJoint`` from the Interlock (``interlock_joint``): the crossbar wall, its axis
-toward the rail, the end plane (the Extend / Cut against the rail in the crossbar's stack, else its end face nearest
-the rail face), the rail face and both wall thicknesses. A refusal leaves the piece with the shape under it and in error
-with the InterlockError message. Neither depends on the other: the tabs read the rail piece under the slots and the
-slots the crossbar piece under the tabs, and the crossbar trim keeps targeting the rail piece it was made against.
+toward the rail, the end plane (the Extend / Cut against the rail in the crossbar's stack, with its Gap, else its end
+face nearest the rail face), the rail face and both wall thicknesses. With a Gap the crossbar ends that far before the
+rail face and the tabs cross it (odd/tasks/t-joint-tabs.md, T6: S8). A refusal leaves the piece with the shape under
+it and in error with the InterlockError message. Neither depends on the other: the tabs read the rail piece under the
+slots and the slots the crossbar piece under the tabs, and the crossbar trim keeps targeting the rail piece it was
+made against.
 
 Deleting the Interlock removes both pieces (``Interlock.unsetupObject``); a piece removed gives back the piece under
 it: whatever was built on it, or linked it, links the piece under it instead (``give_back``). Undo brings everything
@@ -171,11 +173,12 @@ def _untabbed(piece):
 
 
 def _end_plane(crossbar, rail_profile, rail_face, direction):
-    """(point, normal) of the plane the crossbar ends on near ``rail_face``, or None for the plane of that face.
+    """((point, normal), gap) of the plane the crossbar ends on near ``rail_face``; (None, 0) for the plane of that
+    face.
 
-    The Extend / Cut against the rail in the stack of ``crossbar`` (the one nearest the rail face), its gap included;
-    else the planar end face of the crossbar nearest the rail face: a face at either end of the piece along its axis,
-    never one inside it (the side of a slot or a cutout).
+    The Extend / Cut against the rail in the stack of ``crossbar`` (the one nearest the rail face), its gap included,
+    and that gap (its TrimGap, S8); else the planar end face of the crossbar nearest the rail face, gap 0: a face at
+    either end of the piece along its axis, never one inside it (the side of a slot or a cutout).
     """
     center, normal = rail_face.CenterOfMass, face_normal(rail_face)
     planes = []
@@ -186,18 +189,20 @@ def _end_plane(crossbar, rail_profile, rail_face, direction):
         tube = base_profile(target) if target is not None else None
         if tube is not None and tube.Name == rail_profile.Name:
             plane = piece.Proxy.extend_cut_plane(piece)
-            planes.append((plane.origin, plane.normal))
+            gap = piece.TrimGap.Value if hasattr(piece, "TrimGap") else 0.0
+            planes.append((plane.origin, plane.normal, gap))
     if not planes:
         shape = _untabbed(crossbar).Shape
         ends = along_extent(shape, direction)
         planes = [
-            (face.CenterOfMass, face_normal(face))
+            (face.CenterOfMass, face_normal(face), 0.0)
             for face in shape.Faces
             if isinstance(face.Surface, Part.Plane)
             and abs(face_normal(face).dot(direction)) > WALL_TOLERANCE
             and _at_an_end(face, direction, ends)
         ]
-    return min(planes, key=lambda plane: abs((plane[0] - center).dot(normal)), default=None)
+    found = min(planes, key=lambda plane: abs((plane[0] - center).dot(normal)), default=None)
+    return (None, 0.0) if found is None else (found[:2], found[2])
 
 
 def _at_an_end(face, direction, ends):
@@ -237,8 +242,8 @@ def _joint(names, crossbar, crossbar_face, rail, rail_face, bar_end=True):
     direction = -axis if axis.dot(rail_normal) > 0 else axis
     if bar_end:
         _check_bar_end(names, crossbar, crossbar_profile, direction)
-    end = _end_plane(crossbar, rail_profile, rail_face, direction)
-    return TJoint(names, crossbar_face, t_c, direction, rail_face, t_r, end)
+    end, gap = _end_plane(crossbar, rail_profile, rail_face, direction)
+    return TJoint(names, crossbar_face, t_c, direction, rail_face, t_r, end, gap)
 
 
 def _check_bar_end(names, crossbar, profile, direction):

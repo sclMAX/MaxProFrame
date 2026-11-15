@@ -44,6 +44,9 @@ RIGHT_OUTER = App.Vector(325, 100, 0)
 TOP_UNDER = App.Vector(100, 175, 0)
 VOLUME_TOLERANCE = 1e-2
 LENGTH_TOLERANCE = 1e-4
+# The Gap of an Extend / Cut the crossbar ends on (S8): the 0.5 mm of the manual test (L12), and one wider than the
+# tube wall (T) is thick.
+GAP, WIDE_GAP = 0.5, 2.5
 CORNER = "The T joint between {} and {} is at a folded corner of {}: the tabs go on a free end of a Folded Bar."
 OPEN = "The T joint between {} and {} is at the open corner of {}: the tabs go on a free end of a Folded Bar."
 
@@ -326,6 +329,58 @@ class CrossbarOnBarTest(TabsOnBarFixture):
 
         self.assertEqual(OPEN.format(bottom.Label, "Rail", bar.Label), str(raised.exception))
         self.assertEqual(names, sorted(obj.Name for obj in self.doc.Objects))
+
+
+class CrossbarOnBarGapTest(TabsOnBarFixture):
+    """S8 (T6): the free end of the bar is trimmed with a Gap: its tabs cross it and the bar folds them."""
+
+    def assertAcrossTheGap(self, gap):
+        (right, top, left), bar = self.legs()
+        rail = self.loose(RAIL_BELOW, "Rail")
+        trim = self.trimmed(right, rail, Y)
+        trim.TrimGap = gap
+        self.doc.recompute()
+        self.assertEqual("Valid", trim.getStatusString())
+        self.assertAlmostEqual(gap, trim.Shape.BoundBox.YMin, delta=LENGTH_TOLERANCE)
+        volume, unfolded_volume, length = bar.Shape.Volume, *self.straight(bar)
+
+        interlock = make_tab_interlock(
+            bar, face_at(bar, RIGHT_OUTER), rail, face_towards(rail, Y), crossbar_point=RIGHT_OUTER
+        )
+        self.doc.recompute()
+
+        tabs, slots = tab_pieces(interlock)
+        self.assertEqual([tabs, top, left], list(bar.Segments))
+        for obj in (tabs, slots, bar, self.unfolded_of(bar)):
+            self.assertOneSolid(obj)
+        added = self.assertTabsOn(bar, 0, tabs, trim)
+        self.assertAlmostEqual(volume + added, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
+        self.assertAlmostEqual(unfolded_volume + added, self.unfolded_of(bar).Shape.Volume, delta=VOLUME_TOLERANCE)
+        # The tabs cross the gap and the rail wall: T past the rail face, T + gap past the end of the bar (S6).
+        self.assertAlmostEqual(-T, bar.Shape.BoundBox.YMin, delta=LENGTH_TOLERANCE)
+        self.assertAlmostEqual(gap, tabs.Shape.cut(trim.Shape).BoundBox.YMax, delta=LENGTH_TOLERANCE)
+        self.assertAlmostEqual(length + T + gap, bar.DevelopedLength.Value, delta=LENGTH_TOLERANCE)
+        box = self.unfolded_of(bar).Shape.BoundBox
+        self.assertAlmostEqual(0.0, box.XMin, delta=LENGTH_TOLERANCE)
+        self.assertAlmostEqual(length + T + gap, box.XLength, delta=LENGTH_TOLERANCE)
+        removed = rail.Shape.Volume - slots.Shape.Volume
+        self.assertGreater(removed, VOLUME_TOLERANCE)
+        self.assertAlmostEqual(removed, tabs.Shape.common(rail.Shape).Volume, delta=VOLUME_TOLERANCE)
+
+        # The Gap edited afterwards: the tabs follow, the slots stay.
+        trim.TrimGap = 0.0
+        self.doc.recompute()
+        for obj in (tabs, slots, bar):
+            self.assertOneSolid(obj)
+        self.assertAlmostEqual(-T, bar.Shape.BoundBox.YMin, delta=LENGTH_TOLERANCE)
+        self.assertAlmostEqual(length + T + gap, bar.DevelopedLength.Value, delta=LENGTH_TOLERANCE)
+        self.assertAlmostEqual(removed, rail.Shape.Volume - slots.Shape.Volume, delta=VOLUME_TOLERANCE)
+
+    def test_the_tabs_cross_the_gap_of_the_free_end_and_the_bar_is_as_long_as_their_tips(self):
+        self.assertAcrossTheGap(GAP)
+
+    def test_the_tabs_cross_a_gap_wider_than_the_tube_wall(self):
+        self.assertAcrossTheGap(WIDE_GAP)
 
 
 class UnfoldedBarStartTest(TabsOnBarFixture):

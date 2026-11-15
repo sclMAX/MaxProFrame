@@ -27,6 +27,11 @@ of the rail face the crossbar butts against; t_r = rail wall thickness; d = cros
 - S7 Folded Bar (L4: "\"que el larguero o el travesaño sean un segmento de una Barra plegada.\" incluye este caso"):
   the crossbar, the rail or both can be tubes of a Folded Bar; the bar folds with the tabs and slots and the Unfolded
   Bar carries them.
+- S8 Trim gap (L12: "La pestaña cruza la separación (Recomendado)", to the question "¿Qué tiene que pasar con un
+  Encastre de pestañas cuando el Trim tiene separación?"): when the crossbar's Extend / Cut trim has a Gap g > 0 the
+  crossbar end stops g before P; the Tabs Interlock still holds: each tab is measured from P (the tab grows by g across
+  the gap, so it still passes the rail wall as in S4) and the slots stay where they were. The error "No hay una unión
+  en T entre ... no termina sobre la cara de ..." no longer appears for a gap; S6 (cut length to the tab tips) holds.
 
 ## Design decisions (parent, from the analysis in L2-L4; not user requirements)
 - D1 Objects: the Interlock (Kind = Tabs) holds the settings and links PieceA = crossbar, PieceB = rail (base
@@ -54,6 +59,9 @@ of the rail face the crossbar butts against; t_r = rail wall thickness; d = cros
   route=gentle-ai-worker; commit=486a155 [x]
 - T5 [S1-S7] Tutorial, CHANGELOG (Unreleased), Spanish .ts/.qm, Russian unfinished + PENDING_TEXTS; full native
   suite. route=gentle-ai-worker + parent; commit=75c3484 [x]
+- T6 [S8, S4, S6] Tabs across the trim gap: the T joint check accepts a crossbar end parallel to P at distance g =
+  its trim's TrimGap; tabs grow by g; straight and Folded Bar tubes; tests (gap 0 unchanged, gap 0.5, Gap edited
+  after the Interlock exists, Cut List length); CHANGELOG line. route=gentle-ai-worker; commit=T6 (see Log L13) [x]
 
 Delivery forecast: ~1500-2000 authored lines; chained PRs, one per task slice. Slice boundaries: T1 = 95f2b83
 (928 lines, geometry + tests, one work unit); T2 = e16d884 (~1200 lines, objects + tests, one work unit);
@@ -127,3 +135,23 @@ T3 = 0de527d (~510 lines); T4 + T5 = 486a155..75c3484 (~1670 lines, panel + docs
   library_translations 3, workbench_translation_loading 2, interlock_panel 14, tab_interlock_panel 13.
 - L11 Full native suite on 75c3484: 2172 tests OK (37 min). Native review assess per slice: medium, under budget, not
   due. Chained PRs opened for T1, T2, T3, T4+T5; merge waits for the user's manual test.
+- L12 User manual test (screenshot): editing the crossbar's Trim to Separación 0,5 mm makes the _Tb and _Sl pieces fail:
+  "Profile_TC80x40x1.5_004_Tr_Tb: No hay una unión en T entre Profile_TC80x40x1.5_004 y Profile_TC80x40x1.5_002:
+  Profile_TC80x40x1.5_004 no termina sobre la cara de Profile_TC80x40x1.5_002." (same for _Sl). User answer: "La
+  pestaña cruza la separación (Recomendado)" (other options: refuse with a clear message; leave as is). The same edit
+  froze FreeCAD: separate fix, odd/tasks/panel-recompute-deadlock.md on fix/panel-recompute-deadlock.
+- L13 T6 (worker): the refusal lives in tab_geometry._Layout._check_joint (parent approved tab_geometry.py as edit
+  surface). Probes on 75c3484/afe3e0c: TrimGap 0.5 was already Valid on straight and Folded Bar crossbars (stable
+  1.1.4 and the user's weekly 27.1.0 2026-10-28 runtime, base code from git archive): tabs reach P + t_r, slots
+  unchanged, Length = trim + t_r + g; the refusal fired only for a gap > t_r (1.6 on a 1.5 wall), the end being
+  limited to t_r before P (L7 limit 2) on the gapped end. The user's 0.5 failure was not reproduced; hypothesis,
+  unproven: the frozen Extend / Cut panel had applied an intermediate or misread Gap (e.g. 5). Fix: TJoint.gap (the
+  TrimGap of the Extend / Cut _end_plane takes the end from; 0 for an end face), _check_joint checks the end moved
+  back toward the rail by the gap (L7 limit 2 kept past it), tabs start on the gapped end and reach L past P, slots
+  and messages unchanged (no translation change). RED: test_tab_geometry 25 errors (TJoint takes no gap);
+  TabsAcrossTheGapTest gap 2.0 refused (1 failure + 1 error, "... does not end on the face of Rail."),
+  CrossbarOnBarGapTest gap 2.5 refused (1 error); the 0.5 and gap 0 cases passed already (preservation). GREEN
+  (stable 1.1.4): tab_geometry 18, tab_interlock 17, tab_interlock_folded_bar 13 OK; weekly 27.1.0: tab_geometry 18,
+  TabsAcrossTheGapTest 4, CrossbarOnBarGapTest 2 OK. Preserve OK: tab_interlock_panel 13, interlock 11,
+  interlock_geometry 8, interlock_panel 14, interlock_translations 8, cut_list 27, piece_table 23, cut_ends 15.
+  Black 25.1.0 / isort 6.0.1 clean. CHANGELOG Unreleased: "Interlock at a T joint with a gap".
