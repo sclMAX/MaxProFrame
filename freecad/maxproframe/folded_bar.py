@@ -666,6 +666,20 @@ if "_NEW_PIECE_OBSERVER" not in globals():
     App.addDocumentObserver(_NEW_PIECE_OBSERVER)
 
 
+def _at_its_place(shape):
+    """A copy of ``shape`` with its placement moved into its geometry.
+
+    The recompute puts the shape of an object at the object's Placement, dropping the placement of the shape: ``unfold``
+    moves its bar to X = 0 by its placement, by how far the first tube reaches before its path (an Extend / Cut past
+    it, tabs past its end).
+    """
+    placement = shape.Placement
+    moved = shape.copy()
+    moved.Placement = App.Placement()
+    moved.transformShape(placement.toMatrix(), True)
+    return moved
+
+
 class UnfoldedBar:
     def __init__(self, obj):
         self.add_properties(obj)
@@ -696,7 +710,7 @@ class UnfoldedBar:
                     bar.Label
                 )
             )
-        obj.Shape = _sound(bar, unfolded.shape.Solids[0]).copy()
+        obj.Shape = _at_its_place(_sound(bar, unfolded.shape.Solids[0]))
 
     def dumps(self):
         return None

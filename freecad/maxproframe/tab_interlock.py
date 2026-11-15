@@ -25,6 +25,14 @@ slots the crossbar piece under the tabs, and the crossbar trim keeps targeting t
 Deleting the Interlock removes both pieces (``Interlock.unsetupObject``); a piece removed gives back the piece under
 it: whatever was built on it, or linked it, links the piece under it instead (``give_back``). Undo brings everything
 back. ``make_tab_interlock`` is what the Interlock panel calls.
+
+The crossbar, the rail or both can be tubes of a Folded Bar (T3: S7). A face clicked on the bar stands for the face of
+the tube under the clicked point (``folded_bar.segment_at``, as for a Drill Hole or a Cutout on a bar); a click on a
+bend is refused. The new piece is the newest piece of its tube: the bar folds it at the next recompute of the
+document (``folded_bar.follow_new_pieces``) and its unfold carries what the piece changes on its tube, the slots cut
+and the tabs added past the end of the tube (the bar is then as long as the tab tips). The tabs go only on a free end
+of a bar (the start of its first tube or the end of its last one, on an open bar): at a folded corner or at the open
+corner of a closed frame the joint is refused naming the tubes and the bar (``_check_bar_end``).
 """
 
 import os
@@ -33,8 +41,8 @@ import FreeCAD as App
 import Part
 
 from freecad.maxproframe._utils import (
-    folded_into_bar,
     get_childrens_from_extrudedcutout,
+    is_foldedbar,
     is_tab_piece,
     is_trimmedbody,
     piece_stack,
@@ -43,7 +51,8 @@ from freecad.maxproframe._utils import (
 from freecad.maxproframe.drill_hole import MISSING_ELEMENT_PREFIX, _element, _on_plane, _show_unless_built_on
 from freecad.maxproframe.extruded_cutout import ExtrudedCutout, ViewProviderExtrudedCutout, _uncut_shape, along_extent
 from freecad.maxproframe.ff_tools import ICONPATH, place_in_container_of, translate
-from freecad.maxproframe.folded_chain import FOLDABLE_FAMILIES, base_profile
+from freecad.maxproframe.folded_bar import bar_chain, folding_bar, segment_at
+from freecad.maxproframe.folded_chain import FOLDABLE_FAMILIES, ChainError, base_profile
 from freecad.maxproframe.interlock import (
     SLOTS_ROLE,
     TAB_PROPERTIES,
@@ -57,7 +66,7 @@ from freecad.maxproframe.interlock import (
 )
 from freecad.maxproframe.interlock_geometry import TABS, InterlockError, TabSettings
 from freecad.maxproframe.profile import section_shift
-from freecad.maxproframe.profile_pattern import newest_piece
+from freecad.maxproframe.profile_pattern import container_placement, newest_piece
 from freecad.maxproframe.tab_geometry import TJoint, check, make_tabs
 from freecad.maxproframe.trimmed_profile import face_normal, in_frame_of
 
@@ -193,8 +202,41 @@ def _joint(names, crossbar, crossbar_face, rail, rail_face):
             ).format(*names, crossbar=names[0])
         )
     direction = -axis if axis.dot(rail_normal) > 0 else axis
+    _check_bar_end(names, crossbar, crossbar_profile, direction)
     end = _end_plane(crossbar, rail_profile, rail_face, direction)
     return TJoint(names, crossbar_face, t_c, direction, rail_face, t_r, end)
+
+
+def _check_bar_end(names, crossbar, profile, direction):
+    """Raise InterlockError when a Folded Bar folds the tube ``profile`` of ``crossbar`` and its end toward the rail
+    (along ``direction``, in the coordinates of the container of ``profile``) is no free end of the bar: a folded
+    corner, or the open corner of a closed frame. A bar that does not fold says why itself."""
+    bar = folding_bar(crossbar)
+    if bar is None:
+        return
+    try:
+        chain = bar_chain(bar)
+    except ChainError:
+        return
+    index = next((i for i, segment in enumerate(chain.segments) if segment.profile.Name == profile.Name), None)
+    if index is None:
+        return
+    toward = container_placement(profile).Rotation.multVec(direction)
+    # The tabs at the end of the segment or at its start: an end of the bar, or a folded corner.
+    bar_end = index == len(chain.segments) - 1 if toward.dot(chain.segments[index].direction) > 0 else index == 0
+    if bar_end and not chain.closed:
+        return
+    if bar_end:
+        text = translate(
+            "MaxProFrame",
+            "The T joint between {} and {} is at the open corner of {}: the tabs go on a free end of a Folded Bar.",
+        )
+    else:
+        text = translate(
+            "MaxProFrame",
+            "The T joint between {} and {} is at a folded corner of {}: the tabs go on a free end of a Folded Bar.",
+        )
+    raise InterlockError(text.format(*names, bar.Label))
 
 
 def _side(obj, side):
@@ -500,30 +542,45 @@ def _make_piece(cls, view_provider, base, face, interlock, suffix):
     return obj
 
 
-def make_tab_interlock(crossbar_piece, crossbar_sub, rail_piece, rail_sub, point=None, **settings):
+def _on_bar(piece, sub, point):
+    """(piece, face name) a click on the face ``sub`` of ``piece`` at the global ``point`` stands for: on a Folded Bar,
+    the tube under the point and its face (``folded_bar.segment_at``), else ``piece`` and ``sub``.
+
+    Raises InterlockError with the reason of a click on a bend.
+    """
+    if piece is None or not is_foldedbar(piece):
+        return piece, sub
+    pick = segment_at(piece, sub, point)
+    if pick.reason:
+        raise InterlockError(pick.reason)
+    return pick.tip, pick.face
+
+
+def make_tab_interlock(
+    crossbar_piece, crossbar_sub, rail_piece, rail_sub, crossbar_point=None, rail_point=None, **settings
+):
     """A Tabs Interlock between the face ``crossbar_sub`` of ``crossbar_piece`` (the wall that carries the tabs) and
     the face ``rail_sub`` of ``rail_piece`` (the rail face the slots go through), with its _Tb and _Sl pieces.
 
-    The faces are found on the newest piece of each tube, which the new pieces go on. ``settings`` are by property
-    name (``Count=3``, ``Length=3.0``: ``interlock.TAB_PROPERTIES``). ``point``, the clicked point, is for a tube of
-    a Folded Bar (T3); a straight piece does not need it. Raises InterlockError, before anything is made, when the
-    faces make no T joint the tabs fit (``tab_geometry.check``), when a tube is folded into a Folded Bar or when the
-    two faces already have tabs. Run it in the caller's transaction and recompute the document afterwards.
+    The faces are found on the newest piece of each tube, which the new pieces go on. A piece may be a Folded Bar: the
+    face clicked on it, at the clicked global point ``crossbar_point`` or ``rail_point`` (the 3D view gives it; without
+    it the center of the face), stands for the face of the tube of the bar under that point (``folded_bar.segment_at``).
+    ``settings`` are by property name (``Count=3``, ``Length=3.0``: ``interlock.TAB_PROPERTIES``). Raises
+    InterlockError, before anything is made, for a click on a bend of a bar, when the faces make no T joint the tabs
+    fit (``tab_geometry.check``), when the crossbar is a tube of a Folded Bar and the joint is not at a free end of the
+    bar, or when the two faces already have tabs. Run it in the caller's transaction and recompute the document
+    afterwards: a bar folds the new pieces then.
     """
     unknown = sorted(set(settings) - set(TAB_PROPERTIES))
     if unknown:
         raise ValueError(f"Unknown tab settings: {', '.join(unknown)}; give {', '.join(TAB_PROPERTIES)}.")
+    crossbar_piece, crossbar_sub = _on_bar(crossbar_piece, crossbar_sub, crossbar_point)
+    rail_piece, rail_sub = _on_bar(rail_piece, rail_sub, rail_point)
     names = _names(crossbar_piece, rail_piece)
     crossbar_profile, rail_profile = base_profile(crossbar_piece), base_profile(rail_piece)
     if crossbar_profile is None or rail_profile is None or crossbar_profile.Name == rail_profile.Name:
         raise _no_faces(names)
     crossbar, rail = newest_piece(crossbar_piece), newest_piece(rail_piece)
-    if folded_into_bar(crossbar) or folded_into_bar(rail):
-        raise InterlockError(
-            translate(
-                "MaxProFrame", "The tabs of the T joint between {} and {} cannot go on a tube of a Folded Bar yet."
-            ).format(*names)
-        )
     crossbar_name, crossbar_face, crossbar_snapshot = _pick(crossbar_piece, crossbar_sub, crossbar, names)
     rail_name, rail_face, rail_snapshot = _pick(rail_piece, rail_sub, rail, names)
     # Before the joint: the slots already there keep the same tabs off the rail face.

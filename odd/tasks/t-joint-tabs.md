@@ -46,9 +46,9 @@ of the rail face the crossbar butts against; t_r = rail wall thickness; d = cros
   commit=95f2b83 [x]
 - T2 [S1, S6] Objects on straight pieces: Kind Tabs on the Interlock (settings, picked faces), _Tb and _Sl pieces in
   the stacks (piece_stack/base_profile/newest_piece, BOM, Cut List and Piece Table length to the tab tips, Cutout on
-  the rail), creation API for the panel, delete/undo; tests. route=gentle-ai-worker + parent; commit=T2 commit [x]
+  the rail), creation API for the panel, delete/undo; tests. route=gentle-ai-worker + parent; commit=e16d884 [x]
 - T3 [S7] Folded Bar: crossbar and/or rail as tubes of a Folded Bar; the bar folds with the tabs and slots, the
-  Unfolded Bar carries them; tests. route=gentle-ai-worker; commit=
+  Unfolded Bar carries them; tests. route=gentle-ai-worker; commit=3e5d7ad [x]
 - T4 [S1, S2, S3, S4] Panel: deduce the kind from the two faces, Tabs fields (Count, Finger width, Tip, Tip size,
   Length with Automatic, Clearance), refusals, Apply and continue, edit by double click; tests.
   route=gentle-ai-worker; commit=
@@ -56,7 +56,7 @@ of the rail face the crossbar butts against; t_r = rail wall thickness; d = cros
   suite. route=gentle-ai-worker + parent; commit=
 
 Delivery forecast: ~1500-2000 authored lines; chained PRs, one per task slice. Slice boundaries: T1 = 95f2b83
-(928 lines, geometry + tests, one work unit).
+(928 lines, geometry + tests, one work unit); T2 = e16d884 (~1200 lines, objects + tests, one work unit).
 
 ## Log
 - L1 User: "AHora analicemos agregar encastres a uniones en T [Image#2]" (Image: a frame of TC80x40x1.5 tubes, a
@@ -94,3 +94,17 @@ Delivery forecast: ~1500-2000 authored lines; chained PRs, one per task slice. S
   length_restore 10. New texts for T5 listed in the worker report (6 MaxProFrame, 4 App::Property). Open for T3:
   remove the Folded Bar guard in make_tab_interlock, follow_new_pieces/unfold with _Tb/_Sl; for T4: panel, Kind
   tooltip.
+- L7 User: "1. si 2. si" -> accepted the two T1 limits: (1) at an oblique T the tab passes the rail's inside face on
+  one side (about 0.75 mm at 60 degrees) because every cut stays square to its wall; (2) a crossbar ending farther
+  than one rail wall thickness from the rail face is refused.
+- L8 T3 (worker mwhxanuw-5-idar): make_tab_interlock(..., crossbar_point=None, rail_point=None) maps a face clicked on a
+  bar to the tube under the point (segment_at; bend -> "Click a straight part of the folded bar."); tabs only on a
+  free end of an open bar, else "The T joint between {} and {} is at a folded corner of {}: ..." / "... at the open
+  corner of {}: ..." (checked at every recompute). No unfold/fold change needed: follow_new_pieces folds _Tb/_Sl,
+  developed length runs to the tab tips. Pre-existing bug fixed: the Unfolded Bar was shifted by how far the first
+  tube reaches past its path start (folded_bar._at_its_place) -> CHANGELOG Fixes in T5. RED: API missing (9 errors),
+  UnfoldedBarStartTest 0.0 != -10.0; GREEN test_tab_interlock_folded_bar 11/11 (parent re-ran: 11 OK). Preserve OK:
+  tab_interlock 13, tab_geometry 17, interlock 11, interlock_panel 14, folded_bar 50, folded_bar_panel 111,
+  folded_bar_tools 14, drill_hole_folded_bar 19, cutout_folded_bar 13, extend_cut_folded_bar 16,
+  end_miter_folded_bar 13, unfolded_geometry 66, folded_geometry 21, cut_list 27. T5 texts: drop T2's "cannot go on a
+  tube of a Folded Bar yet", add the two bar-end refusals.
