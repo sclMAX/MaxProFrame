@@ -207,14 +207,16 @@ class _Layout:
         return min(edge / sum(1 / math.tan(half) for half in halves), *(f * math.tan(h) for f, h in zip(free, halves)))
 
     def _check_slots(self):
-        """The footprint faces of the slots: apart from each other (else the tabs do not fit) and on the rail face."""
-        faces = [self._footprint(*bounds) for bounds in self.bounds]
+        """The footprint faces of the slots: apart from each other (else the slots join and the tabs do not fit), and
+        the tab footprints they grow on the rail face (S9: the clearance may run past its edge)."""
+        footprints = [self._footprint(*bounds) for bounds in self.bounds]
+        faces = [grown for _, grown in footprints]
         for index, face in enumerate(faces[:-1]):
             for other in faces[index + 1 :]:
                 if face.distToShape(other)[0] <= SIZE_TOLERANCE:
                     raise tabs_misfit(self.names)
-        for face in faces:
-            if face.Area - face.common(self.rail_face).Area > AREA_TOLERANCE:
+        for tab, _ in footprints:
+            if tab.Area - tab.common(self.rail_face).Area > AREA_TOLERANCE:
                 raise self._off_rail()
         return faces
 
@@ -293,8 +295,8 @@ class _Layout:
         return e1, self.n_r.cross(e1)
 
     def _footprint(self, a0, a1):
-        """The face, on P, of the slot of the tab from a0 to a1: the square tab inside the rail wall seen along the
-        normal of P, grown by the clearance."""
+        """(tab, slot): the faces, on P, of the tab from a0 to a1 (the square tab inside the rail wall seen along the
+        normal of P) and of its slot (that face grown by the clearance)."""
         square = self.tab(a0, a1, tips=False)
         e1, e2 = self._rail_axes()
         box = square.BoundBox
@@ -308,7 +310,11 @@ class _Layout:
         if len(hull) < 3:
             raise self._no_end()
         grown = _grow(hull, float(self.settings.clearance) / 2)
-        points = [self.Q + e1 * x + e2 * y for x, y in grown]
+        return tuple(self._face_on_p(polygon, e1, e2) for polygon in (hull, grown))
+
+    def _face_on_p(self, polygon, e1, e2):
+        """The face on P of the 2D ``polygon`` in its (e1, e2) axes from Q."""
+        points = [self.Q + e1 * x + e2 * y for x, y in polygon]
         return Part.Face(Part.makePolygon(points + points[:1]))
 
     def slot(self, footprint):

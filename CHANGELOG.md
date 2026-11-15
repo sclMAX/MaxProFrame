@@ -11,6 +11,7 @@
   **Fixes**
   - **Unfolded Bar**: it was shifted along X by how far the first tube of its Folded Bar reached past the start of its path, for example after an Extend / Cut past a free end of the bar. It starts at X = 0 again.
   - **Extend / Cut, Notch, Create Miter Ends and Drill Hole**: typing in a field (the Gap, while editing a trim), clicking or pressing OK or Cancel while the preview was recomputing could freeze FreeCAD; the panel now waits for the recompute to end before it previews, draws or takes the click, and the preview then shows the last values.
+  - **Interlock at a T joint**: a crossbar whose wall is flush with the end of the rail, or with its top or bottom wall, on sharp-cornered tubes (corner radius 0) was refused with "The slots of the T joint between ... do not fall on the flat part of the face of ..." as soon as the Clearance was above 0. The tabs themselves must still fall on the flat part of the rail face, but the clearance around them may now run past its edge; on tubes with corner radii a flush wall is still refused, the flat face ending where the radius starts.
 
 * v1.14.0 (2026-11-15)
 

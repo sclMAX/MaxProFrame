@@ -31,7 +31,7 @@ from freecad.maxproframe.interlock_geometry import TABS, InterlockError, TabSett
 from freecad.maxproframe.piece_table import piece_texts
 from freecad.maxproframe.profile import Profile
 from freecad.maxproframe.profile_pattern import newest_piece
-from freecad.maxproframe.tab_interlock import make_tab_interlock, tab_pieces
+from freecad.maxproframe.tab_interlock import TabFace, make_tab_interlock, tab_order, tab_pieces
 
 # TC80x40x1.5-like tubes: 80 x 40, walls 1.5 thick, outer corner radius 3.
 WIDE, HIGH, T, RADIUS = 80.0, 40.0, 1.5, 3.0
@@ -55,8 +55,9 @@ class TabInterlockFixture(TrimFixture):
         # Refusals are checked in English: an earlier test may leave FreeCAD in another language.
         use_language(self, "English", "en_US")
 
-    def tube(self, edge, label):
-        """A TC80x40x1.5-like tube along ``edge``, centered on it, its body running exactly along it."""
+    def tube(self, edge, label, radius=RADIUS):
+        """A TC80x40x1.5-like tube along ``edge``, centered on it, its body running exactly along it; outer corners of
+        ``radius`` (0: sharp corners)."""
         sketch = self.make_sketch(edge)
         obj = self.doc.addObject("Part::FeaturePython", "Profile")
         obj.addExtension("Part::AttachExtensionPython")
@@ -69,12 +70,12 @@ class TabInterlockFixture(TrimFixture):
             init_h=HIGH,
             init_mt=T,
             init_ft=0.0,
-            init_r1=RADIUS,
-            init_r2=RADIUS - T,
+            init_r1=radius,
+            init_r2=max(radius - T, 0.0),
             init_len=0.0,
             init_wg=1.0,
             init_unit_price=1.0,
-            init_mf=True,
+            init_mf=radius > 0,
             material="Steel",
             fam="Rectangular Hollow",
             size_name="TC80x40x1.5",
@@ -90,12 +91,12 @@ class TabInterlockFixture(TrimFixture):
         self.assertEqual(obj.getStatusString(), "Valid")
         return obj
 
-    def rail(self, edge=RAIL_EDGE, label="Rail"):
-        return self.tube(edge, label)
+    def rail(self, edge=RAIL_EDGE, label="Rail", radius=RADIUS):
+        return self.tube(edge, label, radius)
 
-    def crossbar(self, rail, edge=((0, 0, 0), (300, 0, 0)), towards=-X, label="Crossbar"):
+    def crossbar(self, rail, edge=((0, 0, 0), (300, 0, 0)), towards=-X, label="Crossbar", radius=RADIUS):
         """(crossbar profile, its Extend / Cut against the face of ``rail`` looking along ``towards``)."""
-        profile = self.tube(edge, label)
+        profile = self.tube(edge, label, radius)
         trim = make_extend_cut_profile(profile, (rail, (self.face_towards(rail, towards),)))
         self.doc.recompute()
         self.assertEqual(trim.getStatusString(), "Valid")
@@ -546,3 +547,33 @@ class TabsAcrossTheGapTest(TabInterlockFixture):
             self.assertOneSolid(obj)
             self.assertSameShape(shape, obj.Shape)
         self.assertAcross(rail, trim, interlock, T, gap=0.0)
+
+
+class FlushWallInterlockTest(TabInterlockFixture):
+    """S9 (T7): on sharp-cornered tubes (R = 0) a crossbar wall flush with the end of the rail gets its tabs; the slots
+    run half the clearance past the end of the rail face (L14)."""
+
+    def test_a_crossbar_flush_with_the_rail_end_gets_its_tabs(self):
+        c = 0.2
+        rail = self.rail(((400, -300, 0), (400, WIDE / 2, 0)), radius=0.0)
+        _, trim = self.crossbar(rail, radius=0.0)
+        wall, rail_face = self.wall(trim, Y), self.face_towards(rail, -X)
+        self.assertAlmostEqual(rail.Shape.getElement(rail_face).BoundBox.YMax, trim.Shape.BoundBox.YMax, places=6)
+
+        order = tab_order(TabFace(rail, rail_face, None), TabFace(trim, wall, None), Clearance=c)
+        self.assertIsNone(order.error)
+        self.assertEqual((trim, wall), (order.crossbar.piece, order.crossbar.sub))
+        interlock = make_tab_interlock(trim, wall, rail, rail_face, Clearance=c)
+        self.doc.recompute()
+
+        self.assertEqual("Valid", interlock.getStatusString())
+        tabs, slots = tab_pieces(interlock)
+        for obj in (tabs, slots):
+            self.assertOneSolid(obj)
+        width = self.flat(trim, wall) / 5
+        self.assertAlmostEqual(HIGH / 5, width, places=6)
+        self.assertTabs(trim, tabs, 2, width, T)
+        # The slots stop at the end of the rail: half the clearance less across the wall than in the middle of it.
+        removed = rail.Shape.Volume - slots.Shape.Volume
+        self.assertAlmostEqual(2 * (width + c) * (T + c / 2) * T, removed, delta=VOLUME_TOLERANCE)
+        self.assertLess(tabs.Shape.common(slots.Shape).Volume, VOLUME_TOLERANCE)
