@@ -92,3 +92,11 @@ Branch fix/panel-recompute-deadlock (from main 314db18); work-unit commits; push
   (its first test: the hooked recompute had not started within 2 s, hook unconsumed); the module now waits up to 10 s
   for the hooked recompute to start, then 5 consecutive runs passed. Weekly 27.1.0: the six gate modules pass
   (6, 4, 5, 6, 5, 4). Black 25.1.0 and isort 6.0.1 clean.
+- L9 Independent re-verify of 137926d (Risk item 4): S1-S4 met, no blocker. 1.1.4: test_recompute_gate 6,
+  test_recompute_gate_order 4, test_panel_recompute_gate_order 5, test_extend_cut_recompute_gate 6/6/6 (3 runs),
+  test_end_miter_recompute_gate 5, test_drill_hole_recompute_gate 4, test_extend_cut_panel 46, test_drill_hole_panel 99,
+  test_end_miter_preview 26. Gate probes P1-P5: nothing queued lost while the panel is open, button always last,
+  gate never stuck after an error. Advisories, left as follow-ups: A1 a value typed during a deferred OK's own
+  recompute is dropped (input after OK; spec silent); A2 Cancel pressed during a direct OK's recompute wins and
+  accept() then returns True on a closed panel (same at 5b211f5; end state consistent; real task view not checked);
+  P3 a work that re-queues itself inside its own hold every time would loop (not reachable from the panels).
