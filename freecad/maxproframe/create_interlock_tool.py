@@ -24,7 +24,7 @@ from PySide import QtCore, QtGui, QtWidgets
 
 from freecad.maxproframe import interlock
 from freecad.maxproframe._utils import is_foldedbar
-from freecad.maxproframe.create_drill_hole_tool import _click_point
+from freecad.maxproframe.create_drill_hole_tool import _button_id, _click_point
 from freecad.maxproframe.create_end_miter_tool import GAP_DELAY_MS, _alive, _alive_document
 from freecad.maxproframe.create_folded_bar_tool import _FinishOnEnter
 from freecad.maxproframe.expression_fields import count_field, length_field
@@ -229,7 +229,8 @@ class InterlockTaskPanel:
     """Two inner wall faces of a folded corner of a Folded Bar, and the settings of the Interlock made there.
 
     ``picks`` are the faces preselected, (object, sub-element, picked point or None); as a selection observer (added by
-    the command) the panel takes the faces clicked while it is open, until the Interlock is made. With ``edited`` the
+    the command) the panel takes the faces clicked while it is open, until the Interlock is made. Apply and continue
+    keeps it in its own Undo step and waits for the faces of the next one, with the same settings. With ``edited`` the
     panel changes that Interlock, without picking.
     """
 
@@ -249,6 +250,10 @@ class InterlockTaskPanel:
         self._filling = False
         self._clicks = []
         self._ok_button = None
+        # Apply and continue in the dialog's button row, next to OK and Cancel: only while creating.
+        self._apply_button = None
+        # Whether Apply and continue kept an Interlock: OK with none made since then just closes.
+        self._applied = False
         self._loaded = last_values()
         self._before = values_of(edited) if edited is not None else None
         self.form = keep_alive_until_destroyed(self._build_form())
@@ -521,7 +526,14 @@ class InterlockTaskPanel:
         self._enable_ok()
 
     def can_accept(self):
-        return self._active() and not self.problems()
+        """OK: the Interlock made and its bar valid, or nothing made since Apply and continue (OK just closes)."""
+        if not self._active():
+            return False
+        return (self.edited is None and self._nothing_since_applied()) or not self.problems()
+
+    def can_apply(self):
+        """Apply and continue: an Interlock made since the last one kept, its bar valid."""
+        return self._active() and self.edited is None and not self.problems()
 
     def ok_button_enabled(self):
         """Whether OK can be pressed: the dialog's button when it is shown."""
@@ -530,8 +542,10 @@ class InterlockTaskPanel:
         return self.can_accept()
 
     def _enable_ok(self):
-        if self._ok_button is not None:
-            self._ok_button.setEnabled(self.can_accept())
+        """OK and Apply and continue enabled as ``can_accept`` and ``can_apply`` say."""
+        for button, enabled in ((self._ok_button, self.can_accept), (self._apply_button, self.can_apply)):
+            if button is not None:
+                button.setEnabled(enabled())
 
     # Dialog.
 
@@ -544,22 +558,47 @@ class InterlockTaskPanel:
             self._transaction_open = True
 
     def getStandardButtons(self):
-        return QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel
+        """OK and Cancel, and Apply (shown as Apply and continue) while creating."""
+        buttons = QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel
+        if self.edited is None:
+            buttons |= QtGui.QDialogButtonBox.Apply
+        return buttons
 
     def modifyStandardButtons(self, box):
-        """Keep the OK button: it is disabled until the Interlock is made and while its bar is in error."""
+        """Keep the OK button and turn Apply into Apply and continue: both are disabled until the Interlock is made
+        and while its bar is in error."""
         # The task view deletes the row when the dialog closes: no wrapper may outlive it.
         invalidate_wrapper_on_destroy(box)
         button = box.button(QtGui.QDialogButtonBox.Ok)
-        if button is None:
-            return
-        invalidate_wrapper_on_destroy(button)
-        button.destroyed.connect(self._ok_button_gone)
-        self._ok_button = button
+        if button is not None:
+            invalidate_wrapper_on_destroy(button)
+            button.destroyed.connect(self._ok_button_gone)
+            self._ok_button = button
+        button = box.button(QtGui.QDialogButtonBox.Apply)
+        if button is not None:
+            invalidate_wrapper_on_destroy(button)
+            button.setText(translate("frameforge", "Apply and continue"))
+            button.setToolTip(
+                translate(
+                    "MaxProFrame",
+                    "Create this interlock in its own Undo step and keep the panel open: click the inner walls at "
+                    "the next folded corner, with the same settings.",
+                )
+            )
+            button.destroyed.connect(self._apply_button_gone)
+            self._apply_button = button
         self._enable_ok()
+
+    def clicked(self, button):
+        """A button of the dialog's row: Apply creates the Interlock and continues, OK and Cancel run on their own."""
+        if _button_id(button) == _button_id(QtGui.QDialogButtonBox.Apply):
+            self.apply_and_continue()
 
     def _ok_button_gone(self, *args):
         self._ok_button = None
+
+    def _apply_button_gone(self, *args):
+        self._apply_button = None
 
     def _form_gone(self, *args):
         if not self._closed:
@@ -617,9 +656,44 @@ class InterlockTaskPanel:
         Gui.Selection.clearSelection()
         return True
 
+    def _nothing_since_applied(self):
+        """Whether Apply and continue kept an Interlock and no other one is made since."""
+        return self._applied and (self.obj is None or not _alive(self.obj))
+
+    def apply_and_continue(self, *args):
+        """Keep the Interlock as OK does, in its own Undo step, then wait for the faces of the next one.
+
+        The settings stay for the next Interlock: only the corner changes with the next clicks. Only while creating.
+        Returns whether the Interlock was kept.
+        """
+        if self.edited is not None or self._closed or self._recomputing:
+            return False
+        # A value still waiting for a recompute applies now.
+        self._apply()
+        if self.problems():
+            return False
+        # The next Interlock, in this session or the next, starts with these settings.
+        remember_values(self.field_values())
+        self.doc.commitTransaction()
+        self._transaction_open = False
+        self._applied = True
+        # The next Interlock's transaction opens when its second face is clicked.
+        self.obj = None
+        self.bar = None
+        self.faces = []
+        self._refusal = ""
+        Gui.Selection.clearSelection()
+        self._show()
+        return True
+
     def accept(self):
         if self._closed or self._recomputing:
             return False
+        if self.edited is None and self._nothing_since_applied():
+            # Nothing made since Apply and continue: OK just closes the panel.
+            self.clean()
+            Gui.Selection.clearSelection()
+            return True
         # A value still waiting for a recompute applies now.
         self._apply()
         if self.problems():
