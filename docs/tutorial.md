@@ -4,6 +4,8 @@
 
 FrameForge is dedicated for creating Frames and Beams, and apply operations (miter cuts, trim cuts) on these profiles.
 
+The commands are on the workbench toolbars and in one **MaxProFrame** menu, grouped in submenus (Spanish in italics): **Profiles and Cuts** (*Perfiles y cortes*), **Folded Miters** (*Ingletes plegados*), **Profiles Group**, **Output** (*Salida*: IDs, balloons, piece table, BOM) and **Utilities** (*Utilidades*). The Sketcher and Part commands of the **Drawing Primitives** and **Part Primitives** toolbars are only on those toolbars.
+
 ## Create the skeleton
 
 Beams are mapped onto Edges or ParametricLine (from a Sketch for instance)
@@ -442,7 +444,7 @@ A trim, cutout or drill hole made from the piece after the pattern shows on ever
 
 A **folded corner** joins two tubes without cutting them apart: the tube is one bar, the laser cuts a V notch through the walls on the inside of the corner, and the wall on the outside of the corner stays whole and is bent. Folding the bar closes the V. MaxProFrame draws the folded bar with its real bend radius and unfolds it into one straight solid with every cut, which you export for a CNC tube laser. Each corner chooses how its inner wall is cut: a **Miter**, tilted, for a laser with a bevel head, or a **Stepped** joint made of straight cuts only, for any tube laser (see [Miter or stepped joint](#miter-or-stepped-joint)).
 
-The commands are on the **Folded Miters** toolbar and menu (Spanish *Ingletes plegados*): **Folded Bar** (*Barra plegada*), **Unfold Bar** (*Desplegar barra*) and **Interlock** (*Encastre*, see [Interlock](#interlock)).
+The commands are on the **Folded Miters** toolbar and in the **MaxProFrame > Folded Miters** menu (Spanish *Ingletes plegados*): **Folded Bar** (*Barra plegada*), **Unfold Bar** (*Desplegar barra*) and **Interlock** (*Encastre*, see [Interlock](#interlock)).
 
 ### Draw the frame
 
@@ -727,7 +729,7 @@ The "Piece Table" Command puts on the page a table of the pieces shown in one or
 
 Workflow:
 - Number the pieces with "Populate IDs": a piece without ID gets no row.
-- Select one or more Views and click on the "Piece Table" Command in the MaxProFrame Output toolbar. Or click the Command first, then a View on the page. A detail view gets no table: the status bar says so and waits for another View. Esc, clicking the Command again or selecting something outside TechDraw cancels.
+- Select one or more Views and click on the "Piece Table" Command in the MaxProFrame Output toolbar (or **MaxProFrame > Output** in the menu). Or click the Command first, then a View on the page. A detail view gets no table: the status bar says so and waits for another View. Esc, clicking the Command again or selecting something outside TechDraw cancels.
 
 The table lists only the pieces of the selected Views, one row per ID, with how many pieces have that ID: the same numbers as the balloons. A piece shown in several of the Views counts once. Piece is the name of the profile only (`TC80x40x1.5`, not `Profile_TC80x40x1.5_001_Tr`). Length is the longest side of the piece, as in the BOM (see About Length below). The cut angles are written as in the BOM, with the face each one is seen on: `45.0 <80`, or `45.0 <80 + 10.0 <40` for a compound cut. Lengths and angles take the decimal separator of the FreeCAD language (`45,0 <80` in Spanish).
 

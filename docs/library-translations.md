@@ -22,4 +22,4 @@ Update the Spanish catalog `maxproframe_es.ts`, then run:
 python3 freecad/maxproframe/compile_translations.py
 ```
 
-This refreshes `maxproframe_es.qm` and its `es-ES`, `es-CO` and `es-AR` copies, the Spanish locales FreeCAD looks for. Catalog tests cover literal library, card, DXF and sketch-dialog messages plus indirect labels and standard T-Slot names.
+This refreshes `maxproframe_es.qm` and its `es-ES`, `es-CO` and `es-AR` copies, the Spanish locales FreeCAD looks for. The committed `.qm` files are built with Qt's `lrelease`, the one bundled in the FreeCAD AppImage (`usr/lib/qt6/bin/lrelease`): `compile_translations.py` gives working catalogs but does not reproduce those files byte for byte. Build `maxproframe_es.qm` and `maxproframe_ru.qm` with it from their `.ts`, and copy `maxproframe_es.qm` to the `es-ES`, `es-CO` and `es-AR` names. Catalog tests cover literal library, card, DXF and sketch-dialog messages plus indirect labels and standard T-Slot names.

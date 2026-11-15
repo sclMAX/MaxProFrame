@@ -108,7 +108,11 @@ class myWorkbench(Workbench):
     def Initialize(self):
         self.appendToolbar("Gear", ["MyCommand"])
         self.appendMenu("Gear", ["MyCommand"])
+        # A list is a path: the commands go in the submenu "Tools" of the menu "Gear".
+        self.appendMenu(["Gear", "Tools"], ["MyCommand", "Separator", "MyOtherCommand"])
 ```
+
+MaxProFrame uses that path form: one **MaxProFrame** menu with a submenu per group of commands, while every group keeps its own toolbar.
 
 ### 2. C++
 
