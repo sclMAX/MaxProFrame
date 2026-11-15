@@ -1,5 +1,6 @@
 import os
 from collections import namedtuple
+from functools import partial
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -32,6 +33,7 @@ from freecad.maxproframe.folded_bar_ends import free_end_tubes, is_whole_bar, wh
 from freecad.maxproframe.folded_chain import base_profile
 from freecad.maxproframe.miter_geometry import TOLERANCE
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
+from freecad.maxproframe.recompute_gate import RecomputeGate
 from freecad.maxproframe.trimmed_profile import (
     AUTO,
     END,
@@ -303,6 +305,10 @@ class ExtendCutTaskPanel:
     A click on a Folded Bar stands for its tube under the clicked point (``_from_bar``), and a trim of a
     tube of a bar is folded into the bar at once, its preview included (odd/tasks/folded-bar-tools.md).
     A cut that would have a bar depend on itself or cut a tube at its folded corner is refused.
+
+    While the panel recomputes, FreeCAD's progress bar runs its timers, keys and clicks: they wait for the
+    recompute to end (``_gate``), as an OCC boolean run inside it would wait forever for its threads
+    (odd/tasks/panel-recompute-deadlock.md).
     """
 
     joint = "Extend Cut"
@@ -354,6 +360,8 @@ class ExtendCutTaskPanel:
         self.keep_ends = {}
         self._closed = False
         self._syncing = False
+        # Held while the panel recomputes: the previews, highlights, clicks and buttons asked for meanwhile wait.
+        self._gate = RecomputeGate(self._active)
         self.doc = App.ActiveDocument
         # Live preview: profile name -> _Preview, and what it shows (see _wanted).
         self._previews = {}
@@ -534,6 +542,8 @@ class ExtendCutTaskPanel:
         return translate("frameforge", "{} is already cut against this target").format(profile.Label)
 
     def remove_selected(self):
+        if self._gate.wait(self.remove_selected):
+            return
         rows = {self.form.profiles_list.row(item) for item in self.form.profiles_list.selectedItems()}
         self.profiles = [obj for row, obj in enumerate(self.profiles) if row not in rows]
         self._show([])
@@ -550,7 +560,7 @@ class ExtendCutTaskPanel:
             self._flip([self.profiles[row]])
 
     def _flip(self, profiles):
-        if not profiles or not self._active():
+        if not profiles or not self._active() or self._gate.wait(partial(self._flip, profiles)):
             return
         if self.target is None:
             self._show([self.texts()["missing_target"]])
@@ -686,21 +696,29 @@ class ExtendCutTaskPanel:
     def _update_preview(self, *args, force=False):
         """Make the preview match the panel when Update automatically is checked (or ``force``).
 
-        While editing, the edited trim itself is the preview.
+        While editing, the edited trim itself is the preview. Asked for while the panel recomputes, it runs right
+        after the recompute, not dropped.
         """
-        if not self._active():
+        if not self._active() or self._gate.wait(self._forced_preview if force else self._update_preview):
             return
-        if (force or self.form.cb_auto_update.isChecked()) and self._previewed != self._wanted():
-            if self.edited is not None:
-                self._preview_edit()
-            else:
-                self._rebuild_preview()
-        self._show_status()
+        with self._gate.hold():
+            if (force or self.form.cb_auto_update.isChecked()) and self._previewed != self._wanted():
+                if self.edited is not None:
+                    self._preview_edit()
+                else:
+                    self._rebuild_preview()
+        if not self._closed:
+            self._show_status()
+
+    def _forced_preview(self):
+        self._update_preview(force=True)
 
     def _rebuild_preview(self):
         """Update the preview trims; when one fails, discard the whole preview and show why."""
+        # Taken before the recompute: a value typed during it is not previewed yet.
+        shown = self._wanted()
         gap = self.form.sb_gap.value()
-        wanted = {obj.Name: obj for obj in self.profiles} if self._wanted() else {}
+        wanted = {obj.Name: obj for obj in self.profiles} if shown else {}
         if not self._transaction_open:
             # The trims live in the document of the profiles they cut.
             if self.profiles:
@@ -735,7 +753,7 @@ class ExtendCutTaskPanel:
         if self._error:
             self._discard_preview()
         else:
-            self._previewed = self._wanted()
+            self._previewed = shown
         self._show_messages()
         self._draw_highlights()
 
@@ -753,6 +771,8 @@ class ExtendCutTaskPanel:
     def _preview_edit(self):
         """Apply the panel to the edited trim inside the edit transaction, and show what it cuts off."""
         doc = self.edited.Document
+        # Taken before the recompute: a value typed during it is not previewed yet.
+        shown = self._wanted()
         self._open_edit_transaction()
         self._error = ""
         self._discarded = {}
@@ -765,7 +785,7 @@ class ExtendCutTaskPanel:
                 self._discarded = self._cut_off_pieces()
         except Exception as error:
             self._error = str(error)
-        self._previewed = self._wanted()
+        self._previewed = shown
         self._show_messages()
         self._draw_highlights()
 
@@ -774,6 +794,10 @@ class ExtendCutTaskPanel:
 
         The panel values are then no longer shown by the trim: the preview applies them again on the next update.
         """
+        with self._gate.hold():
+            self._put_back_edit()
+
+    def _put_back_edit(self):
         doc = self.doc
         obj = self.edited
         if getattr(obj, "Removing", False) or not _in_document(obj):
@@ -878,6 +902,10 @@ class ExtendCutTaskPanel:
 
     def _discard_preview(self):
         """Abort the preview transaction; leftovers (undo disabled) are removed by hand."""
+        with self._gate.hold():
+            self._abort_preview()
+
+    def _abort_preview(self):
         # Aborting deletes selected previews: those deselections are not the user's.
         self._syncing = True
         try:
@@ -922,8 +950,11 @@ class ExtendCutTaskPanel:
     def _draw_highlights(self):
         """Draw the edges of the target and of the profiles over the 3D view, each kind in its color.
 
-        The overlay never touches the document or the view objects: their colors stay as they are.
+        The overlay never touches the document or the view objects: their colors stay as they are. During a
+        recompute of the panel it waits for it to end: the pieces to draw come from it.
         """
+        if self._gate.wait(self._draw_highlights):
+            return
         remove_overlay(self._overlay)
         self._overlay = None
         highlights = self.highlights()
@@ -986,6 +1017,9 @@ class ExtendCutTaskPanel:
     def addSelection(self, doc, obj, sub, other):
         if self._syncing or not self._active():
             return
+        if self._gate.wait(partial(self.addSelection, doc, obj, sub, other)):
+            # A click during a recompute of the panel: taken once it ends.
+            return
         document = App.getDocument(doc)
         source = document.getObject(getattr(obj, "Name", obj)) if document else None
         if source is None:
@@ -1045,6 +1079,7 @@ class ExtendCutTaskPanel:
     def clean(self):
         self._closed = True
         self._preview_timer.stop()
+        self._gate.clear()
         remove_overlay(self._overlay)
         self._overlay = None
         try:
@@ -1060,6 +1095,9 @@ class ExtendCutTaskPanel:
             gui_doc.resetEdit()
 
     def reject(self):
+        if self._gate.defer(self.reject):
+            # Pressed during a recompute of the panel: Cancel runs once it ends.
+            return False
         self.clean()
         if self.edited is not None:
             self._restore_edit()
@@ -1080,6 +1118,9 @@ class ExtendCutTaskPanel:
         return make_extend_cut_profile(body, self.target, gap)
 
     def accept(self):
+        if self._gate.defer(self.accept):
+            # Pressed during a recompute of the panel: OK runs once it ends, with the values typed meanwhile.
+            return False
         error = self._missing()
         if error and self._applied and self.target is None:
             # After Apply and continue, OK without a new target closes: nothing more to cut, no Undo step.
@@ -1091,7 +1132,9 @@ class ExtendCutTaskPanel:
             return False
         gap = self.form.sb_gap.value()
         if self.edited is not None:
-            return self._accept_edit(gap)
+            # Whatever its recompute is asked meanwhile waits for it to end.
+            with self._gate.hold():
+                return self._accept_edit(gap)
 
         # OK keeps the current values even when the preview is out of date or a change is pending.
         self._preview_timer.stop()
@@ -1158,6 +1201,8 @@ class ExtendCutTaskPanel:
         """
         if self.edited is not None or not self._active():
             return False
+        if self._gate.defer(self._apply_deferred):
+            return False
         error = self._missing()
         if error:
             self._show([error])
@@ -1190,6 +1235,11 @@ class ExtendCutTaskPanel:
         self._show([])
         self._changed()
         return True
+
+    def _apply_deferred(self):
+        """Apply and continue pressed during a recompute, once it ends: the panel stays open."""
+        self.apply_and_continue()
+        return False
 
     def _accept_edit(self, gap):
         doc = self.edited.Document
