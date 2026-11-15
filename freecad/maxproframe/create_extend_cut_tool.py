@@ -1209,6 +1209,9 @@ class ExtendCutTaskPanel:
             return False
         self._preview_timer.stop()
         self._update_preview(force=True)
+        if not self._active():
+            # OK or Cancel pressed during that recompute closed the panel.
+            return False
         if not self._error:
             self._error = _failures(preview.obj for preview in self._previews.values())
         if self._error:

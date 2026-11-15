@@ -75,3 +75,20 @@ Branch fix/panel-recompute-deadlock (from main 314db18); work-unit commits; push
   one PR (one bug fix, three panels sharing recompute_gate.py; tests are ~60% of it). Risk: item 4 (re-entrancy of
   panel slots during FreeCAD's progress event pump; offscreen tests cannot reproduce the real pump) -> independent
   verify before delivery.
+- L8 Correction round after the independent verify (B1: `_release` ran the deferred OK / Cancel / Apply at the end of
+  every release, also the nested one of a queued `_update_preview`, so OK closed the panel before the queued click;
+  S4 regression against 314db18). Fix: `recompute_gate.py` runs the queue and the button only from the outermost
+  release (`_releasing`): a hold ending while the queue runs leaves what it queued to that run, and the button runs
+  once the whole queue (including that) is empty; a queued work that raises no longer stops the rest nor the button
+  (the first error is raised after them). Extend Cut `apply_and_continue` returns False when OK / Cancel pressed
+  during its recompute closed the panel. Verifier probes adopted as tests/test_recompute_gate_order.py (4) and
+  tests/test_panel_recompute_gate_order.py (5). RED at HEAD 5b211f5: gate order 3 of 4 failed (['preview', 'ok']
+  instead of ['preview', 'click', 'ok', 'closed']; the error case stopped at ['fail']), panel order 2 of 5 failed
+  (Extend Cut TrimmingBoundary stayed Face1, wanted Face4; Drill Hole ReferenceVertex Vertex3, wanted Vertex8).
+  GREEN on FreeCAD 1.1.4: test_recompute_gate_order 4, test_panel_recompute_gate_order 5, test_recompute_gate 6,
+  test_extend_cut_recompute_gate 6, test_end_miter_recompute_gate 5, test_drill_hole_recompute_gate 4,
+  test_extend_cut_panel 46, test_extend_cut_preview 22, test_end_miter_preview 26, test_end_miter_panel 14,
+  test_drill_hole_panel 99, test_notch_panel 30, all OK. One run of test_extend_cut_recompute_gate failed once
+  (its first test: the hooked recompute had not started within 2 s, hook unconsumed); the module now waits up to 10 s
+  for the hooked recompute to start, then 5 consecutive runs passed. Weekly 27.1.0: the six gate modules pass
+  (6, 4, 5, 6, 5, 4). Black 25.1.0 and isort 6.0.1 clean.

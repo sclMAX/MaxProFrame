@@ -5,6 +5,7 @@ timer fire, click and press OK or Cancel there. None of it may run geometry then
 and the preview ends matching the last values.
 """
 
+import time
 import unittest
 
 import FreeCAD as App
@@ -23,6 +24,8 @@ from freecad.maxproframe.trimmed_profile import TrimmedProfile
 INSIDE = 3 * GAP_DELAY_MS / 1000
 # The preview delay, the recompute and the one that follows it, with room for a loaded machine.
 SETTLE = 2.0
+# The longest wait for the hooked recompute to start (a first test in a cold FreeCAD may be slow).
+START = 10.0
 
 
 class ExtendCutRecomputeGateTest(KeepEndFixture):
@@ -34,6 +37,13 @@ class ExtendCutRecomputeGateTest(KeepEndFixture):
         )
         recomputes = watch(self, ExtendCutTaskPanel, ("_retarget", "_rebuild_preview", "_preview_edit"), state)
         self.calls = (geometry, recomputes)
+
+    def settle(self):
+        """Let the hooked recompute start, then the preview delay and the recomputes after it pass."""
+        deadline = time.monotonic() + START
+        while self.hooks and time.monotonic() < deadline:
+            wait(0.1)
+        wait(SETTLE)
 
     def ran_during(self):
         return during(self.calls[0]) + during(self.calls[1])
@@ -61,7 +71,7 @@ class ExtendCutRecomputeGateTest(KeepEndFixture):
         self.hooks.append(self.type_inside(panel, 2.0))
 
         panel.form.sb_gap.setValue(1.0)
-        wait(SETTLE)
+        self.settle()
 
         self.assertEqual([], self.hooks)
         self.assertEqual([], self.ran_during())
@@ -81,7 +91,7 @@ class ExtendCutRecomputeGateTest(KeepEndFixture):
         self.hooks.append(self.type_inside(panel, 2.0))
 
         self.flip_rows(panel, 0)
-        wait(SETTLE)
+        self.settle()
 
         self.assertEqual([], self.hooks)
         self.assertEqual([], self.ran_during())
@@ -100,7 +110,7 @@ class ExtendCutRecomputeGateTest(KeepEndFixture):
         self.hooks.append(lambda fp: self.click(target, far))
 
         panel.form.sb_gap.setValue(3.0)
-        wait(SETTLE)
+        self.settle()
 
         self.assertEqual([], self.ran_during())
         self.assertEqual(panel.target, (target, (far,)))
@@ -120,7 +130,7 @@ class ExtendCutRecomputeGateTest(KeepEndFixture):
         self.hooks.append(type_and_cancel)
 
         panel.form.sb_gap.setValue(4.0)
-        wait(SETTLE)
+        self.settle()
 
         self.assertEqual([False], returned)
         self.assertEqual([], self.ran_during())
@@ -141,7 +151,7 @@ class ExtendCutRecomputeGateTest(KeepEndFixture):
         self.hooks.append(type_and_ok)
 
         panel.form.sb_gap.setValue(1.0)
-        wait(SETTLE)
+        self.settle()
 
         self.assertEqual([False], returned)
         self.assertEqual([], self.ran_during())

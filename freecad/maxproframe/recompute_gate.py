@@ -4,10 +4,12 @@ FreeCAD's progress bar pumps Qt events inside a recompute: a timer of the panel,
 inside it. An OCC boolean run there (a cut, a nested recompute) waits forever for the threads the paused boolean of
 the recompute holds, and FreeCAD freezes. While the gate is held, the panel queues that work instead of running it:
 the values typed still reach the panel, and the queued work runs, in order, once the outermost hold ends, so the
-panel ends matching its last values. A dialog button (OK, Cancel, Apply) pressed meanwhile runs after it.
+panel ends matching its last values. A dialog button (OK, Cancel, Apply) pressed meanwhile runs after all of it,
+also after the work queued while a queued work recomputes again.
 """
 
 import contextlib
+from functools import partial
 
 import FreeCADGui as Gui
 
@@ -23,6 +25,8 @@ class RecomputeGate:
         self._depth = 0
         self._waiting = []
         self._button = None
+        # Whether the queue is being run: a hold ending meanwhile leaves what it queued to that run.
+        self._releasing = False
 
     @property
     def held(self):
@@ -62,10 +66,34 @@ class RecomputeGate:
         self._button = None
 
     def _release(self):
-        waiting, self._waiting = self._waiting, []
-        for work in waiting:
-            if self._active():
-                work()
-        button, self._button = self._button, None
-        if button is not None and self._active() and button() and Gui.Control.activeDialog():
+        """Run what waited, in order, then the button: only from the outermost release, so a queued work that holds
+        the gate again neither runs the button before the rest of the queue nor the rest before what it queued.
+
+        A work that raises does not stop the others nor the button: the first error is raised once they ran.
+        """
+        if self._releasing:
+            return
+        self._releasing = True
+        error = None
+        try:
+            while self._waiting or self._button is not None:
+                if self._waiting:
+                    work = self._waiting.pop(0)
+                else:
+                    work, self._button = partial(self._press, self._button), None
+                if not self._active():
+                    continue
+                try:
+                    work()
+                except Exception as exception:
+                    error = error or exception
+        finally:
+            self._releasing = False
+        if error is not None:
+            raise error
+
+    @staticmethod
+    def _press(button):
+        """Run the deferred ``button``; close the dialog when it accepts (FreeCAD took False for it meanwhile)."""
+        if button() and Gui.Control.activeDialog():
             Gui.Control.closeDialog()
