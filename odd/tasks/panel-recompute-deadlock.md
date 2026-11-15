@@ -20,11 +20,11 @@ Branch fix/panel-recompute-deadlock (from main 314db18); work-unit commits; push
 - [x] T1 [S1, S3, S4] Extend Cut panel gate (create_extend_cut_tool.py): every doc.recompute() of the panel inside the
   gate; _update_preview / _draw_highlights / _cut_off_pieces and any other timer slot doing geometry defer while it
   runs; tests that simulate a timer firing during the recompute (as tests/test_folded_bar_panel.py does since
-  9b9d537) and that the final preview matches the last Gap. route=gentle-ai-worker; commit=
+  9b9d537) and that the final preview matches the last Gap. route=gentle-ai-worker; commit=ad59336
 - [x] T2 [S2, S3, S4] Same gate in End Miter (create_end_miter_tool.py) and Drill Hole (create_drill_hole_tool.py);
-  tests per panel. route=gentle-ai-worker; commit=
+  tests per panel. route=gentle-ai-worker; commit=e6fc880
 - [x] T3 [S1-S4] CHANGELOG (Unreleased, Fixed); report other panels with the same pattern (not fixed here).
-  route=gentle-ai-worker; commit=
+  route=gentle-ai-worker; commit=4467ad6
 
 ## Log
 - L1 User (manual test of t-joint-tabs, FreeCAD weekly 2026-10-28 AppImage): "estoy probando pero se congelo Freecad
@@ -71,3 +71,7 @@ Branch fix/panel-recompute-deadlock (from main 314db18); work-unit commits; push
   panel runs `face_at` / `segment_at` on a click during its OK recompute; Profile Pattern guards `_update_preview`
   and defers OK / Cancel, but `addSelection` takes picks (element lookups) inside a recompute; the Parametric Line
   panel recomputes on every field change with no guard. commit: left to the parent.
+- L7 Parent: commits ad59336 (T1), e6fc880 (T2), 4467ad6 (T3) on fix/panel-recompute-deadlock; ~990 authored lines,
+  one PR (one bug fix, three panels sharing recompute_gate.py; tests are ~60% of it). Risk: item 4 (re-entrancy of
+  panel slots during FreeCAD's progress event pump; offscreen tests cannot reproduce the real pump) -> independent
+  verify before delivery.
