@@ -102,14 +102,15 @@ class TabFixture(unittest.TestCase):
         normal = App.Vector(-math.sin(math.radians(90 - angle)), math.cos(math.radians(90 - angle)), 0)
         return shape, planar_face(shape, normal)
 
-    def joint(self, angle=90, gap=0.0, lift=0.0, rail=None, rail_face=None, end=None):
-        """(TJoint, crossbar, rail) of the crossbar at ``angle`` against the rail face x = RAIL_X."""
+    def joint(self, angle=90, gap=0.0, lift=0.0, rail=None, rail_face=None, end=None, trim_gap=0.0):
+        """(TJoint, crossbar, rail) of the crossbar at ``angle`` against the rail face x = RAIL_X; ``trim_gap`` is the
+        Gap of its trim (S8)."""
         rail = self.rail() if rail is None else rail
         crossbar, wall = self.crossbar(angle, gap, lift)
         rail_face = planar_face(rail, -X, farthest=True) if rail_face is None else rail_face
         if end is None and gap:
             end = (App.Vector(RAIL_X - gap, 0, 0), X)
-        joint = TJoint(NAMES, wall, T, self.direction(angle), rail_face, T, end)
+        joint = TJoint(NAMES, wall, T, self.direction(angle), rail_face, T, end, trim_gap)
         return joint, crossbar, rail
 
     def assertBox(self, shape, x=None, y=None, z=None, places=6):
@@ -217,6 +218,24 @@ class SquareTabTest(TabFixture):
             self.assertBox(tab, x=(RAIL_X - gap, RAIL_X + T))
         fused = crossbar.fuse(tabs).removeSplitter()
         self.assertEqual(1, len(fused.Solids))
+
+    def test_the_tabs_cross_a_trim_gap_wider_than_the_rail_wall_through_the_same_slots(self):
+        # S8: the crossbar trimmed with a Gap ends that far before P; the tabs start on its end and still reach L past
+        # P, the slots do not change.
+        gap = 3.0
+        joint, crossbar, rail = self.joint(gap=gap, trim_gap=gap)
+        shapes = make_tabs(TabSettings(count=2), joint)
+        flush = make_tabs(TabSettings(count=2), self.joint()[0])
+        for tab, (low, high) in zip(sorted(shapes.tabs, key=lambda shape: shape.BoundBox.ZMin), even(2), strict=True):
+            self.assertBox(tab, x=(RAIL_X - gap, RAIL_X + T), y=(WIDE / 2 - T, WIDE / 2), z=(low, high))
+            self.assertAlmostEqual((high - low) * T * (T + gap), tab.Volume, delta=VOLUME_TOLERANCE)
+        for slot, same in zip(shapes.slots, flush.slots, strict=True):
+            self.assertAlmostEqual(0.0, slot.cut(same).Volume + same.cut(slot).Volume, delta=VOLUME_TOLERANCE)
+        self.assertEqual(1, len(crossbar.fuse(shapes.tabs).removeSplitter().Solids))
+        # Past the gap, the crossbar end may still stop up to the rail wall thickness before P, not farther.
+        no_end = "There is no T joint between Crossbar and Rail: Crossbar does not end on the face of Rail."
+        check(TabSettings(count=2), self.joint(gap=gap + T, trim_gap=gap)[0])
+        self.assertRefused(no_end, TabSettings(count=2), self.joint(gap=gap + T + 0.1, trim_gap=gap)[0])
 
     def test_chamfered_and_round_tips_in_the_crossbar_wall_plane(self):
         # S3: Chamfer cuts the triangle of legs TipSize off both tip corners, Round leaves a quarter disc of that

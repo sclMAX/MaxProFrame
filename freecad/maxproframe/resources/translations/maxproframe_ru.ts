@@ -3119,7 +3119,7 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Click the inner walls of the two tubes at a folded corner of a Folded Bar.</source>
+        <source>Click the inner walls of the two tubes at a folded corner of a Folded Bar for fingers, or a wall of a crossbar and the face of the rail it butts against for tabs.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3167,7 +3167,7 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Shape of the interlock: Fingers, at the inner vertex of a folded corner</source>
+        <source>Shape of the interlock: Fingers, at the inner vertex of a folded corner; Tabs, on the end of a crossbar through slots in the rail at a T joint</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3239,7 +3239,7 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Create this interlock in its own Undo step and keep the panel open: click the inner walls at the next folded corner, with the same settings.</source>
+        <source>Create this interlock in its own Undo step and keep the panel open: click the two faces of the next one, with the same settings.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3256,6 +3256,114 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>{} is a closed frame: it takes no more tubes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click the other face of the T joint: the face of the rail the crossbar butts against, or the wall of the crossbar that carries the tabs.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>T joint</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>T joint: {} → {}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tabs</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tab width</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Length</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Number of tabs, at least 1, across the flat part of the crossbar wall</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Width of every tab, with equal gaps between them and at both ends; Even: the tabs and the gaps split the flat part of the wall evenly</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Corners of each tab tip: Square, Chamfer or Round, to lead it into its slot</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Chamfer leg or radius of the tab tip corners, in the crossbar wall plane</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>How far the tabs go across the rail wall, along its normal; Automatic: the rail wall thickness, flush with its inside face</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Gap around each tab in its slot, half on each side</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>There is no T joint between {} and {}: pick a flat face of each tube.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Both faces are on {}: click a wall of the crossbar and the face of the rail it butts against.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>There is no T joint between {} and {}: {crossbar} does not end on the face of {rail}.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>There is no T joint between {} and {}: {crossbar} runs along the face of {rail}.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>There is no T joint between {} and {}: the face of {crossbar} is not a wall along it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The tabs of the T joint between {} and {} need two tubes: {} is a {} profile.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The interlock of the T joint between {} and {} needs at least 1 tab.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The tab length of the T joint between {} and {} must be 0 (automatic) or more.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The tabs of the T joint between {} and {} do not fit: make them fewer or narrower.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The tab tips of the T joint between {} and {} must be between 0 and {max:g} mm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The slots of the T joint between {} and {} do not fall on the flat part of the face of {rail}.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The T joint between {} and {} already has tabs on that face: {}.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The T joint between {} and {} is at a folded corner of {}: the tabs go on a free end of a Folded Bar.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The T joint between {} and {} is at the open corner of {}: the tabs go on a free end of a Folded Bar.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The interlock {} lost the face of {} it was made on.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3288,7 +3396,7 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>&lt;b&gt;Interlock&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click the inner wall faces of the two tubes at a folded corner of a Folded Bar: fingers cut by the laser at the inner vertex of the corner locate one tube on the other. Set their count, width, tip and clearance in the panel. Double-click the Interlock to edit it.</source>
+        <source>&lt;b&gt;Interlock&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click two faces. The inner wall faces of the two tubes at a folded corner of a Folded Bar: fingers cut by the laser at the inner vertex of the corner locate one tube on the other. A wall of a crossbar and the face of the rail it butts against (a T joint): tabs on the crossbar end go through slots cut in the rail. Set their count, width, tip and clearance in the panel. Double-click the Interlock to edit it.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3367,7 +3475,7 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Shape of the interlock: Fingers, at the inner vertex of a folded corner</source>
+        <source>Shape of the interlock: Fingers, at the inner vertex of a folded corner; Tabs, on the end of a crossbar through slots in the rail at a T joint</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3400,6 +3508,22 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>Interlock objects on the corners of the bar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>How far the tabs go across the rail wall, along its normal; 0: automatic, the rail wall thickness</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Crossbar piece and face that carry the tabs</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Rail piece and face the slots go through</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The Tabs Interlock this piece adds its tabs or slots for</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

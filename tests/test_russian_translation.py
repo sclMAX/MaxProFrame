@@ -16,9 +16,11 @@ PENDING_TEXTS = (
     ("MaxProFrame_Interlock", "Interlock"),
     (
         "MaxProFrame_Interlock",
-        "<b>Interlock</b><br><br>Click the inner wall faces of the two tubes at a folded corner of a Folded Bar: "
-        "fingers cut by the laser at the inner vertex of the corner locate one tube on the other. Set their count, "
-        "width, tip and clearance in the panel. Double-click the Interlock to edit it.",
+        "<b>Interlock</b><br><br>Click two faces. The inner wall faces of the two tubes at a folded corner of a "
+        "Folded Bar: fingers cut by the laser at the inner vertex of the corner locate one tube on the other. A wall "
+        "of a crossbar and the face of the rail it butts against (a T joint): tabs on the crossbar end go through "
+        "slots cut in the rail. Set their count, width, tip and clearance in the panel. Double-click the Interlock "
+        "to edit it.",
     ),
     # odd/tasks/joint-tabs.md, T4: the Interlock panel, its refusals and its properties.
     ("MaxProFrame", "The interlock of the corner between {} and {} needs at least 2 fingers."),
@@ -26,7 +28,11 @@ PENDING_TEXTS = (
     ("MaxProFrame", "The finger tips of the corner between {} and {} must be between 0 and {max:g} mm."),
     ("MaxProFrame", "The interlock between {} and {} is not on a folded corner of {}."),
     ("MaxProFrame", "The corner between {} and {} has two interlocks: {} and {}."),
-    ("MaxProFrame", "Click the inner walls of the two tubes at a folded corner of a Folded Bar."),
+    (
+        "MaxProFrame",
+        "Click the inner walls of the two tubes at a folded corner of a Folded Bar for fingers, or a wall of a "
+        "crossbar and the face of the rail it butts against for tabs.",
+    ),
     ("MaxProFrame", "Click the inner wall of the other tube at that corner."),
     ("MaxProFrame", "Click the inner wall of {}: its face on the inside of the folded corner."),
     ("MaxProFrame", "{} is not a Folded Bar: click the inner walls of two tubes of a Folded Bar."),
@@ -41,7 +47,11 @@ PENDING_TEXTS = (
     ("MaxProFrame", "Corner: {} → {}"),
     ("MaxProFrame", "Fingers"),
     ("MaxProFrame", "Kind"),
-    ("MaxProFrame", "Shape of the interlock: Fingers, at the inner vertex of a folded corner"),
+    (
+        "MaxProFrame",
+        "Shape of the interlock: Fingers, at the inner vertex of a folded corner; Tabs, on the end of a crossbar "
+        "through slots in the rail at a T joint",
+    ),
     ("MaxProFrame", "Count"),
     ("MaxProFrame", "Number of fingers, at least 2; the tube before the corner owns the first one"),
     ("MaxProFrame", "Finger width"),
@@ -68,12 +78,16 @@ PENDING_TEXTS = (
     # Apply and continue in the Interlock panel.
     (
         "MaxProFrame",
-        "Create this interlock in its own Undo step and keep the panel open: click the inner walls at the next "
-        "folded corner, with the same settings.",
+        "Create this interlock in its own Undo step and keep the panel open: click the two faces of the next one, "
+        "with the same settings.",
     ),
     ("App::Property", "Profile of one of the two tubes the interlock joins"),
     ("App::Property", "Profile of the other tube the interlock joins"),
-    ("App::Property", "Shape of the interlock: Fingers, at the inner vertex of a folded corner"),
+    (
+        "App::Property",
+        "Shape of the interlock: Fingers, at the inner vertex of a folded corner; Tabs, on the end of a crossbar "
+        "through slots in the rail at a T joint",
+    ),
     ("App::Property", "Number of fingers, at least 2; the first tube owns the first finger"),
     (
         "App::Property",
@@ -88,6 +102,65 @@ PENDING_TEXTS = (
     ("App::Property", "Gap between every pair of mating finger faces, half on each side"),
     ("App::Property", "Swap the tubes: the second one owns the first finger"),
     ("App::Property", "Interlock objects on the corners of the bar"),
+    # odd/tasks/t-joint-tabs.md: the Tabs Interlock at a T joint, its panel, refusals and properties.
+    (
+        "MaxProFrame",
+        "Click the other face of the T joint: the face of the rail the crossbar butts against, or the wall of the "
+        "crossbar that carries the tabs.",
+    ),
+    ("MaxProFrame", "T joint"),
+    ("MaxProFrame", "T joint: {} → {}"),
+    ("MaxProFrame", "Tabs"),
+    ("MaxProFrame", "Tab width"),
+    ("MaxProFrame", "Length"),
+    ("MaxProFrame", "Number of tabs, at least 1, across the flat part of the crossbar wall"),
+    (
+        "MaxProFrame",
+        "Width of every tab, with equal gaps between them and at both ends; Even: the tabs and the gaps split the "
+        "flat part of the wall evenly",
+    ),
+    ("MaxProFrame", "Corners of each tab tip: Square, Chamfer or Round, to lead it into its slot"),
+    ("MaxProFrame", "Chamfer leg or radius of the tab tip corners, in the crossbar wall plane"),
+    (
+        "MaxProFrame",
+        "How far the tabs go across the rail wall, along its normal; Automatic: the rail wall thickness, flush "
+        "with its inside face",
+    ),
+    ("MaxProFrame", "Gap around each tab in its slot, half on each side"),
+    ("MaxProFrame", "There is no T joint between {} and {}: pick a flat face of each tube."),
+    (
+        "MaxProFrame",
+        "Both faces are on {}: click a wall of the crossbar and the face of the rail it butts against.",
+    ),
+    ("MaxProFrame", "There is no T joint between {} and {}: {crossbar} does not end on the face of {rail}."),
+    ("MaxProFrame", "There is no T joint between {} and {}: {crossbar} runs along the face of {rail}."),
+    ("MaxProFrame", "There is no T joint between {} and {}: the face of {crossbar} is not a wall along it."),
+    ("MaxProFrame", "The tabs of the T joint between {} and {} need two tubes: {} is a {} profile."),
+    ("MaxProFrame", "The interlock of the T joint between {} and {} needs at least 1 tab."),
+    ("MaxProFrame", "The tab length of the T joint between {} and {} must be 0 (automatic) or more."),
+    ("MaxProFrame", "The tabs of the T joint between {} and {} do not fit: make them fewer or narrower."),
+    ("MaxProFrame", "The tab tips of the T joint between {} and {} must be between 0 and {max:g} mm."),
+    (
+        "MaxProFrame",
+        "The slots of the T joint between {} and {} do not fall on the flat part of the face of {rail}.",
+    ),
+    ("MaxProFrame", "The T joint between {} and {} already has tabs on that face: {}."),
+    (
+        "MaxProFrame",
+        "The T joint between {} and {} is at a folded corner of {}: the tabs go on a free end of a Folded Bar.",
+    ),
+    (
+        "MaxProFrame",
+        "The T joint between {} and {} is at the open corner of {}: the tabs go on a free end of a Folded Bar.",
+    ),
+    ("MaxProFrame", "The interlock {} lost the face of {} it was made on."),
+    (
+        "App::Property",
+        "How far the tabs go across the rail wall, along its normal; 0: automatic, the rail wall thickness",
+    ),
+    ("App::Property", "Crossbar piece and face that carry the tabs"),
+    ("App::Property", "Rail piece and face the slots go through"),
+    ("App::Property", "The Tabs Interlock this piece adds its tabs or slots for"),
     # odd/tasks/extend-folded-bar.md, T3: the extend notices.
     ("MaxProFrame", "{} meets neither end of the bar."),
     ("MaxProFrame", "{} is folded by {}: a tube folds into one bar only."),
