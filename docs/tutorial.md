@@ -444,7 +444,7 @@ A trim, cutout or drill hole made from the piece after the pattern shows on ever
 
 A **folded corner** joins two tubes without cutting them apart: the tube is one bar, the laser cuts a V notch through the walls on the inside of the corner, and the wall on the outside of the corner stays whole and is bent. Folding the bar closes the V. MaxProFrame draws the folded bar with its real bend radius and unfolds it into one straight solid with every cut, which you export for a CNC tube laser. Each corner chooses how its inner wall is cut: a **Miter**, tilted, for a laser with a bevel head, or a **Stepped** joint made of straight cuts only, for any tube laser (see [Miter or stepped joint](#miter-or-stepped-joint)).
 
-The commands are on the **Folded Miters** toolbar and in the **MaxProFrame > Folded Miters** menu (Spanish *Ingletes plegados*): **Folded Bar** (*Barra plegada*) and **Unfold Bar** (*Desplegar barra*). **Interlock** (*Encastre*, see [Interlock](#interlock)) is on the **MaxProFrame** toolbar and in **MaxProFrame > Profiles and Cuts**, after **Extend / Cut**, because it also works on straight tubes.
+The commands are on the **Folded Miters** toolbar and in the **MaxProFrame > Folded Miters** menu (Spanish *Ingletes plegados*): **Folded Bar** (*Barra plegada*) and **Unfold Bar** (*Desplegar barra*). **Interlock** (*Encastre*, see [Interlock](#interlock)) is on the **MaxProFrame** toolbar and in **MaxProFrame > Profiles and Cuts**, after **End Miter**, **Extend / Cut** and **Notch**, because it also works on straight tubes.
 
 ### Draw the frame
 
