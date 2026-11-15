@@ -1,13 +1,15 @@
 """The Interlock panel and its messages show Spanish text when FreeCAD runs in Spanish.
 
-odd/tasks/joint-tabs.md, T4 (S7). The panel texts and the refusals are in the MaxProFrame context of the Spanish
-catalog, the property tooltips in App::Property; the stored values (Kind, Tip) stay in English.
+odd/tasks/joint-tabs.md, T4 (S7) and odd/tasks/t-joint-tabs.md, T5 (the Tabs kind). The panel texts and the refusals
+are in the MaxProFrame context of the Spanish catalog, the property tooltips in App::Property; the stored values (Kind,
+Tip) stay in English.
 """
 
 import unittest
 
 from miter_helpers import use_language
 from test_interlock_panel import BOTTOM_INNER, RIGHT_INNER, TOP_INNER, InterlockPanelFixture
+from test_tab_interlock_panel import CROSS_EAST, CROSS_WEST, RAIL_TOP, TabPanelFixture
 from test_unfolded_geometry import PLAIN
 
 from freecad.maxproframe.ff_tools import translate
@@ -40,9 +42,11 @@ class TestInterlockPanelSpanish(InterlockPanelFixture):
         settings = form.groupBox_settings
         self.assertEqual("Aletas", settings.title())
         self.assertEqual("Tipo", field_label(settings, form.combo_kind))
-        self.assertEqual([("Aletas", "Fingers")], items(form.combo_kind))
+        self.assertEqual([("Aletas", "Fingers"), ("Lengüetas", "Tabs")], items(form.combo_kind))
         self.assertEqual(
-            "Forma del encastre: Aletas, en el vértice interior de una esquina plegada", form.combo_kind.toolTip()
+            "Forma del encastre: Aletas, en el vértice interior de una esquina plegada; Lengüetas, en el extremo de un "
+            "travesaño a través de ranuras en el larguero en una unión en T",
+            form.combo_kind.toolTip(),
         )
         self.assertEqual("Cantidad", field_label(settings, form.spin_count))
         self.assertEqual(
@@ -82,7 +86,9 @@ class TestInterlockPanelSpanish(InterlockPanelFixture):
         _, bar = self.make_bar(**PLAIN)
         panel = self.run_command()
         self.assertRefused(
-            panel, "Hacé clic en las paredes interiores de los dos tubos en una esquina plegada de una barra plegada."
+            panel,
+            "Hacé clic en las paredes interiores de los dos tubos en una esquina plegada de una barra plegada para "
+            "aletas, o en una pared de un travesaño y en la cara del larguero contra la que apoya para lengüetas.",
         )
 
         self.click(bar, BOTTOM_INNER)
@@ -116,6 +122,61 @@ class TestInterlockPanelSpanish(InterlockPanelFixture):
         )
 
 
+class TestTabsPanelSpanish(TabPanelFixture):
+    def setUp(self):
+        super().setUp()
+        use_language(self, "Spanish", "es_ES")
+
+    def test_the_tabs_fields_speak_spanish(self):
+        rail, _, trim = self.straight_t()
+
+        panel = self.run_command((trim, CROSS_EAST), (rail, RAIL_TOP))
+
+        form = panel.form
+        self.assertEqual("Unión en T", form.groupBox_corner.title())
+        self.assertEqual("Unión en T: Crossbar → Rail", form.label_corner.text())
+        settings = form.groupBox_settings
+        self.assertEqual("Lengüetas", settings.title())
+        self.assertEqual("Tabs", form.combo_kind.currentData())
+        self.assertEqual("Lengüetas", form.combo_kind.currentText())
+        self.assertEqual("Ancho de lengüeta", field_label(settings, form.spin_finger_width))
+        self.assertEqual(
+            "Cantidad de lengüetas, al menos 1, a lo ancho de la parte plana de la pared del travesaño",
+            form.spin_count.toolTip(),
+        )
+        self.assertEqual("Longitud", field_label(settings, form.spin_length))
+        self.assertEqual("Automático", form.spin_length.specialValueText())
+        self.assertEqual("Automático", form.spin_length.text())
+        self.assertEqual(
+            "Cuánto atraviesan las lengüetas la pared del larguero, a lo largo de su normal; Automático: el espesor de "
+            "pared del larguero, al ras de su cara interior",
+            form.spin_length.toolTip(),
+        )
+        self.assertEqual(
+            "Separación alrededor de cada lengüeta en su ranura, la mitad de cada lado", form.spin_clearance.toolTip()
+        )
+        self.assertAccepts(panel)
+
+    def test_the_tabs_hints_and_refusals_are_spanish(self):
+        _, _, trim = self.straight_t()
+        panel = self.run_command()
+
+        self.click(trim, CROSS_EAST)
+        self.assertRefused(
+            panel,
+            "Hacé clic en la otra cara de la unión en T: la cara del larguero contra la que apoya el travesaño, o la "
+            "pared del travesaño que lleva las lengüetas.",
+        )
+
+        self.click(trim, CROSS_WEST)
+        self.assertRefused(
+            panel,
+            "Las dos caras están en Crossbar: hacé clic en una pared del travesaño y en la cara del larguero contra la "
+            "que apoya.",
+        )
+        self.assertEqual([], self.interlocks())
+
+
 class TestInterlockTextsSpanish(unittest.TestCase):
     def setUp(self):
         use_language(self, "Spanish", "es_ES")
@@ -136,6 +197,26 @@ class TestInterlockTextsSpanish(unittest.TestCase):
         self.assertEqual(
             "Objetos Encastre en las esquinas de la barra",
             translate("App::Property", "Interlock objects on the corners of the bar"),
+        )
+
+    def test_the_tabs_texts_are_spanish(self):
+        self.assertEqual(
+            "Pieza y cara del travesaño que llevan las lengüetas",
+            translate("App::Property", "Crossbar piece and face that carry the tabs"),
+        )
+        self.assertEqual(
+            "Las lengüetas de la unión en T entre Crossbar y Rail no entran: poné menos o hacelas más angostas.",
+            translate(
+                "MaxProFrame", "The tabs of the T joint between {} and {} do not fit: make them fewer or narrower."
+            ).format("Crossbar", "Rail"),
+        )
+        self.assertEqual(
+            "La unión en T entre Crossbar y Rail está en una esquina plegada de FoldedBar: las lengüetas van en un "
+            "extremo libre de una barra plegada.",
+            translate(
+                "MaxProFrame",
+                "The T joint between {} and {} is at a folded corner of {}: the tabs go on a free end of a Folded Bar.",
+            ).format("Crossbar", "Rail", "FoldedBar"),
         )
 
     def test_the_refusals_of_the_bar_are_spanish(self):
