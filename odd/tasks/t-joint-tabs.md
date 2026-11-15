@@ -53,10 +53,11 @@ of the rail face the crossbar butts against; t_r = rail wall thickness; d = cros
   Length with Automatic, Clearance), refusals, Apply and continue, edit by double click; tests.
   route=gentle-ai-worker; commit=486a155 [x]
 - T5 [S1-S7] Tutorial, CHANGELOG (Unreleased), Spanish .ts/.qm, Russian unfinished + PENDING_TEXTS; full native
-  suite. route=gentle-ai-worker + parent; commit=T5 (see Log L10)
+  suite. route=gentle-ai-worker + parent; commit=75c3484 [x]
 
 Delivery forecast: ~1500-2000 authored lines; chained PRs, one per task slice. Slice boundaries: T1 = 95f2b83
-(928 lines, geometry + tests, one work unit); T2 = e16d884 (~1200 lines, objects + tests, one work unit).
+(928 lines, geometry + tests, one work unit); T2 = e16d884 (~1200 lines, objects + tests, one work unit);
+T3 = 0de527d (~510 lines); T4 + T5 = 486a155..75c3484 (~1670 lines, panel + docs/i18n). Chained PRs: one per slice.
 
 ## Log
 - L1 User: "AHora analicemos agregar encastres a uniones en T [Image#2]" (Image: a frame of TC80x40x1.5 tubes, a
@@ -124,3 +125,5 @@ Delivery forecast: ~1500-2000 authored lines; chained PRs, one per task slice. S
   Unreleased: Improvements "Interlock at a T joint", Fixes "Unfolded Bar starts at X = 0 again". Tests OK:
   toolbar_translations 4, interlock_translations 8, russian_translation 6, compile_translations 4,
   library_translations 3, workbench_translation_loading 2, interlock_panel 14, tab_interlock_panel 13.
+- L11 Full native suite on 75c3484: 2172 tests OK (37 min). Native review assess per slice: medium, under budget, not
+  due. Chained PRs opened for T1, T2, T3, T4+T5; merge waits for the user's manual test.
