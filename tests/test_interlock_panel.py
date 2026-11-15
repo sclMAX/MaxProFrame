@@ -426,3 +426,144 @@ class InterlockDeleteTest(InterlockPanelFixture):
         self.assertEqual(names, sorted(obj.Name for obj in self.interlocks()))
         bar = self.doc.getObject(bar.Name)
         self.assertEqual(names, sorted(obj.Name for obj in bar.Interlocks))
+
+
+class InterlockApplyContinueTest(InterlockPanelFixture):
+    """Apply and continue: one Interlock after another without running the command again, with the same settings."""
+
+    def dialog_box(self):
+        """The button row of the task dialog: the one button box holding its OK and Cancel."""
+        boxes = [
+            box
+            for box in Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox)
+            if box.button(QtWidgets.QDialogButtonBox.Ok) is not None
+            and box.button(QtWidgets.QDialogButtonBox.Cancel) is not None
+        ]
+        self.assertEqual(1, len(boxes))
+        return boxes[0]
+
+    def apply_button(self):
+        return self.dialog_box().button(QtWidgets.QDialogButtonBox.Apply)
+
+    def apply(self):
+        """Click Apply and continue, as the user does."""
+        button = self.apply_button()
+        self.assertTrue(button.isEnabled())
+        button.click()
+        self.events()
+
+    def test_the_button_shows_only_while_creating_next_to_ok_and_is_enabled_once_the_interlock_is_made(self):
+        (bottom, right, _, _), bar = self.make_bar(**PLAIN)
+        panel = self.run_command()
+        button = self.apply_button()
+        self.assertIsNotNone(button)
+        self.assertEqual("Apply and continue", button.text())
+        self.assertIs(button.parentWidget(), self.dialog_box().button(QtWidgets.QDialogButtonBox.Ok).parentWidget())
+        self.assertFalse(button.isEnabled())
+        self.click(bar, BOTTOM_INNER)
+        self.assertFalse(button.isEnabled())
+        self.click(bar, RIGHT_INNER)
+        self.assertTrue(button.isEnabled())
+        # A refusal of the bar disables it as it disables OK.
+        panel.form.spin_count.setValue(1)
+        self.events()
+        self.assertEqual(COUNT_REFUSED, self.message(panel))
+        self.assertFalse(button.isEnabled())
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+
+        made = make_interlock(bar, bottom, right)
+        self.doc.recompute()
+        self.edit(made)
+        self.assertIsNone(self.apply_button())
+
+    def test_apply_and_continue_keeps_the_interlock_in_its_own_undo_step_and_takes_the_next_corner(self):
+        (bottom, right, top, _), bar = self.make_bar(**PLAIN)
+        undos = len(self.doc.UndoNames)
+        panel = self.run_command((bar, BOTTOM_INNER), (bar, RIGHT_INNER))
+        panel.form.spin_count.setValue(4)
+        panel.form.cb_flip.setChecked(True)
+        self.events()
+        (first,) = self.interlocks()
+        used = FingerSettings(count=4, clearance=0.5, flip=True)
+
+        self.apply()
+
+        # The dialog stays open, waiting for the walls of the next corner, with the same settings.
+        self.assertTrue(Gui.Control.activeDialog())
+        self.assertEqual(undos + 1, len(self.doc.UndoNames))
+        self.assertEqual("Create Interlock", self.doc.UndoNames[0])
+        self.assertEqual(used, interlock_settings(first))
+        self.assertEqual("", panel.form.label_corner.text())
+        self.assertEqual(HINT_NONE, self.message(panel))
+        # OK closes the panel from now on; Apply and continue waits for the next Interlock.
+        self.assertTrue(panel.ok_button_enabled())
+        self.assertFalse(self.apply_button().isEnabled())
+        self.assertFields(panel, used)
+        self.assertEqual([], Gui.Selection.getSelectionEx())
+
+        self.click(bar, RIGHT_INNER)
+        self.click(bar, TOP_INNER)
+        second = [obj for obj in self.interlocks() if obj is not first]
+        self.assertEqual(1, len(second))
+        self.assertEqual((right, top), (second[0].PieceA, second[0].PieceB))
+        self.assertEqual(used, interlock_settings(second[0]))
+        self.assertEqual("Corner: Profile001 → Profile002", panel.form.label_corner.text())
+        # The fields change only the newer Interlock.
+        panel.form.spin_count.setValue(3)
+        self.events()
+        self.assertEqual(3, second[0].Count)
+        self.assertEqual(4, first.Count)
+
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        self.assertEqual({first.Name, second[0].Name}, {obj.Name for obj in bar.Interlocks})
+        self.assertOneSolid(bar)
+        self.assertEqual(undos + 2, len(self.doc.UndoNames))
+        # The settings applied last start the next Interlock.
+        panel = self.run_command()
+        self.assertFields(panel, FingerSettings(count=3, clearance=0.5, flip=True))
+
+    def test_cancel_after_apply_and_continue_removes_only_the_newer_interlock(self):
+        (bottom, right, _, _), bar = self.make_bar(**PLAIN)
+        undos = len(self.doc.UndoNames)
+        panel = self.run_command((bar, BOTTOM_INNER), (bar, RIGHT_INNER))
+        (first,) = self.interlocks()
+        self.apply()
+        self.click(bar, RIGHT_INNER)
+        self.click(bar, TOP_INNER)
+        self.assertEqual(2, len(self.interlocks()))
+
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+
+        self.assertEqual([first], self.interlocks())
+        self.assertEqual([first], list(bar.Interlocks))
+        self.assertEqual(undos + 1, len(self.doc.UndoNames))
+        self.doc.recompute()
+        self.assertOneSolid(bar)
+
+    def test_ok_or_cancel_with_nothing_picked_after_apply_and_continue_just_close(self):
+        _, bar = self.make_bar(**PLAIN)
+        undos = len(self.doc.UndoNames)
+        for close in ("accept", "reject"):
+            with self.subTest(close=close):
+                panel = self.run_command(
+                    (bar, BOTTOM_INNER) if close == "accept" else (bar, RIGHT_INNER),
+                    (bar, RIGHT_INNER) if close == "accept" else (bar, TOP_INNER),
+                )
+                self.apply()
+                kept = list(self.interlocks())
+                count = len(self.doc.UndoNames)
+                # One wall clicked: still nothing made, OK still closes.
+                self.click(bar, LEFT_INNER)
+                self.assertEqual(HINT_ONE, self.message(panel))
+                self.assertTrue(panel.ok_button_enabled())
+                self.assertFalse(self.apply_button().isEnabled())
+
+                self.assertTrue(getattr(panel, close)())
+                self.close_dialog()
+
+                self.assertEqual(kept, self.interlocks())
+                self.assertEqual(count, len(self.doc.UndoNames))
+        self.assertEqual(undos + 2, len(self.doc.UndoNames))

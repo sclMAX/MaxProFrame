@@ -1529,6 +1529,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Gap between every pair of mating finger faces, half on each side</source><translation>Separación entre cada par de caras enfrentadas de las aletas, la mitad de cada lado</translation></message>
     <message><source>Flip</source><translation>Invertir</translation></message>
     <message><source>Swap the tubes: the tube after the corner owns the first finger</source><translation>Intercambia los tubos: la primera aleta es del tubo posterior a la esquina</translation></message>
+    <message><source>Create this interlock in its own Undo step and keep the panel open: click the inner walls at the next folded corner, with the same settings.</source><translation>Crea este encastre en su propio paso de Deshacer y deja el panel abierto: hacé clic en las paredes internas de la próxima esquina plegada, con los mismos ajustes.</translation></message>
     <message><source>{} meets neither end of the bar.</source><translation>{} no se une con ninguno de los extremos de la barra.</translation></message>
     <message><source>{} is folded by {}: a tube folds into one bar only.</source><translation>{} ya está plegado en {}: un tubo se pliega en una sola barra.</translation></message>
     <message><source>{} is another Folded Bar: a tube folds into one bar only.</source><translation>{} es otra barra plegada: un tubo se pliega en una sola barra.</translation></message>

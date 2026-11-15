@@ -543,6 +543,7 @@ In the panel, select the open row to set its **Joint**, **Step depth**, **Flip s
 
    The first Interlock starts with 3 even square fingers, an automatic depth and a clearance of 0.5 mm; the next ones start with the settings last kept with **OK**, also after restarting FreeCAD.
 4. **OK** keeps the Interlock in one Undo step; **Cancel** leaves the document as it was.
+5. To add Interlocks at more corners without running the command again, press **Apply and continue** (*Aplicar y seguir*), next to OK and Cancel, instead of OK: the Interlock is kept in its own Undo step and the panel stays open with the same settings, waiting for the inner walls of the next folded corner. **OK** then keeps the newer Interlock, or just closes the panel when none was made since; **Cancel** removes only the newer one. Apply and continue shows only while creating, not while editing an Interlock.
 
 The Interlock is an object of its own, shown under the bar in the tree and labelled after its two tubes, for example `Interlock_Profile_Profile001`. Its settings are properties you can change in the property editor too: **Kind**, **Count**, **Finger Width**, **Tip**, **Tip Size**, **Depth**, **Clearance** and **Flip**, and the two tubes (**Piece A**, **Piece B**). Double-click it to edit it in the same panel, without picking: **OK** keeps the changes in one Undo step, **Cancel** puts the values back. Deleting the bar deletes its Interlocks. Documents saved before open with the same shapes.
 

@@ -253,6 +253,12 @@ FOLDED_MITER_TEXTS = (
     ("MaxProFrame", "Gap between every pair of mating finger faces, half on each side"),
     ("MaxProFrame", "Flip"),
     ("MaxProFrame", "Swap the tubes: the tube after the corner owns the first finger"),
+    # Apply and continue in the Interlock panel.
+    (
+        "MaxProFrame",
+        "Create this interlock in its own Undo step and keep the panel open: click the inner walls at the next "
+        "folded corner, with the same settings.",
+    ),
     ("App::Property", "Profile of one of the two tubes the interlock joins"),
     ("App::Property", "Profile of the other tube the interlock joins"),
     ("App::Property", "Shape of the interlock: Fingers, at the inner vertex of a folded corner"),

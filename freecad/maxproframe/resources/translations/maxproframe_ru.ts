@@ -3238,6 +3238,10 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Create this interlock in its own Undo step and keep the panel open: click the inner walls at the next folded corner, with the same settings.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>{} meets neither end of the bar.</source>
         <translation type="unfinished"></translation>
     </message>
