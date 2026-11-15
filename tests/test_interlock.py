@@ -203,6 +203,24 @@ class InterlockObjectTest(InterlockObjectFixture):
         self.doc.recompute()
         self.assertFolds(bar, profiles, FingerSettings(count=2))
 
+    def test_a_fingers_interlock_hides_the_tabs_fields_and_a_bar_leaves_a_tabs_interlock_out(self):
+        # odd/tasks/t-joint-tabs.md, T2: a Tabs Interlock is on no folded corner; its fields mean nothing to Fingers.
+        profiles, bar = self.make_bar(**PLAIN)
+        bottom, right, top, _ = profiles
+        volume = bar.Shape.Volume
+        fingers = make_interlock(bar, bottom, right)
+        self.assertIn("Hidden", fingers.getEditorMode("Length"))
+        self.assertNotIn("Hidden", fingers.getEditorMode("Depth"))
+
+        # Bottom and top do not meet: a Fingers interlock there leaves the bar in error, a Tabs one is left out.
+        tabs = make_interlock(bar, bottom, top, Kind="Tabs")
+        self.doc.recompute()
+
+        self.assertOneSolid(bar)
+        self.assertAlmostEqual(volume, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
+        self.assertIn("Hidden", tabs.getEditorMode("Depth"))
+        self.assertNotIn("Hidden", tabs.getEditorMode("Length"))
+
     def test_the_tree_shows_the_interlocks_under_the_bar_and_edits_them_through_the_hook(self):
         profiles, bar = self.make_bar(**PLAIN)
         bottom, right, _, _ = profiles

@@ -114,6 +114,11 @@ def is_extrudedcutout(obj):
     return False
 
 
+def is_tab_piece(obj):
+    """The piece of a Tabs Interlock that fuses its tabs on the crossbar (``tab_interlock``): a cutout-like piece."""
+    return is_extrudedcutout(obj) and getattr(obj, "InterlockRole", None) == "Tabs"
+
+
 def is_link(obj):
     return obj.TypeId == "App::Link" and hasattr(obj, "AttachmentOffset")
 
@@ -334,6 +339,9 @@ def length_along_normal(obj):
 
     A section without a straight edge along the axis (round tube or bar) keeps its tip-to-tip extent.
     """
+    if is_tab_piece(obj):
+        # The tabs of a Tabs Interlock reach past the crossbar end: the piece keeps its length to their tips.
+        return obj.Length.Value
     # The document of the piece, not the active one: a document being opened is not always active.
     doc = obj.Document
 

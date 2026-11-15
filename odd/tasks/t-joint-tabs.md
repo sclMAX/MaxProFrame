@@ -42,17 +42,21 @@ of the rail face the crossbar butts against; t_r = rail wall thickness; d = cros
 
 ## Tasks
 - T1 [S3, S4, S5] Tab geometry (pure, any angle): tab solids on the crossbar wall end and slot tools in the rail wall
-  from the wall frames, settings and checks with refusal messages; unit tests. route=gentle-ai-worker; commit=T1 commit [x]
-- T2 [S1, S6, S7] Objects: Kind Tabs on the Interlock, _Tb and _Sl pieces in the stacks (BOM, Cut List length to the
-  tab tips, Piece Table, piece_stack/base_profile/newest_piece), Folded Bar folding and Unfolded Bar, delete/undo;
-  tests. route=gentle-ai-worker; commit=
-- T3 [S1, S2, S3, S4] Panel: deduce the kind from the two faces, Tabs fields (Count, Finger width, Tip, Tip size,
-  Length with Automatic, Clearance), refusals, Apply and continue, edit by double click; tests. route=gentle-ai-worker;
-  commit=
-- T4 [S1-S7] Tutorial, CHANGELOG (Unreleased), Spanish .ts/.qm, Russian unfinished + PENDING_TEXTS; full native suite.
-  route=gentle-ai-worker + parent; commit=
+  from the wall frames, settings and checks with refusal messages; unit tests. route=gentle-ai-worker;
+  commit=95f2b83 [x]
+- T2 [S1, S6] Objects on straight pieces: Kind Tabs on the Interlock (settings, picked faces), _Tb and _Sl pieces in
+  the stacks (piece_stack/base_profile/newest_piece, BOM, Cut List and Piece Table length to the tab tips, Cutout on
+  the rail), creation API for the panel, delete/undo; tests. route=gentle-ai-worker + parent; commit=T2 commit [x]
+- T3 [S7] Folded Bar: crossbar and/or rail as tubes of a Folded Bar; the bar folds with the tabs and slots, the
+  Unfolded Bar carries them; tests. route=gentle-ai-worker; commit=
+- T4 [S1, S2, S3, S4] Panel: deduce the kind from the two faces, Tabs fields (Count, Finger width, Tip, Tip size,
+  Length with Automatic, Clearance), refusals, Apply and continue, edit by double click; tests.
+  route=gentle-ai-worker; commit=
+- T5 [S1-S7] Tutorial, CHANGELOG (Unreleased), Spanish .ts/.qm, Russian unfinished + PENDING_TEXTS; full native
+  suite. route=gentle-ai-worker + parent; commit=
 
-Delivery forecast: ~1500-2000 authored lines; chained PRs, one per task slice (T1, T2, T3+T4).
+Delivery forecast: ~1500-2000 authored lines; chained PRs, one per task slice. Slice boundaries: T1 = 95f2b83
+(928 lines, geometry + tests, one work unit).
 
 ## Log
 - L1 User: "AHora analicemos agregar encastres a uniones en T [Image#2]" (Image: a frame of TC80x40x1.5 tubes, a
@@ -78,3 +82,15 @@ Delivery forecast: ~1500-2000 authored lines; chained PRs, one per task slice (T
   crossbar wall not square to the rail face the tab passes the inside face on one side by t_c*|n_c.n_r| (all cuts
   square to the wall, D2). Open for T2: interlock_settings Tabs branch (FingerWidth -> tab_width, new Length), bar
   integration (unfolded_geometry ignores Tabs), cut length from the tab extents.
+- L6 T2 (worker mwhvxyn0-4-xax1): tab_interlock.py TabPiece (_Tb) / SlotPiece (_Sl) on ExtrudedCutout (baseObject =
+  piece under; Interlock link; InterlockRole), make_tab_interlock(crossbar_piece, crossbar_sub, rail_piece, rail_sub,
+  point=None, **settings), give_back relinks what pointed at a removed piece; interlock.py Tabs branch, Length,
+  CrossbarFace/RailFace + snapshots; cut_ends delegates for _Tb; corner_interlocks skips Tabs. RED: module missing;
+  GREEN test_tab_interlock 12. Parent: a cut on top of _Tb took the trim length (worker risk) -> RED 360 != 361.5,
+  then measured_piece finds the tab piece and length_along_normal returns a tab piece's own Length; GREEN 13/13.
+  Preserve OK: cut_list 27, piece_table 23, cut_ends 15, drill_hole_geometry 26, drill_hole_rebase 4,
+  drill_hole_folded_bar 19, cutout_flow 19, cutout_one_wall 11, cutout_folded_bar 13, extend_cut_geometry 20,
+  notch_geometry 30, profile_pattern 26, folded_bar 50, interlock 11, interlock_panel 14, tab_geometry 17,
+  length_restore 10. New texts for T5 listed in the worker report (6 MaxProFrame, 4 App::Property). Open for T3:
+  remove the Folded Bar guard in make_tab_interlock, follow_new_pieces/unfold with _Tb/_Sl; for T4: panel, Kind
+  tooltip.

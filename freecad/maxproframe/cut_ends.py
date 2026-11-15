@@ -10,7 +10,7 @@ import math
 import FreeCAD as App
 import Part
 
-from freecad.maxproframe._utils import is_profile
+from freecad.maxproframe._utils import is_profile, is_tab_piece
 from freecad.maxproframe.populate_ids import profile_source
 from freecad.maxproframe.trimmed_profile import face_normal, in_frame_of
 
@@ -113,8 +113,12 @@ def cut_ends(obj):
     """(cut angle 1, cut angle 2, ends) of the piece ``obj``: a profile, a trim of it or a cutout.
 
     A piece whose ends are not each one flat cut (a notch, a cutout eating an end), or that cannot be read on its
-    profile (not made from a profile, no solid, no section), keeps its CuttingAngleA/B and gets no Ends symbol.
+    profile (not made from a profile, no solid, no section), keeps its CuttingAngleA/B and gets no Ends symbol. A
+    crossbar with tabs (``is_tab_piece``) has the ends of the piece under its tabs: they are cut with its end, which is
+    then not one flat cut.
     """
+    if is_tab_piece(obj) and obj.baseObject:
+        return cut_ends(obj.baseObject[0])
     fallback = (obj.CuttingAngleA, obj.CuttingAngleB, "")
     source = profile_source(obj)
     if source is None or not is_profile(source) or obj.Shape.isNull() or not obj.Shape.Solids:

@@ -9,13 +9,19 @@ the fingers at the inner vertex of the corner (``Count``, ``FingerWidth``, ``Tip
 the bar refuses an Interlock on none of its folded corners or a second one on a corner (``folded_bar``). An Interlock
 saved before a property existed gets it, with its default, when its document opens. A later kind adds its group of
 properties and its branch in ``interlock_settings``; the links, the bar and the two-face picking stay.
+
+The kind ``Tabs`` (odd/tasks/t-joint-tabs.md, T2) joins a crossbar (``PieceA``) to the rail it butts against
+(``PieceB``) at a T joint, with the Fingers fields again and the tab ``Length`` (0: Automatic, the rail wall
+thickness). It remembers its two faces (``CrossbarFace``, ``RailFace``, each one's plane local to the profile of its
+tube) and no bar lists it: its tabs and slots are two pieces of their own that link it (``tab_interlock``), removed with
+it (``unsetupObject``).
 """
 
 import os
 
 from freecad.maxproframe.ff_tools import ICONPATH, place_in_container_of, translate
 from freecad.maxproframe.folded_chain import base_profile
-from freecad.maxproframe.interlock_geometry import FINGERS, KINDS, SQUARE, TIPS, FingerSettings
+from freecad.maxproframe.interlock_geometry import FINGERS, KINDS, SQUARE, TABS, TIPS, FingerSettings, TabSettings
 from freecad.maxproframe.version import __version__ as ff_version
 
 # What a double click on an Interlock opens: a callable taking the Interlock, set by its command (joint-tabs.md, T3);
@@ -32,6 +38,26 @@ FINGER_PROPERTIES = {
     "Clearance": "clearance",
     "Flip": "flip",
 }
+# Interlock property -> TabSettings field: the Fingers fields again (S3), and the tab Length (S4).
+TAB_PROPERTIES = {
+    "Count": "count",
+    "FingerWidth": "tab_width",
+    "Tip": "tip",
+    "TipSize": "tip_size",
+    "Length": "length",
+    "Clearance": "clearance",
+}
+# What a Tabs Interlock remembers of each of its two faces: the piece and face (a link), and the face plane (point,
+# normal) and the anchor shift of the section when it was picked, local to the profile of the tube
+# (odd/tasks/t-joint-tabs.md, T2).
+TAB_SIDES = ("Crossbar", "Rail")
+# The properties only one kind uses, hidden on an Interlock of the other kind.
+KIND_ONLY = {
+    FINGERS: ("Depth", "Flip"),
+    TABS: ("Length", *(f"{side}{name}" for side in TAB_SIDES for name in ("Face", "Point", "Normal", "Anchor"))),
+}
+# The pieces of a Tabs Interlock (``tab_interlock``) carry its link in ``Interlock`` and their role here.
+TABS_ROLE, SLOTS_ROLE = "Tabs", "Slots"
 
 
 def _add(obj, kind, name, group, tooltip, value=None):
@@ -61,9 +87,28 @@ def interlock_key(obj):
     return frozenset((obj.PieceA.Name, obj.PieceB.Name))
 
 
+def interlock_pieces(obj):
+    """The pieces of the Tabs Interlock ``obj`` that link it: its tabs and its slots (``tab_interlock``)."""
+    return [
+        piece
+        for piece in getattr(obj, "InList", ())
+        if "InterlockRole" in piece.PropertiesList and getattr(piece, "Interlock", None) == obj
+    ]
+
+
 def interlock_settings(obj):
-    """The settings of the kind of the interlock ``obj`` (``CornerSettings.interlock``): a ``FingerSettings``."""
+    """The settings of the kind of the interlock ``obj``: a ``FingerSettings`` (``CornerSettings.interlock``) or a
+    ``TabSettings``; a Tabs Interlock saved before ``Length`` existed has its Automatic length."""
     kind = str(obj.Kind)
+    if kind == TABS:
+        return TabSettings(
+            count=int(obj.Count),
+            tab_width=float(obj.FingerWidth.Value),
+            tip=str(obj.Tip),
+            tip_size=float(obj.TipSize.Value),
+            length=float(obj.Length.Value) if "Length" in obj.PropertiesList else 0.0,
+            clearance=float(obj.Clearance.Value),
+        )
     if kind == FINGERS:
         return FingerSettings(
             count=int(obj.Count),
@@ -77,10 +122,27 @@ def interlock_settings(obj):
     raise ValueError(f"Unknown interlock {kind!r}: give one of {', '.join(KINDS)}.")
 
 
+def show_kind_properties(obj):
+    """Hide on ``obj`` the properties of the kinds it is not; read-only, the faces a Tabs Interlock remembers."""
+    kind = str(getattr(obj, "Kind", FINGERS))
+    for other, names in KIND_ONLY.items():
+        for name in names:
+            if name not in obj.PropertiesList:
+                continue
+            mode = [] if other == kind else ["Hidden"]
+            if name.endswith(("Point", "Normal", "Anchor")):
+                mode = ["ReadOnly", "Hidden"]
+            elif name.endswith("Face"):
+                mode = mode + ["ReadOnly"]
+            if sorted(obj.getEditorMode(name)) != sorted(mode):
+                obj.setEditorMode(name, mode)
+
+
 class Interlock:
     def __init__(self, obj):
         self.add_properties(obj)
         obj.Proxy = self
+        show_kind_properties(obj)
 
     @staticmethod
     def add_properties(obj):
@@ -143,9 +205,49 @@ class Interlock:
             translate("App::Property", "Swap the tubes: the second one owns the first finger"),
             False,
         )  # fmt: skip
+        _add(
+            obj, "App::PropertyLength", "Length", "Tabs",
+            translate(
+                "App::Property",
+                "How far the tabs go across the rail wall, along its normal; 0: automatic, the rail wall thickness",
+            ),
+        )  # fmt: skip
+        for side, tooltip in zip(
+            TAB_SIDES,
+            (
+                translate("App::Property", "Crossbar piece and face that carry the tabs"),
+                translate("App::Property", "Rail piece and face the slots go through"),
+            ),
+        ):
+            _add(obj, "App::PropertyLinkSubGlobal", f"{side}Face", "Tabs", tooltip)
+            for name in ("Point", "Normal", "Anchor"):
+                _add(
+                    obj, "App::PropertyVector", f"{side}{name}", "Tabs",
+                    "Face plane and section anchor when the face was picked, local to the profile",
+                )  # fmt: skip
 
     def onDocumentRestored(self, obj):
+        """An Interlock saved before a kind or a property existed gets it; it stays as it was otherwise."""
+        touched = "Touched" in obj.State
         self.add_properties(obj)
+        if obj.getEnumerationsOfProperty("Kind") != list(KINDS):
+            kind = obj.Kind
+            obj.Kind = list(KINDS)
+            obj.Kind = kind
+        show_kind_properties(obj)
+        if not touched:
+            obj.purgeTouched()
+
+    def onChanged(self, obj, prop):
+        if prop == "Kind":
+            show_kind_properties(obj)
+
+    def unsetupObject(self, obj):
+        """A Tabs Interlock leaves the document (not by undo): its tabs and slots go with it, the pieces under them
+        given back (``tab_interlock``)."""
+        for piece in interlock_pieces(obj):
+            if piece.Document is not None and piece.Document.getObject(piece.Name) is piece:
+                piece.Document.removeObject(piece.Name)
 
     def dumps(self):
         return None
