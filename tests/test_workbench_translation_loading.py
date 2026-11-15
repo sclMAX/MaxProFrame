@@ -165,7 +165,7 @@ class TestWorkbenchTranslationLoading(unittest.TestCase):
             [
                 ["MaxProFrame", "Perfiles y cortes"],
                 ["MaxProFrame", "Ingletes plegados"],
-                ["MaxProFrame", "Profiles Group"],
+                ["MaxProFrame", "Grupos de perfiles"],
                 ["MaxProFrame", "Salida"],
                 ["MaxProFrame", "Utilidades"],
             ],

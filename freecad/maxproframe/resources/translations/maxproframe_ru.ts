@@ -2583,6 +2583,10 @@ All files and sketches on disk will be kept intact.</source>
         <source>Utilities</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Profiles Group</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>MaxProFrame_ParametricLine</name>

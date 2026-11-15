@@ -97,6 +97,7 @@ PENDING_TEXTS = (
     ("frameforge", "Profiles and Cuts"),
     ("frameforge", "Output"),
     ("frameforge", "Utilities"),
+    ("frameforge", "Profiles Group"),
 )
 
 

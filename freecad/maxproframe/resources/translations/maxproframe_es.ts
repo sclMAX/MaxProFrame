@@ -1328,6 +1328,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Profiles and Cuts</source><translation>Perfiles y cortes</translation></message>
     <message><source>Output</source><translation>Salida</translation></message>
     <message><source>Utilities</source><translation>Utilidades</translation></message>
+    <message><source>Profiles Group</source><translation>Grupos de perfiles</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ParametricLine</name>
