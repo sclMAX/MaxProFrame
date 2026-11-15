@@ -32,6 +32,11 @@ of the rail face the crossbar butts against; t_r = rail wall thickness; d = cros
   crossbar end stops g before P; the Tabs Interlock still holds: each tab is measured from P (the tab grows by g across
   the gap, so it still passes the rail wall as in S4) and the slots stay where they were. The error "No hay una unión
   en T entre ... no termina sobre la cara de ..." no longer appears for a gap; S6 (cut length to the tab tips) holds.
+- S9 Flush wall (L14: "si quiero hacer un encastre en esa punta no me deja, dice que no cae en la cara plana pero ese
+  deberia se un encastre posible"; answer "Validar la pestaña, no la holgura (Recomendado)"): the "flat part" check
+  (D4) applies to the tab footprint itself, not to the slot grown by the clearance; the clearance may run past the
+  edge of the rail face. A crossbar wall flush with the rail end or with a rail wall is then accepted on sharp-cornered
+  tubes; on tubes with corner radii a flush wall is still refused (the flat face ends where the radius starts).
 
 ## Design decisions (parent, from the analysis in L2-L4; not user requirements)
 - D1 Objects: the Interlock (Kind = Tabs) holds the settings and links PieceA = crossbar, PieceB = rail (base
@@ -62,6 +67,10 @@ of the rail face the crossbar butts against; t_r = rail wall thickness; d = cros
 - T6 [S8, S4, S6] Tabs across the trim gap: the T joint check accepts a crossbar end parallel to P at distance g =
   its trim's TrimGap; tabs grow by g; straight and Folded Bar tubes; tests (gap 0 unchanged, gap 0.5, Gap edited
   after the Interlock exists, Cut List length); CHANGELOG line. route=gentle-ai-worker; commit=T6 (see Log L13) [x]
+- T7 [S9, D4] Off-rail check on the ungrown tab footprint (tab_geometry.py _footprint/_check_slots); slot keeps the
+  clearance; tests (flush at the rail end and flush top/bottom on R = 0 tubes accepted with clearance 0.2; slot reaches
+  c/2 past the edge; flush wall on a rounded rail still refused; a tab really off the face still refused).
+  route=gentle-ai-worker; commit=T7 (see Log L15) [x]
 
 Delivery forecast: ~1500-2000 authored lines; chained PRs, one per task slice. Slice boundaries: T1 = 95f2b83
 (928 lines, geometry + tests, one work unit); T2 = e16d884 (~1200 lines, objects + tests, one work unit);
@@ -155,3 +164,22 @@ T3 = 0de527d (~510 lines); T4 + T5 = 486a155..75c3484 (~1670 lines, panel + docs
   TabsAcrossTheGapTest 4, CrossbarOnBarGapTest 2 OK. Preserve OK: tab_interlock_panel 13, interlock 11,
   interlock_geometry 8, interlock_panel 14, interlock_translations 8, cut_list 27, piece_table 23, cut_ends 15.
   Black 25.1.0 / isort 6.0.1 clean. CHANGELOG Unreleased: "Interlock at a T joint with a gap".
+- L14 User (manual test, prueba.FCStd): the Tabs Interlock at the end of the rail is refused with "Las ranuras de la
+  unión en T entre Profile_TC80x40x1.5_003 y Profile_TC80x40x1.5_002 no caen en la parte plana de la cara de
+  Profile_TC80x40x1.5_002." Reproduced (worker probe): square joint (180°), RH 40x80x1.5 with R = 0, crossbar _003
+  outer wide wall (Face5, x = -250) flush with the rail end; the tab footprint lies exactly on rail Face1, the clearance
+  grows it c/2 = 0.1 mm past x = -250 and _check_slots (tab_geometry.py:217) counts it off the rail; clearance 0
+  passes. Same for the narrow walls flush with the rail top/bottom. Not a bug in angle, face pick or normals. User chose
+  "Validar la pestaña, no la holgura (Recomendado)" (other options: also cut through the corner radius; leave as is).
+- L15 T7 (worker): tab_geometry._Layout._footprint returns (tab, slot) faces on P, the hull before and after _grow;
+  _check_slots tests the ungrown tab face against the rail face (off-rail refusal) and keeps the spacing check
+  (tabs_misfit) on the grown slot faces, since slots that touch join and leave no rail between the tabs; slot tools
+  still use the grown faces; messages unchanged (no .ts change). Tests: test_tab_geometry FlushWallTest (R = 0: wall
+  flush with the rail end and narrow wall flush with the rail top accepted at clearance 0.2, slots reaching c/2 past
+  the face edge; rounded rail flush wall still refused; crossbar 1 mm past the rail end still refused; centred joint
+  R = 0 and R = 3 unchanged) and TabRefusalTest's "clearance alone" case now accepted (S9); test_tab_interlock
+  FlushWallInterlockTest (R = 0 Profiles, tab_order + make_tab_interlock Valid, _Tb/_Sl one solid each). RED (stable):
+  test_tab_geometry 23 tests, 3 errors (the two flush acceptances, the clearance-alone case: "The slots ... do not fall
+  on the flat part ..."); test_tab_interlock 18 tests, 1 failure (tab_order error not None). GREEN (stable):
+  tab_geometry 23, tab_interlock 18, tab_interlock_folded_bar 13, tab_interlock_panel 13, interlock_panel 14 OK.
+  Black / isort clean. CHANGELOG Unreleased Fixes: "Interlock at a T joint" flush wall.

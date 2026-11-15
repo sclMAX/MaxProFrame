@@ -4,8 +4,8 @@ A crossbar (the arriving tube, trimmed against a face of the rail) ends in tabs 
 the wall prolonged along the crossbar axis through the rail wall, flush with its inside face by default (D3) or as
 long as asked. The rail gets one slot per tab: the footprint of the tab inside the rail wall, seen along the rail face
 normal and grown by the clearance; at an oblique joint the slot is longer (S5). Every cut is square to the wall it goes
-through (D2); tabs and slots must lie on the flat parts of both walls (D4), otherwise the Interlock is refused naming
-the two tubes.
+through (D2); the tabs and their footprints on the rail must lie on the flat parts of both walls (D4), otherwise the
+Interlock is refused naming the two tubes; the clearance may run past the edge of the rail face (S9).
 """
 
 import math
@@ -41,17 +41,19 @@ VOLUME_TOLERANCE = 1e-4
 X, Y, Z = App.Vector(1, 0, 0), App.Vector(0, 1, 0), App.Vector(0, 0, 1)
 
 
-def tube(start, end, wide=WIDE, high=HIGH):
+def tube(start, end, wide=WIDE, high=HIGH, radius=RADIUS):
     """A rectangular tube along X from ``start`` to ``end``: ``wide`` along Y, ``high`` along Z, centered on the
-    X axis, walls T thick with outer corners of RADIUS."""
+    X axis, walls T thick with outer corners of ``radius`` (0: sharp corners)."""
 
     def rounded(length, width, height, radius, x):
         box = Part.makeBox(length, width, height, App.Vector(x, -width / 2, -height / 2))
+        if radius <= TOLERANCE:
+            return box
         along = [edge for edge in box.Edges if abs(edge.Vertexes[0].Point.x - edge.Vertexes[1].Point.x) > TOLERANCE]
         return box.makeFillet(radius, along)
 
-    outer = rounded(end - start, wide, high, RADIUS, start)
-    inner = rounded(end - start + 2, wide - 2 * T, high - 2 * T, RADIUS - T, start - 1)
+    outer = rounded(end - start, wide, high, radius, start)
+    inner = rounded(end - start + 2, wide - 2 * T, high - 2 * T, radius - T, start - 1)
     return outer.cut(inner)
 
 
@@ -78,9 +80,9 @@ class TabFixture(unittest.TestCase):
         use_language(self, "English", "en_US")
 
     @staticmethod
-    def rail():
-        """The rail along Y, 80 along X from RAIL_X, 40 along Z."""
-        shape = tube(-300, 300)
+    def rail(end=300.0, radius=RADIUS):
+        """The rail along Y from -300 to ``end``, 80 along X from RAIL_X, 40 along Z, outer corners of ``radius``."""
+        shape = tube(-300, end, radius=radius)
         shape.rotate(App.Vector(), Z, 90)
         shape.translate(App.Vector(RAIL_X + WIDE / 2, 0, 0))
         return shape
@@ -90,10 +92,10 @@ class TabFixture(unittest.TestCase):
         """The crossbar axis toward the rail, at ``angle`` degrees to the rail axis (Y), in the XY plane."""
         return App.Vector(math.sin(math.radians(angle)), math.cos(math.radians(angle)), 0)
 
-    def crossbar(self, angle=90, gap=0.0, lift=0.0):
+    def crossbar(self, angle=90, gap=0.0, lift=0.0, radius=RADIUS):
         """(crossbar, its 40 mm wall carrying the tabs): its axis at ``angle`` to the rail's, through
-        (RAIL_X, 0, ``lift``), trimmed on the plane ``gap`` before the rail face."""
-        shape = tube(-400, 400)
+        (RAIL_X, 0, ``lift``), trimmed on the plane ``gap`` before the rail face; outer corners of ``radius``."""
+        shape = tube(-400, 400, radius=radius)
         shape.rotate(App.Vector(), Z, 90 - angle)
         shape.translate(App.Vector(RAIL_X, 0, lift))
         kept = Part.makeBox(1000, 2000, 1000, App.Vector(RAIL_X - gap - 1000, -1000, -500))
@@ -102,11 +104,11 @@ class TabFixture(unittest.TestCase):
         normal = App.Vector(-math.sin(math.radians(90 - angle)), math.cos(math.radians(90 - angle)), 0)
         return shape, planar_face(shape, normal)
 
-    def joint(self, angle=90, gap=0.0, lift=0.0, rail=None, rail_face=None, end=None, trim_gap=0.0):
+    def joint(self, angle=90, gap=0.0, lift=0.0, rail=None, rail_face=None, end=None, trim_gap=0.0, radius=RADIUS):
         """(TJoint, crossbar, rail) of the crossbar at ``angle`` against the rail face x = RAIL_X; ``trim_gap`` is the
-        Gap of its trim (S8)."""
-        rail = self.rail() if rail is None else rail
-        crossbar, wall = self.crossbar(angle, gap, lift)
+        Gap of its trim (S8); both tubes with outer corners of ``radius``."""
+        rail = self.rail(radius=radius) if rail is None else rail
+        crossbar, wall = self.crossbar(angle, gap, lift, radius)
         rail_face = planar_face(rail, -X, farthest=True) if rail_face is None else rail_face
         if end is None and gap:
             end = (App.Vector(RAIL_X - gap, 0, 0), X)
@@ -392,9 +394,10 @@ class TabRefusalTest(TabFixture):
         short.translate(App.Vector(RAIL_X + WIDE / 2, 0, 0))
         joint, _, _ = self.joint(rail=short)
         self.assertRefused(message, TabSettings(count=2), joint)
-        # The clearance alone takes the slots off the flat part.
+        # S9: the clearance alone no longer takes the slots off the flat part: the tab footprint is what must fall on
+        # it, the clearance may run past its edge.
         joint, _, _ = self.joint()
-        self.assertRefused(message, TabSettings(count=1, tab_width=FLAT - 0.2, clearance=0.4), joint)
+        check(TabSettings(count=1, tab_width=FLAT - 0.2, clearance=0.4), joint)
         check(TabSettings(count=1, tab_width=FLAT - 0.4, clearance=0.4), joint)
         check(TabSettings(count=2), self.joint(lift=3.0)[0])
 
@@ -414,6 +417,115 @@ class TabRefusalTest(TabFixture):
         self.assertRefused(no_end, settings, self.joint(end=(App.Vector(RAIL_X + 1.0, 0, 0), X))[0])
         check(settings, self.joint(gap=T)[0])
         check(settings, self.joint(120)[0])
+
+
+class FlushWallTest(TabFixture):
+    """S9 (T7): the flat part check (D4) takes the tab footprint, not the slot grown by the clearance: a crossbar wall
+    flush with the end of the rail or with a rail wall gets its tabs on sharp-cornered tubes (R = 0), its slots running
+    half the clearance past the edge of the rail face; a footprint really off the face is still refused."""
+
+    CLEARANCE = 0.2
+    OFF_RAIL = "The slots of the T joint between Crossbar and Rail do not fall on the flat part of the face of Rail."
+
+    def assertSlots(self, shapes, tabs, slots, along):
+        """``shapes`` has the ``tabs`` and ``slots`` boxes ((x, y, z) bounds), sorted ``along`` an axis."""
+
+        def ordered(found):
+            return sorted(found, key=lambda shape: shape.BoundBox.Center.dot(along))
+
+        self.assertEqual((len(tabs), len(slots)), (len(shapes.tabs), len(shapes.slots)))
+        for expected, found in ((tabs, shapes.tabs), (slots, shapes.slots)):
+            for (x, y, z), shape in zip(expected, ordered(found), strict=True):
+                with self.subTest(box=(x, y, z)):
+                    self.assertTrue(shape.isValid())
+                    self.assertBox(shape, x=x, y=y, z=z)
+
+    def narrow_joint(self, radius):
+        """(TJoint, crossbar, rail): a crossbar 40 wide along Y and 80 high along Z, its narrow top wall carrying the
+        tabs flush with the top of the rail (z = HIGH / 2)."""
+        rail = self.rail(radius=radius)
+        shape = tube(-400, 400, wide=HIGH, high=WIDE, radius=radius)
+        shape.translate(App.Vector(RAIL_X, 0, HIGH / 2 - WIDE / 2))
+        crossbar = shape.common(Part.makeBox(1000, 2000, 1000, App.Vector(RAIL_X - 1000, -1000, -500)))
+        wall = planar_face(crossbar, Z)
+        return TJoint(NAMES, wall, T, X, planar_face(rail, -X), T), crossbar, rail
+
+    def test_a_wall_flush_with_the_rail_end_gets_its_tabs_and_the_slots_run_past_the_end(self):
+        c = self.CLEARANCE
+        rail = self.rail(end=WIDE / 2, radius=0.0)
+        joint, crossbar, _ = self.joint(rail=rail, radius=0.0)
+        # The tab wall (outer face y = WIDE / 2) is flush with the end of the rail face.
+        self.assertAlmostEqual(WIDE / 2, joint.rail_face.BoundBox.YMax, places=9)
+        self.assertAlmostEqual(WIDE / 2, joint.crossbar_face.BoundBox.YMax, places=9)
+        settings = TabSettings(count=2, clearance=c)
+        check(settings, joint)
+        shapes = make_tabs(settings, joint)
+        y_tab, y_slot = (WIDE / 2 - T, WIDE / 2), (WIDE / 2 - T - c / 2, WIDE / 2 + c / 2)
+        self.assertSlots(
+            shapes,
+            [((RAIL_X, RAIL_X + T), y_tab, (low, high)) for low, high in even(2, HIGH)],
+            [((RAIL_X - 1.0, RAIL_X + T + 1.0), y_slot, (low - c / 2, high + c / 2)) for low, high in even(2, HIGH)],
+            Z,
+        )
+        slotted = rail.cut(shapes.slots)
+        self.assertEqual(1, len(slotted.Solids))
+        # Inside the rail the slots end at its end: half the clearance less across the wall than a slot in the middle.
+        width = HIGH / 5
+        self.assertAlmostEqual(2 * (width + c) * (T + c / 2) * T, rail.Volume - slotted.Volume, delta=VOLUME_TOLERANCE)
+        fused = crossbar.fuse(shapes.tabs).removeSplitter()
+        self.assertEqual(1, len(fused.Solids))
+        self.assertAlmostEqual(0.0, fused.common(slotted).Volume, delta=VOLUME_TOLERANCE)
+
+    def test_a_narrow_wall_flush_with_the_top_of_the_rail_gets_its_tabs(self):
+        c = self.CLEARANCE
+        joint, crossbar, rail = self.narrow_joint(0.0)
+        self.assertAlmostEqual(HIGH / 2, joint.rail_face.BoundBox.ZMax, places=9)
+        settings = TabSettings(count=2, clearance=c)
+        check(settings, joint)
+        shapes = make_tabs(settings, joint)
+        z_tab, z_slot = (HIGH / 2 - T, HIGH / 2), (HIGH / 2 - T - c / 2, HIGH / 2 + c / 2)
+        self.assertSlots(
+            shapes,
+            [((RAIL_X, RAIL_X + T), (low, high), z_tab) for low, high in even(2, HIGH)],
+            [((RAIL_X - 1.0, RAIL_X + T + 1.0), (low - c / 2, high + c / 2), z_slot) for low, high in even(2, HIGH)],
+            Y,
+        )
+        slotted = rail.cut(shapes.slots)
+        self.assertEqual(1, len(slotted.Solids))
+        self.assertAlmostEqual(0.0, crossbar.fuse(shapes.tabs).common(slotted).Volume, delta=VOLUME_TOLERANCE)
+
+    def test_a_flush_wall_on_tubes_with_corner_radii_is_still_refused(self):
+        # S9: the flat face of the rail ends where its corner radius starts, below the flush wall.
+        joint, _, _ = self.narrow_joint(RADIUS)
+        for clearance in (0.0, self.CLEARANCE):
+            with self.subTest(clearance=clearance):
+                self.assertRefused(self.OFF_RAIL, TabSettings(count=2, clearance=clearance), joint)
+
+    def test_a_tab_footprint_off_the_rail_face_is_still_refused(self):
+        # The crossbar wall 1 mm past the end of the rail: part of each tab footprint is off the face.
+        rail = self.rail(end=WIDE / 2 - 1.0, radius=0.0)
+        joint, _, _ = self.joint(rail=rail, radius=0.0)
+        for clearance in (0.0, self.CLEARANCE):
+            with self.subTest(clearance=clearance):
+                self.assertRefused(self.OFF_RAIL, TabSettings(count=2, clearance=clearance), joint)
+
+    def test_a_centred_t_joint_keeps_its_tabs_and_slots(self):
+        # The slots stay the tab footprints grown by the clearance, half on each side.
+        c = self.CLEARANCE
+        for radius, span in ((0.0, HIGH), (RADIUS, FLAT)):
+            with self.subTest(radius=radius):
+                joint, _, _ = self.joint(radius=radius)
+                shapes = make_tabs(TabSettings(count=2, clearance=c), joint)
+                y_tab, y_slot = (WIDE / 2 - T, WIDE / 2), (WIDE / 2 - T - c / 2, WIDE / 2 + c / 2)
+                self.assertSlots(
+                    shapes,
+                    [((RAIL_X, RAIL_X + T), y_tab, (low, high)) for low, high in even(2, span)],
+                    [
+                        ((RAIL_X - 1.0, RAIL_X + T + 1.0), y_slot, (low - c / 2, high + c / 2))
+                        for low, high in even(2, span)
+                    ],
+                    Z,
+                )
 
 
 if __name__ == "__main__":
