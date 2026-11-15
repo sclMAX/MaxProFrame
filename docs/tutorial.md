@@ -531,7 +531,16 @@ In the panel, select the open row to set its **Joint**, **Step depth**, **Flip s
 
 ### Interlock
 
-**Interlock** (Spanish *Encastre*) adds fingers cut by the laser at the inner vertex of a folded corner, where the inner walls of its two tubes meet, so the two tubes locate each other while the corner is folded and welded. Across the inner wall, from its inner face to the finger depth, the wall is split along the bend axis into fingers that belong to one tube and the other in turn: each finger is a step of the [Stepped joint](#miter-or-stepped-joint), covered by the tube before the corner and then by the tube after it. Below the fingers the corner keeps its own joint (Miter or Stepped, with its key and relief). Every cut is straight, square to the tube or to the inner wall, so any tube laser cuts it. The fingers are cut in the Unfolded Bar, the Folded Bar folds into one solid with them, and the developed length does not change.
+**Interlock** (Spanish *Encastre*) joins two tubes with parts cut by the laser that locate one on the other while they are welded. It has two kinds, and the two faces you click tell which one it makes:
+
+- **Fingers** (*Aletas*), at a folded corner of a Folded Bar: click the inner walls of its two tubes (see [Fingers at a folded corner](#fingers-at-a-folded-corner)).
+- **Tabs** (*Lengüetas*), at a T joint, where a crossbar ends against a face of a rail: click a wall of the crossbar and the face of the rail it butts against (see [Tabs at a T joint](#tabs-at-a-t-joint)).
+
+Before the second face, the panel says "Click the inner walls of the two tubes at a folded corner of a Folded Bar for fingers, or a wall of a crossbar and the face of the rail it butts against for tabs.".
+
+#### Fingers at a folded corner
+
+**Interlock** adds fingers cut by the laser at the inner vertex of a folded corner, where the inner walls of its two tubes meet, so the two tubes locate each other while the corner is folded and welded. Across the inner wall, from its inner face to the finger depth, the wall is split along the bend axis into fingers that belong to one tube and the other in turn: each finger is a step of the [Stepped joint](#miter-or-stepped-joint), covered by the tube before the corner and then by the tube after it. Below the fingers the corner keeps its own joint (Miter or Stepped, with its key and relief). Every cut is straight, square to the tube or to the inner wall, so any tube laser cuts it. The fingers are cut in the Unfolded Bar, the Folded Bar folds into one solid with them, and the developed length does not change.
 
 1. Click **Interlock** on the Folded Miters toolbar.
 2. Click the inner wall of each of the two tubes at a folded corner of a Folded Bar: their faces on the inside of the corner. Faces selected before the command count too. The Interlock is made at once and shows on the bar; the **Corner** group (Spanish *Esquina*) names its two tubes, for example `Corner: Profile → Profile001`.
@@ -551,10 +560,38 @@ The Interlock is an object of its own, shown under the bar in the tree and label
 
 What the panel refuses, saying it at the bottom with **OK** disabled:
 
-- Faces that are not the inner walls of the two tubes at one folded corner. Until both are clicked it says "Click the inner walls of the two tubes at a folded corner of a Folded Bar.", then "Click the inner wall of the other tube at that corner.". An outer or a side wall gives "Click the inner wall of Profile: its face on the inside of the folded corner."; two tubes that do not meet at a folded corner, the open corner of a closed frame (it does not fold), an object that is not a Folded Bar or faces on two bars are named with what to click instead. A corner that has an Interlock already says to double-click it to edit it. Nothing is created.
+- Faces that are not the inner walls of the two tubes at one folded corner. After the first inner wall it says "Click the inner wall of the other tube at that corner.". An outer or a side wall gives "Click the inner wall of Profile: its face on the inside of the folded corner."; two tubes that do not meet at a folded corner, the open corner of a closed frame (it does not fold), an object that is not a Folded Bar or faces on two bars are named with what to click instead. A corner that has an Interlock already says to double-click it to edit it. Nothing is created.
 - Fingers that do not fit, naming the corner's two tubes: fewer than 2 ("The interlock of the corner between Profile and Profile001 needs at least 2 fingers."), fingers too wide for the tube, or not wider than the clearance ("The fingers of the corner between Profile and Profile001 do not fit: make them fewer or narrower."), a tip size over half the narrowest finger less the clearance ("The finger tips of the corner between Profile and Profile001 must be between 0 and 8 mm." for three even fingers on a 50 mm tube with a clearance of 0.5 mm), and a depth or an angle the Stepped joint refuses (the step depth messages of [Miter or stepped joint](#miter-or-stepped-joint)).
 
-There is no dovetail: the corner closes by bending, so an undercut could not pass. Fingers are the first **Kind** of interlock; other kinds may come later, such as hooks, clips, a tab and slot for a T joint, or a key across a miter.
+There is no dovetail: the corner closes by bending, so an undercut could not pass. Other kinds of interlock may come later, such as hooks, clips or a key across a miter.
+
+#### Tabs at a T joint
+
+At a **T joint** a tube, the **crossbar** (*travesaño*), ends against a face of another tube, the **rail** (*larguero*), usually cut against it with **Extend / Cut**. A **Tabs** Interlock makes the wall of the crossbar end in tabs that go through slots cut by the laser in the wall of the rail, so the crossbar sits in its place on the rail before it is welded. Both tubes must be **Square Hollow** or **Rectangular Hollow**; they may be straight profiles, trimmed profiles, cutouts or tubes of a Folded Bar. Every cut is straight and square to the wall it goes through, so any tube laser cuts it.
+
+1. Click **Interlock**.
+2. Click a wall of the crossbar, the one that carries the tabs, and the face of the rail it butts against, in either order; faces selected before the command count too. After the first face the panel says "Click the other face of the T joint: the face of the rail the crossbar butts against, or the wall of the crossbar that carries the tabs.". The Interlock is made at once; the **T joint** group (*Unión en T*) names the crossbar and the rail, for example `T joint: Crossbar → Rail`.
+3. The **Tabs** group (*Lengüetas*) sets them; each change shows on the tubes at once:
+   - **Count** (*Cantidad*): the number of tabs, at least 1, across the flat part of the crossbar wall (outside its rounded edges).
+   - **Tab width** (*Ancho de lengüeta*): **Even** (*Uniforme*, 0) splits the flat part of the wall evenly into tabs and gaps of the same width (5 parts for 2 tabs); a value makes every tab that wide, with equal gaps between them and at both ends.
+   - **Tip** (*Punta*): **Square** (*Recta*), **Chamfer** (*Biselada*) or **Round** (*Redondeada*) corners at the tip of each tab, to lead it into its slot. **Tip size** (*Tamaño de punta*), for Chamfer and Round only, is the chamfer leg or the radius, in the plane of the crossbar wall.
+   - **Length** (*Longitud*): how far the tabs go across the rail wall, measured along the normal of the rail face from its outer face. **Automatic** (*Automático*, 0) is the rail wall thickness: the tabs end flush with the inside face of the rail. A larger value makes them stand out inside the rail, a smaller one keeps them inside its wall.
+   - **Clearance** (*Holgura*): the gap around each tab in its slot, half on each side.
+
+   The first Tabs Interlock starts with 2 even square tabs, an automatic length and no clearance; the next ones start with the settings last kept with **OK** or **Apply and continue** for Tabs, also after restarting FreeCAD. Fingers keep their own.
+4. **OK** keeps the Interlock in one Undo step; **Cancel** leaves the document as it was. **Apply and continue** (*Aplicar y seguir*) keeps it in its own Undo step and waits for the two faces of the next one, with the same settings: for example the other wall of the same crossbar, or the next crossbar.
+
+The joint may be at **any angle**: on an oblique crossbar the tabs follow its wall, and each slot is the footprint of its tab in the rail wall, along the normal of the rail face, so it is longer than at a square joint. As every cut stays square to its own wall, at an oblique joint the tab passes the inside face of the rail on one side by a little (the crossbar wall thickness times the cosine of the angle between the normals of the two walls: about 0.75 mm for a 1.5 mm wall at 60 degrees).
+
+On a **Folded Bar**, click the bar itself: the face stands for the face of the tube under the click. The rail can be any tube of a bar, on a straight part; the crossbar can be a tube of a bar only at a free end of an open bar, its first or its last tube. At a folded corner or at the open corner of a closed frame the panel says so, for example "The T joint between Profile and Rail is at a folded corner of FoldedBar: the tabs go on a free end of a Folded Bar.". The bar folds with the tabs and the slots, and its **Unfolded Bar** carries them, its developed length up to the tab tips.
+
+Two pieces make it real, each one on top of its tube, as a cutout is: the crossbar gets a piece labelled as the piece under it with `_Tb` added, with the tabs, and the rail a piece with `_Sl` added, with the slots. The Interlock, labelled after its two tubes, for example `Interlock_Crossbar_Rail`, shows under the `_Tb` piece in the tree. The BOM, the **Cut List** and the **Piece Table** give the crossbar its length up to the tips of its tabs: 2 mm more than the trimmed crossbar on a rail with a 2 mm wall and an automatic length. Its settings are properties of the Interlock: **Kind** (`Tabs`), **Count**, **Finger Width** (the tab width), **Tip**, **Tip Size**, **Length**, **Clearance**, the crossbar and the rail (**Piece A**, **Piece B**) and the two faces picked (**Crossbar Face**, **Rail Face**). Double-click the Interlock, or its `_Tb` or `_Sl` piece, to edit it in the same panel. Deleting the Interlock deletes both pieces and gives the pieces under them back: whatever was built on them follows those. Undo brings everything back.
+
+What the panel refuses, saying it at the bottom with **OK** disabled and nothing created (the order you clicked is tried first, then the other way round):
+
+- Faces that make no T joint, naming the tubes: a crossbar that does not end on the rail face, or ends farther from it than the rail wall is thick ("There is no T joint between Crossbar and Rail: Crossbar does not end on the face of Rail."), a crossbar along the rail face, a crossbar face that is not one of its walls, a face that is not flat, two faces of the same tube ("Both faces are on Crossbar: click a wall of the crossbar and the face of the rail it butts against.") or a profile that is not a tube.
+- Tabs that do not fit: fewer than 1, too wide for the flat part of the wall ("The tabs of the T joint between Crossbar and Rail do not fit: make them fewer or narrower."), a tip size too large for them, slots that do not fall on the flat part of the rail face, or a negative length.
+- Faces that have tabs already: "The T joint between Crossbar and Rail already has tabs on that face: Interlock_Crossbar_Rail."; double-click that Interlock to edit it.
 
 ### Developed length and K-factor
 

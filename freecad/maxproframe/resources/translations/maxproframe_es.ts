@@ -1503,7 +1503,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>The finger tips of the corner between {} and {} must be between 0 and {max:g} mm.</source><translation>El tamaño de la punta de las aletas de la esquina entre {} y {} tiene que estar entre 0 y {max:g} mm.</translation></message>
     <message><source>The interlock between {} and {} is not on a folded corner of {}.</source><translation>El encastre entre {} y {} no está en una esquina plegada de {}.</translation></message>
     <message><source>The corner between {} and {} has two interlocks: {} and {}.</source><translation>La esquina entre {} y {} tiene dos encastres: {} y {}.</translation></message>
-    <message><source>Click the inner walls of the two tubes at a folded corner of a Folded Bar.</source><translation>Hacé clic en las paredes interiores de los dos tubos en una esquina plegada de una barra plegada.</translation></message>
+    <message><source>Click the inner walls of the two tubes at a folded corner of a Folded Bar for fingers, or a wall of a crossbar and the face of the rail it butts against for tabs.</source><translation>Hacé clic en las paredes interiores de los dos tubos en una esquina plegada de una barra plegada para aletas, o en una pared de un travesaño y en la cara del larguero contra la que apoya para lengüetas.</translation></message>
     <message><source>Click the inner wall of the other tube at that corner.</source><translation>Hacé clic en la pared interior del otro tubo en esa esquina.</translation></message>
     <message><source>Click the inner wall of {}: its face on the inside of the folded corner.</source><translation>Hacé clic en la pared interior de {}: su cara del lado de adentro de la esquina plegada.</translation></message>
     <message><source>{} is not a Folded Bar: click the inner walls of two tubes of a Folded Bar.</source><translation>{} no es una barra plegada: hacé clic en las paredes interiores de dos tubos de una barra plegada.</translation></message>
@@ -1515,7 +1515,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Corner: {} → {}</source><translation>Esquina: {} → {}</translation></message>
     <message><source>Fingers</source><translation>Aletas</translation></message>
     <message><source>Kind</source><translation>Tipo</translation></message>
-    <message><source>Shape of the interlock: Fingers, at the inner vertex of a folded corner</source><translation>Forma del encastre: Aletas, en el vértice interior de una esquina plegada</translation></message>
+    <message><source>Shape of the interlock: Fingers, at the inner vertex of a folded corner; Tabs, on the end of a crossbar through slots in the rail at a T joint</source><translation>Forma del encastre: Aletas, en el vértice interior de una esquina plegada; Lengüetas, en el extremo de un travesaño a través de ranuras en el larguero en una unión en T</translation></message>
     <message><source>Count</source><translation>Cantidad</translation></message>
     <message><source>Number of fingers, at least 2; the tube before the corner owns the first one</source><translation>Cantidad de aletas, al menos 2; la primera es del tubo anterior a la esquina</translation></message>
     <message><source>Finger width</source><translation>Ancho de aleta</translation></message>
@@ -1533,11 +1533,38 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Gap between every pair of mating finger faces, half on each side</source><translation>Separación entre cada par de caras enfrentadas de las aletas, la mitad de cada lado</translation></message>
     <message><source>Flip</source><translation>Invertir</translation></message>
     <message><source>Swap the tubes: the tube after the corner owns the first finger</source><translation>Intercambia los tubos: la primera aleta es del tubo posterior a la esquina</translation></message>
-    <message><source>Create this interlock in its own Undo step and keep the panel open: click the inner walls at the next folded corner, with the same settings.</source><translation>Crea este encastre en su propio paso de Deshacer y deja el panel abierto: hacé clic en las paredes internas de la próxima esquina plegada, con los mismos ajustes.</translation></message>
+    <message><source>Create this interlock in its own Undo step and keep the panel open: click the two faces of the next one, with the same settings.</source><translation>Crea este encastre en su propio paso de Deshacer y deja el panel abierto: hacé clic en las dos caras del próximo, con los mismos ajustes.</translation></message>
     <message><source>{} meets neither end of the bar.</source><translation>{} no se une con ninguno de los extremos de la barra.</translation></message>
     <message><source>{} is folded by {}: a tube folds into one bar only.</source><translation>{} ya está plegado en {}: un tubo se pliega en una sola barra.</translation></message>
     <message><source>{} is another Folded Bar: a tube folds into one bar only.</source><translation>{} es otra barra plegada: un tubo se pliega en una sola barra.</translation></message>
     <message><source>{} is a closed frame: it takes no more tubes.</source><translation>{} es un marco cerrado: no admite más tubos.</translation></message>
+    <message><source>Click the other face of the T joint: the face of the rail the crossbar butts against, or the wall of the crossbar that carries the tabs.</source><translation>Hacé clic en la otra cara de la unión en T: la cara del larguero contra la que apoya el travesaño, o la pared del travesaño que lleva las lengüetas.</translation></message>
+    <message><source>T joint</source><translation>Unión en T</translation></message>
+    <message><source>T joint: {} → {}</source><translation>Unión en T: {} → {}</translation></message>
+    <message><source>Tabs</source><translation>Lengüetas</translation></message>
+    <message><source>Tab width</source><translation>Ancho de lengüeta</translation></message>
+    <message><source>Length</source><translation>Longitud</translation></message>
+    <message><source>Number of tabs, at least 1, across the flat part of the crossbar wall</source><translation>Cantidad de lengüetas, al menos 1, a lo ancho de la parte plana de la pared del travesaño</translation></message>
+    <message><source>Width of every tab, with equal gaps between them and at both ends; Even: the tabs and the gaps split the flat part of the wall evenly</source><translation>Ancho de cada lengüeta, con huecos iguales entre ellas y en los dos extremos; Uniforme: las lengüetas y los huecos dividen la parte plana de la pared en partes iguales</translation></message>
+    <message><source>Corners of each tab tip: Square, Chamfer or Round, to lead it into its slot</source><translation>Esquinas de la punta de cada lengüeta: Recta, Biselada o Redondeada, para guiarla en su ranura</translation></message>
+    <message><source>Chamfer leg or radius of the tab tip corners, in the crossbar wall plane</source><translation>Cateto del bisel o radio de las esquinas de la punta de las lengüetas, en el plano de la pared del travesaño</translation></message>
+    <message><source>How far the tabs go across the rail wall, along its normal; Automatic: the rail wall thickness, flush with its inside face</source><translation>Cuánto atraviesan las lengüetas la pared del larguero, a lo largo de su normal; Automático: el espesor de pared del larguero, al ras de su cara interior</translation></message>
+    <message><source>Gap around each tab in its slot, half on each side</source><translation>Separación alrededor de cada lengüeta en su ranura, la mitad de cada lado</translation></message>
+    <message><source>There is no T joint between {} and {}: pick a flat face of each tube.</source><translation>No hay una unión en T entre {} y {}: elegí una cara plana de cada tubo.</translation></message>
+    <message><source>Both faces are on {}: click a wall of the crossbar and the face of the rail it butts against.</source><translation>Las dos caras están en {}: hacé clic en una pared del travesaño y en la cara del larguero contra la que apoya.</translation></message>
+    <message><source>There is no T joint between {} and {}: {crossbar} does not end on the face of {rail}.</source><translation>No hay una unión en T entre {} y {}: {crossbar} no termina sobre la cara de {rail}.</translation></message>
+    <message><source>There is no T joint between {} and {}: {crossbar} runs along the face of {rail}.</source><translation>No hay una unión en T entre {} y {}: {crossbar} corre a lo largo de la cara de {rail}.</translation></message>
+    <message><source>There is no T joint between {} and {}: the face of {crossbar} is not a wall along it.</source><translation>No hay una unión en T entre {} y {}: la cara de {crossbar} no es una pared a lo largo de ese tubo.</translation></message>
+    <message><source>The tabs of the T joint between {} and {} need two tubes: {} is a {} profile.</source><translation>Las lengüetas de la unión en T entre {} y {} necesitan dos tubos: {} es un perfil {}.</translation></message>
+    <message><source>The interlock of the T joint between {} and {} needs at least 1 tab.</source><translation>El encastre de la unión en T entre {} y {} necesita al menos 1 lengüeta.</translation></message>
+    <message><source>The tab length of the T joint between {} and {} must be 0 (automatic) or more.</source><translation>La longitud de las lengüetas de la unión en T entre {} y {} tiene que ser 0 (automática) o más.</translation></message>
+    <message><source>The tabs of the T joint between {} and {} do not fit: make them fewer or narrower.</source><translation>Las lengüetas de la unión en T entre {} y {} no entran: poné menos o hacelas más angostas.</translation></message>
+    <message><source>The tab tips of the T joint between {} and {} must be between 0 and {max:g} mm.</source><translation>El tamaño de la punta de las lengüetas de la unión en T entre {} y {} tiene que estar entre 0 y {max:g} mm.</translation></message>
+    <message><source>The slots of the T joint between {} and {} do not fall on the flat part of the face of {rail}.</source><translation>Las ranuras de la unión en T entre {} y {} no caen en la parte plana de la cara de {rail}.</translation></message>
+    <message><source>The T joint between {} and {} already has tabs on that face: {}.</source><translation>La unión en T entre {} y {} ya tiene lengüetas en esa cara: {}.</translation></message>
+    <message><source>The T joint between {} and {} is at a folded corner of {}: the tabs go on a free end of a Folded Bar.</source><translation>La unión en T entre {} y {} está en una esquina plegada de {}: las lengüetas van en un extremo libre de una barra plegada.</translation></message>
+    <message><source>The T joint between {} and {} is at the open corner of {}: the tabs go on a free end of a Folded Bar.</source><translation>La unión en T entre {} y {} está en la esquina abierta de {}: las lengüetas van en un extremo libre de una barra plegada.</translation></message>
+    <message><source>The interlock {} lost the face of {} it was made on.</source><translation>El encastre {} perdió la cara de {} sobre la que se hizo.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_FoldedBar</name>
@@ -1552,7 +1579,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
 <context>
     <name>MaxProFrame_Interlock</name>
     <message><source>Interlock</source><translation>Encastre</translation></message>
-    <message><source>&lt;b&gt;Interlock&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click the inner wall faces of the two tubes at a folded corner of a Folded Bar: fingers cut by the laser at the inner vertex of the corner locate one tube on the other. Set their count, width, tip and clearance in the panel. Double-click the Interlock to edit it.</source><translation>&lt;b&gt;Encastre&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en las caras de pared interior de los dos tubos en una esquina plegada de una barra plegada: aletas cortadas con láser en el vértice interior de la esquina ubican un tubo sobre el otro. Configurá su cantidad, ancho, punta y holgura en el panel. Doble clic en el encastre para editarlo.</translation></message>
+    <message><source>&lt;b&gt;Interlock&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click two faces. The inner wall faces of the two tubes at a folded corner of a Folded Bar: fingers cut by the laser at the inner vertex of the corner locate one tube on the other. A wall of a crossbar and the face of the rail it butts against (a T joint): tabs on the crossbar end go through slots cut in the rail. Set their count, width, tip and clearance in the panel. Double-click the Interlock to edit it.</source><translation>&lt;b&gt;Encastre&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en dos caras. Las caras de pared interior de los dos tubos en una esquina plegada de una barra plegada: aletas cortadas con láser en el vértice interior de la esquina ubican un tubo sobre el otro. Una pared de un travesaño y la cara del larguero contra la que apoya (una unión en T): lengüetas en el extremo del travesaño pasan por ranuras cortadas en el larguero. Configurá su cantidad, ancho, punta y holgura en el panel. Doble clic en el encastre para editarlo.</translation></message>
 </context>
 <context>
     <name>App::Property</name>
@@ -1574,7 +1601,7 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Swap the tubes of a Stepped joint: the other one covers the step</source><translation>Intercambia los tubos de una unión escalonada: el otro cubre el escalón</translation></message>
     <message><source>Profile of one of the two tubes the interlock joins</source><translation>Perfil de uno de los dos tubos que une el encastre</translation></message>
     <message><source>Profile of the other tube the interlock joins</source><translation>Perfil del otro tubo que une el encastre</translation></message>
-    <message><source>Shape of the interlock: Fingers, at the inner vertex of a folded corner</source><translation>Forma del encastre: Aletas, en el vértice interior de una esquina plegada</translation></message>
+    <message><source>Shape of the interlock: Fingers, at the inner vertex of a folded corner; Tabs, on the end of a crossbar through slots in the rail at a T joint</source><translation>Forma del encastre: Aletas, en el vértice interior de una esquina plegada; Lengüetas, en el extremo de un travesaño a través de ranuras en el larguero en una unión en T</translation></message>
     <message><source>Number of fingers, at least 2; the first tube owns the first finger</source><translation>Cantidad de aletas, al menos 2; la primera aleta es del primer tubo</translation></message>
     <message><source>Width of every finger but the two outermost, centered; 0: the fingers split the tube evenly</source><translation>Ancho de cada aleta menos las dos de los extremos, centradas; 0: las aletas dividen el tubo en partes iguales</translation></message>
     <message><source>Corners of each finger tip: Square, Chamfer or Round, to lead it in</source><translation>Esquinas de la punta de cada aleta: Recta, Biselada o Redondeada, para guiar su entrada</translation></message>
@@ -1583,5 +1610,9 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>Gap between every pair of mating finger faces, half on each side</source><translation>Separación entre cada par de caras enfrentadas de las aletas, la mitad de cada lado</translation></message>
     <message><source>Swap the tubes: the second one owns the first finger</source><translation>Intercambia los tubos: la primera aleta es del segundo tubo</translation></message>
     <message><source>Interlock objects on the corners of the bar</source><translation>Objetos Encastre en las esquinas de la barra</translation></message>
+    <message><source>How far the tabs go across the rail wall, along its normal; 0: automatic, the rail wall thickness</source><translation>Cuánto atraviesan las lengüetas la pared del larguero, a lo largo de su normal; 0: automático, el espesor de pared del larguero</translation></message>
+    <message><source>Crossbar piece and face that carry the tabs</source><translation>Pieza y cara del travesaño que llevan las lengüetas</translation></message>
+    <message><source>Rail piece and face the slots go through</source><translation>Pieza y cara del larguero por las que pasan las ranuras</translation></message>
+    <message><source>The Tabs Interlock this piece adds its tabs or slots for</source><translation>El encastre de lengüetas para el que esta pieza agrega sus lengüetas o ranuras</translation></message>
 </context>
 </TS>

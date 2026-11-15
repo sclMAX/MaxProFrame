@@ -35,6 +35,7 @@ from freecad.maxproframe.folded_chain import ChainError, build_chain
 from freecad.maxproframe.folded_corner import corner_key, corner_settings, make_folded_corner, set_corner_settings
 from freecad.maxproframe.folded_geometry import fold_bar
 from freecad.maxproframe.interlock import interlock_key, interlock_settings
+from freecad.maxproframe.interlock_geometry import TABS
 from freecad.maxproframe.profile_pattern import (
     container_placement,
     global_element,
@@ -339,12 +340,13 @@ def corner_interlocks(bar, chain):
 
     An interlock is matched by its two profiles, in either order (odd/tasks/joint-tabs.md, S7); one missing a profile
     is left out. Raises UnfoldError naming the pieces of an interlock on no folded corner of ``chain`` (the open corner
-    of a closed frame, two tubes that do not meet) and the corner and both interlocks of a corner with two (S6).
+    of a closed frame, two tubes that do not meet) and the corner and both interlocks of a corner with two (S6). A
+    Tabs Interlock (a T joint, odd/tasks/t-joint-tabs.md) is on no folded corner: it is left out.
     """
     index = {frozenset(profile.Name for profile in _pair(chain, corner)): i for i, corner in enumerate(chain.corners)}
     found = [None] * len(chain.corners)
     for obj in getattr(bar, "Interlocks", ()):
-        key = interlock_key(obj) if _alive(obj) else None
+        key = interlock_key(obj) if _alive(obj) and str(getattr(obj, "Kind", "")) != TABS else None
         if key is None:
             continue
         at = index.get(key)
@@ -664,6 +666,20 @@ if "_NEW_PIECE_OBSERVER" not in globals():
     App.addDocumentObserver(_NEW_PIECE_OBSERVER)
 
 
+def _at_its_place(shape):
+    """A copy of ``shape`` with its placement moved into its geometry.
+
+    The recompute puts the shape of an object at the object's Placement, dropping the placement of the shape: ``unfold``
+    moves its bar to X = 0 by its placement, by how far the first tube reaches before its path (an Extend / Cut past
+    it, tabs past its end).
+    """
+    placement = shape.Placement
+    moved = shape.copy()
+    moved.Placement = App.Placement()
+    moved.transformShape(placement.toMatrix(), True)
+    return moved
+
+
 class UnfoldedBar:
     def __init__(self, obj):
         self.add_properties(obj)
@@ -694,7 +710,7 @@ class UnfoldedBar:
                     bar.Label
                 )
             )
-        obj.Shape = _sound(bar, unfolded.shape.Solids[0]).copy()
+        obj.Shape = _at_its_place(_sound(bar, unfolded.shape.Solids[0]))
 
     def dumps(self):
         return None
