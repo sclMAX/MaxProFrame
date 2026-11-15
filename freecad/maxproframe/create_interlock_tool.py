@@ -1,18 +1,26 @@
-"""Interlock command: locating fingers at a folded corner of a Folded Bar, picked by two faces (odd/tasks/joint-tabs.md,
-T3: S1, S6, S7).
+"""Interlock command: locating fingers at a folded corner of a Folded Bar (odd/tasks/joint-tabs.md, T3: S1, S6, S7) or
+tabs at a T joint (odd/tasks/t-joint-tabs.md, T4: S1-S4), picked by two faces.
 
-The panel takes two faces of one Folded Bar, preselected when the command starts or clicked while it is open (as
-Drill Hole takes them): each one is read at its picked point as a face of the tube under it (``folded_bar.segment_at``).
-They must be the inner walls of the two tubes meeting at one folded corner of the bar: the planar faces on the inside
-of that corner (S3). Those make one Interlock on the corner (``interlock.make_interlock``, in one transaction),
-previewed on the bar; anything else creates nothing and the panel says what to pick (S6): a face of something that is
-not a Folded Bar, a bend, an outer or a side wall, two tubes that do not meet at a folded corner, the open corner of a
-closed frame, a corner that has an interlock. The settings (Kind, Count, FingerWidth, Tip, TipSize for a Chamfer or
-Round tip only, Depth, Clearance, Flip) update the Interlock as they change and recompute the bar; whatever the bar
-refuses (too few fingers, a tip too large, a band that does not fit) shows in the panel and keeps OK disabled. OK keeps
-the Interlock, Cancel leaves the document as it was. A double click on an Interlock opens the same panel on it, without
-picking (``interlock.EDIT_PANEL``); OK keeps the changes in one Undo step, Cancel puts its values back. A new
-Interlock starts with the settings last kept with OK.
+The panel takes two faces, preselected when the command starts or clicked while it is open (as Drill Hole takes them),
+and deduces the kind of Interlock from them (``InterlockTaskPanel._deduce``):
+
+- Fingers: the inner walls of the two tubes meeting at one folded corner of a Folded Bar, each one read at its picked
+  point as a face of the tube under it (``folded_bar.segment_at``): the planar faces on the inside of that corner (S3).
+  Those make one Interlock on the corner (``interlock.make_interlock``), previewed on the bar.
+- Tabs: otherwise, a wall of a crossbar and the face of the rail it butts against, clicked in either order
+  (``tab_interlock.tab_order``: the order clicked, else the other way round), on straight profiles, trims, cutouts or
+  Folded Bars; ``tab_interlock.make_tab_interlock`` adds the tabs and slots pieces.
+
+A pair that makes neither creates nothing and the panel says why, OK disabled: the refusal of the Tabs order that
+found a T joint (its crossbar ends on the rail face); else the Fingers refusal when both faces are on one Folded Bar, or
+one is on a Folded Bar and the other on no tube; else the refusal of the Tabs order clicked. A click on no face or on a
+bend of a bar is refused at once. The settings of the kind (Fingers: Count, FingerWidth, Tip, TipSize for a Chamfer or
+Round tip only, Depth, Clearance, Flip; Tabs: the same without Depth and Flip, with the tab Length) update the
+Interlock as they change and recompute the document; whatever its bar or its pieces refuse shows in the panel and keeps
+OK disabled. OK keeps the Interlock, Cancel leaves the document as it was; Apply and continue keeps it in its own Undo
+step and waits for the next two faces. A double click on an Interlock (or on the tabs or slots piece of a Tabs one)
+opens the same panel on it, without picking (``interlock.EDIT_PANEL``); OK keeps the changes in one Undo step, Cancel
+puts its values back. A new Interlock starts with the settings last kept with OK or Apply and continue for its kind.
 """
 
 import os
@@ -29,39 +37,73 @@ from freecad.maxproframe.create_end_miter_tool import GAP_DELAY_MS, _alive, _ali
 from freecad.maxproframe.create_folded_bar_tool import _FinishOnEnter
 from freecad.maxproframe.expression_fields import count_field, length_field
 from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, get_param_group, translate
-from freecad.maxproframe.folded_bar import PICK_TOLERANCE, bar_chain, segment_at
+from freecad.maxproframe.folded_bar import PICK_TOLERANCE, bar_chain, folding_bar, segment_at
 from freecad.maxproframe.folded_chain import ChainError, base_profile, section_offset
 from freecad.maxproframe.interlock import interlock_key, make_interlock
-from freecad.maxproframe.interlock_geometry import CHAMFER, FINGERS, KINDS, ROUND, SQUARE, TIPS
+from freecad.maxproframe.interlock_geometry import (
+    CHAMFER,
+    FINGERS,
+    KINDS,
+    ROUND,
+    SQUARE,
+    TABS,
+    TIPS,
+    InterlockError,
+    TabSettings,
+)
 from freecad.maxproframe.profile_pattern import global_shape
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
+from freecad.maxproframe.tab_interlock import TabFace, make_tab_interlock, tab_order, tab_pieces
 
 # Largest length and count the fields take (mm, fingers).
 MAX_SIZE = 1000.0
 MAX_COUNT = 99
 # Cosine above which a face normal is the inner wall normal.
 NORMAL_TOLERANCE = 1e-6
-# The settings last kept, given to the next Interlock: (parameter, kind, Interlock property).
-LAST_VALUE_PARAMS = (
-    ("Interlock Kind", "String", "Kind"),
-    ("Interlock Count", "Int", "Count"),
-    ("Interlock Finger Width", "Float", "FingerWidth"),
-    ("Interlock Tip", "String", "Tip"),
-    ("Interlock Tip Size", "Float", "TipSize"),
-    ("Interlock Depth", "Float", "Depth"),
-    ("Interlock Clearance", "Float", "Clearance"),
-    ("Interlock Flip", "Bool", "Flip"),
-)
-# The first Interlock ever: three even square fingers, the automatic depth and the clearance of a first Folded Corner.
+# The kind of the Interlock last kept: the panel shows its settings until two faces make one.
+KIND_PARAM = "Interlock Kind"
+# The settings last kept, given to the next Interlock of each kind: (parameter, kind, Interlock property).
+LAST_VALUE_PARAMS = {
+    FINGERS: (
+        ("Interlock Count", "Int", "Count"),
+        ("Interlock Finger Width", "Float", "FingerWidth"),
+        ("Interlock Tip", "String", "Tip"),
+        ("Interlock Tip Size", "Float", "TipSize"),
+        ("Interlock Depth", "Float", "Depth"),
+        ("Interlock Clearance", "Float", "Clearance"),
+        ("Interlock Flip", "Bool", "Flip"),
+    ),
+    TABS: (
+        ("Interlock Tabs Count", "Int", "Count"),
+        ("Interlock Tabs Width", "Float", "FingerWidth"),
+        ("Interlock Tabs Tip", "String", "Tip"),
+        ("Interlock Tabs Tip Size", "Float", "TipSize"),
+        ("Interlock Tabs Length", "Float", "Length"),
+        ("Interlock Tabs Clearance", "Float", "Clearance"),
+    ),
+}
+# The first Interlock ever of each kind. Fingers: three even square fingers, the automatic depth and the clearance of a
+# first Folded Corner. Tabs: the ``TabSettings`` defaults, two even square tabs through the rail wall.
 FIRST_VALUES = {
-    "Kind": FINGERS,
-    "Count": 3,
-    "FingerWidth": 0.0,
-    "Tip": SQUARE,
-    "TipSize": 0.0,
-    "Depth": 0.0,
-    "Clearance": 0.5,
-    "Flip": False,
+    FINGERS: {
+        "Kind": FINGERS,
+        "Count": 3,
+        "FingerWidth": 0.0,
+        "Tip": SQUARE,
+        "TipSize": 0.0,
+        "Depth": 0.0,
+        "Clearance": 0.5,
+        "Flip": False,
+    },
+    TABS: {
+        "Kind": TABS,
+        "Count": TabSettings().count,
+        "FingerWidth": TabSettings().tab_width,
+        "Tip": TabSettings().tip,
+        "TipSize": TabSettings().tip_size,
+        "Length": TabSettings().length,
+        "Clearance": TabSettings().clearance,
+    },
 }
 
 PickedFace = namedtuple("PickedFace", "bar profile normal point")
@@ -69,22 +111,31 @@ PickedFace.__doc__ = """A face picked on the Folded Bar ``bar``: the tube ``prof
 of its face and the picked ``point``, global."""
 
 
-def last_values():
-    """The settings a new Interlock starts with: the ones last kept, else ``FIRST_VALUES``."""
-    param = get_param_group()
-    values = {prop: getattr(param, f"Get{kind}")(name, FIRST_VALUES[prop]) for name, kind, prop in LAST_VALUE_PARAMS}
-    if values["Kind"] not in KINDS:
-        values["Kind"] = FIRST_VALUES["Kind"]
+def last_kind():
+    """The kind of the Interlock last kept, else Fingers."""
+    kind = get_param_group().GetString(KIND_PARAM, FINGERS)
+    return kind if kind in KINDS else FINGERS
+
+
+def last_values(kind=None):
+    """The settings a new Interlock of ``kind`` (default: ``last_kind``) starts with: the ones last kept for it, else
+    ``FIRST_VALUES``."""
+    kind = last_kind() if kind is None else kind
+    param, first = get_param_group(), FIRST_VALUES[kind]
+    values = {"Kind": kind}
+    for name, type_, prop in LAST_VALUE_PARAMS[kind]:
+        values[prop] = getattr(param, f"Get{type_}")(name, first[prop])
     if values["Tip"] not in TIPS:
-        values["Tip"] = FIRST_VALUES["Tip"]
+        values["Tip"] = first["Tip"]
     return values
 
 
 def remember_values(values):
-    """Keep ``values`` (by Interlock property) for the next Interlock, between sessions."""
+    """Keep ``values`` (by Interlock property, with its Kind) for the next Interlock of that kind, between sessions."""
     param = get_param_group(writable=True)
-    for name, kind, prop in LAST_VALUE_PARAMS:
-        getattr(param, f"Set{kind}")(name, values[prop])
+    param.SetString(KIND_PARAM, values["Kind"])
+    for name, type_, prop in LAST_VALUE_PARAMS[values["Kind"]]:
+        getattr(param, f"Set{type_}")(name, values[prop])
 
 
 def _plain(value):
@@ -94,8 +145,9 @@ def _plain(value):
 
 
 def values_of(obj):
-    """The settings of the Interlock ``obj``, by property."""
-    return {prop: _plain(getattr(obj, prop)) for _, _, prop in LAST_VALUE_PARAMS}
+    """The settings of the Interlock ``obj``, by property: its Kind and those of its kind."""
+    kind = str(obj.Kind)
+    return {"Kind": kind, **{prop: _plain(getattr(obj, prop)) for _, _, prop in LAST_VALUE_PARAMS[kind]}}
 
 
 def interlock_bar(obj):
@@ -110,11 +162,23 @@ def interlock_bar(obj):
 
 
 def pick_hint():
-    return translate("MaxProFrame", "Click the inner walls of the two tubes at a folded corner of a Folded Bar.")
+    return translate(
+        "MaxProFrame",
+        "Click the inner walls of the two tubes at a folded corner of a Folded Bar for fingers, or a wall of a "
+        "crossbar and the face of the rail it butts against for tabs.",
+    )
 
 
-def other_face_hint():
-    return translate("MaxProFrame", "Click the inner wall of the other tube at that corner.")
+def other_face_hint(first=None):
+    """What to click after the face ``first`` (a ``Click``): the other inner wall after an inner wall at a folded
+    corner, else the other face of a T joint."""
+    if first is None or first.fingers is not None:
+        return translate("MaxProFrame", "Click the inner wall of the other tube at that corner.")
+    return translate(
+        "MaxProFrame",
+        "Click the other face of the T joint: the face of the rail the crossbar butts against, or the wall of the "
+        "crossbar that carries the tabs.",
+    )
 
 
 def _segment_index(chain, profile):
@@ -214,6 +278,47 @@ def picked_corner(first, second):
     return chain, corner, None
 
 
+Click = namedtuple("Click", "obj sub point fingers refusal")
+Click.__doc__ = """A face clicked for an Interlock: ``sub`` of ``obj`` at the global ``point`` (or None); ``fingers``
+the PickedFace when it is an inner wall at a folded corner of a Folded Bar, else None and ``refusal`` says why."""
+
+
+def clicked_face(obj, sub, point=None):
+    """(Click, None) for the face ``sub`` of ``obj`` clicked at ``point`` when it may be one of the two faces of an
+    Interlock, Fingers or Tabs; (None, what to click) for no face or a bend of a Folded Bar."""
+    if obj is None or not sub:
+        return None, pick_hint()
+    if is_foldedbar(obj):
+        pick = segment_at(obj, sub, point)
+        if pick.reason:
+            return None, pick.reason
+    fingers, refusal = picked_face(obj, sub, point)
+    return Click(obj, sub, point, fingers, refusal), None
+
+
+def _same_corner_tube(first, second):
+    """Whether the clicks ``first`` and ``second`` are inner walls of the same tube of one Folded Bar."""
+    return (
+        first.fingers is not None
+        and second.fingers is not None
+        and first.fingers.bar.Name == second.fingers.bar.Name
+        and first.fingers.profile.Name == second.fingers.profile.Name
+    )
+
+
+def _fingers_meant(first, second):
+    """Whether the clicks ``first`` and ``second`` that make no Interlock and no T joint ask for Fingers: both on one
+    Folded Bar, or one on a Folded Bar and the other on no tube."""
+    bars = [click.obj.Name for click in (first, second) if is_foldedbar(click.obj)]
+    if len(bars) == 2:
+        return bars[0] == bars[1]
+    return len(bars) == 1 and any(not is_foldedbar(c.obj) and base_profile(c.obj) is None for c in (first, second))
+
+
+def _without_kind(values):
+    return {prop: value for prop, value in values.items() if prop != "Kind"}
+
+
 def show_panel(panel, picking=False):
     Gui.Control.showDialog(panel)
     if picking:
@@ -226,17 +331,19 @@ def edit_interlock(obj):
 
 
 class InterlockTaskPanel:
-    """Two inner wall faces of a folded corner of a Folded Bar, and the settings of the Interlock made there.
+    """Two faces, the kind of Interlock they make (the module docstring says how) and its settings.
 
     ``picks`` are the faces preselected, (object, sub-element, picked point or None); as a selection observer (added by
     the command) the panel takes the faces clicked while it is open, until the Interlock is made. Apply and continue
     keeps it in its own Undo step and waits for the faces of the next one, with the same settings. With ``edited`` the
-    panel changes that Interlock, without picking.
+    panel changes that Interlock, without picking. ``kind`` is the kind the fields show: that of the Interlock made or
+    edited; before, that of the Interlock last kept.
     """
 
     def __init__(self, picks=(), edited=None):
         self.edited = edited
         self.obj = edited
+        self.kind = str(edited.Kind) if edited is not None else last_kind()
         self.bar = interlock_bar(edited) if edited is not None else None
         self.doc = edited.Document if edited is not None else App.ActiveDocument
         # The faces picked so far, at most one until they make the Interlock.
@@ -254,11 +361,14 @@ class InterlockTaskPanel:
         self._apply_button = None
         # Whether Apply and continue kept an Interlock: OK with none made since then just closes.
         self._applied = False
-        self._loaded = last_values()
         self._before = values_of(edited) if edited is not None else None
+        # The settings of each kind for its next Interlock: those last kept, as the fields change them.
+        self._values = {kind: last_values(kind) for kind in KINDS}
+        if edited is not None:
+            self._values[self.kind] = dict(self._before)
         self.form = keep_alive_until_destroyed(self._build_form())
         self.form.destroyed.connect(self._form_gone)
-        self._fill(self._before if edited is not None else self._loaded)
+        self._fill(self._values[self.kind])
         self._connect()
         if edited is not None:
             self._open_transaction("Edit Interlock")
@@ -286,24 +396,23 @@ class InterlockTaskPanel:
         settings = QtWidgets.QFormLayout(form.groupBox_settings)
         form.combo_kind = QtWidgets.QComboBox()
         form.combo_kind.addItem(translate("MaxProFrame", "Fingers"), FINGERS)
+        form.combo_kind.addItem(translate("MaxProFrame", "Tabs"), TABS)
+        # The two faces make the kind: it shows, it is no choice.
+        form.combo_kind.setEnabled(False)
         form.combo_kind.setToolTip(
-            translate("MaxProFrame", "Shape of the interlock: Fingers, at the inner vertex of a folded corner")
+            translate(
+                "MaxProFrame",
+                "Shape of the interlock: Fingers, at the inner vertex of a folded corner; Tabs, on the end of a "
+                "crossbar through slots in the rail at a T joint",
+            )
         )
         settings.addRow(translate("MaxProFrame", "Kind"), form.combo_kind)
-        form.spin_count = count_field(1, MAX_COUNT, FIRST_VALUES["Count"])
-        form.spin_count.setToolTip(
-            translate("MaxProFrame", "Number of fingers, at least 2; the tube before the corner owns the first one")
-        )
+        form.spin_count = count_field(1, MAX_COUNT, FIRST_VALUES[FINGERS]["Count"])
         settings.addRow(translate("MaxProFrame", "Count"), form.spin_count)
         form.spin_finger_width = length_field(0.0, MAX_SIZE, 0.0)
         form.spin_finger_width.setSpecialValueText(translate("MaxProFrame", "Even"))
-        form.spin_finger_width.setToolTip(
-            translate(
-                "MaxProFrame",
-                "Width of every finger but the two outermost, centered; Even: the fingers split the tube evenly",
-            )
-        )
-        settings.addRow(translate("MaxProFrame", "Finger width"), form.spin_finger_width)
+        form.label_finger_width = QtWidgets.QLabel()
+        settings.addRow(form.label_finger_width, form.spin_finger_width)
         form.combo_tip = QtWidgets.QComboBox()
         for tip, text in (
             (SQUARE, translate("MaxProFrame", "Square")),
@@ -311,14 +420,8 @@ class InterlockTaskPanel:
             (ROUND, translate("MaxProFrame", "Round")),
         ):
             form.combo_tip.addItem(text, tip)
-        form.combo_tip.setToolTip(
-            translate("MaxProFrame", "Corners of each finger tip: Square, Chamfer or Round, to lead it in")
-        )
         settings.addRow(translate("MaxProFrame", "Tip"), form.combo_tip)
         form.spin_tip_size = length_field(0.0, MAX_SIZE, 0.0)
-        form.spin_tip_size.setToolTip(
-            translate("MaxProFrame", "Chamfer leg or radius of the finger tip corners, in the inner wall plane")
-        )
         settings.addRow(translate("MaxProFrame", "Tip size"), form.spin_tip_size)
         form.spin_depth = length_field(0.0, MAX_SIZE, 0.0)
         form.spin_depth.setSpecialValueText(translate("MaxProFrame", "Automatic"))
@@ -328,11 +431,20 @@ class InterlockTaskPanel:
                 "Depth of the finger band across the bent wall; Automatic: the step depth of a Stepped joint",
             )
         )
-        settings.addRow(translate("MaxProFrame", "Depth"), form.spin_depth)
-        form.spin_clearance = length_field(0.0, MAX_SIZE, 0.0)
-        form.spin_clearance.setToolTip(
-            translate("MaxProFrame", "Gap between every pair of mating finger faces, half on each side")
+        form.label_depth = QtWidgets.QLabel(translate("MaxProFrame", "Depth"))
+        settings.addRow(form.label_depth, form.spin_depth)
+        form.spin_length = length_field(0.0, MAX_SIZE, 0.0)
+        form.spin_length.setSpecialValueText(translate("MaxProFrame", "Automatic"))
+        form.spin_length.setToolTip(
+            translate(
+                "MaxProFrame",
+                "How far the tabs go across the rail wall, along its normal; Automatic: the rail wall thickness, "
+                "flush with its inside face",
+            )
         )
+        form.label_length = QtWidgets.QLabel(translate("MaxProFrame", "Length"))
+        settings.addRow(form.label_length, form.spin_length)
+        form.spin_clearance = length_field(0.0, MAX_SIZE, 0.0)
         settings.addRow(translate("MaxProFrame", "Clearance"), form.spin_clearance)
         form.cb_flip = QtWidgets.QCheckBox(translate("MaxProFrame", "Flip"))
         form.cb_flip.setToolTip(
@@ -349,46 +461,115 @@ class InterlockTaskPanel:
 
     @staticmethod
     def _spins(form):
-        return [form.spin_count, form.spin_finger_width, form.spin_tip_size, form.spin_depth, form.spin_clearance]
+        return [
+            form.spin_count,
+            form.spin_finger_width,
+            form.spin_tip_size,
+            form.spin_depth,
+            form.spin_length,
+            form.spin_clearance,
+        ]
 
     def _connect(self):
         form = self.form
         for spin in self._spins(form):
             spin.valueChanged.connect(self._changed)
-        form.combo_kind.currentIndexChanged.connect(self._changed)
         form.combo_tip.currentIndexChanged.connect(self._changed)
         form.cb_flip.toggled.connect(self._changed)
 
     def _fill(self, values):
-        """Show ``values`` (by Interlock property) in the fields."""
+        """Show ``values`` (by Interlock property, with their Kind) in the fields, and the fields of that kind."""
         form = self.form
         self._filling = True
         try:
-            form.combo_kind.setCurrentIndex(max(0, form.combo_kind.findData(values["Kind"])))
+            self.kind = values["Kind"]
+            form.combo_kind.setCurrentIndex(max(0, form.combo_kind.findData(self.kind)))
             form.spin_count.setValue(int(values["Count"]))
             form.spin_finger_width.setValue(float(values["FingerWidth"]))
             form.combo_tip.setCurrentIndex(max(0, form.combo_tip.findData(values["Tip"])))
             form.spin_tip_size.setValue(float(values["TipSize"]))
-            form.spin_depth.setValue(float(values["Depth"]))
             form.spin_clearance.setValue(float(values["Clearance"]))
-            form.cb_flip.setChecked(bool(values["Flip"]))
+            if self.kind == TABS:
+                form.spin_length.setValue(float(values["Length"]))
+            else:
+                form.spin_depth.setValue(float(values["Depth"]))
+                form.cb_flip.setChecked(bool(values["Flip"]))
         finally:
             self._filling = False
+        self._show_kind()
         self._enable_tip_size()
 
-    def field_values(self):
-        """The settings in the fields, by Interlock property."""
+    def _show_kind(self):
+        """The fields, labels and tool tips of the kind shown: Tabs have a Length, no Depth nor Flip."""
         form = self.form
-        return {
-            "Kind": form.combo_kind.currentData(),
+        tabs = self.kind == TABS
+        for widget in (form.label_depth, form.spin_depth, form.cb_flip):
+            widget.setVisible(not tabs)
+        for widget in (form.label_length, form.spin_length):
+            widget.setVisible(tabs)
+        if tabs:
+            form.groupBox_corner.setTitle(translate("MaxProFrame", "T joint"))
+            form.groupBox_settings.setTitle(translate("MaxProFrame", "Tabs"))
+            form.label_finger_width.setText(translate("MaxProFrame", "Tab width"))
+            form.spin_count.setToolTip(
+                translate("MaxProFrame", "Number of tabs, at least 1, across the flat part of the crossbar wall")
+            )
+            form.spin_finger_width.setToolTip(
+                translate(
+                    "MaxProFrame",
+                    "Width of every tab, with equal gaps between them and at both ends; Even: the tabs and the gaps "
+                    "split the flat part of the wall evenly",
+                )
+            )
+            form.combo_tip.setToolTip(
+                translate("MaxProFrame", "Corners of each tab tip: Square, Chamfer or Round, to lead it into its slot")
+            )
+            form.spin_tip_size.setToolTip(
+                translate("MaxProFrame", "Chamfer leg or radius of the tab tip corners, in the crossbar wall plane")
+            )
+            form.spin_clearance.setToolTip(
+                translate("MaxProFrame", "Gap around each tab in its slot, half on each side")
+            )
+            return
+        form.groupBox_corner.setTitle(translate("MaxProFrame", "Corner"))
+        form.groupBox_settings.setTitle(translate("MaxProFrame", "Fingers"))
+        form.label_finger_width.setText(translate("MaxProFrame", "Finger width"))
+        form.spin_count.setToolTip(
+            translate("MaxProFrame", "Number of fingers, at least 2; the tube before the corner owns the first one")
+        )
+        form.spin_finger_width.setToolTip(
+            translate(
+                "MaxProFrame",
+                "Width of every finger but the two outermost, centered; Even: the fingers split the tube evenly",
+            )
+        )
+        form.combo_tip.setToolTip(
+            translate("MaxProFrame", "Corners of each finger tip: Square, Chamfer or Round, to lead it in")
+        )
+        form.spin_tip_size.setToolTip(
+            translate("MaxProFrame", "Chamfer leg or radius of the finger tip corners, in the inner wall plane")
+        )
+        form.spin_clearance.setToolTip(
+            translate("MaxProFrame", "Gap between every pair of mating finger faces, half on each side")
+        )
+
+    def field_values(self):
+        """The settings in the fields, by Interlock property: the Kind shown and those of that kind."""
+        form = self.form
+        values = {
+            "Kind": self.kind,
             "Count": int(form.spin_count.value()),
             "FingerWidth": _plain(float(form.spin_finger_width.value())),
             "Tip": form.combo_tip.currentData(),
             "TipSize": _plain(float(form.spin_tip_size.value())),
-            "Depth": _plain(float(form.spin_depth.value())),
             "Clearance": _plain(float(form.spin_clearance.value())),
-            "Flip": bool(form.cb_flip.isChecked()),
         }
+        if self.kind == TABS:
+            values["Length"] = _plain(float(form.spin_length.value()))
+        else:
+            values["Depth"] = _plain(float(form.spin_depth.value()))
+            values["Flip"] = bool(form.cb_flip.isChecked())
+        return values
 
     def _enable_tip_size(self):
         self.form.spin_tip_size.setEnabled(self.form.combo_tip.currentData() in (CHAMFER, ROUND))
@@ -396,42 +577,91 @@ class InterlockTaskPanel:
     # Picking.
 
     def _pick(self, obj, sub, point):
-        """Take the face ``sub`` of ``obj`` clicked at ``point``: the second one of a folded corner makes the
-        Interlock; a refused one is not taken and says why."""
+        """Take the face ``sub`` of ``obj`` clicked at ``point``: the second one of a pair that makes an Interlock
+        makes it; a refused face or pair is not taken and says why."""
         if self.obj is not None:
             return
-        face, refusal = picked_face(obj, sub, point)
-        if face is None:
+        click, refusal = clicked_face(obj, sub, point)
+        if click is None:
             self._refusal = refusal
             return
         self._refusal = ""
         first = self.faces[0] if self.faces else None
-        if first is None or (first.bar.Name == face.bar.Name and first.profile.Name == face.profile.Name):
-            # A face of the same tube again takes the place of the first one.
-            self.faces = [face]
+        if first is None or _same_corner_tube(first, click):
+            # An inner wall of the same tube again takes the place of the first one.
+            self.faces = [click]
             return
-        chain, corner, refusal = picked_corner(first, face)
-        if refusal is None:
-            piece_a, piece_b = (chain.segments[index].profile for index in (corner.before, corner.after))
-            key = frozenset((piece_a.Name, piece_b.Name))
-            taken = [obj for obj in face.bar.Interlocks if _alive(obj) and interlock_key(obj) == key]
-            if taken:
-                refusal = translate(
-                    "MaxProFrame", "The corner between {} and {} has an interlock already: double-click {} to edit it."
-                ).format(piece_a.Label, piece_b.Label, taken[0].Label)
+        kind, made, refusal = self._deduce(first, click)
         if refusal is not None:
-            # The newest face starts the next pair.
-            self.faces = [face]
+            # The newest face starts the next pair, unless only the first one is an inner wall at a folded corner.
+            self.faces = [first] if first.fingers is not None and click.fingers is None else [click]
             self._refusal = refusal
             return
-        self.faces = [first, face]
-        self._make(face.bar, piece_a, piece_b)
+        self.faces = [first, click]
+        self._make(kind, made)
 
-    def _make(self, bar, piece_a, piece_b):
-        """The Interlock between ``piece_a`` and ``piece_b`` (chain order) with the settings of the fields."""
+    def _deduce(self, first, second):
+        """(kind, what makes it, None) for the clicks ``first`` and ``second``: Fingers at a folded corner, else Tabs
+        at a T joint; (None, None, why) when they make neither (the module docstring says which refusal shows)."""
+        if first.fingers is not None and second.fingers is not None:
+            corner, fingers_refusal = self._fingers_corner(first.fingers, second.fingers)
+            if fingers_refusal is None:
+                return FINGERS, corner, None
+        else:
+            fingers_refusal = first.refusal if first.fingers is None else second.refusal
+        faces = [TabFace(click.obj, click.sub, click.point) for click in (first, second)]
+        order = tab_order(*faces, **_without_kind(self._values[TABS]))
+        if order.error is None:
+            return TABS, order, None
+        if not order.found and _fingers_meant(first, second):
+            return None, None, fingers_refusal
+        return None, None, str(order.error)
+
+    @staticmethod
+    def _fingers_corner(first, second):
+        """((bar, piece_a, piece_b), None) for the folded corner whose inner walls are the PickedFaces ``first`` and
+        ``second`` (pieces in chain order) when it has no interlock yet; else (None, why)."""
+        chain, corner, refusal = picked_corner(first, second)
+        if refusal is not None:
+            return None, refusal
+        piece_a, piece_b = (chain.segments[index].profile for index in (corner.before, corner.after))
+        key = frozenset((piece_a.Name, piece_b.Name))
+        taken = [obj for obj in second.bar.Interlocks if _alive(obj) and interlock_key(obj) == key]
+        if taken:
+            return None, translate(
+                "MaxProFrame", "The corner between {} and {} has an interlock already: double-click {} to edit it."
+            ).format(piece_a.Label, piece_b.Label, taken[0].Label)
+        return (second.bar, piece_a, piece_b), None
+
+    def _make(self, kind, made):
+        """The Interlock of ``kind`` that ``made`` stands for (Fingers: (bar, piece_a, piece_b) in chain order; Tabs:
+        the ``TabOrder``), with the settings of that kind, shown in the fields."""
+        if kind != self.kind:
+            self._fill(self._values[kind])
+        values = self.field_values()
         self._open_transaction("Create Interlock")
-        self.bar = bar
-        self.obj = make_interlock(bar, piece_a, piece_b, **self.field_values())
+        if kind == FINGERS:
+            bar, piece_a, piece_b = made
+            self.bar = bar
+            self.obj = make_interlock(bar, piece_a, piece_b, **values)
+        else:
+            try:
+                self.obj = make_tab_interlock(
+                    made.crossbar.piece,
+                    made.crossbar.sub,
+                    made.rail.piece,
+                    made.rail.sub,
+                    crossbar_point=made.crossbar.point,
+                    rail_point=made.rail.point,
+                    **_without_kind(values),
+                )
+            except InterlockError as error:
+                self.doc.abortTransaction()
+                self._transaction_open = False
+                self.faces = self.faces[-1:]
+                self._refusal = str(error)
+                return
+            self.bar = None
         self._recompute()
 
     def addSelection(self, doc, obj, sub, point=None):
@@ -464,6 +694,7 @@ class InterlockTaskPanel:
     def _changed(self, *args):
         if self._filling or not self._active():
             return
+        self._values[self.kind] = self.field_values()
         self._enable_tip_size()
         self._apply()
 
@@ -479,7 +710,7 @@ class InterlockTaskPanel:
                     QtCore.QTimer.singleShot(GAP_DELAY_MS, self._retry)
                 return
             changed = False
-            for prop, value in self.field_values().items():
+            for prop, value in _without_kind(self.field_values()).items():
                 if _plain(getattr(self.obj, prop)) != value:
                     setattr(self.obj, prop, value)
                     changed = True
@@ -496,6 +727,18 @@ class InterlockTaskPanel:
             return True
         return any(getattr(doc, "Recomputing", False) for doc in App.listDocuments().values())
 
+    def _invalid(self):
+        """What the bar of a Fingers Interlock, or the pieces of a Tabs one and the bars folding them, refuse."""
+        if str(self.obj.Kind) == TABS:
+            pieces = [piece for piece in tab_pieces(self.obj) if piece is not None]
+            objects = pieces + [folding_bar(piece) for piece in pieces]
+        else:
+            objects = [self.bar]
+        for obj in objects:
+            if obj is not None and _alive(obj) and "Invalid" in obj.State:
+                return [obj.getStatusString()]
+        return []
+
     def _recompute(self):
         self._recomputing = True
         try:
@@ -506,21 +749,24 @@ class InterlockTaskPanel:
     # Messages and OK.
 
     def problems(self):
-        """What keeps OK disabled: the faces still to pick, or the refusal of the bar."""
+        """What keeps OK disabled: the faces still to pick, or the refusal of the bar or the pieces."""
         if self.obj is None or not _alive(self.obj):
             if self._refusal:
                 return [self._refusal]
-            return [other_face_hint() if self.faces else pick_hint()]
-        if self.bar is not None and _alive(self.bar) and "Invalid" in self.bar.State:
-            return [self.bar.getStatusString()]
-        return []
+            return [other_face_hint(self.faces[0]) if self.faces else pick_hint()]
+        return self._invalid()
 
     def _show(self):
         if not self._active():
             return
         text = ""
-        if self.obj is not None and _alive(self.obj) and self.obj.PieceA is not None and self.obj.PieceB is not None:
-            text = translate("MaxProFrame", "Corner: {} → {}").format(self.obj.PieceA.Label, self.obj.PieceB.Label)
+        obj = self.obj
+        if obj is not None and _alive(obj) and obj.PieceA is not None and obj.PieceB is not None:
+            if str(obj.Kind) == TABS:
+                text = translate("MaxProFrame", "T joint: {} → {}")
+            else:
+                text = translate("MaxProFrame", "Corner: {} → {}")
+            text = text.format(obj.PieceA.Label, obj.PieceB.Label)
         self.form.label_corner.setText(text)
         self.form.message_label.setText("\n".join(self.problems()))
         self._enable_ok()
@@ -581,8 +827,8 @@ class InterlockTaskPanel:
             button.setToolTip(
                 translate(
                     "MaxProFrame",
-                    "Create this interlock in its own Undo step and keep the panel open: click the inner walls at "
-                    "the next folded corner, with the same settings.",
+                    "Create this interlock in its own Undo step and keep the panel open: click the two faces of the "
+                    "next one, with the same settings.",
                 )
             )
             button.destroyed.connect(self._apply_button_gone)
@@ -634,7 +880,7 @@ class InterlockTaskPanel:
                 self.doc.removeObject(self.obj.Name)
                 changed = True
         elif _alive(self.edited) and values_of(self.edited) != self._before:
-            for prop, value in self._before.items():
+            for prop, value in _without_kind(self._before).items():
                 setattr(self.edited, prop, value)
             changed = True
         if changed:
@@ -716,7 +962,8 @@ class InterlockTaskPanel:
 
 
 class InterlockCommand:
-    """Interlock: fingers that locate the two tubes of a folded corner of a Folded Bar, picked by their inner walls."""
+    """Interlock: fingers that locate the two tubes of a folded corner of a Folded Bar, picked by their inner walls, or
+    tabs on a crossbar end through slots in the rail at a T joint, picked by a crossbar wall and the rail face."""
 
     def GetResources(self):
         return {

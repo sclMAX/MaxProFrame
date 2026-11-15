@@ -40,9 +40,12 @@ class TestInterlockPanelSpanish(InterlockPanelFixture):
         settings = form.groupBox_settings
         self.assertEqual("Aletas", settings.title())
         self.assertEqual("Tipo", field_label(settings, form.combo_kind))
-        self.assertEqual([("Aletas", "Fingers")], items(form.combo_kind))
+        # odd/tasks/t-joint-tabs.md, T4 added the Tabs kind and changed the tooltip; T5 translates them.
+        self.assertEqual([("Aletas", "Fingers"), ("Tabs", "Tabs")], items(form.combo_kind))
         self.assertEqual(
-            "Forma del encastre: Aletas, en el vértice interior de una esquina plegada", form.combo_kind.toolTip()
+            "Shape of the interlock: Fingers, at the inner vertex of a folded corner; Tabs, on the end of a crossbar "
+            "through slots in the rail at a T joint",
+            form.combo_kind.toolTip(),
         )
         self.assertEqual("Cantidad", field_label(settings, form.spin_count))
         self.assertEqual(
@@ -81,8 +84,11 @@ class TestInterlockPanelSpanish(InterlockPanelFixture):
     def test_the_picking_hints_and_refusals_are_spanish(self):
         _, bar = self.make_bar(**PLAIN)
         panel = self.run_command()
+        # odd/tasks/t-joint-tabs.md, T4 changed this hint to name both kinds; T5 translates it.
         self.assertRefused(
-            panel, "Hacé clic en las paredes interiores de los dos tubos en una esquina plegada de una barra plegada."
+            panel,
+            "Click the inner walls of the two tubes at a folded corner of a Folded Bar for fingers, or a wall of a "
+            "crossbar and the face of the rail it butts against for tabs.",
         )
 
         self.click(bar, BOTTOM_INNER)
