@@ -1,4 +1,5 @@
 """Native GUI checks for compact metadata and non-destructive family search."""
+
 import copy
 import os
 import tempfile
@@ -17,21 +18,48 @@ class TestLibraryUsability(unittest.TestCase):
         self.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.manager = LibraryManager(user_dir=os.path.join(self.temp.name, "user"),
-                                      stock_dir=os.path.join(self.temp.name, "stock"),
-                                      registry_path=os.path.join(self.temp.name, "registry.json"))
+        self.manager = LibraryManager(
+            user_dir=os.path.join(self.temp.name, "user"),
+            stock_dir=os.path.join(self.temp.name, "stock"),
+            registry_path=os.path.join(self.temp.name, "registry.json"),
+        )
         self.folder = os.path.join(self.temp.name, "catalog")
-        self.manager.create_folder_library(self.folder, "Catalog", data={
-            "Square Hollow": {"fillet": True, "norm": "Standard", "sizes": {
-                "SH40": {"Height": "40", "Width": "40", "Thickness": "2", "Radius1": "4", "Radius2": "2", "Weight": "2.4", "Description": "Tubo estructural"}}},
-            "Custom Profile": {"canonical_family": "Custom Profile", "fillet": False, "sizes": {
-                "PGC100": {"Weight": "2.3", "Description": "Correa galvanizada", "vendor": "keep"},
-                "AL200": {"Weight": "1.2", "Description": "Ángulo de aluminio"}}},
-            "Pipe": {"fillet": False, "sizes": {}}})
+        self.manager.create_folder_library(
+            self.folder,
+            "Catalog",
+            data={
+                "Square Hollow": {
+                    "fillet": True,
+                    "norm": "Standard",
+                    "sizes": {
+                        "SH40": {
+                            "Height": "40",
+                            "Width": "40",
+                            "Thickness": "2",
+                            "Radius1": "4",
+                            "Radius2": "2",
+                            "Weight": "2.4",
+                            "Description": "Tubo estructural",
+                        }
+                    },
+                },
+                "Custom Profile": {
+                    "canonical_family": "Custom Profile",
+                    "fillet": False,
+                    "sizes": {
+                        "PGC100": {"Weight": "2.3", "Description": "Correa galvanizada", "vendor": "keep"},
+                        "AL200": {"Weight": "1.2", "Description": "Ángulo de aluminio"},
+                    },
+                },
+                "Pipe": {"fillet": False, "sizes": {}},
+            },
+        )
         self.dialog = ProfileLibraryManagerDialog(library_manager=self.manager)
+
         def discard_on_cleanup():
             with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Discard):
                 self.dialog.close()
+
         self.addCleanup(discard_on_cleanup)
         self.dialog.refresh_libraries(select_name="Catalog")
 
@@ -44,8 +72,10 @@ class TestLibraryUsability(unittest.TestCase):
         self.assertNotIn(self.folder, banner.text())
         self.assertIn("Catalog", banner.text())
         self.assertIn(self.folder, banner.toolTip())
-        self.assertIn(self.dialog._get_family_display_name("Square Hollow", self.dialog.current_lib_data["Square Hollow"]),
-                      self.dialog.lbl_family_name.text())
+        self.assertIn(
+            self.dialog._get_family_display_name("Square Hollow", self.dialog.current_lib_data["Square Hollow"]),
+            self.dialog.lbl_family_name.text(),
+        )
         self.assertFalse(hasattr(self.dialog, "cb_fillet"))
         self.assertFalse(self.dialog.table_sizes.isColumnHidden(5))
         self.dialog.table_sizes.item(0, 1).setText("42")
@@ -68,8 +98,7 @@ class TestLibraryUsability(unittest.TestCase):
             self.assertIsInstance(badge, QtWidgets.QLabel)
             self.assertEqual(badge.textFormat(), QtCore.Qt.PlainText)
             margins = badge.contentsMargins()
-            self.assertGreaterEqual(
-                badge.height(), badge.fontMetrics().height() + margins.top() + margins.bottom())
+            self.assertGreaterEqual(badge.height(), badge.fontMetrics().height() + margins.top() + margins.bottom())
             self.assertLessEqual(badge.width(), badge.sizeHint().width())
             self.assertFalse(badge.grab().isNull())
         self.assertTrue(library.text().startswith("Catalog | "))
@@ -107,7 +136,8 @@ class TestLibraryUsability(unittest.TestCase):
             self.assertEqual(badge.textFormat(), QtCore.Qt.PlainText)
             self.assertLessEqual(badge.x() + badge.width(), badge.parentWidget().width())
             self.assertLess(
-                badge.width(), badge.sizeHint().width(),
+                badge.width(),
+                badge.sizeHint().width(),
                 f"badge_text={badge.text()!r}; tooltip={badge.toolTip()!r}; expected_length={len(name)}",
             )
             self.assertIn(name, badge.toolTip())
@@ -134,6 +164,7 @@ class TestLibraryUsability(unittest.TestCase):
 
     def test_delete_confirmation_no_preserves_selection_and_storage(self):
         import html
+
         for family, code in (("Square Hollow", "SH40"), ("Custom Profile", "PGC100")):
             for response in (QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.NoButton, QtWidgets.QMessageBox.Ok):
                 with self.subTest(family=family, response=response):
@@ -147,8 +178,10 @@ class TestLibraryUsability(unittest.TestCase):
                     stored = copy.deepcopy(self.manager.get_library("Catalog"))
                     with open(os.path.join(self.folder, "library.json"), "rb") as stream:
                         manifest = stream.read()
-                    rows = [[table.item(r, c).text() if table.item(r, c) else None
-                             for c in range(table.columnCount())] for r in range(table.rowCount())]
+                    rows = [
+                        [table.item(r, c).text() if table.item(r, c) else None for c in range(table.columnCount())]
+                        for r in range(table.rowCount())
+                    ]
                     assets = set(self.dialog._staged_deleted_assets)
                     new_assets = set(self.dialog._staged_new_assets)
                     dirty = self.dialog.is_dirty
@@ -156,16 +189,23 @@ class TestLibraryUsability(unittest.TestCase):
                     with patch.object(QtWidgets.QMessageBox, "question", return_value=response) as question:
                         self.dialog.btn_del_size.click()
                     question.assert_called_once_with(
-                        self.dialog, translate("frameforge", "Remove Size"),
+                        self.dialog,
+                        translate("frameforge", "Remove Size"),
                         "<p>" + html.escape(translate("frameforge", "Remove size '%s'?") % code) + "</p>",
                         QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
-                        QtWidgets.QMessageBox.No)
+                        QtWidgets.QMessageBox.No,
+                    )
                     self.assertEqual(self.dialog.current_lib_data, before)
                     self.assertEqual(self.manager.get_library("Catalog"), stored)
                     with open(os.path.join(self.folder, "library.json"), "rb") as stream:
                         self.assertEqual(stream.read(), manifest)
-                    self.assertEqual([[table.item(r, c).text() if table.item(r, c) else None
-                                       for c in range(table.columnCount())] for r in range(table.rowCount())], rows)
+                    self.assertEqual(
+                        [
+                            [table.item(r, c).text() if table.item(r, c) else None for c in range(table.columnCount())]
+                            for r in range(table.rowCount())
+                        ],
+                        rows,
+                    )
                     self.assertEqual(self.dialog._staged_deleted_assets, assets)
                     self.assertEqual(self.dialog._staged_new_assets, new_assets)
                     self.assertEqual(self.dialog.is_dirty, dirty)
@@ -174,14 +214,16 @@ class TestLibraryUsability(unittest.TestCase):
 
     def test_delete_confirmation_yes_and_markup_code(self):
         import html
+
         self.family("Square Hollow")
         code = "<b>SH40 & special</b>"
         self.dialog.table_sizes.item(0, 0).setText(code)
         self.dialog.table_sizes.selectRow(0)
         with patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Yes) as question:
             self.dialog.btn_del_size.click()
-        self.assertEqual(question.call_args[0][2], "<p>" + html.escape(
-            translate("frameforge", "Remove size '%s'?") % code) + "</p>")
+        self.assertEqual(
+            question.call_args[0][2], "<p>" + html.escape(translate("frameforge", "Remove size '%s'?") % code) + "</p>"
+        )
         self.assertEqual(self.dialog.table_sizes.rowCount(), 0)
         self.assertTrue(self.dialog.is_dirty)
         self.dialog.btn_save.click()
@@ -194,8 +236,9 @@ class TestLibraryUsability(unittest.TestCase):
         card.code_edit.setText("PGC101")
         card.weight_edit.setText("3.25")
         self.assertEqual(card.weight_edit._display_lines(), ["3.25 kg/m"])
-        self.assertNotIn(translate("frameforge", "Weight (kg/m):"),
-                         [label.text() for label in card.findChildren(QtWidgets.QLabel)])
+        self.assertNotIn(
+            translate("frameforge", "Weight (kg/m):"), [label.text() for label in card.findChildren(QtWidgets.QLabel)]
+        )
         self.dialog._on_save_library()
         self.dialog.refresh_libraries(select_name="Catalog")
         self.family("Custom Profile")
@@ -228,8 +271,7 @@ class TestLibraryUsability(unittest.TestCase):
         self.assertEqual(self.dialog.is_dirty, dirty_before)
         self.assertEqual(self.dialog._staged_deleted_assets, assets_before)
         other = self.dialog.cards_view.card_by_code("AL200")
-        position = self.dialog.cards_view.grid_layout.getItemPosition(
-            self.dialog.cards_view.grid_layout.indexOf(other))
+        position = self.dialog.cards_view.grid_layout.getItemPosition(self.dialog.cards_view.grid_layout.indexOf(other))
         self.assertEqual(position[:2], (0, 0))
         self.assertEqual(other.row, 1)
         self.assertEqual(self.dialog.lbl_profile_count.text(), translate("frameforge", "%s of %s profiles") % (1, 2))
@@ -264,8 +306,9 @@ class TestLibraryUsability(unittest.TestCase):
         self.family("Custom Profile")
         data = copy.deepcopy(self.dialog.current_lib_data)
         # Seed via the existing writer, then discover it as a bundled catalog.
-        stock_writer = LibraryManager(user_dir=self.manager.stock_dir,
-                                      stock_dir=os.path.join(self.temp.name, "empty-stock"))
+        stock_writer = LibraryManager(
+            user_dir=self.manager.stock_dir, stock_dir=os.path.join(self.temp.name, "empty-stock")
+        )
         stock_writer.save_user_library("Stock", data)
         self.dialog.refresh_libraries(select_name="Stock")
         self.family("Custom Profile")
@@ -303,6 +346,7 @@ class TestLibraryUsability(unittest.TestCase):
 
     def test_spanish_usability_translations_in_all_runtime_aliases(self):
         from freecad.maxproframe.ff_tools import TRANSLATIONSPATH
+
         messages = {
             "Remove size '%s'?": "¿Quitar la medida '%s'?",
             "Description:": "Descripción:",
@@ -313,12 +357,11 @@ class TestLibraryUsability(unittest.TestCase):
             "No matching profiles.": "No hay perfiles que coincidan",
             "This family has no profiles.": "Esta familia no tiene perfiles.",
         }
-        for prefix in ("frameforge", "FrameForge", "maxproframe", "MaxProFrame"):
-            for locale in ("es", "es-ES", "es-CO", "es-AR"):
-                translator = QtCore.QTranslator()
-                self.assertTrue(translator.load(os.path.join(TRANSLATIONSPATH, f"{prefix}_{locale}.qm")))
-                for source, expected in messages.items():
-                    self.assertEqual(translator.translate("frameforge", source), expected)
+        for locale in ("es", "es-ES", "es-CO", "es-AR"):
+            translator = QtCore.QTranslator()
+            self.assertTrue(translator.load(os.path.join(TRANSLATIONSPATH, f"maxproframe_{locale}.qm")))
+            for source, expected in messages.items():
+                self.assertEqual(translator.translate("frameforge", source), expected)
 
     def test_clear_selection_disables_library_and_family_removal(self):
         self.family("Square Hollow")

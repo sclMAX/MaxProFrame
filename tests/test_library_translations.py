@@ -63,18 +63,26 @@ def catalog(path):
 
 class TestLibraryTranslationCatalogs(unittest.TestCase):
     def test_spanish_covers_library_labels_tooltips_and_messages(self):
-        for prefix in ("frameforge", "maxproframe"):
-            with self.subTest(prefix=prefix):
-                entries = catalog(TRANSLATIONS / f"{prefix}_es.ts")
-                self.assertEqual(sorted(library_sources() - entries.keys()), [])
-                for key in library_sources():
-                    self.assertEqual(re.findall(r"%[sd]", key[1]), re.findall(r"%[sd]", entries[key]), key)
-                self.assertEqual(entries[("frameforge", "Code:")], "Código:")
-                self.assertEqual(entries[("frameforge", "Weight:")], "Peso:")
+        entries = catalog(TRANSLATIONS / "maxproframe_es.ts")
+        self.assertEqual(sorted(library_sources() - entries.keys()), [])
+        for key in library_sources():
+            self.assertEqual(re.findall(r"%[sd]", key[1]), re.findall(r"%[sd]", entries[key]), key)
+        self.assertEqual(entries[("frameforge", "Code:")], "Código:")
+        self.assertEqual(entries[("frameforge", "Weight:")], "Peso:")
 
-    def test_existing_spanish_labels_and_legacy_catalog_are_preserved(self):
+    def test_existing_spanish_labels_are_preserved_and_spanish_ships_once(self):
+        # Only the canonical catalog: the FrameForge-era copies (frameforge_, FrameForge_, MaxProFrame_) are gone.
+        self.assertEqual(
+            sorted(path.name for path in TRANSLATIONS.glob("*_es*")),
+            [
+                "maxproframe_es-AR.qm",
+                "maxproframe_es-CO.qm",
+                "maxproframe_es-ES.qm",
+                "maxproframe_es.qm",
+                "maxproframe_es.ts",
+            ],
+        )
         canonical = catalog(TRANSLATIONS / "maxproframe_es.ts")
-        self.assertEqual(canonical, catalog(TRANSLATIONS / "frameforge_es.ts"))
         for source, expected in {
             "Save Changes": "Guardar Cambios",
             "Close": "Cerrar",
@@ -97,18 +105,17 @@ class TestLibraryTranslationCatalogs(unittest.TestCase):
         except ImportError:
             self.skipTest("Native FreeCAD Qt runtime required")
         entries = catalog(TRANSLATIONS / "maxproframe_es.ts")
-        for prefix in ("frameforge", "FrameForge", "maxproframe", "MaxProFrame"):
-            for locale in ("es", "es-ES", "es-CO", "es-AR"):
-                with self.subTest(prefix=prefix, locale=locale):
-                    translator = QtCore.QTranslator()
-                    self.assertTrue(translator.load(str(TRANSLATIONS / f"{prefix}_{locale}.qm")))
-                    for context, source in library_sources() | {
-                        ("frameforge", "Create Profile"),
-                        ("frameforge", "Select Edges or set Length to create a profile"),
-                    }:
-                        self.assertEqual(translator.translate(context, source), entries[(context, source)])
-                    self.assertFalse(translator.translate("frameforge", "Untranslated sentinel"))
-                    self.assertFalse(translator.translate("unrelated-context", "Save Changes"))
+        for locale in ("es", "es-ES", "es-CO", "es-AR"):
+            with self.subTest(locale=locale):
+                translator = QtCore.QTranslator()
+                self.assertTrue(translator.load(str(TRANSLATIONS / f"maxproframe_{locale}.qm")))
+                for context, source in library_sources() | {
+                    ("frameforge", "Create Profile"),
+                    ("frameforge", "Select Edges or set Length to create a profile"),
+                }:
+                    self.assertEqual(translator.translate(context, source), entries[(context, source)])
+                self.assertFalse(translator.translate("frameforge", "Untranslated sentinel"))
+                self.assertFalse(translator.translate("unrelated-context", "Save Changes"))
 
 
 if __name__ == "__main__":

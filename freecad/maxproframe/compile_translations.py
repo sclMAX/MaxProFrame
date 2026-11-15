@@ -112,11 +112,12 @@ def compile_all_translations(translations_dir):
     if not os.path.isdir(translations_dir):
         return compiled
 
-    # FreeCAD supportedLocales mappings and Qt aliases for recognized project Spanish catalogs:
-    # FreeCAD maps 'Spanish' -> 'es-CO' and 'Spanish (Argentina)' -> 'es-AR'
-    SPANISH_KNOWN_SOURCES = {"frameforge_es.ts", "maxproframe_es.ts"}
+    # FreeCAD loads every "*_<locale>.qm" of the language path, whatever the prefix, and maps
+    # 'Spanish' -> 'es-CO' and 'Spanish (Argentina)' -> 'es-AR': the project Spanish catalog
+    # gets one copy per Spanish locale, under the project prefix only.
+    SPANISH_KNOWN_SOURCES = {"maxproframe_es.ts"}
     SPANISH_LOCALES = ["es", "es-ES", "es-CO", "es-AR"]
-    PROJECT_PREFIXES = ["frameforge", "FrameForge", "maxproframe", "MaxProFrame"]
+    PROJECT_PREFIXES = ["maxproframe"]
 
     for fname in sorted(os.listdir(translations_dir)):
         if fname.endswith(".ts"):

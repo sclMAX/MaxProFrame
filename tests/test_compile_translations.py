@@ -20,7 +20,7 @@ except ImportError:
         HAS_PYSIDE = False
 
 
-MINIMAL_FRAMEFORGE_ES_TS = """<?xml version="1.0" encoding="utf-8"?>
+MINIMAL_MAXPROFRAME_ES_TS = """<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
 <TS version="2.1" language="es" sourcelanguage="en">
 <context>
@@ -60,13 +60,7 @@ MINIMAL_CUSTOM_FR_TS = """<?xml version="1.0" encoding="utf-8"?>
 """
 
 
-def folds_case(directory):
-    """True when the file system of directory ignores case (NTFS and APFS by default)."""
-    probe = tempfile.mkdtemp(prefix="CaseProbe", dir=directory)
-    try:
-        return os.path.exists(os.path.join(directory, os.path.basename(probe).swapcase()))
-    finally:
-        os.rmdir(probe)
+SPANISH_ALIASES = {f"maxproframe_{loc}.qm" for loc in ("es", "es-ES", "es-CO", "es-AR")}
 
 
 RETIRED_MESSAGES_TS = """<?xml version="1.0" encoding="utf-8"?>
@@ -98,29 +92,23 @@ RETIRED_MESSAGES_TS = """<?xml version="1.0" encoding="utf-8"?>
 class TestCompileTranslations(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.mkdtemp(prefix="ff_test_compile_")
-        # FrameForge_es.qm and frameforge_es.qm are one file where case is ignored.
-        self.file_name = str.casefold if folds_case(self.test_dir) else str
 
     def tearDown(self):
         if os.path.exists(self.test_dir):
             shutil.rmtree(self.test_dir)
 
-    def test_known_spanish_catalogs_generate_required_runtime_aliases(self):
-        """Recognized project Spanish catalogs generate all 16 runtime and prefix aliases."""
-        ts_path = os.path.join(self.test_dir, "frameforge_es.ts")
+    def test_spanish_catalog_generates_its_four_runtime_locales(self):
+        """maxproframe_es.ts compiles to maxproframe_es.qm and its es-ES, es-CO and es-AR copies, nothing else."""
+        ts_path = os.path.join(self.test_dir, "maxproframe_es.ts")
         with open(ts_path, "w", encoding="utf-8") as f:
-            f.write(MINIMAL_FRAMEFORGE_ES_TS)
+            f.write(MINIMAL_MAXPROFRAME_ES_TS)
 
         compiled = compile_all_translations(self.test_dir)
 
-        expected_aliases = {
-            f"{stem}_{loc}.qm"
-            for stem in ("frameforge", "FrameForge", "maxproframe", "MaxProFrame")
-            for loc in ("es", "es-ES", "es-CO", "es-AR")
-        }
+        expected_aliases = SPANISH_ALIASES
 
-        created_files = set(os.listdir(self.test_dir)) - {"frameforge_es.ts"}
-        self.assertEqual({self.file_name(name) for name in created_files}, set(map(self.file_name, expected_aliases)))
+        created_files = set(os.listdir(self.test_dir)) - {"maxproframe_es.ts"}
+        self.assertEqual(created_files, expected_aliases)
         self.assertEqual(set(os.path.basename(p) for p in compiled), expected_aliases)
 
         if HAS_PYSIDE:
@@ -133,6 +121,16 @@ class TestCompileTranslations(unittest.TestCase):
                     "Crear perfil",
                     f"Wrong translation in {alias_name}",
                 )
+
+    def test_a_legacy_frameforge_catalog_is_compiled_alone_without_aliases(self):
+        """frameforge_es.ts, from before the rename, is no longer a project catalog: it gets only its own .qm."""
+        with open(os.path.join(self.test_dir, "frameforge_es.ts"), "w", encoding="utf-8") as f:
+            f.write(MINIMAL_MAXPROFRAME_ES_TS)
+
+        compiled = compile_all_translations(self.test_dir)
+
+        self.assertEqual(set(os.listdir(self.test_dir)), {"frameforge_es.ts", "frameforge_es.qm"})
+        self.assertEqual([os.path.basename(p) for p in compiled], ["frameforge_es.qm"])
 
     @unittest.skipUnless(HAS_PYSIDE, "PySide is required to read the compiled catalog")
     def test_vanished_obsolete_and_unfinished_messages_stay_untranslated(self):
@@ -151,9 +149,9 @@ class TestCompileTranslations(unittest.TestCase):
 
     def test_unrelated_catalogs_preserve_own_output_without_overwriting_or_aliasing(self):
         """Unrelated Spanish and non-Spanish catalogs only compile to their own single output."""
-        ff_ts = os.path.join(self.test_dir, "frameforge_es.ts")
+        ff_ts = os.path.join(self.test_dir, "maxproframe_es.ts")
         with open(ff_ts, "w", encoding="utf-8") as f:
-            f.write(MINIMAL_FRAMEFORGE_ES_TS)
+            f.write(MINIMAL_MAXPROFRAME_ES_TS)
 
         unrelated_ts = os.path.join(self.test_dir, "unrelated_es.ts")
         with open(unrelated_ts, "w", encoding="utf-8") as f:
@@ -165,16 +163,11 @@ class TestCompileTranslations(unittest.TestCase):
 
         compiled = compile_all_translations(self.test_dir)
 
-        # Expected outputs: 16 project aliases for frameforge_es.ts + 1 for unrelated_es.qm + 1 for custom_fr.qm
-        expected_project_aliases = {
-            f"{stem}_{loc}.qm"
-            for stem in ("frameforge", "FrameForge", "maxproframe", "MaxProFrame")
-            for loc in ("es", "es-ES", "es-CO", "es-AR")
-        }
-        all_expected = expected_project_aliases | {"unrelated_es.qm", "custom_fr.qm"}
+        # Expected outputs: 4 project aliases for maxproframe_es.ts + 1 for unrelated_es.qm + 1 for custom_fr.qm
+        all_expected = SPANISH_ALIASES | {"unrelated_es.qm", "custom_fr.qm"}
 
-        created_files = set(os.listdir(self.test_dir)) - {"frameforge_es.ts", "unrelated_es.ts", "custom_fr.ts"}
-        self.assertEqual({self.file_name(name) for name in created_files}, set(map(self.file_name, all_expected)))
+        created_files = set(os.listdir(self.test_dir)) - {"maxproframe_es.ts", "unrelated_es.ts", "custom_fr.ts"}
+        self.assertEqual(created_files, all_expected)
         self.assertEqual(set(os.path.basename(p) for p in compiled), all_expected)
 
         # Ensure unrelated catalogs did NOT generate prefix aliases
@@ -194,11 +187,11 @@ class TestCompileTranslations(unittest.TestCase):
         # Ensure unrelated_es did NOT overwrite project catalog content
         if HAS_PYSIDE:
             translator = QtCore.QTranslator()
-            self.assertTrue(translator.load(os.path.join(self.test_dir, "frameforge_es-CO.qm")))
+            self.assertTrue(translator.load(os.path.join(self.test_dir, "maxproframe_es-CO.qm")))
             self.assertEqual(
                 translator.translate("frameforge", "Create Profile"),
                 "Crear perfil",
-                "frameforge_es-CO.qm was corrupted or overwritten by unrelated_es.ts!",
+                "maxproframe_es-CO.qm was corrupted or overwritten by unrelated_es.ts!",
             )
 
 
