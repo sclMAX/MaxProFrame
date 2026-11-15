@@ -113,6 +113,14 @@ class TestWorkbenchCommands(unittest.TestCase):
             with self.subTest(menu=name):
                 self.assertNotIn(name, list(menus))
 
+    def test_interlock_follows_extend_cut_in_profiles_and_cuts(self):
+        # Tabs at a T joint need an Extend / Cut first, and they work on any tube, not only on a Folded Bar.
+        self._activate()
+        items = Gui.activeWorkbench().getToolbarItems()
+        cuts = items["MaxProFrame"]
+        self.assertEqual(cuts.index("MaxProFrame_Interlock"), cuts.index("MaxProFrame_ExtendCut") + 1)
+        self.assertEqual(items["Folded Miters"], ["MaxProFrame_FoldedBar", "MaxProFrame_UnfoldBar"])
+
     def test_every_toolbar_stays_with_its_commands(self):
         self._activate()
         workbench = Gui.activeWorkbench()

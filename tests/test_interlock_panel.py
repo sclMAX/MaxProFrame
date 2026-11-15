@@ -171,12 +171,12 @@ class InterlockPanelFixture(InterlockObjectFixture):
 
 
 class InterlockCommandTest(InterlockPanelFixture):
-    def test_the_command_is_registered_with_its_icon_on_the_folded_miters_toolbar(self):
+    def test_the_command_is_registered_with_its_icon_after_extend_cut(self):
         self.assertIn("MaxProFrame_Interlock", Gui.listCommands())
-        # After the Folded Bar tools.
-        self.assertEqual(
-            ["MaxProFrame_FoldedBar", "MaxProFrame_UnfoldBar", "MaxProFrame_Interlock"], MaxProFrame.toolbox_folded
-        )
+        # On the MaxProFrame toolbar right after Extend / Cut: Tabs work on straight tubes too.
+        tools = MaxProFrame.toolbox_maxproframe
+        self.assertEqual(tools.index("MaxProFrame_Interlock"), tools.index("MaxProFrame_ExtendCut") + 1)
+        self.assertNotIn("MaxProFrame_Interlock", MaxProFrame.toolbox_folded)
         info = Gui.Command.get("MaxProFrame_Interlock").getInfo()
         self.assertEqual("Interlock.svg", info["pixmap"].rsplit("/", 1)[-1])
         self.assertTrue(info["pixmap"].startswith(ICONPATH))
