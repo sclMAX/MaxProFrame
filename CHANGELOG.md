@@ -2,6 +2,9 @@
 
 * Unreleased
 
+  **Improvements**
+  - **One MaxProFrame menu**: the menu bar shows one **MaxProFrame** menu instead of seven, with the submenus **Profiles and Cuts**, **Folded Miters**, **Profiles Group**, **Output** and **Utilities** (Spanish *Perfiles y cortes*, *Ingletes plegados*, *Salida*, *Utilidades*); the **Drawing Primitives** and **Part Primitives** menus are gone, their commands stay on their toolbars, and every toolbar and command is unchanged. In Russian the new submenu names show in English until they are translated. See the [tutorial](docs/tutorial.md).
+
   **Fixes**
   - **Extend / Cut, Notch, Create Miter Ends and Drill Hole**: typing in a field (the Gap, while editing a trim), clicking or pressing OK or Cancel while the preview was recomputing could freeze FreeCAD; the panel now waits for the recompute to end before it previews, draws or takes the click, and the preview then shows the last values.
 
