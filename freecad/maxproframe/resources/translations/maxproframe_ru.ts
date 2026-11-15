@@ -2571,6 +2571,18 @@ All files and sketches on disk will be kept intact.</source>
         <source>OK creates a sketch on the face and opens it to draw the cutout.</source>
         <translation type="vanished">При нажатии OK создается эскиз на грани, который затем открывается для прорисовки выреза.</translation>
     </message>
+    <message>
+        <source>Profiles and Cuts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Output</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Utilities</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>MaxProFrame_ParametricLine</name>

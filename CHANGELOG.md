@@ -1,5 +1,10 @@
 ## Changelog
 
+* Unreleased
+
+  **Improvements**
+  - **One MaxProFrame menu**: the menu bar shows one **MaxProFrame** menu instead of seven, with the submenus **Profiles and Cuts**, **Folded Miters**, **Profiles Group**, **Output** and **Utilities** (Spanish *Perfiles y cortes*, *Ingletes plegados*, *Salida*, *Utilidades*); the **Drawing Primitives** and **Part Primitives** menus are gone, their commands stay on their toolbars, and every toolbar and command is unchanged. In Russian the new submenu names show in English until they are translated. See the [tutorial](docs/tutorial.md).
+
 * v1.14.0 (2026-11-15)
 
   **Improvements**
