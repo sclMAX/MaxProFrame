@@ -11,7 +11,9 @@ try:
     import FreeCAD as App
     import FreeCADGui as Gui
     from PySide import QtCore, QtGui, QtWidgets
+
     from freecad.maxproframe.ff_tools import TRANSLATIONSPATH, translate
+
     HAS_FREECAD_GUI = True
 except ImportError:
     HAS_FREECAD_GUI = False
@@ -142,6 +144,32 @@ class TestWorkbenchTranslationLoading(unittest.TestCase):
                     [("Crear perfil", "Seleccione aristas o defina la longitud para crear un perfil")],
                 )
                 self.assertEqual([o.Name for o in doc.Objects], baseline_objects)
+
+    def test_the_maxproframe_submenus_are_spanish(self):
+        """The one MaxProFrame menu shows its submenus in Spanish when FreeCAD runs in Spanish."""
+        from freecad.maxproframe.InitGui import MaxProFrame
+
+        Gui.addLanguagePath(TRANSLATIONSPATH)
+        self.prefs.SetString("Language", "Spanish")
+        Gui.setLocale("Spanish")
+        Gui.updateLocale()
+
+        workbench = MaxProFrame()
+        with (
+            patch.object(MaxProFrame, "appendToolbar", create=True),
+            patch.object(MaxProFrame, "appendMenu", create=True) as append_menu,
+        ):
+            workbench.Initialize()
+        self.assertEqual(
+            [call.args[0] for call in append_menu.call_args_list],
+            [
+                ["MaxProFrame", "Perfiles y cortes"],
+                ["MaxProFrame", "Ingletes plegados"],
+                ["MaxProFrame", "Grupos de perfiles"],
+                ["MaxProFrame", "Salida"],
+                ["MaxProFrame", "Utilidades"],
+            ],
+        )
 
     def test_native_freecad_translation_loading_preserves_english(self):
         """FreeCAD native catalog loading preserves English strings when English is selected."""

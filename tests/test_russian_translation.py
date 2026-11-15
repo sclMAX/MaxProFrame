@@ -166,6 +166,11 @@ PENDING_TEXTS = (
     ("MaxProFrame", "{} is folded by {}: a tube folds into one bar only."),
     ("MaxProFrame", "{} is another Folded Bar: a tube folds into one bar only."),
     ("MaxProFrame", "{} is a closed frame: it takes no more tubes."),
+    # The submenus of the one MaxProFrame menu.
+    ("frameforge", "Profiles and Cuts"),
+    ("frameforge", "Output"),
+    ("frameforge", "Utilities"),
+    ("frameforge", "Profiles Group"),
 )
 
 

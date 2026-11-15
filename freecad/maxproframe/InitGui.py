@@ -95,26 +95,22 @@ class MaxProFrame(Gui.Workbench):
 
         App.Console.PrintMessage(translate("frameforge", "Switching to MaxProFrame") + "\n")
 
+        # Every group keeps its toolbar; the menu bar gets one MaxProFrame menu with a submenu per group of its own
+        # commands. The Sketcher, Part and PartDesign commands stay on their toolbars only.
         self.appendToolbar(translate("frameforge", "Drawing Primitives"), self.toolbox_drawing)
-        self.appendMenu(translate("frameforge", "Drawing Primitives"), self.toolbox_drawing)
-
         self.appendToolbar(translate("frameforge", "MaxProFrame"), self.toolbox_maxproframe)
-        self.appendMenu(translate("frameforge", "MaxProFrame"), self.toolbox_maxproframe)
-
         self.appendToolbar(translate("MaxProFrame", "Folded Miters"), self.toolbox_folded)
-        self.appendMenu(translate("MaxProFrame", "Folded Miters"), self.toolbox_folded)
-
         self.appendToolbar(translate("frameforge", "Profiles Group"), self.toolbox_group)
-        self.appendMenu(translate("frameforge", "Profiles Group"), self.toolbox_group)
-
         self.appendToolbar(translate("frameforge", "Part Primitives"), self.toolbox_part)
-        self.appendMenu(translate("frameforge", "Part Primitives"), self.toolbox_part)
-
         self.appendToolbar(translate("frameforge", "MaxProFrame Output"), self.toolbox_output)
-        self.appendMenu(translate("frameforge", "MaxProFrame Output"), self.toolbox_output)
-
         self.appendToolbar(translate("frameforge", "MaxProFrame Utilities"), self.toolbox_utilities)
-        self.appendMenu(translate("frameforge", "MaxProFrame Utilities"), self.toolbox_utilities)
+
+        menu = translate("frameforge", "MaxProFrame")
+        self.appendMenu([menu, translate("frameforge", "Profiles and Cuts")], self.toolbox_maxproframe)
+        self.appendMenu([menu, translate("MaxProFrame", "Folded Miters")], self.toolbox_folded)
+        self.appendMenu([menu, translate("frameforge", "Profiles Group")], self.toolbox_group)
+        self.appendMenu([menu, translate("frameforge", "Output")], self.toolbox_output)
+        self.appendMenu([menu, translate("frameforge", "Utilities")], self.toolbox_utilities)
 
     def Activated(self):
         """

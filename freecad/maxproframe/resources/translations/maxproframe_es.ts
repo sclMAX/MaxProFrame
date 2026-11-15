@@ -1325,6 +1325,10 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>The faces must not be on the piece: it moves between them.</source><translation>Las caras no pueden ser de la pieza: la pieza se mueve entre ellas.</translation></message>
     <message><source>Click a straight edge for the direction, or a planar face for Between faces.</source><translation>Hacé clic en una arista recta para la dirección, o en una cara plana para Entre caras.</translation></message>
     <message><source>Click the two planar faces the pieces go between.</source><translation>Hacé clic en las dos caras planas entre las que van las piezas.</translation></message>
+    <message><source>Profiles and Cuts</source><translation>Perfiles y cortes</translation></message>
+    <message><source>Output</source><translation>Salida</translation></message>
+    <message><source>Utilities</source><translation>Utilidades</translation></message>
+    <message><source>Profiles Group</source><translation>Grupos de perfiles</translation></message>
 </context>
 <context>
     <name>MaxProFrame_ParametricLine</name>
