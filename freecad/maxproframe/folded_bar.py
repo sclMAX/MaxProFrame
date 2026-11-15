@@ -16,10 +16,15 @@ it before a tool removes it.
 The bar keeps the tube each segment is made from (``BaseTubes``, odd/tasks/pending-followups.md S4c): a segment whose
 piece is removed without release (undone after a recompute outside its transaction, deleted from a script) falls back
 to its tube, or to the piece left on it, instead of leaving the bar (``bar_tubes``).
+
+The bar lists the Interlock objects on its corners (``Interlocks``, odd/tasks/joint-tabs.md S7): each folded corner
+unfolds and folds with the interlock whose two profiles are its own (``CornerSettings.interlock``); one on no folded
+corner of the bar, or a second one on a corner, leaves the bar in error naming them (``corner_interlocks``).
 """
 
 import os
 from collections import namedtuple
+from dataclasses import replace
 
 import FreeCAD as App
 import Part
@@ -29,6 +34,7 @@ from freecad.maxproframe.ff_tools import ICONPATH, get_param_group, place_in_con
 from freecad.maxproframe.folded_chain import ChainError, build_chain
 from freecad.maxproframe.folded_corner import corner_key, corner_settings, make_folded_corner, set_corner_settings
 from freecad.maxproframe.folded_geometry import fold_bar
+from freecad.maxproframe.interlock import interlock_key, interlock_settings
 from freecad.maxproframe.profile_pattern import (
     container_placement,
     global_element,
@@ -222,6 +228,19 @@ def segment_at(bar, sub, point=None, nearest=False):
     return BarPick(None, None, target, straight_part_message())
 
 
+def folding_bar(piece, other_than=None):
+    """The Folded Bar, but ``other_than``, that folds the tube of ``piece``: None when no other bar folds it."""
+    tube = base_tube(piece)
+    for obj in (piece, tube, newest_piece(tube)):
+        for parent in obj.InList:
+            if is_foldedbar(parent) and (other_than is None or parent.Name != other_than.Name):
+                if tube.Name in {base_tube(segment).Name for segment in parent.Segments if _alive(segment)} or any(
+                    _alive(base) and base.Name == tube.Name for base in getattr(parent, "BaseTubes", ())
+                ):
+                    return parent
+    return None
+
+
 def follow_new_pieces(doc):
     """Have every Folded Bar of ``doc`` fold the newest piece of each of its tubes; relinked bars recompute next.
 
@@ -315,10 +334,41 @@ def folded_corners(bar, chain):
     return [by_pair.get(frozenset(profile.Name for profile in _pair(chain, corner))) for corner in chain.corners]
 
 
-def bar_settings(bar, chain):
-    """The ``CornerSettings`` of each folded corner of ``chain`` from the corner objects of ``bar``.
+def corner_interlocks(bar, chain):
+    """The Interlock object of ``bar`` on each folded corner of ``chain``, in chain order; None where it has none.
 
-    Raises UnfoldError naming the two pieces of a corner that has no corner object.
+    An interlock is matched by its two profiles, in either order (odd/tasks/joint-tabs.md, S7); one missing a profile
+    is left out. Raises UnfoldError naming the pieces of an interlock on no folded corner of ``chain`` (the open corner
+    of a closed frame, two tubes that do not meet) and the corner and both interlocks of a corner with two (S6).
+    """
+    index = {frozenset(profile.Name for profile in _pair(chain, corner)): i for i, corner in enumerate(chain.corners)}
+    found = [None] * len(chain.corners)
+    for obj in getattr(bar, "Interlocks", ()):
+        key = interlock_key(obj) if _alive(obj) else None
+        if key is None:
+            continue
+        at = index.get(key)
+        if at is None:
+            raise UnfoldError(
+                translate("MaxProFrame", "The interlock between {} and {} is not on a folded corner of {}.").format(
+                    obj.PieceA.Label, obj.PieceB.Label, bar.Label
+                )
+            )
+        if found[at] is not None:
+            raise UnfoldError(
+                translate("MaxProFrame", "The corner between {} and {} has two interlocks: {} and {}.").format(
+                    *(profile.Label for profile in _pair(chain, chain.corners[at])), found[at].Label, obj.Label
+                )
+            )
+        found[at] = obj
+    return found
+
+
+def bar_settings(bar, chain):
+    """The ``CornerSettings`` of each folded corner of ``chain`` from the corner objects of ``bar``, with the
+    settings of the interlock on it (``corner_interlocks``).
+
+    Raises UnfoldError naming the two pieces of a corner that has no corner object, and as ``corner_interlocks``.
     """
     settings = []
     for corner, obj in zip(chain.corners, folded_corners(bar, chain)):
@@ -329,6 +379,9 @@ def bar_settings(bar, chain):
                 )
             )
         settings.append(corner_settings(obj))
+    for at, obj in enumerate(corner_interlocks(bar, chain)):
+        if obj is not None:
+            settings[at] = replace(settings[at], interlock=interlock_settings(obj))
     return settings
 
 
@@ -405,6 +458,18 @@ def remove_corners(bar):
             doc.removeObject(obj.Name)
 
 
+def remove_interlocks(bar):
+    """Remove the Interlock objects of ``bar`` that no other bar lists: without its bar one does nothing
+    (odd/tasks/joint-tabs.md, L10)."""
+    doc = bar.Document
+    for obj in list(getattr(bar, "Interlocks", ())):
+        if not _alive(obj):
+            continue
+        others = [parent for parent in obj.InList if parent is not bar and "Interlocks" in parent.PropertiesList]
+        if not others:
+            doc.removeObject(obj.Name)
+
+
 def stock_length():
     """The stock length the cut list fits pieces in (mm)."""
     return get_param_group().GetFloat(STOCK_LENGTH_PARAM, DEFAULT_STOCK_LENGTH)
@@ -475,6 +540,10 @@ class FoldedBar:
             ),
         )  # fmt: skip
         _add(
+            obj, "App::PropertyLinkList", "Interlocks", "FoldedBar",
+            translate("App::Property", "Interlock objects on the corners of the bar"),
+        )  # fmt: skip
+        _add(
             obj, "App::PropertyLength", "DevelopedLength", "Structure",
             translate("App::Property", "Length of the unfolded bar: the length to cut"), read_only=True,
         )  # fmt: skip
@@ -517,8 +586,9 @@ class FoldedBar:
                 user.Label = unfolded_label(obj.Label)
 
     def unsetupObject(self, obj):
-        """The bar leaves the document (not by undo): its corner objects go with it."""
+        """The bar leaves the document (not by undo): its corner objects and its Interlocks go with it."""
         remove_corners(obj)
+        remove_interlocks(obj)
 
     def execute(self, obj):
         self.unfolded = None
@@ -644,8 +714,9 @@ class ViewProviderFoldedBar:
         return os.path.join(ICONPATH, "FoldedBar.svg")
 
     def claimChildren(self):
-        """Under the bar in the tree: its segments, then its corners."""
-        return [obj for obj in (*self.Object.Segments, *self.Object.Corners) if obj is not None]
+        """Under the bar in the tree: its segments, then its corners, then its interlocks."""
+        bar = self.Object
+        return [obj for obj in (*bar.Segments, *bar.Corners, *getattr(bar, "Interlocks", ())) if obj is not None]
 
     def doubleClicked(self, vobj):
         """Edit the bar: unhandled, the tree starts renaming it instead."""
@@ -665,7 +736,12 @@ class ViewProviderFoldedBar:
             return False
         from freecad.maxproframe import create_folded_bar_tool
 
-        create_folded_bar_tool.show_panel(create_folded_bar_tool.FoldedBarTaskPanel(edited=vobj.Object))
+        panel = create_folded_bar_tool.FoldedBarTaskPanel(edited=vobj.Object)
+        create_folded_bar_tool.show_panel(panel)
+        # The panel editing the bar now: a new-bar panel hands its tubes to it (extend-folded-bar S3).
+        self.panel = panel
+        # A tube clicked while editing joins the bar at the end it meets (extend-folded-bar S2).
+        Gui.Selection.addObserver(panel)
         return True
 
     def unsetEdit(self, vobj, mode):
@@ -677,7 +753,8 @@ class ViewProviderFoldedBar:
         return True
 
     def onDelete(self, vobj, sub):
-        """The pieces of a deleted bar show again; its corners are removed with it (``FoldedBar.unsetupObject``)."""
+        """The pieces of a deleted bar show again; its corners and Interlocks are removed with it
+        (``FoldedBar.unsetupObject``)."""
         for tip in self.Object.Segments:
             if tip is not None:
                 tip.Visibility = True

@@ -417,7 +417,8 @@ class CommandTest(FoldedPanelFixture):
     def test_commands_are_registered_with_their_icons_and_on_a_workbench_toolbar(self):
         known = set(Gui.listCommands())
         self.assertEqual([], [name for name in COMMANDS if name not in known])
-        self.assertEqual(list(COMMANDS), MaxProFrame.toolbox_folded)
+        # The Folded Bar tools lead the toolbar; the Interlock follows them (test_interlock_panel).
+        self.assertEqual(list(COMMANDS), MaxProFrame.toolbox_folded[: len(COMMANDS)])
         icons = {"MaxProFrame_FoldedBar": "FoldedBar.svg", "MaxProFrame_UnfoldBar": "UnfoldedBar.svg"}
         for name, icon in icons.items():
             with self.subTest(command=name):
@@ -1340,28 +1341,323 @@ class PickAsYouGoTest(FoldedPanelFixture):
                 self.assertEqual(1 if close == "accept" else 0, len(self.bars()))
                 Gui.Selection.clearSelection()
 
-    def test_editing_a_bar_does_not_follow_the_selection(self):
-        # As End Miter's edit: the pieces of an edited bar are not changed by clicks.
-        profiles, bar = self.make_bar(**PLAIN)
-        other = self.frame()
-        panel = self.edit(bar)
 
-        self.click(other[0])
-        Gui.Selection.removeSelection(self.doc.Name, other[0].Name)
-        self.events()
-        self.assertEqual([], [entry for entry in self.notified if entry[0] is panel])
-        # Even told directly, the edited bar keeps its pieces.
-        panel.addSelection(self.doc.Name, other[1].Name, "Face1", (0.0, 0.0, 0.0))
-        panel.removeSelection(self.doc.Name, profiles[1].Name, "")
-        self.events()
+class ExtendFixture(FoldedPanelFixture):
+    """A frame folded at its top right corner only: the left and bottom tubes are free (extend-folded-bar)."""
 
-        self.assertEqual(profiles, panel.selection)
-        self.assertEqual(4, panel.form.corner_list.count())
-        self.pick(panel, 0, 1, 2)
-        panel.form.spin_clearance.setValue(0.3)
+    click = PickAsYouGoTest.click
+
+    def setUp(self):
+        super().setUp()
+        self.bottom, self.right, self.top, self.left = self.frame()
+        # Folded at the top right corner only: the left and bottom tubes are free.
+        self.bar = make_folded_bar([self.right, self.top], bend(radius=4.0, **PLAIN))
+        self.assertEqual("Valid", self.bar.getStatusString())
+
+    def far_tubes(self, count=1):
+        """``count`` tubes of an open chain far from the frame: they meet no end of the bar."""
+        edges = tuple(((5000 + x0, y0, z0), (5000 + x1, y1, z1)) for (x0, y0, z0), (x1, y1, z1) in RECTANGLE)
+        return self.frame(edges=edges[:count])
+
+    def corner_names(self, bar):
+        return {frozenset((corner.PieceA.Name, corner.PieceB.Name)): corner.Name for corner in bar.Corners}
+
+
+class ExtendEditedBarTest(ExtendFixture):
+    """extend-folded-bar S2, S4, S5: the edit panel takes a click on a tube that meets one end of the bar."""
+
+    def test_a_tube_meeting_the_last_end_goes_last_and_the_first_corner_keeps_its_object_and_values(self):
+        before = self.corner_names(self.bar)
+        radius = self.bar.Corners[0].OuterRadius.Value
+        panel = self.edit(self.bar)
+
+        self.click(self.left)
+        panel.update_preview()
+
+        self.assertEqual([self.right, self.top, self.left], panel.selection)
+        self.assertEqual([self.right, self.top, self.left], list(self.bar.Segments))
+        self.assertEqual(2, len(self.folded_corners(self.bar)))
+        after = self.corner_names(self.bar)
+        key = frozenset((self.right.Name, self.top.Name))
+        self.assertEqual(before[key], after[key])
+        self.assertEqual(radius, self.doc.getObject(after[key]).OuterRadius.Value)
+        self.assertFalse(self.left.Visibility)
+        self.assertOneSolid(self.bar)
+        self.assertAccepts(panel)
         self.assertTrue(panel.accept())
-        self.assertEqual(profiles, list(bar.Segments))
-        self.assertEqual([0.3] * 3, [round(corner.Clearance.Value, 9) for corner in self.folded_corners(bar)])
+        self.assertEqual([self.right, self.top, self.left], list(self.bar.Segments))
+
+    def test_a_tube_meeting_the_first_end_goes_first(self):
+        panel = self.edit(self.bar)
+
+        self.click(self.bottom)
+        panel.update_preview()
+
+        self.assertEqual([self.bottom, self.right, self.top], panel.selection)
+        self.assertEqual([self.bottom, self.right, self.top], list(self.bar.Segments))
+        self.assertEqual(2, len(self.folded_corners(self.bar)))
+        self.assertOneSolid(self.bar)
+
+    def test_a_tube_meeting_both_ends_closes_the_frame(self):
+        panel = self.edit(self.bar)
+        self.click(self.left)
+        self.click(self.bottom)
+        panel.update_preview()
+
+        self.assertEqual(4, len(panel.selection))
+        self.assertEqual(3, len(self.folded_corners(self.bar)))
+        self.assertEqual(1, len(self.open_pairs(self.bar)))
+        self.assertOneSolid(self.bar)
+        self.assertTrue(panel.accept())
+
+    def test_ok_after_adding_a_tube_is_one_undo_step(self):
+        self.doc.clearUndos()
+        panel = self.edit(self.bar)
+        self.click(self.left)
+        self.assertTrue(panel.accept())
+        self.events()
+        self.assertEqual([self.right, self.top, self.left], list(self.bar.Segments))
+
+        self.doc.undo()
+        self.doc.recompute()
+        self.assertEqual([self.right, self.top], list(self.bar.Segments))
+        self.assertEqual(1, len(self.bar.Corners))
+
+    def test_cancel_takes_the_added_tube_off_and_shows_it_again_undo_or_not(self):
+        for undo in (1, 0):
+            with self.subTest(undo=undo):
+                self.doc.UndoMode = undo
+                Gui.Selection.clearSelection()
+                corners = self.corner_names(self.bar)
+                panel = self.edit(self.bar)
+                self.click(self.left)
+                panel.update_preview()
+                self.assertFalse(self.left.Visibility)
+
+                self.assertTrue(panel.reject())
+                self.close_dialog()
+
+                self.assertEqual([self.right, self.top], list(self.bar.Segments))
+                self.assertEqual(corners, self.corner_names(self.bar))
+                self.assertTrue(self.left.Visibility)
+                # With undo on, Cancel leaves the bar touched (assertShapeBack): a recompute folds it as before.
+                self.doc.recompute()
+                self.assertOneSolid(self.bar)
+
+    def test_a_tube_meeting_no_end_is_refused_and_the_panel_says_why(self):
+        (far,) = self.far_tubes()
+        panel = self.edit(self.bar)
+
+        self.click(far)
+
+        self.assertEqual([self.right, self.top], panel.selection)
+        self.assertIn(f"{far.Label} meets neither end of the bar.", self.messages(panel).split("\n"))
+        self.assertTrue(far.Visibility)
+        # A notice only: the bar still folds and OK keeps it as it was.
+        self.assertTrue(panel.ok_button_enabled())
+        self.assertTrue(panel.accept())
+        self.assertEqual([self.right, self.top], list(self.bar.Segments))
+
+    def test_a_tube_another_bar_folds_is_refused(self):
+        other_tubes = self.far_tubes(2)
+        other = make_folded_bar(other_tubes, bend(**PLAIN))
+        panel = self.edit(self.bar)
+
+        for target in (other, other_tubes[0]):
+            with self.subTest(target=target.Name):
+                self.click(target)
+                self.assertEqual([self.right, self.top], panel.selection)
+                expected = f"{other_tubes[0].Label} is folded by {other.Label}: a tube folds into one bar only."
+                if target is other:
+                    expected = f"{other.Label} is another Folded Bar: a tube folds into one bar only."
+                self.assertIn(expected, self.messages(panel).split("\n"))
+                Gui.Selection.clearSelection()
+                self.events()
+        self.assertEqual(list(other_tubes), list(other.Segments))
+
+    def test_a_closed_bar_takes_no_more_tubes(self):
+        (far,) = self.far_tubes()
+        panel = self.edit(self.bar)
+        self.click(self.left)
+        self.click(self.bottom)
+        self.assertTrue(panel.accept())
+        self.close_dialog()
+        self.assertEqual(4, len(self.bar.Segments))
+
+        panel = self.edit(self.bar)
+        self.click(far)
+        self.assertEqual(4, len(panel.selection))
+        self.assertIn(f"{self.bar.Label} is a closed frame: it takes no more tubes.", self.messages(panel).split("\n"))
+
+    def test_cancel_after_remove_and_click_back_keeps_the_folded_tube_hidden(self):
+        tubes = self.far_tubes(3)
+        bar = make_folded_bar(tubes, bend(**PLAIN))
+        self.doc.recompute()
+        panel = self.edit(bar)
+        self.pick(panel, panel.form.corner_list.count() - 1)
+        panel.form.button_remove.click()
+        self.events()
+        panel.update_preview()
+        self.assertTrue(tubes[2].Visibility)
+        self.click(tubes[2])
+        panel.update_preview()
+        self.assertEqual(list(tubes), panel.selection)
+
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+
+        self.assertEqual(list(tubes), list(bar.Segments))
+        self.assertFalse(tubes[2].Visibility)
+
+    def test_a_tube_added_then_removed_shows_after_ok(self):
+        panel = self.edit(self.bar)
+        self.click(self.left)
+        panel.update_preview()
+        self.pick(panel, panel.form.corner_list.count() - 1)
+        panel.form.button_remove.click()
+        self.events()
+        panel.update_preview()
+
+        self.assertTrue(panel.accept())
+
+        self.assertEqual([self.right, self.top], list(self.bar.Segments))
+        self.assertTrue(self.left.Visibility)
+
+    def test_the_closing_tube_opens_where_it_meets_the_first_tube(self):
+        panel = self.edit(self.bar)
+        self.click(self.left)
+        self.click(self.bottom)
+        panel.update_preview()
+        self.assertEqual({self.right, self.bottom}, set(self.open_pairs(self.bar)[0]))
+        self.assertTrue(panel.accept())
+
+    def test_a_click_on_the_edited_bar_or_its_own_tube_is_silent(self):
+        panel = self.edit(self.bar)
+        for target in (self.bar, self.right):
+            self.click(target)
+            Gui.Selection.clearSelection()
+            self.events()
+        self.assertEqual([self.right, self.top], panel.selection)
+        self.assertEqual("", panel._notice)
+
+
+class ExtendFromNewBarTest(ExtendFixture):
+    """extend-folded-bar S3, S4: a click on a Folded Bar in the new-bar panel extends that bar instead."""
+
+    def test_a_click_on_a_folded_bar_edits_it_with_the_listed_tube_that_meets_its_end(self):
+        panel = self.run_command()
+        self.click(self.left)
+        count = len(self.recorded)
+
+        self.click(self.bar)
+
+        self.assertEqual(count + 1, len(self.recorded))
+        edit = self.recorded[-1]
+        self.assertIs(self.bar, edit.edited)
+        self.assertTrue(panel._closed)
+        self.assertEqual([self.right, self.top, self.left], edit.selection)
+        self.assertEqual([self.bar], self.bars())
+        self.assertTrue(edit.accept())
+        self.assertEqual([self.right, self.top, self.left], list(self.bar.Segments))
+        self.assertEqual(2, len(self.folded_corners(self.bar)))
+
+    def test_listed_tubes_join_in_any_order_as_long_as_they_chain_to_an_end(self):
+        self.run_command()
+        self.click(self.bottom)
+        self.click(self.left)
+
+        self.click(self.bar)
+
+        edit = self.recorded[-1]
+        self.assertIs(self.bar, edit.edited)
+        self.assertEqual(4, len(edit.selection))
+        self.assertTrue(edit.accept())
+        self.assertEqual(3, len(self.folded_corners(self.bar)))
+
+    def test_with_nothing_listed_the_click_edits_the_bar(self):
+        self.run_command()
+
+        self.click(self.bar)
+
+        edit = self.recorded[-1]
+        self.assertIs(self.bar, edit.edited)
+        self.assertEqual([self.right, self.top], edit.selection)
+
+    def test_a_listed_tube_meeting_no_end_is_left_out_and_the_edit_panel_says_why(self):
+        (far,) = self.far_tubes()
+        self.run_command()
+        self.click(far)
+
+        self.click(self.bar)
+
+        edit = self.recorded[-1]
+        self.assertIs(self.bar, edit.edited)
+        self.assertEqual([self.right, self.top], edit.selection)
+        self.assertIn(f"{far.Label} meets neither end of the bar.", self.messages(edit).split("\n"))
+        self.assertTrue(far.Visibility)
+
+    def test_a_tube_another_bar_folds_is_not_listed_and_the_panel_says_why(self):
+        panel = self.run_command(self.right)
+
+        self.assertEqual([], panel.selection)
+        expected = f"{self.right.Label} is folded by {self.bar.Label}: a tube folds into one bar only."
+        self.assertIn(expected, self.messages(panel).split("\n"))
+        self.assertEqual([self.bar], self.bars())
+
+    def test_a_preselected_tube_another_bar_folds_says_why_when_a_free_tube_follows(self):
+        panel = self.run_command(self.right, self.bottom)
+        expected = f"{self.right.Label} is folded by {self.bar.Label}: a tube folds into one bar only."
+        self.assertNotIn(self.right, panel.selection)
+        self.assertIn(expected, self.messages(panel).split("\n"))
+
+    def test_an_edit_opened_from_the_new_bar_closes_without_ok_or_cancel(self):
+        self.run_command()
+        self.click(self.left)
+        self.click(self.bar)
+        self.assertEqual([self.right, self.top, self.left], self.recorded[-1].selection)
+
+        self.close_dialog()
+
+        self.assertEqual([self.right, self.top], list(self.bar.Segments))
+        self.assertTrue(self.left.Visibility)
+        self.doc.recompute()
+        self.assertOneSolid(self.bar)
+
+    def test_a_refused_click_then_a_taken_click_drops_the_notice(self):
+        panel = self.run_command()
+        self.click(self.right)
+        expected = f"{self.right.Label} is folded by {self.bar.Label}: a tube folds into one bar only."
+        self.assertIn(expected, self.messages(panel).split("\n"))
+        Gui.Selection.clearSelection()
+        self.events()
+
+        self.click(self.left)
+
+        self.assertEqual([self.left], panel.selection)
+        self.assertNotIn(expected, self.messages(panel))
+
+    def test_a_click_on_a_closed_bar_edits_it_and_says_the_listed_tube_is_refused(self):
+        (far,) = self.far_tubes()
+        edges = tuple(((x0, 9000 + y0, z0), (x1, 9000 + y1, z1)) for (x0, y0, z0), (x1, y1, z1) in RECTANGLE)
+        closed = make_folded_bar(list(self.frame(edges=edges)), bend(**PLAIN))
+        self.doc.recompute()
+        self.run_command()
+        self.click(far)
+
+        self.click(closed)
+
+        edit = self.recorded[-1]
+        self.assertIs(closed, edit.edited)
+        self.assertIn(f"{closed.Label} is a closed frame: it takes no more tubes.", self.messages(edit).split("\n"))
+        self.assertTrue(far.Visibility)
+        self.assertIsNone(closed.ViewObject.Proxy.dumps())
+
+    def test_the_preview_folding_a_tube_is_no_refusal(self):
+        panel = self.run_command(self.left, self.bottom)
+        self.click(self.bottom, ctrl=True)
+        self.click(self.bottom)
+        self.assertEqual([self.left, self.bottom], panel.selection)
+        self.assertEqual("", panel._notice)
 
 
 class EditPanelTest(FoldedPanelFixture):

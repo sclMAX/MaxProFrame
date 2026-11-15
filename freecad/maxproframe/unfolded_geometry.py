@@ -15,6 +15,9 @@ before (A, the segment after with ``step_flip``) keeps its band up to one cross-
 of both bands when folded, and the other segment (B) keeps its band from one cross-section past that overlap; B's side
 walls give way where A's band folds onto them. Every cut through the inner wall is then a tube cross-section, so any
 tube laser cuts it.
+A corner with a ``Fingers`` interlock (``interlock_geometry``) splits that band along w into fingers that alternate
+which segment covers the overlap: each finger level is the stepped band, A's or B's; the clearance opens the finger
+sides too, and the finger tips can be chamfered or rounded in the inner wall plane (odd/tasks/joint-tabs.md, S3-S5).
 The cuts made on each segment (its trims, cutouts and drill holes) move with it. The bar starts at X = 0 at the
 open-corner end of the first segment. A closed frame whose open corner is ``Stepped`` gets that joint at both ends of
 the bar instead of the ends' End Miter there (their other cuts stay): around the virtual sharp of the outer faces the
@@ -22,8 +25,8 @@ last segment covers the overlap of the inner wall bands and the first one the ov
 to s) as far as nothing passes the other tube's outer face (a notch is left at the outer edge away from 90 degrees,
 which the last segment's outer wall narrows with a second step), the side walls between keep the miter. See
 odd/tasks/folded-miter.md, section "T3 design", odd/tasks/folded-corners.md (S6 outer radius, S7 thickness from the
-profile, S8 automatic K-factor), odd/tasks/stepped-corners.md (S2-S5, L8, L11, L13) and odd/tasks/pending-followups.md
-(S3a-S3c).
+profile, S8 automatic K-factor), odd/tasks/stepped-corners.md (S2-S5, L8, L11, L13), odd/tasks/pending-followups.md
+(S3a-S3c) and odd/tasks/joint-tabs.md (L7).
 """
 
 import math
@@ -36,6 +39,7 @@ import Part
 from freecad.maxproframe._utils import is_trimmedbody, piece_stack
 from freecad.maxproframe.ff_tools import translate
 from freecad.maxproframe.folded_chain import ChainError, _corner, base_profile, section_offset
+from freecad.maxproframe.interlock_geometry import CHAMFER, FINGERS, KINDS, SQUARE, InterlockError
 from freecad.maxproframe.profile_pattern import container_placement, placed
 
 # Default key: its diameter as a part of the depth across the bent wall (S20).
@@ -76,6 +80,9 @@ class CornerSettings:
     cut with tube cross-sections; 0: automatic, ``automatic_step_depth``); ``step_flip`` gives the band that covers
     the overlap to the segment after instead of the one before. The clearance also opens the step faces, half on
     each side. A Miter corner ignores the step settings.
+    ``interlock``: None, or the settings of an interlock kind of ``interlock_geometry.KINDS`` at the corner: with
+    ``FingerSettings`` the inner wall band is split into fingers, whatever the joint (its depth, clearance and flip
+    replace the step settings there); below the band the joint stays.
     """
 
     outer_radius: float
@@ -86,6 +93,7 @@ class CornerSettings:
     joint: str = MITER
     step_depth: float = 0.0
     step_flip: bool = False
+    interlock: object = None
 
 
 def automatic_k_factor(inside_radius, thickness):
@@ -188,6 +196,9 @@ class UnfoldedCorner:
     ``step_split`` is None at a Miter corner; at a Stepped one it is (v, u): from v on (the stepped band) the segment
     after owns the bar from u on, inside the gap the band leaves between both segments (below, its nominal flank
     splits them).
+    ``finger_split`` is None without fingers; with them it is (v, ((w0, w1, u), ...)): from v on, in each finger level
+    w0 to w1 (the outermost ones on past the tube), the segment after owns the bar from u on, as ``step_split`` for
+    the segment that covers that level.
     """
 
     bend_angle: float
@@ -196,6 +207,7 @@ class UnfoldedCorner:
     start: float
     frame: App.Placement
     step_split: tuple = None
+    finger_split: tuple = None
 
 
 @dataclass
@@ -292,6 +304,13 @@ def _prism(face, reach):
     return face.extrude(App.Vector(0, 0, 2 * reach))
 
 
+def _prism_between(face, low, high):
+    """``face`` of the (u, v) plane extruded along w from ``low`` to ``high``."""
+    face = face.copy()
+    face.translate(App.Vector(0, 0, low))
+    return face.extrude(App.Vector(0, 0, high - low))
+
+
 @dataclass
 class _Bend:
     """The sizes of one folded corner, in its (u, v) plane."""
@@ -308,6 +327,9 @@ class _Bend:
     joint: str = MITER
     step_depth: float = 0.0
     step_flip: bool = False
+    # The size of the tube along w, and the fingers of the band (None without them).
+    span: float = 0.0
+    fingers: object = None
 
     @property
     def half(self):
@@ -318,14 +340,24 @@ class _Bend:
         return self.joint == STEPPED
 
     @property
+    def banded(self):
+        """Whether the inner wall band is cut apart from the V: a Stepped joint, or fingers."""
+        return self.stepped or self.fingers is not None
+
+    @property
+    def band_clearance(self):
+        """The clearance of the band faces: the fingers', else the corner's."""
+        return float(self.fingers.clearance) if self.fingers is not None else self.clearance
+
+    @property
     def _flank_top(self):
-        """Where the flanks of the V end inward: the inner corner (v = depth), or the bottom of the stepped band."""
-        return self.depth - self.step_depth if self.stepped else self.depth
+        """Where the flanks of the V end inward: the inner corner (v = depth), or the bottom of the band."""
+        return self.depth - self.step_depth if self.banded else self.depth
 
     @property
     def _key_top(self):
-        """How high the key may reach: the inside of the inner wall, or the bottom of the stepped band."""
-        return self.depth - self.step_depth if self.stepped else self.depth - self.thickness
+        """How high the key may reach: the inside of the inner wall, or the bottom of the band."""
+        return self.depth - self.step_depth if self.banded else self.depth - self.thickness
 
     def sizes(self):
         """Everything but the names: two corners of the same sizes remove the same solid."""
@@ -483,9 +515,11 @@ class _Bend:
         tab, socket = self.tab(along, diameter), self.socket(along, diameter)
         boxes = [_box(tab), _box(socket)]
         above = all(box.YMax <= self._key_top + SIZE_TOLERANCE for box in boxes)
-        if above and self.stepped:
-            # The tab must not reach where the stepped band of the other segment folds (flipped step).
-            above = all(tab.common(face).Area <= AREA_TOLERANCE for face in self._step_regions()[1:])
+        if above and self.banded:
+            # The tab must not reach where the band of the other segment folds (flipped step, or any finger).
+            flips = (False, True) if self.fingers is not None else (self.step_flip,)
+            trims = [face for flip in flips for face in self._step_regions(flip)[1:]]
+            above = all(tab.common(face).Area <= AREA_TOLERANCE for face in trims)
         below = all(box.YMin >= self.thickness - SIZE_TOLERANCE for box in boxes)
         if below:
             notch, behind = self._behind_flank
@@ -578,7 +612,7 @@ class _Bend:
         moves back g/2 and the trim grows g/2 past it; the trim grows g below A's step face (the bottom of its band
         past the flank, below 90 degrees) and B's end moves back g from A's inner face (where it rests at 90
         degrees), since those faces of A's band stay (with s = t they are the faces of the inner wall)."""
-        h, g, t, s = self.half, self.clearance, self.thickness, self.step_depth
+        h, g, t, s = self.half, self.band_clearance, self.thickness, self.step_depth
         ba, depth, c = self.allowance, self.depth, self.radius + self.thickness
         x_a, x_b = self._step_ends
         band = [(x_a - g / 2, depth - s), (ba + x_b + g, depth - s), (ba + x_b + g, depth + t)]
@@ -593,28 +627,83 @@ class _Bend:
             trim = []
         return band, trim
 
-    def _step_regions(self):
+    def _step_regions(self, flip):
         """The faces the stepped band removes: the band rectangle and, when there is one, the trim of B's side walls;
-        mirrored about the middle of the bend zone with ``step_flip``."""
+        mirrored about the middle of the bend zone with ``flip`` (the segment after covers the overlap)."""
         ba = self.allowance
         regions = [points for points in self._step_points() if points]
-        if self.step_flip:
+        if flip:
             regions = [[(ba - u, v) for u, v in reversed(points)] for points in regions]
         return [_polygon(points) for points in regions]
 
-    def step_split(self):
-        """(v, u) of ``UnfoldedCorner.step_split``: the bottom of the band and the middle of the gap the band leaves
-        between the segments (mirrored with ``step_flip``); None at a Miter corner."""
-        if not self.stepped:
-            return None
+    def _band_middle(self, flip):
+        """The middle of the gap the band leaves between the segments along u (mirrored with ``flip``)."""
         band = self._step_points()[0]
         middle = (band[0][0] + band[1][0]) / 2
-        return self.depth - self.step_depth, self.allowance - middle if self.step_flip else middle
+        return self.allowance - middle if flip else middle
+
+    def step_split(self):
+        """(v, u) of ``UnfoldedCorner.step_split``: the bottom of the band and the middle of the gap the band leaves
+        between the segments (mirrored with ``step_flip``); None at a Miter corner or with fingers."""
+        if not self.stepped or self.fingers is not None:
+            return None
+        return self.depth - self.step_depth, self._band_middle(self.step_flip)
+
+    def finger_levels(self):
+        """[(w0, w1, flip)]: each finger level along w (``FingerSettings.bounds``) and whether the segment after
+        covers it (every other one, from the second one, or from the first one with the fingers' ``flip``)."""
+        bounds = self.fingers.bounds(self.span)
+        return [
+            (low, high, (index % 2 == 1) != bool(self.fingers.flip))
+            for index, (low, high) in enumerate(zip(bounds, bounds[1:]))
+        ]
+
+    def finger_split(self):
+        """(v, ((w0, w1, u), ...)) of ``UnfoldedCorner.finger_split``: the bottom of the band and, per finger level,
+        the middle of the gap its band leaves (``_band_middle``); None without fingers."""
+        if self.fingers is None:
+            return None
+        levels = tuple((low, high, self._band_middle(flip)) for low, high, flip in self.finger_levels())
+        return self.depth - self.step_depth, levels
+
+    def _tips(self):
+        """The solids that lead the fingers in (joint-tabs.md S4): at each tip corner of a finger next to another
+        finger (tip at u = x_A - g/2 for A, its mirror for B; w at the level boundary less g/2), a Chamfer removes the
+        triangle of legs ``tip_size`` in the (u, w) plane, a Round the square of side ``tip_size`` less the quarter
+        disc of that radius; both swept along v through the band, so a laser cuts them. They reach on past the tip
+        along u (where the band is already cut), never along w into the next level (with no clearance it holds the
+        other segment's finger)."""
+        fingers, k = self.fingers, float(self.fingers.tip_size)
+        if fingers.tip == SQUARE or k <= SIZE_TOLERANCE:
+            return []
+        g, ba = self.band_clearance, self.allowance
+        tip = self._step_ends[0] - g / 2
+        low, high = self.depth - self.step_depth, self.depth + self.thickness
+        levels = self.finger_levels()
+        m, side = END_MARGIN, (1 - math.sqrt(0.5)) * k
+        solids = []
+        for index, (w0, w1, flip) in enumerate(levels):
+            corner_u, along = (ba - tip, -1) if flip else (tip, 1)
+            corners = [(w0 + g / 2, -1)] if index > 0 else []
+            if index < len(levels) - 1:
+                corners.append((w1 - g / 2, 1))
+            for corner_w, across in corners:
+                # (x, y) from the tip corner along u and w, negative into the finger, on the band bottom.
+                origin, x_axis = App.Vector(corner_u, low, corner_w), App.Vector(along, 0, 0)
+                y_axis = App.Vector(0, 0, across)
+                at = [origin + x_axis * x + y_axis * y for x, y in ((-k, 0), (m, 0), (m, -k), (0, -k), (-side, -side))]
+                if fingers.tip == CHAMFER:
+                    edges = Part.makePolygon(at[:4] + at[:1]).Edges
+                else:
+                    # The square less the quarter disc centered k inside the finger from the corner.
+                    edges = Part.makePolygon(at[3:0:-1] + at[:1]).Edges + [Part.Arc(at[0], at[4], at[3]).toShape()]
+                solids.append(Part.Face(Part.Wire(edges)).extrude(App.Vector(0, high - low, 0)))
+        return solids
 
     def check_step(self):
         """The step depth of a stepped corner (S5): at least the wall thickness; at most where the band (from
         v = depth - s) still clears the relief (v = t + r), and under half the depth, rounded down to 0.1 mm."""
-        if not self.stepped:
+        if not self.banded:
             return
         t = self.thickness
         largest = min(self.depth - t - self.radius, self.depth / 2 - SIZE_TOLERANCE)
@@ -624,9 +713,9 @@ class _Bend:
         """Whether the stepped band fits at the angle of the corner (L8): A's band stays on its side of B's flank on
         the unfolded bar (the folded bar splits the segments there), and the trim of B's side walls stays above the
         bent wall and the bottom of the V."""
-        if not self.stepped:
+        if not self.banded:
             return
-        g, h, c = self.clearance, self.half, self.radius + self.thickness
+        g, h, c = self.band_clearance, self.half, self.radius + self.thickness
         x_a = self._step_ends[0]
         b_flank = self.allowance + (self.depth - self.step_depth - c) * math.tan(h)
         trim = self._step_points()[1]
@@ -636,23 +725,37 @@ class _Bend:
 
     def _cut_faces(self):
         """The faces of the (u, v) plane the corner cuts through the side walls and the inner wall, but the relief."""
-        cuts = [self.notch(self._flank_top if self.stepped else self.depth + self.thickness)]
+        cuts = [self.notch(self._flank_top if self.banded else self.depth + self.thickness)]
         if self.key:
             cuts[0] = cuts[0].cut(self.tab())
             cuts.append(self.socket())
-        if self.stepped:
-            cuts.extend(self._step_regions())
+        if self.stepped and self.fingers is None:
+            cuts.extend(self._step_regions(self.step_flip))
         return cuts
 
     def reach(self):
         """(u_min, u_max): how far the corner cuts along the bar, back into the segment before and on into the one
         after, from the start of its bend zone (the relief spans the bend zone)."""
-        boxes = [face.BoundBox for face in self._cut_faces()]
+        shapes = self._cut_faces()
+        if self.fingers is not None:
+            shapes += self._step_regions(False) + self._step_regions(True) + self._tips()
+        boxes = [shape.BoundBox for shape in shapes]
         return min([box.XMin for box in boxes] + [0.0]), max([box.XMax for box in boxes] + [self.allowance])
 
     def removed(self, reach):
-        """What the corner removes, as a solid of the corner coordinates (u, v, w)."""
+        """What the corner removes, as a solid of the corner coordinates (u, v, w).
+
+        With fingers each level removes its stepped band (``_step_regions`` of its flip) from g/2 below its boundaries
+        to g/2 above them (the outermost ones on past the tube): next levels overlap by g, which opens every finger
+        side pair by g, g/2 on each finger; then the tips (``_tips``)."""
         solids = [_prism(face, reach) for face in self._cut_faces()]
+        if self.fingers is not None:
+            g, levels = self.band_clearance, self.finger_levels()
+            for index, (low, high, flip) in enumerate(levels):
+                low = -reach if index == 0 else low - g / 2
+                high = reach if index == len(levels) - 1 else high + g / 2
+                solids.extend(_prism_between(face, low, high) for face in self._step_regions(flip))
+            solids.extend(self._tips())
         rectangle, *discs = self.relief_region()
         relief = _prism(rectangle, reach)
         if discs:
@@ -903,11 +1006,18 @@ def _bends(chain, corners):
         if joint not in JOINTS:
             raise ValueError(f"Unknown joint {joint!r}: give Miter or Stepped.")
         stepped = joint == STEPPED
+        interlock = chosen.interlock
+        if interlock is not None and getattr(interlock, "kind", None) not in KINDS:
+            raise ValueError(f"Unknown interlock {interlock!r}: give one of {', '.join(KINDS)}.")
+        fingers = interlock if interlock is not None and interlock.kind == FINGERS else None
+        segment = chain.segments[corner.before]
         step_depth = 0.0
-        if stepped:
-            # S5: 0 is automatic, from the tube of the segment before (all the tubes of a chain are alike).
-            corner_radius = _corner_radius(chain.segments[corner.before].profile)
-            step_depth = float(chosen.step_depth) or automatic_step_depth(thickness, corner_radius)
+        if stepped or fingers is not None:
+            # S5: 0 is automatic, from the tube of the segment before (all the tubes of a chain are alike); the fingers
+            # carry their own band depth (joint-tabs.md S4).
+            corner_radius = _corner_radius(segment.profile)
+            given = fingers.depth if fingers is not None else chosen.step_depth
+            step_depth = float(given) or automatic_step_depth(thickness, corner_radius)
         bend = _Bend(
             names=(_label(chain.segments[corner.before].profile), _label(chain.segments[corner.after].profile)),
             angle=corner.bend_angle,
@@ -920,13 +1030,21 @@ def _bends(chain, corners):
             diameter=float(chosen.key_diameter) or corner.depth * KEY_DIAMETER_RATIO,
             joint=joint,
             step_depth=step_depth,
-            step_flip=stepped and bool(chosen.step_flip),
+            step_flip=stepped and fingers is None and bool(chosen.step_flip),
+            # The tube along the bend axis: its other size than the depth across the bent wall.
+            span=segment.width + segment.height - corner.depth,
+            fingers=fingers,
         )
         bend.check_radius()
         if bend.k_factor == 0:
             # S8: automatic, once the inside radius is known to be at least the wall thickness.
             bend.k_factor = automatic_k_factor(bend.radius, thickness)
         bend.check_k_factor()
+        if fingers is not None:
+            try:
+                fingers.check(bend.names, bend.span)
+            except InterlockError as error:
+                raise UnfoldError(str(error)) from error
         bend.check_step()
         bend.check_step_fit()
         bends.append(bend)
@@ -1133,6 +1251,9 @@ def unfold(chain, corners, open_corner=None):
     other one keeps its band from past that overlap and loses its side walls where the first band folds onto them;
     the key stays below the band. The step depth is the larger of the wall thickness and the outer corner radius of
     the tube unless given (``automatic_step_depth``).
+    A corner whose ``interlock`` is ``FingerSettings`` splits its band along w into fingers, each one the stepped band
+    of the segment that owns it, the finger sides opened by the fingers' clearance and their tips led in
+    (odd/tasks/joint-tabs.md, L7); the length does not change.
     ``open_corner`` is the ``CornerSettings`` of the open corner of a closed chain (ignored on an open one): with None
     or ``Miter`` the ends of the bar are the segments' own tips there (their End Miter, if any); with ``Stepped``
     both ends get the stepped joint (S4, L11) instead of their End Miter there (the trims against the other end);
@@ -1142,8 +1263,9 @@ def unfold(chain, corners, open_corner=None):
     second step (``_OpenStep.second_step``) (swapped with ``step_flip``), the side walls between keep the miter
     through the virtual sharp of the outer faces, the clearance moves each end back half of it; only its joint,
     clearance and step settings are read.
-    Raises UnfoldError when the radius, the K-factor, the step or the key of a corner do not suit the tube, or when a
-    tube is too short for the bends at its ends or, at a stepped open corner, for that joint and its folded corner.
+    Raises UnfoldError when the radius, the K-factor, the step, the fingers or the key of a corner do not suit the tube,
+    or when a tube is too short for the bends at its ends or, at a stepped open corner, for that joint and its folded
+    corner.
     """
     bends = _bends(chain, corners)
     step = _open_step(chain, open_corner)
@@ -1191,6 +1313,7 @@ def unfold(chain, corners, open_corner=None):
             start=start - x_min,
             frame=App.Placement(frame.Base + shift, frame.Rotation),
             step_split=bend.step_split(),
+            finger_split=bend.finger_split(),
         )
         for bend, (start, frame) in zip(bends, corners)
     ]

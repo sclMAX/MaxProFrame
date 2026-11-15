@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="64px" height="64px" viewBox="0 0 64 64" version="1.1" id="Interlock" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="tube" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" style="stop-color:#729fcf;stop-opacity:1" />
+      <stop offset="1" style="stop-color:#3465a4;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Two walls of a folded corner meeting at its inner vertex, their fingers alternating along it -->
+  <path d="M 4,4 H 44 V 24 H 36 V 44 H 44 V 60 H 4 Z"
+        style="fill:url(#tube);stroke:#204a87;stroke-width:2;stroke-linejoin:round" />
+  <path d="M 60,4 H 44 V 24 H 36 V 44 H 44 V 60 H 60 Z"
+        style="fill:#fcaf3e;stroke:#ce5c00;stroke-width:2;stroke-linejoin:round" />
+</svg>

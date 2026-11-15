@@ -3098,6 +3098,162 @@ All files and sketches on disk will be kept intact.</source>
         <source>The step of the corner between {} and {} does not fit at this angle: make the step depth smaller.</source>
         <translation>Ступень угла между {} и {} не помещается при этом угле: уменьшите глубину ступени.</translation>
     </message>
+    <message>
+        <source>The interlock of the corner between {} and {} needs at least 2 fingers.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The fingers of the corner between {} and {} do not fit: make them fewer or narrower.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The finger tips of the corner between {} and {} must be between 0 and {max:g} mm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The interlock between {} and {} is not on a folded corner of {}.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The corner between {} and {} has two interlocks: {} and {}.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click the inner walls of the two tubes at a folded corner of a Folded Bar.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click the inner wall of the other tube at that corner.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click the inner wall of {}: its face on the inside of the folded corner.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} is not a Folded Bar: click the inner walls of two tubes of a Folded Bar.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Click both faces on the same Folded Bar.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} and {} meet at the open corner of {}, which does not fold: click the inner walls at a folded corner.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} and {} do not meet at a folded corner of {}: click the inner walls of two tubes that do.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The corner between {} and {} has an interlock already: double-click {} to edit it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Interlock</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Corner: {} → {}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fingers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Kind</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shape of the interlock: Fingers, at the inner vertex of a folded corner</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Count</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Number of fingers, at least 2; the tube before the corner owns the first one</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Finger width</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Even</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Width of every finger but the two outermost, centered; Even: the fingers split the tube evenly</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tip</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Square</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Chamfer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Round</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Corners of each finger tip: Square, Chamfer or Round, to lead it in</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tip size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Chamfer leg or radius of the finger tip corners, in the inner wall plane</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Depth</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Depth of the finger band across the bent wall; Automatic: the step depth of a Stepped joint</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Gap between every pair of mating finger faces, half on each side</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Flip</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Swap the tubes: the tube after the corner owns the first finger</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} meets neither end of the bar.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} is folded by {}: a tube folds into one bar only.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} is another Folded Bar: a tube folds into one bar only.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} is a closed frame: it takes no more tubes.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>MaxProFrame_FoldedBar</name>
@@ -3119,6 +3275,17 @@ All files and sketches on disk will be kept intact.</source>
     <message>
         <source>&lt;b&gt;Unfold Bar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a Folded Bar: its straight bar with every cut is made from X = 0 along X, to export with File &gt; Export (STEP, IGES, BREP) for a tube laser.</source>
         <translation>&lt;b&gt;Развернуть заготовку&lt;/b&gt;&lt;br&gt;&lt;br&gt;Выберите гнутую заготовку: создается ее прямая заготовка со всеми резами, от X = 0 вдоль оси X, для экспорта через «Файл &gt; Экспорт» (STEP, IGES, BREP) на лазер для резки труб.</translation>
+    </message>
+</context>
+<context>
+    <name>MaxProFrame_Interlock</name>
+    <message>
+        <source>Interlock</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Interlock&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click the inner wall faces of the two tubes at a folded corner of a Folded Bar: fingers cut by the laser at the inner vertex of the corner locate one tube on the other. Set their count, width, tip and clearance in the panel. Double-click the Interlock to edit it.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -3186,6 +3353,50 @@ All files and sketches on disk will be kept intact.</source>
     <message>
         <source>Swap the tubes of a Stepped joint: the other one covers the step</source>
         <translation>Поменять местами трубы ступенчатого соединения: ступень перекрывает другая труба</translation>
+    </message>
+    <message>
+        <source>Profile of one of the two tubes the interlock joins</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Profile of the other tube the interlock joins</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shape of the interlock: Fingers, at the inner vertex of a folded corner</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Number of fingers, at least 2; the first tube owns the first finger</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Width of every finger but the two outermost, centered; 0: the fingers split the tube evenly</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Corners of each finger tip: Square, Chamfer or Round, to lead it in</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Chamfer leg or radius of the finger tip corners, in the inner wall plane</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Depth of the finger band across the bent wall; 0: automatic, the step depth of a Stepped joint</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Gap between every pair of mating finger faces, half on each side</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Swap the tubes: the second one owns the first finger</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Interlock objects on the corners of the bar</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>

@@ -1494,6 +1494,45 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>{} · stepped</source><translation>{} · escalonada</translation></message>
     <message><source>The step depth of the corner between {} and {} must be between {min:g} and {max:g} mm.</source><translation>La profundidad del escalón de la esquina entre {} y {} tiene que estar entre {min:g} y {max:g} mm.</translation></message>
     <message><source>The step of the corner between {} and {} does not fit at this angle: make the step depth smaller.</source><translation>El escalón de la esquina entre {} y {} no entra con este ángulo: achicá la profundidad del escalón.</translation></message>
+    <message><source>The interlock of the corner between {} and {} needs at least 2 fingers.</source><translation>El encastre de la esquina entre {} y {} necesita al menos 2 aletas.</translation></message>
+    <message><source>The fingers of the corner between {} and {} do not fit: make them fewer or narrower.</source><translation>Las aletas de la esquina entre {} y {} no entran: poné menos o hacelas más angostas.</translation></message>
+    <message><source>The finger tips of the corner between {} and {} must be between 0 and {max:g} mm.</source><translation>El tamaño de la punta de las aletas de la esquina entre {} y {} tiene que estar entre 0 y {max:g} mm.</translation></message>
+    <message><source>The interlock between {} and {} is not on a folded corner of {}.</source><translation>El encastre entre {} y {} no está en una esquina plegada de {}.</translation></message>
+    <message><source>The corner between {} and {} has two interlocks: {} and {}.</source><translation>La esquina entre {} y {} tiene dos encastres: {} y {}.</translation></message>
+    <message><source>Click the inner walls of the two tubes at a folded corner of a Folded Bar.</source><translation>Hacé clic en las paredes interiores de los dos tubos en una esquina plegada de una barra plegada.</translation></message>
+    <message><source>Click the inner wall of the other tube at that corner.</source><translation>Hacé clic en la pared interior del otro tubo en esa esquina.</translation></message>
+    <message><source>Click the inner wall of {}: its face on the inside of the folded corner.</source><translation>Hacé clic en la pared interior de {}: su cara del lado de adentro de la esquina plegada.</translation></message>
+    <message><source>{} is not a Folded Bar: click the inner walls of two tubes of a Folded Bar.</source><translation>{} no es una barra plegada: hacé clic en las paredes interiores de dos tubos de una barra plegada.</translation></message>
+    <message><source>Click both faces on the same Folded Bar.</source><translation>Hacé clic en las dos caras sobre la misma barra plegada.</translation></message>
+    <message><source>{} and {} meet at the open corner of {}, which does not fold: click the inner walls at a folded corner.</source><translation>{} y {} se unen en la esquina abierta de {}, que no se pliega: hacé clic en las paredes interiores en una esquina plegada.</translation></message>
+    <message><source>{} and {} do not meet at a folded corner of {}: click the inner walls of two tubes that do.</source><translation>{} y {} no se unen en una esquina plegada de {}: hacé clic en las paredes interiores de dos tubos que sí se unan.</translation></message>
+    <message><source>The corner between {} and {} has an interlock already: double-click {} to edit it.</source><translation>La esquina entre {} y {} ya tiene un encastre: hacé doble clic en {} para editarlo.</translation></message>
+    <message><source>Interlock</source><translation>Encastre</translation></message>
+    <message><source>Corner: {} → {}</source><translation>Esquina: {} → {}</translation></message>
+    <message><source>Fingers</source><translation>Aletas</translation></message>
+    <message><source>Kind</source><translation>Tipo</translation></message>
+    <message><source>Shape of the interlock: Fingers, at the inner vertex of a folded corner</source><translation>Forma del encastre: Aletas, en el vértice interior de una esquina plegada</translation></message>
+    <message><source>Count</source><translation>Cantidad</translation></message>
+    <message><source>Number of fingers, at least 2; the tube before the corner owns the first one</source><translation>Cantidad de aletas, al menos 2; la primera es del tubo anterior a la esquina</translation></message>
+    <message><source>Finger width</source><translation>Ancho de aleta</translation></message>
+    <message><source>Even</source><translation>Uniforme</translation></message>
+    <message><source>Width of every finger but the two outermost, centered; Even: the fingers split the tube evenly</source><translation>Ancho de cada aleta menos las dos de los extremos, centradas; Uniforme: las aletas dividen el tubo en partes iguales</translation></message>
+    <message><source>Tip</source><translation>Punta</translation></message>
+    <message><source>Square</source><translation>Recta</translation></message>
+    <message><source>Chamfer</source><translation>Biselada</translation></message>
+    <message><source>Round</source><translation>Redondeada</translation></message>
+    <message><source>Corners of each finger tip: Square, Chamfer or Round, to lead it in</source><translation>Esquinas de la punta de cada aleta: Recta, Biselada o Redondeada, para guiar su entrada</translation></message>
+    <message><source>Tip size</source><translation>Tamaño de punta</translation></message>
+    <message><source>Chamfer leg or radius of the finger tip corners, in the inner wall plane</source><translation>Cateto del bisel o radio de las esquinas de la punta de las aletas, en el plano de la pared interior</translation></message>
+    <message><source>Depth</source><translation>Profundidad</translation></message>
+    <message><source>Depth of the finger band across the bent wall; Automatic: the step depth of a Stepped joint</source><translation>Profundidad de la franja de aletas, perpendicular a la pared doblada; Automático: la profundidad del escalón de una unión escalonada</translation></message>
+    <message><source>Gap between every pair of mating finger faces, half on each side</source><translation>Separación entre cada par de caras enfrentadas de las aletas, la mitad de cada lado</translation></message>
+    <message><source>Flip</source><translation>Invertir</translation></message>
+    <message><source>Swap the tubes: the tube after the corner owns the first finger</source><translation>Intercambia los tubos: la primera aleta es del tubo posterior a la esquina</translation></message>
+    <message><source>{} meets neither end of the bar.</source><translation>{} no se une con ninguno de los extremos de la barra.</translation></message>
+    <message><source>{} is folded by {}: a tube folds into one bar only.</source><translation>{} ya está plegado en {}: un tubo se pliega en una sola barra.</translation></message>
+    <message><source>{} is another Folded Bar: a tube folds into one bar only.</source><translation>{} es otra barra plegada: un tubo se pliega en una sola barra.</translation></message>
+    <message><source>{} is a closed frame: it takes no more tubes.</source><translation>{} es un marco cerrado: no admite más tubos.</translation></message>
 </context>
 <context>
     <name>MaxProFrame_FoldedBar</name>
@@ -1504,6 +1543,11 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <name>MaxProFrame_UnfoldBar</name>
     <message><source>Unfold Bar</source><translation>Desplegar barra</translation></message>
     <message><source>&lt;b&gt;Unfold Bar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a Folded Bar: its straight bar with every cut is made from X = 0 along X, to export with File &gt; Export (STEP, IGES, BREP) for a tube laser.</source><translation>&lt;b&gt;Desplegar barra&lt;/b&gt;&lt;br&gt;&lt;br&gt;Seleccioná una barra plegada: se crea su barra recta con todos los cortes, desde X = 0 a lo largo de X, para exportarla con Archivo &gt; Exportar (STEP, IGES, BREP) a un láser de tubos.</translation></message>
+</context>
+<context>
+    <name>MaxProFrame_Interlock</name>
+    <message><source>Interlock</source><translation>Encastre</translation></message>
+    <message><source>&lt;b&gt;Interlock&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click the inner wall faces of the two tubes at a folded corner of a Folded Bar: fingers cut by the laser at the inner vertex of the corner locate one tube on the other. Set their count, width, tip and clearance in the panel. Double-click the Interlock to edit it.</source><translation>&lt;b&gt;Encastre&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hacé clic en las caras de pared interior de los dos tubos en una esquina plegada de una barra plegada: aletas cortadas con láser en el vértice interior de la esquina ubican un tubo sobre el otro. Configurá su cantidad, ancho, punta y holgura en el panel. Doble clic en el encastre para editarlo.</translation></message>
 </context>
 <context>
     <name>App::Property</name>
@@ -1523,5 +1567,16 @@ Todos los archivos y croquis en disco se conservarán intactos.</translation>
     <message><source>How the inner wall is cut: Miter, at half the bend angle (a bevel cut); Stepped, an interlock of straight cuts only</source><translation>Cómo se corta la pared interior: Inglete, a la mitad del ángulo de plegado (un corte biselado); Escalonada, un encastre solo de cortes rectos</translation></message>
     <message><source>Depth of the step of a Stepped joint across the bent wall; 0: automatic, the larger of the wall thickness and the outer corner radius of the tube</source><translation>Profundidad del escalón de una unión escalonada, perpendicular a la pared doblada; 0: automático, el mayor entre el espesor de pared y el radio exterior de las aristas del tubo</translation></message>
     <message><source>Swap the tubes of a Stepped joint: the other one covers the step</source><translation>Intercambia los tubos de una unión escalonada: el otro cubre el escalón</translation></message>
+    <message><source>Profile of one of the two tubes the interlock joins</source><translation>Perfil de uno de los dos tubos que une el encastre</translation></message>
+    <message><source>Profile of the other tube the interlock joins</source><translation>Perfil del otro tubo que une el encastre</translation></message>
+    <message><source>Shape of the interlock: Fingers, at the inner vertex of a folded corner</source><translation>Forma del encastre: Aletas, en el vértice interior de una esquina plegada</translation></message>
+    <message><source>Number of fingers, at least 2; the first tube owns the first finger</source><translation>Cantidad de aletas, al menos 2; la primera aleta es del primer tubo</translation></message>
+    <message><source>Width of every finger but the two outermost, centered; 0: the fingers split the tube evenly</source><translation>Ancho de cada aleta menos las dos de los extremos, centradas; 0: las aletas dividen el tubo en partes iguales</translation></message>
+    <message><source>Corners of each finger tip: Square, Chamfer or Round, to lead it in</source><translation>Esquinas de la punta de cada aleta: Recta, Biselada o Redondeada, para guiar su entrada</translation></message>
+    <message><source>Chamfer leg or radius of the finger tip corners, in the inner wall plane</source><translation>Cateto del bisel o radio de las esquinas de la punta de las aletas, en el plano de la pared interior</translation></message>
+    <message><source>Depth of the finger band across the bent wall; 0: automatic, the step depth of a Stepped joint</source><translation>Profundidad de la franja de aletas, perpendicular a la pared doblada; 0: automático, la profundidad del escalón de una unión escalonada</translation></message>
+    <message><source>Gap between every pair of mating finger faces, half on each side</source><translation>Separación entre cada par de caras enfrentadas de las aletas, la mitad de cada lado</translation></message>
+    <message><source>Swap the tubes: the second one owns the first finger</source><translation>Intercambia los tubos: la primera aleta es del segundo tubo</translation></message>
+    <message><source>Interlock objects on the corners of the bar</source><translation>Objetos Encastre en las esquinas de la barra</translation></message>
 </context>
 </TS>

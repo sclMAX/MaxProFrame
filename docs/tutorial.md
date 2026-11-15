@@ -442,7 +442,7 @@ A trim, cutout or drill hole made from the piece after the pattern shows on ever
 
 A **folded corner** joins two tubes without cutting them apart: the tube is one bar, the laser cuts a V notch through the walls on the inside of the corner, and the wall on the outside of the corner stays whole and is bent. Folding the bar closes the V. MaxProFrame draws the folded bar with its real bend radius and unfolds it into one straight solid with every cut, which you export for a CNC tube laser. Each corner chooses how its inner wall is cut: a **Miter**, tilted, for a laser with a bevel head, or a **Stepped** joint made of straight cuts only, for any tube laser (see [Miter or stepped joint](#miter-or-stepped-joint)).
 
-The commands are on the **Folded Miters** toolbar and menu (Spanish *Ingletes plegados*): **Folded Bar** (*Barra plegada*) and **Unfold Bar** (*Desplegar barra*).
+The commands are on the **Folded Miters** toolbar and menu (Spanish *Ingletes plegados*): **Folded Bar** (*Barra plegada*), **Unfold Bar** (*Desplegar barra*) and **Interlock** (*Encastre*, see [Interlock](#interlock)).
 
 ### Draw the frame
 
@@ -461,7 +461,7 @@ The first tube you select is where the bar starts. In a closed frame the bar ope
 ### Create the Folded Bar
 
 1. Click **Folded Bar**: the panel opens at once, as in **Create Miter Ends**.
-2. Click the tubes in the 3D view in order around the frame, the first one where the bar starts. Each one clicked joins the end of the bar, and the corners, the messages and the preview follow; a trimmed profile, cutout or drill hole made from a listed tube takes its place. **Ctrl+click** a listed tube (or the preview over it), or deselect it, to drop it. Clicking anything that is not a tube does nothing. Tubes selected before clicking **Folded Bar** are listed already, in the order they were selected.
+2. Click the tubes in the 3D view in order around the frame, the first one where the bar starts. Each one clicked joins the end of the bar, and the corners, the messages and the preview follow; a trimmed profile, cutout or drill hole made from a listed tube takes its place. **Ctrl+click** a listed tube (or the preview over it), or deselect it, to drop it. A tube that another Folded Bar folds is not listed, and the panel says why: "Profile004 is folded by FoldedBar: a tube folds into one bar only.". Clicking another Folded Bar extends that bar instead of making a second one: the panel closes and that bar opens for editing (see [Edit the bar](#edit-the-bar)), with the tubes listed so far added at the end of the bar each one meets, in any order; a listed tube that meets neither end is left out, and the panel says why. Clicking anything else that is not a tube does nothing. Tubes selected before clicking **Folded Bar** are listed already, in the order they were selected.
 3. The **Corners** group (Spanish *Esquinas*) shows the bar:
    - **Tube**: the material and the wall thickness of the tubes, read from their profile, for example `Steel · 2 mm`. It is only shown: to change it, change the profile.
    - The **corner list**: one row per folded corner, from the start of the bar, naming its two tubes and its values, for example `1 · Profile → Profile001 · R 10 mm · key · clearance 0.5 mm`; a corner with a **Stepped** joint ends its row with `· stepped`. A closed frame ends the list with its open corner, `Open · Profile003 → Profile`, which does not fold: selecting it edits only its **Joint**, **Step depth**, **Flip step** and **Clearance**, the other fields stay disabled. Until two tubes meet end to end the list says what to do: "Click the tube where the bar starts.", then "Click the next tube, after Profile.", or the tubes picked so far when they fold no corner yet, while the bottom of the panel says why (for example "Select at least two profiles that meet end to end.") and **OK** stays disabled.
@@ -527,6 +527,32 @@ Each end tube must be long enough for the joint: where the joint reaches into an
 
 In the panel, select the open row to set its **Joint**, **Step depth**, **Flip step** and **Clearance**; with folded corners selected too, only those fields can be changed. The row ends with `· stepped` too, for example `Open · Profile003 → Profile · stepped`.
 
+### Interlock
+
+**Interlock** (Spanish *Encastre*) adds fingers cut by the laser at the inner vertex of a folded corner, where the inner walls of its two tubes meet, so the two tubes locate each other while the corner is folded and welded. Across the inner wall, from its inner face to the finger depth, the wall is split along the bend axis into fingers that belong to one tube and the other in turn: each finger is a step of the [Stepped joint](#miter-or-stepped-joint), covered by the tube before the corner and then by the tube after it. Below the fingers the corner keeps its own joint (Miter or Stepped, with its key and relief). Every cut is straight, square to the tube or to the inner wall, so any tube laser cuts it. The fingers are cut in the Unfolded Bar, the Folded Bar folds into one solid with them, and the developed length does not change.
+
+1. Click **Interlock** on the Folded Miters toolbar.
+2. Click the inner wall of each of the two tubes at a folded corner of a Folded Bar: their faces on the inside of the corner. Faces selected before the command count too. The Interlock is made at once and shows on the bar; the **Corner** group (Spanish *Esquina*) names its two tubes, for example `Corner: Profile → Profile001`.
+3. The **Fingers** group (Spanish *Aletas*) sets them; each change shows on the bar at once:
+   - **Count** (*Cantidad*): the number of fingers, at least 2. The tube before the corner, in the order of the bar, owns the first one.
+   - **Finger width** (*Ancho de aleta*): **Even** (*Uniforme*, 0) splits the tube evenly; a value makes every finger but the two outermost that wide, centered, and the two outermost share the rest.
+   - **Tip** (*Punta*): **Square** (*Recta*), **Chamfer** (*Biselada*) or **Round** (*Redondeada*) corners at the tip of each finger, to lead it in. **Tip size** (*Tamaño de punta*), for Chamfer and Round only, is the chamfer leg or the radius, in the plane of the inner wall.
+   - **Depth** (*Profundidad*): how deep the fingers go across the bent wall from the inner face. **Automatic** (0) is the automatic step depth of a Stepped joint.
+   - **Clearance** (*Holgura*): every pair of finger faces that meet once folded, the sides of the fingers included, opens by all of it, half on each side.
+   - **Flip** (*Invertir*): the tube after the corner owns the first finger.
+
+   The first Interlock starts with 3 even square fingers, an automatic depth and a clearance of 0.5 mm; the next ones start with the settings last kept with **OK**, also after restarting FreeCAD.
+4. **OK** keeps the Interlock in one Undo step; **Cancel** leaves the document as it was.
+
+The Interlock is an object of its own, shown under the bar in the tree and labelled after its two tubes, for example `Interlock_Profile_Profile001`. Its settings are properties you can change in the property editor too: **Kind**, **Count**, **Finger Width**, **Tip**, **Tip Size**, **Depth**, **Clearance** and **Flip**, and the two tubes (**Piece A**, **Piece B**). Double-click it to edit it in the same panel, without picking: **OK** keeps the changes in one Undo step, **Cancel** puts the values back. Deleting the bar deletes its Interlocks. Documents saved before open with the same shapes.
+
+What the panel refuses, saying it at the bottom with **OK** disabled:
+
+- Faces that are not the inner walls of the two tubes at one folded corner. Until both are clicked it says "Click the inner walls of the two tubes at a folded corner of a Folded Bar.", then "Click the inner wall of the other tube at that corner.". An outer or a side wall gives "Click the inner wall of Profile: its face on the inside of the folded corner."; two tubes that do not meet at a folded corner, the open corner of a closed frame (it does not fold), an object that is not a Folded Bar or faces on two bars are named with what to click instead. A corner that has an Interlock already says to double-click it to edit it. Nothing is created.
+- Fingers that do not fit, naming the corner's two tubes: fewer than 2 ("The interlock of the corner between Profile and Profile001 needs at least 2 fingers."), fingers too wide for the tube, or not wider than the clearance ("The fingers of the corner between Profile and Profile001 do not fit: make them fewer or narrower."), a tip size over half the narrowest finger less the clearance ("The finger tips of the corner between Profile and Profile001 must be between 0 and 8 mm." for three even fingers on a 50 mm tube with a clearance of 0.5 mm), and a depth or an angle the Stepped joint refuses (the step depth messages of [Miter or stepped joint](#miter-or-stepped-joint)).
+
+There is no dovetail: the corner closes by bending, so an undercut could not pass. Fingers are the first **Kind** of interlock; other kinds may come later, such as hooks, clips, a tab and slot for a T joint, or a key across a miter.
+
 ### Developed length and K-factor
 
 The length of the bar is its **developed length**: the straight lengths plus, for each folded corner, the bend allowance, angle × (r + K × t), where r is the inside radius of the corner (its outer radius less the wall thickness), t the wall thickness of the tube and K its K-factor. The outer size of the frame does not change: the fold rounds the outside of the corner inside the frame you drew.
@@ -548,7 +574,16 @@ Its values are properties you can change in the property editor, or drive with a
 
 ### Edit the bar
 
-Double-click the Folded Bar: the same panel opens with its corners and their values. Its tubes stay as they are: clicking tubes does not add them, as when editing an End Miter; **Remove** can still take off an end tube or open a closed frame at another corner. **OK** keeps the changes in one Undo step, or none when nothing changed; **Cancel** puts the bar and its corners back. A cutout, drill hole, miter or trim made on one of its tubes after the bar shows folded into it at once (see [Tools on a Folded Bar](#tools-on-a-folded-bar)). Deleting the bar shows its tubes again.
+Double-click the Folded Bar: the same panel opens with its corners and their values.
+
+To extend an open bar, click in the 3D view a tube that meets its first or its last tube: it joins the bar at that end, before the first tube or after the last one, and the corners, the messages and the preview follow. A tube that meets both ends closes the frame, and the open corner is where it meets the first tube. The corners already there keep their Folded Corner objects, their values and their Interlocks; a new corner starts with the values last set in the panel. A click the bar cannot take adds nothing, and the bottom of the panel says why, without disabling **OK**:
+
+- a tube that meets neither end: "Profile004 meets neither end of the bar.";
+- a tube that another Folded Bar folds: "Profile004 is folded by FoldedBar001: a tube folds into one bar only.";
+- another Folded Bar: "FoldedBar001 is another Folded Bar: a tube folds into one bar only.";
+- any tube, when the bar is a closed frame: "FoldedBar is a closed frame: it takes no more tubes.".
+
+**Remove** can still take off an end tube or open a closed frame at another corner. **OK** keeps the changes in one Undo step, or none when nothing changed; **Cancel** puts the bar, its corners and its Interlocks back, and a tube clicked into it shows again as it was. A cutout, drill hole, miter or trim made on one of its tubes after the bar shows folded into it at once (see [Tools on a Folded Bar](#tools-on-a-folded-bar)). Deleting the bar shows its tubes again.
 
 ### Tools on a Folded Bar
 
