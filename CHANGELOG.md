@@ -23,6 +23,7 @@
   - **Folded Bar**: typing in a corner field while the preview was recomputing could freeze FreeCAD; the panel now waits for the recompute to end before checking or drawing the corners.
   - **Mixed values**: closing a panel while a field showing **Mixed values** had the focus printed `Internal C++ object already deleted` and could crash FreeCAD.
   - **Dark themes**: the number fields of the MaxProFrame panels show their values in light text in FreeCAD Dark; their text was black on the dark field once FreeCAD laid them out or bound them to an expression, so the fields of a selected corner looked empty. A field whose value differs between the selected items (Create Profile, Edit Profile, Folded Bar) shows only **Mixed values**, in every FreeCAD theme; the value used to show through under it.
+  - **Spanish translation**: it now ships once, as `maxproframe_es*.qm`, instead of four copies left from the FrameForge name (`frameforge_es*`, `FrameForge_es*`, `MaxProFrame_es*`) that FreeCAD loaded one over another; nothing changes on screen.
 
 * v1.13.1 (2026-11-11)
 

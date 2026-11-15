@@ -45,21 +45,18 @@ class TestDXFUnitsDialog(unittest.TestCase):
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "translate":
                     if len(node.args) >= 2 and all(isinstance(arg, ast.Constant) for arg in node.args[:2]):
                         sources.add((node.args[0].value, node.args[1].value))
-        for prefix in ("frameforge", "maxproframe"):
-            path = root / "resources/translations" / (prefix + "_es.ts")
-            entries = {
-                (context.findtext("name"), message.findtext("source")): message.findtext("translation")
-                for context in ET.parse(path).getroot().findall("context")
-                for message in context.findall("message")
-            }
-            self.assertTrue(sources)
-            for key in sources:
-                self.assertTrue(entries.get(key), key)
-            mixed_case = {"frameforge": "FrameForge", "maxproframe": "MaxProFrame"}[prefix]
-            for alias in (prefix, mixed_case):
-                for locale in ("es", "es-ES", "es-CO", "es-AR"):
-                    translator = QtCore.QTranslator()
-                    qm = path.parent / (alias + "_" + locale + ".qm")
-                    self.assertTrue(translator.load(str(qm)), str(qm))
-                    for context, source in sources:
-                        self.assertEqual(translator.translate(context, source), entries[(context, source)], str(qm))
+        path = root / "resources/translations" / "maxproframe_es.ts"
+        entries = {
+            (context.findtext("name"), message.findtext("source")): message.findtext("translation")
+            for context in ET.parse(path).getroot().findall("context")
+            for message in context.findall("message")
+        }
+        self.assertTrue(sources)
+        for key in sources:
+            self.assertTrue(entries.get(key), key)
+        for locale in ("es", "es-ES", "es-CO", "es-AR"):
+            translator = QtCore.QTranslator()
+            qm = path.parent / ("maxproframe_" + locale + ".qm")
+            self.assertTrue(translator.load(str(qm)), str(qm))
+            for context, source in sources:
+                self.assertEqual(translator.translate(context, source), entries[(context, source)], str(qm))

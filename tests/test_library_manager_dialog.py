@@ -825,10 +825,10 @@ class TestLibraryManagerDialog(unittest.TestCase):
 
         # 1. Verify Spanish translation loads and translates core UI elements
         translator = QtCore.QTranslator()
-        qm_path = os.path.join(TRANSLATIONSPATH, "frameforge_es.qm")
+        qm_path = os.path.join(TRANSLATIONSPATH, "maxproframe_es.qm")
         self.assertTrue(os.path.isfile(qm_path), f"QM file not found at {qm_path}")
         loaded = translator.load(qm_path)
-        self.assertTrue(loaded, "Failed to load frameforge_es.qm")
+        self.assertTrue(loaded, "Failed to load maxproframe_es.qm")
 
         app.installTranslator(translator)
         try:

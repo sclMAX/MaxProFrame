@@ -368,7 +368,7 @@ class TestCreateProfileApply(unittest.TestCase):
                 Gui.updateLocale()
             translator = QtCore.QTranslator()
             if spanish:
-                self.assertTrue(translator.load(os.path.join(TRANSLATIONSPATH, "frameforge_es.qm")))
+                self.assertTrue(translator.load(os.path.join(TRANSLATIONSPATH, "maxproframe_es.qm")))
                 self.app.installTranslator(translator)
             try:
                 for action in ("accept", "apply"):

@@ -273,7 +273,7 @@ class TestCProfileUI(unittest.TestCase):
             "Exterior radius": "Radio exterior",
             "Exterior Radius [mm]": "Radio exterior [mm]",
         }
-        for name in ("frameforge_es.qm", "frameforge_es-ES.qm", "FrameForge_es.qm", "FrameForge_es-ES.qm"):
+        for name in ("maxproframe_es.qm", "maxproframe_es-ES.qm"):
             with self.subTest(resource=name):
                 translator = QtCore.QTranslator()
                 self.assertTrue(translator.load(os.path.join(TRANSLATIONSPATH, name)))

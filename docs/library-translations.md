@@ -16,10 +16,10 @@ The legacy `_on_calc_weight` material chooser has no connected visible action. I
 
 ## Translation maintenance
 
-Update both Spanish TS catalogs, then run:
+Update the Spanish catalog `maxproframe_es.ts`, then run:
 
 ```sh
 python3 freecad/maxproframe/compile_translations.py
 ```
 
-This refreshes the 16 shipped prefix/locale QM aliases. Catalog tests cover literal library, card, DXF and sketch-dialog messages plus indirect labels and standard T-Slot names.
+This refreshes `maxproframe_es.qm` and its `es-ES`, `es-CO` and `es-AR` copies, the Spanish locales FreeCAD looks for. Catalog tests cover literal library, card, DXF and sketch-dialog messages plus indirect labels and standard T-Slot names.

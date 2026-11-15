@@ -127,22 +127,20 @@ class TestLibraryCloseGuard(unittest.TestCase):
 
         source = "You have unsaved changes. Do you want to save them before closing?"
         expected = "Tenés cambios sin guardar. ¿Querés guardarlos antes de cerrar?"
-        for name in ("frameforge_es.ts", "maxproframe_es.ts"):
-            tree = ET.parse(os.path.join(TRANSLATIONSPATH, name))
-            self.assertIn(
-                (source, expected),
-                [
-                    (m.findtext("source"), m.findtext("translation"))
-                    for c in tree.findall("context")
-                    if c.findtext("name") == "frameforge"
-                    for m in c.findall("message")
-                ],
-            )
-        for prefix in ("frameforge", "FrameForge", "maxproframe", "MaxProFrame"):
-            for locale in ("es", "es-ES", "es-CO", "es-AR"):
-                translator = QtCore.QTranslator()
-                self.assertTrue(translator.load(os.path.join(TRANSLATIONSPATH, f"{prefix}_{locale}.qm")))
-                self.assertEqual(translator.translate("frameforge", source), expected)
+        tree = ET.parse(os.path.join(TRANSLATIONSPATH, "maxproframe_es.ts"))
+        self.assertIn(
+            (source, expected),
+            [
+                (m.findtext("source"), m.findtext("translation"))
+                for c in tree.findall("context")
+                if c.findtext("name") == "frameforge"
+                for m in c.findall("message")
+            ],
+        )
+        for locale in ("es", "es-ES", "es-CO", "es-AR"):
+            translator = QtCore.QTranslator()
+            self.assertTrue(translator.load(os.path.join(TRANSLATIONSPATH, f"maxproframe_{locale}.qm")))
+            self.assertEqual(translator.translate("frameforge", source), expected)
 
     def test_clean_close_has_no_prompt(self):
         with patch.object(QtWidgets.QMessageBox, "question") as question:

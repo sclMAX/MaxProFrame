@@ -172,7 +172,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
 
         # Verify Spanish translations in dialog
         translator = QtCore.QTranslator()
-        qm_path = os.path.join(TRANSLATIONSPATH, "frameforge_es.qm")
+        qm_path = os.path.join(TRANSLATIONSPATH, "maxproframe_es.qm")
         if os.path.isfile(qm_path) and translator.load(qm_path):
             self.app.installTranslator(translator)
             try:
@@ -472,7 +472,7 @@ class TestFamilyVariantPicker(unittest.TestCase):
 
         # Explicit Spanish translation check
         translator = QtCore.QTranslator()
-        qm_path = os.path.join(TRANSLATIONSPATH, "frameforge_es.qm")
+        qm_path = os.path.join(TRANSLATIONSPATH, "maxproframe_es.qm")
         if os.path.isfile(qm_path) and translator.load(qm_path):
             self.app.installTranslator(translator)
             try:
