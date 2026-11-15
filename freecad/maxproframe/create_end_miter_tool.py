@@ -20,6 +20,7 @@ from freecad.maxproframe.folded_bar_ends import free_end_tubes, is_whole_bar
 from freecad.maxproframe.miter_geometry import Member, real_stretch
 from freecad.maxproframe.miter_joints import find_joints
 from freecad.maxproframe.qt_lifetime import keep_alive_until_destroyed
+from freecad.maxproframe.recompute_gate import RecomputeGate
 from freecad.maxproframe.trimmed_profile import TrimmedProfile, ViewProviderTrimmedProfile
 from freecad.maxproframe.ui_forms import load_form
 
@@ -200,6 +201,10 @@ class EndMiterTaskPanel:
 
     Without ``edited`` the miters are previewed live, like Create Profile does: the preview
     objects are the End Miters OK keeps, all inside one transaction that Cancel aborts.
+
+    While the panel recomputes, FreeCAD's progress bar runs its timers, keys and clicks: they wait for the
+    recompute to end (``_gate``), as an OCC boolean run inside it would wait forever for its threads
+    (odd/tasks/panel-recompute-deadlock.md).
     """
 
     def __init__(self, members=(), edited=None, notes=()):
@@ -215,6 +220,8 @@ class EndMiterTaskPanel:
         self.edited = edited
         self._closed = False
         self._syncing = False
+        # Held while the panel recomputes: the previews, selections and buttons asked for meanwhile wait.
+        self._gate = RecomputeGate(self._active)
         self.doc = App.ActiveDocument
         # Live preview: member name -> _Preview.
         self._previews = {}
@@ -286,6 +293,8 @@ class EndMiterTaskPanel:
         return obj
 
     def remove_selected(self):
+        if self._gate.wait(self.remove_selected):
+            return
         rows = {self.form.members_list.row(item) for item in self.form.members_list.selectedItems()}
         self.members = [obj for row, obj in enumerate(self.members) if row not in rows]
         self.refresh()
@@ -391,15 +400,27 @@ class EndMiterTaskPanel:
             self.closed()
 
     def _update_preview(self, *args, force=False):
-        """Make the preview match the panel when Update automatically is checked (or ``force``)."""
+        """Make the preview match the panel when Update automatically is checked (or ``force``).
+
+        Asked for while the panel recomputes, it runs right after the recompute, not dropped.
+        """
         if not self._active() or self.edited is not None:
             return
-        if (force or self.form.cb_auto_update.isChecked()) and self._previewed != self._wanted():
-            self._rebuild_preview()
-        self._show_status()
+        if self._gate.wait(self._forced_preview if force else self._update_preview):
+            return
+        with self._gate.hold():
+            if (force or self.form.cb_auto_update.isChecked()) and self._previewed != self._wanted():
+                self._rebuild_preview()
+        if not self._closed:
+            self._show_status()
+
+    def _forced_preview(self):
+        self._update_preview(force=True)
 
     def _rebuild_preview(self):
         """Update the preview miters; when one fails, discard the whole preview and show why."""
+        # Taken before the recompute: a value typed during it is not previewed yet.
+        shown = self._wanted()
         extend = self.form.cb_extend.isChecked()
         gap = self.form.sb_gap.value()
         wanted = {member.Name: (member, partners) for member, partners in self._planned}
@@ -436,7 +457,7 @@ class EndMiterTaskPanel:
         if self._error:
             self._discard_preview()
         else:
-            self._previewed = self._wanted()
+            self._previewed = shown
         self._show_messages()
 
     def _drop_preview(self, name):
@@ -464,6 +485,10 @@ class EndMiterTaskPanel:
 
         A Folded Bar that folded a preview then folds its tube again, recomputed at once.
         """
+        with self._gate.hold():
+            self._abort_preview()
+
+    def _abort_preview(self):
         bars = self._folding_bars()
         # Aborting deletes selected previews: those deselections are not the user's.
         self._syncing = True
@@ -534,7 +559,7 @@ class EndMiterTaskPanel:
 
     def _highlight_members(self):
         """Show every listed member, or its preview, selected as a whole object, never as a face."""
-        if self._closed:
+        if self._closed or self._gate.wait(self._highlight_members):
             return
         self._syncing = True
         try:
@@ -587,7 +612,7 @@ class EndMiterTaskPanel:
         QtCore.QTimer.singleShot(0, self._after_selection)
 
     def _after_selection(self):
-        if not self._active():
+        if not self._active() or self._gate.wait(self._after_selection):
             return
         self._draw_markers()
         self._update_preview()
@@ -621,6 +646,7 @@ class EndMiterTaskPanel:
     def clean(self):
         self._closed = True
         self._gap_timer.stop()
+        self._gate.clear()
         self._markers = []
         self._remove_marker_node()
         try:
@@ -638,6 +664,9 @@ class EndMiterTaskPanel:
             gui_doc.resetEdit()
 
     def reject(self):
+        if self._gate.defer(self.reject):
+            # Pressed during a recompute of the panel: Cancel runs once it ends.
+            return False
         self.clean()
         if self.edited is not None:
             # Nothing is changed before OK, so there is nothing to restore.
@@ -676,8 +705,13 @@ class EndMiterTaskPanel:
         return True
 
     def accept(self):
+        if self._gate.defer(self.accept):
+            # Pressed during a recompute of the panel: OK runs once it ends, with the values typed meanwhile.
+            return False
         if self.edited is not None:
-            return self.accept_edit()
+            # Whatever its recompute is asked meanwhile waits for it to end.
+            with self._gate.hold():
+                return self.accept_edit()
 
         if not self._planned:
             return False
