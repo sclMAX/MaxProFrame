@@ -1,4 +1,5 @@
 import os
+from functools import partial
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -46,6 +47,7 @@ from freecad.maxproframe.extruded_cutout import CUT_TYPES, wall_thickness
 from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, get_param_group, translate
 from freecad.maxproframe.folded_bar import bar_tips, release_piece, segment_at, straight_part_message
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
+from freecad.maxproframe.recompute_gate import RecomputeGate
 
 # Offsets of a new drill hole from its reference point, in mm: the hole starts on the picked point.
 DEFAULT_OFFSET = 0.0
@@ -298,6 +300,10 @@ class DrillHoleTaskPanel:
 
     The preview follows the panel under the Update automatically check box, like Extend / Cut does:
     value changes once typing pauses, picks at once. OK applies the panel values in any case.
+
+    While the panel recomputes, FreeCAD's progress bar runs its timers, keys and clicks: they wait for the
+    recompute to end (``_gate``), as an OCC boolean run inside it would wait forever for its threads
+    (odd/tasks/panel-recompute-deadlock.md).
     """
 
     # Remembered state of the "Update automatically" check box, and its value until first changed.
@@ -339,11 +345,8 @@ class DrillHoleTaskPanel:
         self._error = ""
         # What the shown drill hole was last recomputed for (see _wanted).
         self._previewed = ()
-        # A recompute pumps Qt events: an update asked for meanwhile runs once it ends.
-        self._recomputing = False
-        self._pending = False
-        # OK or Cancel pressed during a recompute: it runs once the recompute ends.
-        self._deferred = None
+        # A recompute pumps Qt events: an update, a pick, OK or Cancel asked for meanwhile runs once it ends.
+        self._gate = RecomputeGate(self._active)
         # Expressions of the dropped preview, given to the next one.
         self._expressions = {}
         # Value changes fire one by one while typing: the preview waits this long for the next one.
@@ -1038,6 +1041,9 @@ class DrillHoleTaskPanel:
         """Take the marker ``name`` as the whole reference, as a click on it does (see _take)."""
         if not self._active():
             return False
+        if self._gate.wait(partial(self.pick_marker, name)):
+            # Picked during a recompute of the panel: taken once it ends.
+            return True
         marker = next((marker for marker in self._markers() if marker[0] == name), None)
         if marker is None:
             return False
@@ -1178,7 +1184,9 @@ class DrillHoleTaskPanel:
             return
         if event.getState() == coin.SoMouseButtonEvent.DOWN:
             marker = None
-            if self._active():
+            # During a recompute of the panel the markers are not looked for: the click is a click on the face,
+            # taken once the recompute ends.
+            if self._active() and not self._gate.held:
                 marker = marker_at(self.reference_markers(), event.getPosition().getValue(), self._viewport_point)
             self._marker_pressed = marker is not None
             self._marker_click = marker is not None
@@ -1246,27 +1254,16 @@ class DrillHoleTaskPanel:
         Never recomputes while a recompute of the panel runs: an update asked for meanwhile follows it,
         so the preview ends at the last values.
         """
-        if not self._active():
+        if not self._active() or self._gate.wait(self._forced_preview if force else self._update_preview):
             return
-        if self._recomputing:
-            self._pending = True
-            return
-        self._recomputing = True
-        try:
-            while True:
-                self._pending = False
-                if force or self.form.cb_auto_update.isChecked():
-                    self._preview(force)
-                # OK pressed meanwhile previews the last values itself, Cancel drops them.
-                if not (self._pending and self._active()) or self._deferred is not None:
-                    break
-        finally:
-            self._recomputing = False
+        with self._gate.hold():
+            if force or self.form.cb_auto_update.isChecked():
+                self._preview(force)
         if self._active():
             self._show_status()
-        deferred, self._deferred = self._deferred, None
-        if deferred is not None and self._active() and deferred():
-            self._close_dialog()
+
+    def _forced_preview(self):
+        self._update_preview(force=True)
 
     def _preview(self, force):
         """Recompute the shown drill hole for the panel values; without a face and a vertex the preview goes."""
@@ -1356,9 +1353,10 @@ class DrillHoleTaskPanel:
             except Exception:
                 pass
         self._transaction_open = False
-        self._drop_preview()
-        if folded and _alive_document(self.doc) and any("Touched" in obj.State for obj in self.doc.Objects):
-            self.doc.recompute()
+        with self._gate.hold():
+            self._drop_preview()
+            if folded and _alive_document(self.doc) and any("Touched" in obj.State for obj in self.doc.Objects):
+                self.doc.recompute()
 
     def _restore_edit(self):
         """Put the edited drill hole back as it was when the panel opened, even with undo disabled."""
@@ -1373,7 +1371,8 @@ class DrillHoleTaskPanel:
         restore_expressions(self.edited, self._edit_expressions)
         if self._values(self.edited) != self._edit_before:
             self._restore(self.edited, self._edit_before)
-        self.doc.recompute()
+        with self._gate.hold():
+            self.doc.recompute()
 
     # Selection observer.
 
@@ -1384,6 +1383,9 @@ class DrillHoleTaskPanel:
             # FreeCAD selects what lies under a clicked marker: not a pick, and not left selected.
             # Never change the selection during FreeCAD's selection observer dispatch.
             QtCore.QTimer.singleShot(0, self._clear_selection)
+            return
+        if self._gate.wait(partial(self.addSelection, doc, obj, sub, other)):
+            # A click during a recompute of the panel: taken once it ends.
             return
         document = App.getDocument(doc)
         source = document.getObject(getattr(obj, "Name", obj)) if document else None
@@ -1476,6 +1478,7 @@ class DrillHoleTaskPanel:
     def clean(self):
         self._closed = True
         self._preview_timer.stop()
+        self._gate.clear()
         self._marker_pressed = self._marker_click = False
         self._remove_corner_marker()
         self._stop_listening_to_mouse()
@@ -1491,20 +1494,9 @@ class DrillHoleTaskPanel:
         if gui_doc is not None and gui_doc.getInEdit() is not None:
             gui_doc.resetEdit()
 
-    def _close_dialog(self):
-        """Close the dialog after OK or Cancel ran on their own (pressed during a recompute)."""
-        if Gui.Control.activeDialog():
-            Gui.Control.closeDialog()
-
-    def _defer(self, button):
-        """A recompute pumps Qt events: OK or Cancel pressed during it waits for it to end."""
-        if not self._recomputing:
-            return False
-        self._deferred = button
-        return True
-
     def reject(self):
-        if self._defer(self.reject):
+        # A recompute pumps Qt events: Cancel pressed during it waits for it to end.
+        if self._gate.defer(self.reject):
             return False
         self.clean()
         if self.edited is None:
@@ -1530,7 +1522,8 @@ class DrillHoleTaskPanel:
         return ""
 
     def accept(self):
-        if self._defer(self.accept):
+        # A recompute pumps Qt events: OK pressed during it waits for it to end, then closes the dialog.
+        if self._gate.defer(self.accept):
             return False
         problem = self._missing()
         if problem and self._applied and self.face is None:
@@ -1547,18 +1540,20 @@ class DrillHoleTaskPanel:
         if self._error:
             # The panel stays open with the error, to change the values.
             return False
-        if (
-            self.edited is not None
-            and self._values(self.edited) == self._edit_before
-            and expressions_of(self.edited, EXPRESSION_PROPERTIES) == self._edit_expressions
-        ):
-            # Nothing changed in the end: no Undo step.
-            self._restore_edit()
-        else:
-            self.doc.commitTransaction()
-        self._transaction_open = False
-        self._remember_diameter()
-        self.clean()
+        # What the recompute below is asked meanwhile is dropped with the panel.
+        with self._gate.hold():
+            if (
+                self.edited is not None
+                and self._values(self.edited) == self._edit_before
+                and expressions_of(self.edited, EXPRESSION_PROPERTIES) == self._edit_expressions
+            ):
+                # Nothing changed in the end: no Undo step.
+                self._restore_edit()
+            else:
+                self.doc.commitTransaction()
+            self._transaction_open = False
+            self._remember_diameter()
+            self.clean()
         if self.edited is not None:
             self._close_edit()
         return True
@@ -1571,7 +1566,7 @@ class DrillHoleTaskPanel:
         """
         if self.edited is not None or not self._active():
             return False
-        if self._defer(self._apply_deferred):
+        if self._gate.defer(self._apply_deferred):
             return False
         problem = self._missing()
         if problem:
