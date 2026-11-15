@@ -1647,7 +1647,7 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>{} cannot be cut at its folded corner with {}.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} нельзя резать в гнутом углу, который он образует с {}.</translation>
     </message>
     <message>
         <source>Extend / Cut: the target face {} of {} is not planar.</source>
@@ -1777,7 +1777,7 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>Click a planar face of a profile, a trimmed profile, a cutout or a folded bar.</source>
-        <translation type="unfinished"></translation>
+        <translation>Щелкните по плоской грани профиля, обрезанного профиля, выреза или гнутой заготовки.</translation>
     </message>
     <message>
         <source>Select a planar face of a profile, a trimmed profile or a cutout.</source>
@@ -1785,15 +1785,15 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>Select a planar face of a profile, a trimmed profile, a cutout or a folded bar.</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите плоскую грань профиля, обрезанного профиля, выреза или гнутой заготовки.</translation>
     </message>
     <message>
         <source>Click a face of the folded bar.</source>
-        <translation type="unfinished"></translation>
+        <translation>Щелкните по грани гнутой заготовки.</translation>
     </message>
     <message>
         <source>{} is closed: click its tubes to add them.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} — замкнутая заготовка: щелкните по ее трубам, чтобы добавить их.</translation>
     </message>
     <message>
         <source>{}: pick one of its faces</source>
@@ -2513,7 +2513,7 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>Select the piece to repeat: click a profile, a trimmed profile, a cutout, a drill hole or a folded bar.</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите элемент для повторения: щелкните по профилю, обрезанному профилю, вырезу, отверстию или гнутой заготовке.</translation>
     </message>
     <message>
         <source>Click a straight edge for the direction of the copies.</source>
@@ -2658,7 +2658,7 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>&lt;b&gt;Cutout / Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile, a cutout or a folded bar, then OK: a sketch holding the face outline is created on the face and opened. Draw the hole and close the sketch to cut it.&lt;br&gt;&lt;br&gt;Or preselect one face and one sketch to cut with that sketch directly.</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;Вырез / Отверстие&lt;/b&gt;&lt;br&gt;&lt;br&gt;Щелкните по плоской грани профиля, обрезанного профиля, выреза или гнутой заготовки и нажмите «ОК»: на этой грани будет создан и открыт эскиз, повторяющий её контур. Нарисуйте отверстие и закройте эскиз, чтобы выполнить вырез.&lt;br&gt;&lt;br&gt;Также можно предварительно выбрать грань и эскиз, чтобы сразу выполнить вырез по этому эскизу.</translation>
     </message>
 </context>
 <context>
@@ -2673,7 +2673,7 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>&lt;b&gt;Drill Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile, a cutout or a folded bar, then one of its nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the offsets from that point: one, or a pattern on both sides of it along and across the profile, with a diameter and a depth.</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;Отверстие&lt;/b&gt;&lt;br&gt;&lt;br&gt;Щелкните по плоской грани профиля, обрезанного профиля, выреза или гнутой заготовки, а затем по одной из девяти ее окружностей, от которой будет производиться отсчет: в углу, посередине ребра или в центре. В заданных смещениях от этой точки сверлятся круглые отверстия с указанными диаметром и глубиной: одно отверстие или шаблон по обе стороны от нее вдоль и поперек профиля.</translation>
     </message>
     <message>
         <source>&lt;b&gt;Drill Hole&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click a planar face of a profile, a trimmed profile or a cutout, then one of its nine circles to measure from: a corner, the middle of an edge or the center. Round holes are drilled at the offsets from that point, one or a row of them, with a diameter and a depth.</source>
@@ -2692,7 +2692,7 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>&lt;b&gt;Profile Pattern&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a profile, a trimmed profile, a cutout, a drill hole or a folded bar and click a straight edge for the direction: the copies are Links placed by count and pitch (in the edge&apos;s sense, inverted or symmetric) or between two faces with equal gaps. A change to the piece shows on every copy; the BOM counts them with its ID. Double-click the pattern to edit it.</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;Шаблон профиля&lt;/b&gt;&lt;br&gt;&lt;br&gt;Выберите профиль, обрезанный профиль, вырез, отверстие или гнутую заготовку и щелкните по прямолинейному ребру, чтобы задать направление: копии создаются как ссылки (Links), размещенные по количеству и шагу (в направлении ребра, в обратном направлении или симметрично) либо между двумя гранями с равными зазорами. Любое изменение элемента отражается на всех копиях; в спецификации (BOM) они учитываются под его идентификатором. Чтобы отредактировать шаблон, дважды щелкните по нему.</translation>
     </message>
 </context>
 <context>
@@ -2798,304 +2798,305 @@ All files and sketches on disk will be kept intact.</source>
     <name>MaxProFrame</name>
     <message>
         <source>{} has no path to fold.</source>
-        <translation type="unfinished"></translation>
+        <translation>У {} нет траектории для гибки.</translation>
     </message>
     <message>
         <source>{} follows a curved path: only straight profiles can be folded.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} идет по криволинейной траектории: гнуть можно только прямые профили.</translation>
     </message>
     <message>
         <source>{} is a {} profile: only Square Hollow and Rectangular Hollow tubes can be folded.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} — профиль типа {}: гнуть можно только трубы «Квадратный полый профиль» и «Прямоугольный полый профиль».</translation>
     </message>
     <message>
         <source>{} is not the same tube as {}: {} instead of {}.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} — не та же труба, что {}: {} вместо {}.</translation>
     </message>
     <message>
         <source>More than two of the selected profiles meet at one point.</source>
-        <translation type="unfinished"></translation>
+        <translation>Более двух выбранных профилей сходятся в одной точке.</translation>
     </message>
     <message>
         <source>The selected profiles do not form one chain: {} meets none of the others.</source>
-        <translation type="unfinished"></translation>
+        <translation>Выбранные профили не образуют одну цепочку: {} не сходится ни с одним из остальных.</translation>
     </message>
     <message>
         <source>{} and {} are in line: there is nothing to fold.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} и {} лежат на одной прямой: сгибать нечего.</translation>
     </message>
     <message>
         <source>{1} turns back on {0}: a corner can fold less than 180 degrees.</source>
-        <translation type="unfinished"></translation>
+        <translation>{1} возвращается назад вдоль {0}: угол можно согнуть только меньше чем на 180 градусов.</translation>
     </message>
     <message>
         <source>The corner between {} and {} bends across a corner of the tube: its walls must be parallel to the bend.</source>
-        <translation type="unfinished"></translation>
+        <translation>Угол между {} и {} сгибается поперек ребра трубы: ее стенки должны быть параллельны линии гиба.</translation>
     </message>
     <message>
         <source>{1} does not continue {0} across the fold: give both the same anchor, offsets and rotation.</source>
-        <translation type="unfinished"></translation>
+        <translation>{1} не продолжает {0} через гиб: задайте обоим одинаковые привязку, смещения и вращение.</translation>
     </message>
     <message>
         <source>{} cuts {} at its folded corner with {}: delete it or make that corner the open one.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} режет {} в гнутом углу, который тот образует с {}: удалите его или сделайте этот угол открытым.</translation>
     </message>
     <message>
         <source>{} cuts {} at its folded corner with {}: delete it.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} режет {} в гнутом углу, который тот образует с {}: удалите его.</translation>
     </message>
     <message>
         <source>{} is not a profile.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} не является профилем.</translation>
     </message>
     <message>
         <source>{} is selected more than once.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} выбран более одного раза.</translation>
     </message>
     <message>
         <source>Select at least two profiles that meet end to end.</source>
-        <translation type="unfinished"></translation>
+        <translation>Выберите не менее двух профилей, которые стыкуются конец в конец.</translation>
     </message>
     <message>
         <source>Only a closed frame has an open corner: these profiles already have two free ends.</source>
-        <translation type="unfinished"></translation>
+        <translation>Открытый угол есть только у замкнутой рамы: у этих профилей уже есть два свободных конца.</translation>
     </message>
     <message>
         <source>Select first a profile at one end of the chain: {} is in its middle.</source>
-        <translation type="unfinished"></translation>
+        <translation>Сначала выберите профиль на одном из концов цепочки: {} находится в ее середине.</translation>
     </message>
     <message>
         <source>{} and {} do not meet at a corner.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} и {} не сходятся в углу.</translation>
     </message>
     <message>
         <source>The open corner must be at one end of the first selected profile ({}).</source>
-        <translation type="unfinished"></translation>
+        <translation>Открытый угол должен находиться на одном из концов первого выбранного профиля ({}).</translation>
     </message>
     <message>
         <source>The selected profiles do not form one chain.</source>
-        <translation type="unfinished"></translation>
+        <translation>Выбранные профили не образуют одну цепочку.</translation>
     </message>
     <message>
         <source>The outer radius of the corner between {} and {} must be between {min:g} and {max:g} mm.</source>
-        <translation type="unfinished"></translation>
+        <translation>Внешний радиус угла между {} и {} должен быть в пределах от {min:g} до {max:g} мм.</translation>
     </message>
     <message>
         <source>The K-factor of the corner between {} and {} must be between 0 and 1.</source>
-        <translation type="unfinished"></translation>
+        <translation>K-фактор угла между {} и {} должен быть в пределах от 0 до 1.</translation>
     </message>
     <message>
         <source>The key does not fit in the notch between {} and {} with this radius: make the radius smaller or turn the key off.</source>
-        <translation type="unfinished"></translation>
+        <translation>Замковый выступ не помещается в вырезе между {} и {} при этом радиусе: уменьшите радиус или отключите выступ.</translation>
     </message>
     <message>
         <source>The corner between {} and {} has no Folded Corner object.</source>
-        <translation type="unfinished"></translation>
+        <translation>У угла между {} и {} нет объекта «Гнутый угол».</translation>
     </message>
     <message>
         <source>The key does not fit in the notch between {} and {}: make it smaller.</source>
-        <translation type="unfinished"></translation>
+        <translation>Замковый выступ не помещается в вырезе между {} и {}: уменьшите его.</translation>
     </message>
     <message>
         <source>{} is too short for the radius of its corners.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} слишком короткий для радиуса своих углов.</translation>
     </message>
     <message>
         <source>{} is too short for the stepped joint of the open corner.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} слишком короткий для ступенчатого соединения открытого угла.</translation>
     </message>
     <message>
         <source>{}: its developed length ({:.1f} mm) is longer than the stock length of the cut list ({:.1f} mm).
 </source>
-        <translation type="unfinished"></translation>
+        <translation>{}: длина его развёртки ({:.1f} мм) больше длины исходного материала в списке для раскроя ({:.1f} мм).
+</translation>
     </message>
     <message>
         <source>{} does not fold into one solid: change its bend settings.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} не сгибается в одно твердое тело: измените параметры гибки.</translation>
     </message>
     <message>
         <source>{} does not unfold into one solid: change its bend settings.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} не разворачивается в одно твердое тело: измените параметры гибки.</translation>
     </message>
     <message>
         <source>Folded Bar</source>
-        <translation type="unfinished"></translation>
+        <translation>Гнутая заготовка</translation>
     </message>
     <message>
         <source>Corners</source>
-        <translation type="unfinished"></translation>
+        <translation>Углы</translation>
     </message>
     <message>
         <source>Gap between the notch flanks and around the key, half on each side</source>
-        <translation type="unfinished"></translation>
+        <translation>Зазор между сторонами выреза и вокруг выступа, по половине с каждой стороны</translation>
     </message>
     <message>
         <source>Clearance</source>
-        <translation type="unfinished"></translation>
+        <translation>Зазор</translation>
     </message>
     <message>
         <source>Interlocking key</source>
-        <translation type="unfinished"></translation>
+        <translation>Замковый выступ</translation>
     </message>
     <message>
         <source>Diameter of the key, a half circle on the miter line; Default: a quarter of the tube depth across the bent wall</source>
-        <translation type="unfinished"></translation>
+        <translation>Диаметр выступа — полукруга на линии скоса; По умолчанию: четверть размера трубы поперек согнутой стенки</translation>
     </message>
     <message>
         <source>Key diameter</source>
-        <translation type="unfinished"></translation>
+        <translation>Диаметр выступа</translation>
     </message>
     <message>
         <source>Preview</source>
-        <translation type="unfinished"></translation>
+        <translation>Предварительный просмотр</translation>
     </message>
     <message>
         <source>Update automatically</source>
-        <translation type="unfinished"></translation>
+        <translation>Обновлять автоматически</translation>
     </message>
     <message>
         <source>Default</source>
-        <translation type="unfinished"></translation>
+        <translation>По умолчанию</translation>
     </message>
     <message>
         <source>Pending changes</source>
-        <translation type="unfinished"></translation>
+        <translation>Ожидающие изменения</translation>
     </message>
     <message>
         <source>Preview updated</source>
-        <translation type="unfinished"></translation>
+        <translation>Предварительный просмотр обновлен</translation>
     </message>
     <message>
         <source>No preview</source>
-        <translation type="unfinished"></translation>
+        <translation>Предварительный просмотр недоступен</translation>
     </message>
     <message>
         <source>K-factor</source>
-        <translation type="unfinished"></translation>
+        <translation>K-фактор</translation>
     </message>
     <message>
         <source>Folded Miters</source>
-        <translation type="unfinished"></translation>
+        <translation>Гнутые соединения под углом</translation>
     </message>
     <message>
         <source>Tube</source>
-        <translation type="unfinished"></translation>
+        <translation>Труба</translation>
     </message>
     <message>
         <source>Material and wall thickness of the tubes, from their profile</source>
-        <translation type="unfinished"></translation>
+        <translation>Материал и толщина стенки труб, по их профилю</translation>
     </message>
     <message>
         <source>Corners from the start of the bar: click, Ctrl+click or Shift+click to select the ones to edit</source>
-        <translation type="unfinished"></translation>
+        <translation>Углы от начала заготовки: щелкните, щелкните с нажатой клавишей Ctrl или Shift, чтобы выбрать углы для редактирования</translation>
     </message>
     <message>
         <source>Remove</source>
-        <translation type="unfinished"></translation>
+        <translation>Удалить</translation>
     </message>
     <message>
         <source>Open bar: take off the end tube of the first or last corner selected. Closed frame: open the frame at the selected corner.</source>
-        <translation type="unfinished"></translation>
+        <translation>Незамкнутая заготовка: убрать концевую трубу первого или последнего выбранного угла. Замкнутая рама: разомкнуть раму в выбранном углу.</translation>
     </message>
     <message>
         <source>Corner</source>
-        <translation type="unfinished"></translation>
+        <translation>Угол</translation>
     </message>
     <message>
         <source>Radius seen outside the bend: the inside radius is it less the wall thickness</source>
-        <translation type="unfinished"></translation>
+        <translation>Радиус по внешней стороне гиба: внутренний радиус равен ему за вычетом толщины стенки</translation>
     </message>
     <message>
         <source>Outer radius</source>
-        <translation type="unfinished"></translation>
+        <translation>Внешний радиус</translation>
     </message>
     <message>
         <source>Automatic</source>
-        <translation type="unfinished"></translation>
+        <translation>Автоматически</translation>
     </message>
     <message>
         <source>Where the neutral axis sits in the wall, 0 &lt; K &lt;= 1; Automatic: from DIN 6935, by the inside radius and the wall thickness</source>
-        <translation type="unfinished"></translation>
+        <translation>Положение нейтрального слоя в стенке, 0 &lt; K &lt;= 1; Автоматически: по DIN 6935, по внутреннему радиусу и толщине стенки</translation>
     </message>
     <message>
         <source>Open · {} → {}</source>
-        <translation type="unfinished"></translation>
+        <translation>Открытый · {} → {}</translation>
     </message>
     <message>
         <source>key</source>
-        <translation type="unfinished"></translation>
+        <translation>выступ</translation>
     </message>
     <message>
         <source>no key</source>
-        <translation type="unfinished"></translation>
+        <translation>без выступа</translation>
     </message>
     <message>
         <source>{} · {} → {} · R {} · {} · clearance {}</source>
-        <translation type="unfinished"></translation>
+        <translation>{} · {} → {} · R {} · {} · зазор {}</translation>
     </message>
     <message>
         <source>Click the tube where the bar starts.</source>
-        <translation type="unfinished"></translation>
+        <translation>Щелкните по трубе, с которой начинается заготовка.</translation>
     </message>
     <message>
         <source>Click the next tube, after {}.</source>
-        <translation type="unfinished"></translation>
+        <translation>Щелкните по следующей трубе, после {}.</translation>
     </message>
     <message>
         <source>Tubes picked: {}</source>
-        <translation type="unfinished"></translation>
+        <translation>Выбрано труб: {}</translation>
     </message>
     <message>
         <source>Click a straight part of the folded bar.</source>
-        <translation type="unfinished"></translation>
+        <translation>Щелкните по прямому участку гнутой заготовки.</translation>
     </message>
     <message>
         <source>{} does not fold into a valid solid: check the cuts on its tubes (a hole or cutout touching an edge or another cut).</source>
-        <translation type="unfinished"></translation>
+        <translation>{} не сгибается в корректное твердое тело: проверьте резы на ее трубах (отверстие или вырез, касающиеся ребра или другого реза).</translation>
     </message>
     <message>
         <source>Joint</source>
-        <translation type="unfinished"></translation>
+        <translation>Соединение</translation>
     </message>
     <message>
         <source>Miter</source>
-        <translation type="unfinished"></translation>
+        <translation>Соединение под углом</translation>
     </message>
     <message>
         <source>Stepped</source>
-        <translation type="unfinished"></translation>
+        <translation>Ступенчатое соединение</translation>
     </message>
     <message>
         <source>How the inner wall is cut: Miter, at half the bend angle (a bevel cut); Stepped, an interlock of straight cuts only, for any tube laser</source>
-        <translation type="unfinished"></translation>
+        <translation>Как режется внутренняя стенка: соединение под углом — на половине угла гиба (скошенный рез); ступенчатое соединение — замок только из прямых резов, для любого лазера для резки труб</translation>
     </message>
     <message>
         <source>Step depth</source>
-        <translation type="unfinished"></translation>
+        <translation>Глубина ступени</translation>
     </message>
     <message>
         <source>Depth of the step of a Stepped joint across the bent wall; Automatic: the larger of the wall thickness and the outer corner radius of the tube</source>
-        <translation type="unfinished"></translation>
+        <translation>Глубина ступени ступенчатого соединения поперек согнутой стенки; Автоматически: большее из толщины стенки и внешнего радиуса скругления ребер трубы</translation>
     </message>
     <message>
         <source>Flip step</source>
-        <translation type="unfinished"></translation>
+        <translation>Перевернуть ступень</translation>
     </message>
     <message>
         <source>Swap the tubes of a Stepped joint: the other one covers the step</source>
-        <translation type="unfinished"></translation>
+        <translation>Поменять местами трубы ступенчатого соединения: ступень перекрывает другая труба</translation>
     </message>
     <message>
         <source>{} · stepped</source>
-        <translation type="unfinished"></translation>
+        <translation>{} · ступенчатое</translation>
     </message>
     <message>
         <source>The step depth of the corner between {} and {} must be between {min:g} and {max:g} mm.</source>
-        <translation type="unfinished"></translation>
+        <translation>Глубина ступени угла между {} и {} должна быть в пределах от {min:g} до {max:g} мм.</translation>
     </message>
     <message>
         <source>The step of the corner between {} and {} does not fit at this angle: make the step depth smaller.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ступень угла между {} и {} не помещается при этом угле: уменьшите глубину ступени.</translation>
     </message>
     <message>
         <source>The interlock of the corner between {} and {} needs at least 2 fingers.</source>
@@ -3258,22 +3259,22 @@ All files and sketches on disk will be kept intact.</source>
     <name>MaxProFrame_FoldedBar</name>
     <message>
         <source>Folded Bar</source>
-        <translation type="unfinished"></translation>
+        <translation>Гнутая заготовка</translation>
     </message>
     <message>
         <source>&lt;b&gt;Folded Bar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click two or more tube profiles (or pieces made from them) that meet end to end, the first one where the bar starts: their corners fold, with a V notch, a key and a relief cut by the laser and the outer wall bent. A closed frame stays open at one corner. Double-click the bar to edit it.</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;Гнутая заготовка&lt;/b&gt;&lt;br&gt;&lt;br&gt;Щелкните по двум или более профилям труб (или элементам, изготовленным из них), которые стыкуются конец в конец, первым — по тому, с которого начинается заготовка: их углы сгибаются — лазер вырезает V-образный вырез, замковый выступ и разгрузочный вырез, а внешняя стенка сгибается. Замкнутая рама остается открытой в одном углу. Чтобы отредактировать заготовку, дважды щелкните по ней.</translation>
     </message>
 </context>
 <context>
     <name>MaxProFrame_UnfoldBar</name>
     <message>
         <source>Unfold Bar</source>
-        <translation type="unfinished"></translation>
+        <translation>Развернуть заготовку</translation>
     </message>
     <message>
         <source>&lt;b&gt;Unfold Bar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select a Folded Bar: its straight bar with every cut is made from X = 0 along X, to export with File &gt; Export (STEP, IGES, BREP) for a tube laser.</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;Развернуть заготовку&lt;/b&gt;&lt;br&gt;&lt;br&gt;Выберите гнутую заготовку: создается ее прямая заготовка со всеми резами, от X = 0 вдоль оси X, для экспорта через «Файл &gt; Экспорт» (STEP, IGES, BREP) на лазер для резки труб.</translation>
     </message>
 </context>
 <context>
@@ -3291,67 +3292,67 @@ All files and sketches on disk will be kept intact.</source>
     <name>App::Property</name>
     <message>
         <source>Profile of one of the two tubes meeting at the corner</source>
-        <translation type="unfinished"></translation>
+        <translation>Профиль одной из двух труб, сходящихся в углу</translation>
     </message>
     <message>
         <source>Profile of the other tube meeting at the corner</source>
-        <translation type="unfinished"></translation>
+        <translation>Профиль другой трубы, сходящейся в углу</translation>
     </message>
     <message>
         <source>Where a closed frame stays open: the bar starts and ends here, unfolded</source>
-        <translation type="unfinished"></translation>
+        <translation>Где замкнутая рама остается открытой: заготовка начинается и заканчивается здесь, без гиба</translation>
     </message>
     <message>
         <source>Radius seen outside the bend; the inside radius is it less the wall thickness</source>
-        <translation type="unfinished"></translation>
+        <translation>Радиус по внешней стороне гиба; внутренний радиус равен ему за вычетом толщины стенки</translation>
     </message>
     <message>
         <source>Where the neutral axis sits in the wall: 0 &lt; K &lt;= 1; 0: automatic, from DIN 6935</source>
-        <translation type="unfinished"></translation>
+        <translation>Положение нейтрального слоя в стенке: 0 &lt; K &lt;= 1; 0: автоматически, по DIN 6935</translation>
     </message>
     <message>
         <source>Gap between the notch flanks and around the key, half on each side</source>
-        <translation type="unfinished"></translation>
+        <translation>Зазор между сторонами выреза и вокруг выступа, по половине с каждой стороны</translation>
     </message>
     <message>
         <source>Interlocking key in the notch</source>
-        <translation type="unfinished"></translation>
+        <translation>Замковый выступ в вырезе</translation>
     </message>
     <message>
         <source>Diameter of the key, a half circle on the miter line; 0: a quarter of the tube depth across the bent wall</source>
-        <translation type="unfinished"></translation>
+        <translation>Диаметр выступа — полукруга на линии скоса; 0: четверть размера трубы поперек согнутой стенки</translation>
     </message>
     <message>
         <source>Tube pieces folded into the bar, in chain order from its start</source>
-        <translation type="unfinished"></translation>
+        <translation>Части труб, согнутые в заготовку, в порядке цепочки от ее начала</translation>
     </message>
     <message>
         <source>Tube each segment of the bar is made from, in its order</source>
-        <translation type="unfinished"></translation>
+        <translation>Труба, из которой изготовлен каждый сегмент заготовки, по порядку</translation>
     </message>
     <message>
         <source>Folded Corner objects of the bar in chain order from its start, then the open corner of a closed frame</source>
-        <translation type="unfinished"></translation>
+        <translation>Объекты «Гнутый угол» заготовки в порядке цепочки от ее начала, затем открытый угол замкнутой рамы</translation>
     </message>
     <message>
         <source>Length of the unfolded bar: the length to cut</source>
-        <translation type="unfinished"></translation>
+        <translation>Длина развёрнутой заготовки: длина для резки</translation>
     </message>
     <message>
         <source>The folded bar this is the straight bar of</source>
-        <translation type="unfinished"></translation>
+        <translation>Гнутая заготовка, прямой заготовкой которой является этот объект</translation>
     </message>
     <message>
         <source>How the inner wall is cut: Miter, at half the bend angle (a bevel cut); Stepped, an interlock of straight cuts only</source>
-        <translation type="unfinished"></translation>
+        <translation>Как режется внутренняя стенка: соединение под углом — на половине угла гиба (скошенный рез); ступенчатое соединение — замок только из прямых резов</translation>
     </message>
     <message>
         <source>Depth of the step of a Stepped joint across the bent wall; 0: automatic, the larger of the wall thickness and the outer corner radius of the tube</source>
-        <translation type="unfinished"></translation>
+        <translation>Глубина ступени ступенчатого соединения поперек согнутой стенки; 0: автоматически, большее из толщины стенки и внешнего радиуса скругления ребер трубы</translation>
     </message>
     <message>
         <source>Swap the tubes of a Stepped joint: the other one covers the step</source>
-        <translation type="unfinished"></translation>
+        <translation>Поменять местами трубы ступенчатого соединения: ступень перекрывает другая труба</translation>
     </message>
     <message>
         <source>Profile of one of the two tubes the interlock joins</source>
