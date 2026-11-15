@@ -1,5 +1,10 @@
 ## Changelog
 
+* Unreleased
+
+  **Fixes**
+  - **Extend / Cut, Notch, Create Miter Ends and Drill Hole**: typing in a field (the Gap, while editing a trim), clicking or pressing OK or Cancel while the preview was recomputing could freeze FreeCAD; the panel now waits for the recompute to end before it previews, draws or takes the click, and the preview then shows the last values.
+
 * v1.14.0 (2026-11-15)
 
   **Improvements**
