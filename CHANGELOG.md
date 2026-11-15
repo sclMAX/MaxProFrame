@@ -9,6 +9,7 @@
 
   **Fixes**
   - **Unfolded Bar**: it was shifted along X by how far the first tube of its Folded Bar reached past the start of its path, for example after an Extend / Cut past a free end of the bar. It starts at X = 0 again.
+  - **Extend / Cut, Notch, Create Miter Ends and Drill Hole**: typing in a field (the Gap, while editing a trim), clicking or pressing OK or Cancel while the preview was recomputing could freeze FreeCAD; the panel now waits for the recompute to end before it previews, draws or takes the click, and the preview then shows the last values.
 
 * v1.14.0 (2026-11-15)
 
