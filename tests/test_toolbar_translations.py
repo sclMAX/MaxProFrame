@@ -88,7 +88,7 @@ EXPECTED = {
     "MaxProFrame_Interlock": (
         "Interlock",
         "Encastre",
-        "Hacé clic en las caras de pared interior de los dos tubos en una esquina plegada de una barra plegada",
+        "Una pared de un travesaño y la cara del larguero contra la que apoya (una unión en T)",
     ),
     "MaxProFrame_Link": (
         "Attached Link",

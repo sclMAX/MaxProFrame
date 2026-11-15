@@ -14,6 +14,7 @@ import shutil
 import tempfile
 
 import FreeCAD as App
+import Part
 from miter_helpers import use_language
 from test_end_miter_geometry import CENTER
 from test_notch_geometry import TrimFixture
@@ -43,6 +44,9 @@ NO_END = "There is no T joint between Crossbar and Rail: Crossbar does not end o
 NO_TAB = "The interlock of the T joint between Crossbar and Rail needs at least 1 tab."
 NOT_A_WALL = "There is no T joint between Crossbar and Rail: the face of Crossbar is not a wall along it."
 TWICE = "The T joint between Crossbar and Rail already has tabs on that face: {}."
+# The Gap of an Extend / Cut the crossbar ends on (S8): the 0.5 mm of the manual test (L12), and one wider than the
+# rail wall is thick.
+GAP, WIDE_GAP = 0.5, 2.0
 
 
 class TabInterlockFixture(TrimFixture):
@@ -441,3 +445,104 @@ class TabInterlockTest(TabInterlockFixture):
         box = near_tabs.Shape.BoundBox
         self.assertAlmostEqual(trim.Shape.BoundBox.XMin - T, box.XMin, places=6)
         self.assertAlmostEqual(trim.Shape.BoundBox.XMax + T, box.XMax, places=6)
+
+
+class TabsAcrossTheGapTest(TabInterlockFixture):
+    """S8 (T6): a crossbar trimmed with a Gap g ends g before the rail face P; its tabs cross the gap, measured from P
+    (S4), through the same slots, and the crossbar is as long as its tab tips (S6)."""
+
+    def near(self, rail):
+        return rail.Shape.getElement(self.face_towards(rail, -X)).CenterOfMass.x
+
+    def removed(self, rail, slots):
+        """What the slots take out of ``rail``."""
+        return rail.Shape.cut(slots.Shape)
+
+    def assertSameShape(self, expected, shape):
+        self.assertAlmostEqual(expected.Volume, shape.Volume, delta=VOLUME_TOLERANCE)
+        self.assertLess(expected.cut(shape).Volume + shape.cut(expected).Volume, VOLUME_TOLERANCE)
+
+    def assertAcross(self, rail, trim, interlock, length, gap=GAP):
+        """The tabs of ``interlock`` reach ``length`` past P across the ``gap`` the crossbar ``trim`` ends before P,
+        through slots as deep as the rail wall; the crossbar is as long as the tab tips."""
+        tabs, slots = tab_pieces(interlock)
+        for obj in (tabs, slots):
+            self.assertOneSolid(obj)
+        near = self.near(rail)
+        span = self.flat(trim, self.wall(trim, Y))
+        self.assertAlmostEqual(near - gap, trim.Shape.BoundBox.XMax, places=6)
+        self.assertTabs(trim, tabs, 2, span / 5, length + gap)
+        self.assertAlmostEqual(near + length, tabs.Shape.BoundBox.XMax, places=6)
+        added = tabs.Shape.cut(trim.Shape).BoundBox
+        self.assertAlmostEqual(near - gap, added.XMin, places=6)
+        # The tabs fill the gap and the slots.
+        if gap > 0:
+            gap_box = Part.makeBox(gap, 2 * WIDE, 2 * WIDE, App.Vector(near - gap, -WIDE, -WIDE))
+            self.assertAlmostEqual(2 * span / 5 * T * gap, tabs.Shape.common(gap_box).Volume, delta=VOLUME_TOLERANCE)
+        removed = self.removed(rail, slots)
+        self.assertAlmostEqual(2 * span / 5 * T * T, removed.Volume, delta=VOLUME_TOLERANCE)
+        self.assertAlmostEqual(removed.Volume, tabs.Shape.common(rail.Shape).Volume, delta=VOLUME_TOLERANCE)
+        self.assertLess(tabs.Shape.common(slots.Shape).Volume, VOLUME_TOLERANCE)
+        # S6: the cut length runs to the tab tips, g more past the crossbar end than without a gap.
+        self.assertAlmostEqual(trim.Length.Value + length + gap, tabs.Length.Value, places=6)
+        rows, links = [], []
+        traverse_assembly(rows, links, tabs)
+        self.assertEqual(f"{trim.Length.Value + length + gap:.1f}", rows[0]["length"])
+        self.assertEqual(decimal_text(tabs.Length.Value), piece_texts(tabs)[1])
+        return tabs, slots
+
+    def gapped_t(self, gap):
+        """(rail, trim, interlock) of a square T whose crossbar was trimmed with ``gap`` before the tabs were made."""
+        rail = self.rail()
+        _, trim = self.crossbar(rail)
+        trim.TrimGap = gap
+        self.doc.recompute()
+        self.assertEqual("Valid", trim.getStatusString())
+        interlock = make_tab_interlock(trim, self.wall(trim, Y), rail, self.face_towards(rail, -X))
+        self.doc.recompute()
+        return rail, trim, interlock
+
+    def test_tabs_on_a_crossbar_trimmed_with_a_gap_cross_it_through_the_slots(self):
+        rail, trim, interlock = self.gapped_t(GAP)
+
+        self.assertAcross(rail, trim, interlock, T)
+        # A Length set by the user is measured from P too (D3).
+        interlock.Length = 3.0
+        self.doc.recompute()
+        self.assertAcross(rail, trim, interlock, 3.0)
+
+    def test_tabs_cross_a_gap_wider_than_the_rail_wall(self):
+        rail, trim, interlock = self.gapped_t(WIDE_GAP)
+
+        self.assertAcross(rail, trim, interlock, T, WIDE_GAP)
+
+    def test_editing_the_gap_after_the_interlock_exists_recomputes_the_tabs_and_keeps_the_slots(self):
+        rail, _, trim, interlock = self.square_t()
+        tabs, slots = tab_pieces(interlock)
+        slotted, length = self.removed(rail, slots), tabs.Length.Value
+
+        for gap in (GAP, WIDE_GAP):
+            with self.subTest(gap=gap):
+                trim.TrimGap = gap
+                self.doc.recompute()
+
+                self.assertAcross(rail, trim, interlock, T, gap)
+                self.assertSameShape(slotted, self.removed(rail, slots))
+                # The tips stay where they were: the crossbar is as long to cut as before.
+                self.assertAlmostEqual(length, tabs.Length.Value, places=6)
+
+    def test_without_a_gap_the_tabs_start_at_the_crossbar_end_as_before(self):
+        rail, _, trim, interlock = self.square_t()
+        tabs, slots = tab_pieces(interlock)
+        shapes = (tabs.Shape.copy(), slots.Shape.copy())
+
+        self.assertAcross(rail, trim, interlock, T, gap=0.0)
+
+        trim.TrimGap = WIDE_GAP
+        self.doc.recompute()
+        trim.TrimGap = 0.0
+        self.doc.recompute()
+        for shape, obj in zip(shapes, (tabs, slots)):
+            self.assertOneSolid(obj)
+            self.assertSameShape(shape, obj.Shape)
+        self.assertAcross(rail, trim, interlock, T, gap=0.0)

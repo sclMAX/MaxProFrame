@@ -162,7 +162,11 @@ class Interlock:
         if "Kind" not in obj.PropertiesList:
             _add(
                 obj, "App::PropertyEnumeration", "Kind", "Interlock",
-                translate("App::Property", "Shape of the interlock: Fingers, at the inner vertex of a folded corner"),
+                translate(
+                    "App::Property",
+                    "Shape of the interlock: Fingers, at the inner vertex of a folded corner; Tabs, on the end of a "
+                    "crossbar through slots in the rail at a T joint",
+                ),
                 list(KINDS),
             )  # fmt: skip
             obj.Kind = FINGERS
