@@ -1,5 +1,13 @@
 ## Changelog
 
+* Unreleased
+
+  **Improvements**
+  - **Interlock at a T joint**: the **Interlock** command (Spanish *Encastre*) makes a second kind, **Tabs** (*Lengüetas*): at a T joint, where a crossbar ends against a face of a rail (usually cut with Extend / Cut), the crossbar wall ends in tabs that go through slots cut in the rail wall, so the crossbar sits in its place before it is welded. Click a wall of the crossbar and the face of the rail it butts against, in either order: the two faces tell the kind, the inner walls at a folded corner still make Fingers. One Interlock per pair of faces; **Apply and continue** repeats it on other faces (the other wall of the crossbar, the next crossbar) with the same settings. The panel reuses the Fingers fields, **Count** (at least 1), **Tab width** (**Even** by default), **Tip** with **Tip size** and **Clearance** (around each tab, in its slot), without Depth and Flip, and adds **Length**: **Automatic** is the rail wall thickness, the tabs ending flush with its inside face; a value makes them longer or shorter. Each kind starts with the settings last kept for it. Every cut is straight and square to its wall, so any tube laser cuts it; at any angle, the slots are the footprint of the tabs on the rail wall, longer at an oblique joint. Two pieces make it real, `_Tb` on the crossbar and `_Sl` on the rail, and the BOM, the Cut List and the Piece Table give the crossbar its length up to the tab tips. The crossbar, the rail or both can be tubes of a Folded Bar (the rail anywhere on a straight part, the crossbar on a free end of an open bar): the bar folds with the tabs and the slots and the Unfolded Bar carries them. Faces that make no T joint, tabs that do not fit and faces that have tabs already create nothing and the panel says why, naming the tubes, for example "The tabs of the T joint between Crossbar and Rail do not fit: make them fewer or narrower.". Double-click the Interlock or one of its pieces to edit it; deleting it deletes both pieces and gives back the pieces under them. The new texts are in Spanish; in Russian they show in English until they are translated. See the [tutorial](docs/tutorial.md#interlock).
+
+  **Fixes**
+  - **Unfolded Bar**: it was shifted along X by how far the first tube of its Folded Bar reached past the start of its path, for example after an Extend / Cut past a free end of the bar. It starts at X = 0 again.
+
 * v1.14.0 (2026-11-15)
 
   **Improvements**

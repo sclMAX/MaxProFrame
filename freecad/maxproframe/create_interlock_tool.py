@@ -971,9 +971,11 @@ class InterlockCommand:
             "MenuText": QT_TRANSLATE_NOOP("MaxProFrame_Interlock", "Interlock"),
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_Interlock",
-                "<b>Interlock</b><br><br>Click the inner wall faces of the two tubes at a folded corner of a Folded "
-                "Bar: fingers cut by the laser at the inner vertex of the corner locate one tube on the other. Set "
-                "their count, width, tip and clearance in the panel. Double-click the Interlock to edit it.",
+                "<b>Interlock</b><br><br>Click two faces. The inner wall faces of the two tubes at a folded corner of "
+                "a Folded Bar: fingers cut by the laser at the inner vertex of the corner locate one tube on the "
+                "other. A wall of a crossbar and the face of the rail it butts against (a T joint): tabs on the "
+                "crossbar end go through slots cut in the rail. Set their count, width, tip and clearance in the "
+                "panel. Double-click the Interlock to edit it.",
             ),
         }
 

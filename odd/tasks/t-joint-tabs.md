@@ -51,9 +51,9 @@ of the rail face the crossbar butts against; t_r = rail wall thickness; d = cros
   Unfolded Bar carries them; tests. route=gentle-ai-worker; commit=0de527d [x]
 - T4 [S1, S2, S3, S4] Panel: deduce the kind from the two faces, Tabs fields (Count, Finger width, Tip, Tip size,
   Length with Automatic, Clearance), refusals, Apply and continue, edit by double click; tests.
-  route=gentle-ai-worker; commit=T4 (see Log L9) [x]
+  route=gentle-ai-worker; commit=486a155 [x]
 - T5 [S1-S7] Tutorial, CHANGELOG (Unreleased), Spanish .ts/.qm, Russian unfinished + PENDING_TEXTS; full native
-  suite. route=gentle-ai-worker + parent; commit=
+  suite. route=gentle-ai-worker + parent; commit=T5 (see Log L10)
 
 Delivery forecast: ~1500-2000 authored lines; chained PRs, one per task slice. Slice boundaries: T1 = 95f2b83
 (928 lines, geometry + tests, one work unit); T2 = e16d884 (~1200 lines, objects + tests, one work unit).
@@ -118,3 +118,9 @@ Delivery forecast: ~1500-2000 authored lines; chained PRs, one per task slice. S
   tab_interlock 13, tab_interlock_folded_bar 11, tab_geometry 17, toolbar_translations 4, workbench_commands 2,
   shortcuts 5, folded_bar_panel 111; russian_translation 6 (parent). T5 texts: worker report list (changed hint,
   Kind tooltip in MaxProFrame and App::Property, Apply tooltip; ~13 new; command tooltip text proposed).
+- L10 T5 (worker mwhz6j9i-7-ir99): command tooltip names both kinds; 36 messages (5 changed, 31 new) in es (voseo:
+  Lengüetas, ranuras, travesaño, larguero, Unión en T, Longitud) and ru (unfinished, PENDING_TEXTS); es .qm rebuilt
+  (843, 4 identical copies); tutorial "### Interlock" split into Fingers / Tabs subsections; README; CHANGELOG
+  Unreleased: Improvements "Interlock at a T joint", Fixes "Unfolded Bar starts at X = 0 again". Tests OK:
+  toolbar_translations 4, interlock_translations 8, russian_translation 6, compile_translations 4,
+  library_translations 3, workbench_translation_loading 2, interlock_panel 14, tab_interlock_panel 13.
