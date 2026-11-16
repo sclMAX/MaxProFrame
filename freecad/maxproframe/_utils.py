@@ -119,6 +119,18 @@ def is_tab_piece(obj):
     return is_extrudedcutout(obj) and getattr(obj, "InterlockRole", None) == "Tabs"
 
 
+def is_finger_piece(obj):
+    """The piece of a tube at an End Miter corner with the fingers of its Interlock (``miter_finger_interlock``): a
+    cutout-like piece."""
+    return is_extrudedcutout(obj) and getattr(obj, "InterlockRole", None) in ("FingersA", "FingersB")
+
+
+def sets_its_length(obj):
+    """Whether the piece ``obj`` keeps a Length of its own, past the shape it is made from: the tabs of a Tabs
+    Interlock, the fingers at an End Miter corner, which may reach past the end of their tube."""
+    return is_tab_piece(obj) or is_finger_piece(obj)
+
+
 def is_link(obj):
     return obj.TypeId == "App::Link" and hasattr(obj, "AttachmentOffset")
 
@@ -339,8 +351,9 @@ def length_along_normal(obj):
 
     A section without a straight edge along the axis (round tube or bar) keeps its tip-to-tip extent.
     """
-    if is_tab_piece(obj):
-        # The tabs of a Tabs Interlock reach past the crossbar end: the piece keeps its length to their tips.
+    if sets_its_length(obj):
+        # The tabs of a Tabs Interlock reach past the crossbar end, the fingers of a miter corner may reach past the
+        # miter: the piece keeps its length to their tips.
         return obj.Length.Value
     # The document of the piece, not the active one: a document being opened is not always active.
     doc = obj.Document

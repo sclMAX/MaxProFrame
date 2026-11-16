@@ -322,7 +322,8 @@ def tab_pieces(obj):
 
 
 class _InterlockPiece(ExtrudedCutout):
-    """A piece of a Tabs Interlock on top of ``baseObject``: a cutout without sketch nor pattern."""
+    """A piece of an Interlock on top of ``baseObject``: a cutout without sketch nor pattern. A Tabs Interlock's here;
+    the fingers of an End Miter corner (``miter_finger_interlock``) override ``made``, ``shaped`` and the tooltip."""
 
     role = None
 
@@ -330,17 +331,21 @@ class _InterlockPiece(ExtrudedCutout):
         super().__init__(obj, None, base)
         for name in ("Sketch", "ExtrusionLength", "CutType"):
             obj.setEditorMode(name, 2)
-        obj.addProperty(
-            "App::PropertyLinkGlobal",
-            "Interlock",
-            "Interlock",
-            translate("App::Property", "The Tabs Interlock this piece adds its tabs or slots for"),
-        )
+        obj.addProperty("App::PropertyLinkGlobal", "Interlock", "Interlock", self.interlock_tooltip())
         obj.setEditorMode("Interlock", 1)
         obj.addProperty("App::PropertyString", "InterlockRole", "Interlock", "Tabs or Slots")
         obj.InterlockRole = self.role
         obj.setEditorMode("InterlockRole", ["ReadOnly", "Hidden"])
         obj.Interlock = interlock
+
+    @staticmethod
+    def interlock_tooltip():
+        return translate("App::Property", "The Tabs Interlock this piece adds its tabs or slots for")
+
+    def made(self, fp):
+        """What the Interlock of ``fp`` gives it, the arguments of ``shaped`` after the piece under it: (``TJoint``,
+        ``TabShapes``). Raises InterlockError when they are refused."""
+        return interlock_shapes(fp.Interlock)
 
     def add_pattern_properties(self, obj):
         """None: the Interlock gives what the piece adds."""
@@ -362,7 +367,7 @@ class _InterlockPiece(ExtrudedCutout):
         made = None
         try:
             if fp.Interlock is not None:
-                made = interlock_shapes(fp.Interlock)
+                made = self.made(fp)
         finally:
             fp.Shape = _uncut_shape(under.Shape) if made is None else self.shaped(fp, under, *made)
             self._update_structure_data(fp, under, made)

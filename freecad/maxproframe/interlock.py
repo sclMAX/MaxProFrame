@@ -15,6 +15,12 @@ The kind ``Tabs`` (odd/tasks/t-joint-tabs.md, T2) joins a crossbar (``PieceA``) 
 thickness). It remembers its two faces (``CrossbarFace``, ``RailFace``, each one's plane local to the profile of its
 tube) and no bar lists it: its tabs and slots are two pieces of their own that link it (``tab_interlock``), removed with
 it (``unsetupObject``).
+
+Fingers at the inner vertex of an End Miter corner between two separate tubes (odd/tasks/miter-fingers.md, T2, D2) are
+an Interlock of Kind ``Fingers`` too, the same settings, marked ``AtEndMiter`` (``is_miter_interlock``): only such an
+Interlock has the marker and the two faces it remembers (``FaceA``, ``FaceB``, as a Tabs Interlock remembers its own;
+``add_miter_properties``), so an Interlock saved before opens as it was. Its fingers are two pieces of their own, one
+on each tube (``miter_finger_interlock``), removed with it; no bar folds it (``on_folded_corner``).
 """
 
 import os
@@ -58,6 +64,12 @@ KIND_ONLY = {
 }
 # The pieces of a Tabs Interlock (``tab_interlock``) carry its link in ``Interlock`` and their role here.
 TABS_ROLE, SLOTS_ROLE = "Tabs", "Slots"
+# Fingers at an End Miter corner (odd/tasks/miter-fingers.md, T2, D2): the marker of such an Interlock, the sides of
+# its two faces (A the first face given, B the second one: ``FaceA``, ``PointA``, ...) and the roles of its pieces.
+MITER_MARKER = "AtEndMiter"
+MITER_SIDES = ("A", "B")
+FINGERS_A_ROLE, FINGERS_B_ROLE = "FingersA", "FingersB"
+FINGER_ROLES = (FINGERS_A_ROLE, FINGERS_B_ROLE)
 
 
 def _add(obj, kind, name, group, tooltip, value=None):
@@ -79,6 +91,51 @@ def is_interlock(obj):
     )
 
 
+def is_miter_interlock(obj):
+    """An Interlock of Fingers at the inner vertex of an End Miter corner between two tubes, not at a folded corner
+    (odd/tasks/miter-fingers.md, D2)."""
+    return (
+        is_interlock(obj)
+        and str(obj.Kind) == FINGERS
+        and MITER_MARKER in obj.PropertiesList
+        and bool(getattr(obj, MITER_MARKER))
+    )
+
+
+def on_folded_corner(obj):
+    """Whether the Interlock ``obj`` goes on a folded corner of a Folded Bar: Fingers, but not at an End Miter corner."""
+    return str(getattr(obj, "Kind", "")) == FINGERS and not is_miter_interlock(obj)
+
+
+def add_miter_properties(obj):
+    """Mark the Fingers Interlock ``obj`` as being at an End Miter corner and give it the two faces it remembers:
+    ``FaceA``/``FaceB`` (the piece under each tube's fingers and its inner wall) and the plane of each one, local to
+    the profile of its tube, with the anchor shift of the section (``tab_interlock.face_snapshot``)."""
+    _add(
+        obj, "App::PropertyBool", MITER_MARKER, "Interlock",
+        translate("App::Property", "Fingers at the inner vertex of an End Miter corner between two tubes"),
+        True,
+    )  # fmt: skip
+    obj.setEditorMode(MITER_MARKER, ["ReadOnly", "Hidden"])
+    for side, tooltip in zip(
+        MITER_SIDES,
+        (
+            translate("App::Property", "Piece and inner wall of the first tube, which owns the first finger"),
+            translate("App::Property", "Piece and inner wall of the second tube"),
+        ),
+    ):
+        _add(obj, "App::PropertyLinkSubGlobal", f"Face{side}", "Interlock", tooltip)
+        obj.setEditorMode(f"Face{side}", ["ReadOnly"])
+        for name in ("Point", "Normal", "Anchor"):
+            _add(
+                obj, "App::PropertyVector", f"{name}{side}", "Interlock",
+                "Face plane and section anchor when the face was picked, local to the profile",
+            )  # fmt: skip
+            obj.setEditorMode(f"{name}{side}", ["ReadOnly", "Hidden"])
+    # Its pieces make Fingers only.
+    obj.setEditorMode("Kind", ["ReadOnly"])
+
+
 def interlock_key(obj):
     """The corner of the interlock ``obj`` by the names of its two profiles, whatever their order; None when one is
     missing (as ``folded_corner.corner_key``)."""
@@ -88,7 +145,8 @@ def interlock_key(obj):
 
 
 def interlock_pieces(obj):
-    """The pieces of the Tabs Interlock ``obj`` that link it: its tabs and its slots (``tab_interlock``)."""
+    """The pieces of the Interlock ``obj`` that link it: the tabs and the slots of a Tabs Interlock (``tab_interlock``),
+    the fingers of both tubes of an End Miter corner (``miter_finger_interlock``)."""
     return [
         piece
         for piece in getattr(obj, "InList", ())
@@ -234,6 +292,8 @@ class Interlock:
         """An Interlock saved before a kind or a property existed gets it; it stays as it was otherwise."""
         touched = "Touched" in obj.State
         self.add_properties(obj)
+        if is_miter_interlock(obj):
+            add_miter_properties(obj)
         if obj.getEnumerationsOfProperty("Kind") != list(KINDS):
             kind = obj.Kind
             obj.Kind = list(KINDS)
@@ -248,7 +308,7 @@ class Interlock:
 
     def unsetupObject(self, obj):
         """A Tabs Interlock leaves the document (not by undo): its tabs and slots go with it, the pieces under them
-        given back (``tab_interlock``)."""
+        given back (``tab_interlock``); so do the finger pieces of an End Miter corner."""
         for piece in interlock_pieces(obj):
             if piece.Document is not None and piece.Document.getObject(piece.Name) is piece:
                 piece.Document.removeObject(piece.Name)
