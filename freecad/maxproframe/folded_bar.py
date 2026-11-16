@@ -691,12 +691,25 @@ class UnfoldedBar:
             obj, "App::PropertyString", "MaxProFrameVersion", "Profile",
             "MaxProFrame version used to create the object", ff_version,
         )  # fmt: skip
+        # Global: the Unfolded Bar stays at the document root, from X = 0, while its bar may be in a Part; a local
+        # link made FreeCAD report it out of scope on every recompute.
         _add(
-            obj, "App::PropertyLink", "FoldedBar", "UnfoldedBar",
+            obj, "App::PropertyLinkGlobal", "FoldedBar", "UnfoldedBar",
             translate("App::Property", "The folded bar this is the straight bar of"),
         )  # fmt: skip
 
     def onDocumentRestored(self, obj):
+        """One saved with a local link to its bar gets the global one, to the same bar, as untouched as it was."""
+        if "FoldedBar" in obj.PropertiesList and obj.getTypeIdOfProperty("FoldedBar") != "App::PropertyLinkGlobal":
+            touched = "Touched" in obj.State
+            bar = obj.FoldedBar
+            # Unlinked first: a property removed while linking leaves the bar listing ``obj`` twice.
+            obj.FoldedBar = None
+            obj.removeProperty("FoldedBar")
+            self.add_properties(obj)
+            obj.FoldedBar = bar
+            if not touched:
+                obj.purgeTouched()
         self.add_properties(obj)
 
     def execute(self, obj):
