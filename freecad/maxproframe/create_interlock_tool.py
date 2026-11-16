@@ -32,7 +32,9 @@ step and waits for the next two faces. A double click on an Interlock (or on the
 on a finger piece of a miter corner) opens the same panel on it, without picking (``interlock.EDIT_PANEL``); OK keeps
 the changes in one Undo step, Cancel puts its values back. A new Interlock starts with the settings last kept with OK or Apply and continue for its kind
 (Fingers at a folded corner and at a miter corner share theirs). While the panel's own recompute runs, the faces
-clicked and the fields changed wait for it to end (odd/tasks/panel-recompute-deadlock.md, S3).
+clicked and the fields changed wait for it to end (odd/tasks/panel-recompute-deadlock.md, S3). The Interlock made or
+edited is drawn over the 3D view, its two faces and its corner, following Flip (``interlock_highlight``,
+odd/tasks/interlock-highlight.md S2).
 """
 
 import os
@@ -40,9 +42,10 @@ from collections import namedtuple
 
 import FreeCAD as App
 import FreeCADGui as Gui
+import Part
 from PySide import QtCore, QtGui, QtWidgets
 
-from freecad.maxproframe import interlock
+from freecad.maxproframe import interlock, interlock_highlight
 from freecad.maxproframe._utils import is_foldedbar
 from freecad.maxproframe.create_drill_hole_tool import _button_id, _click_point
 from freecad.maxproframe.create_end_miter_tool import GAP_DELAY_MS, _alive, _alive_document
@@ -75,6 +78,7 @@ from freecad.maxproframe.miter_finger_interlock import (
 from freecad.maxproframe.profile_pattern import global_shape
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
 from freecad.maxproframe.tab_interlock import TabFace, make_tab_interlock, tab_order, tab_pieces
+from freecad.maxproframe.trimmed_profile import face_normal
 
 # Largest length and count the fields take (mm, fingers).
 MAX_SIZE = 1000.0
@@ -237,6 +241,39 @@ def _on_inner_wall(chain, corner, index, face):
     return abs((face.point - center).dot(normal) - corner.depth / 2) <= PICK_TOLERANCE
 
 
+def corner_faces(obj):
+    """((PieceA, faces), (PieceB, faces)) of the Fingers Interlock ``obj`` at a folded corner: the planar faces of its
+    bar, global, on the inner wall of each of its two tubes at that corner (``_on_inner_wall``, as a click is read);
+    None when no bar lists it or its bar has no such corner (odd/tasks/interlock-highlight.md, S4)."""
+    bar = interlock_bar(obj)
+    if bar is None or obj.PieceA is None or obj.PieceB is None:
+        return None
+    try:
+        chain = bar_chain(bar)
+    except ChainError:
+        return None
+    pieces = (obj.PieceA, obj.PieceB)
+    indexes = [_segment_index(chain, piece) for piece in pieces]
+    corner = next((c for c in chain.corners if [c.before, c.after] in (indexes, indexes[::-1])), None)
+    if corner is None:
+        return None
+    planar = [face for face in global_shape(bar).Faces if isinstance(face.Surface, Part.Plane)]
+    found = []
+    for piece, index in zip(pieces, indexes):
+        segment = chain.segments[index]
+        walls = []
+        for face in planar:
+            center = face.CenterOfMass
+            # Within its tube: a coplanar face of another tube is not its wall.
+            along = (center - segment.start).dot(segment.direction)
+            if not -PICK_TOLERANCE <= along <= segment.length + PICK_TOLERANCE:
+                continue
+            if _on_inner_wall(chain, corner, index, PickedFace(bar, piece, face_normal(face), center)):
+                walls.append(face)
+        found.append((piece, walls))
+    return tuple(found)
+
+
 def _inner_wall_message(profile):
     return translate("MaxProFrame", "Click the inner wall of {}: its face on the inside of the folded corner.").format(
         profile.Label
@@ -393,6 +430,10 @@ class InterlockTaskPanel:
         self._apply_button = None
         # Whether Apply and continue kept an Interlock: OK with none made since then just closes.
         self._applied = False
+        # Its faces and its corner over the 3D view (odd/tasks/interlock-highlight.md, S2), and whether drawing it
+        # waits for a recompute.
+        self._overlay = interlock_highlight.InterlockOverlay()
+        self._overlay_waiting = False
         self._before = values_of(edited) if edited is not None else None
         # The settings of each kind for its next Interlock: those last kept, as the fields change them.
         self._values = {kind: last_values(kind) for kind in KINDS}
@@ -404,6 +445,8 @@ class InterlockTaskPanel:
         self._connect()
         if edited is not None:
             self._open_transaction("Edit Interlock")
+        # The tree selection draws no overlay while the panel is open.
+        interlock_highlight.panel_opened(self)
         for obj, sub, point in picks:
             self._pick(obj, sub, point)
         self._show()
@@ -857,6 +900,24 @@ class InterlockTaskPanel:
         self.form.label_corner.setText(text)
         self.form.message_label.setText("\n".join(self.problems()))
         self._enable_ok()
+        self._draw_overlay()
+
+    def _draw_overlay(self):
+        """Draw the faces and the corner of the Interlock made or edited over the 3D view, as its settings and Flip
+        are now; none before it is made. While a recompute runs it waits for it to end: the faces come from it
+        (odd/tasks/panel-recompute-deadlock.md, S3)."""
+        if not self._active():
+            return
+        if self._busy():
+            if not self._overlay_waiting:
+                self._overlay_waiting = True
+                QtCore.QTimer.singleShot(GAP_DELAY_MS, self._overlay_later)
+            return
+        self._overlay.show(self.obj if self.obj is not None and _alive(self.obj) else None)
+
+    def _overlay_later(self):
+        self._overlay_waiting = False
+        self._draw_overlay()
 
     def can_accept(self):
         """OK: the Interlock made and its bar valid, or nothing made since Apply and continue (OK just closes)."""
@@ -946,6 +1007,8 @@ class InterlockTaskPanel:
     def clean(self):
         self._closed = True
         self._clicks = []
+        self._overlay.remove()
+        interlock_highlight.panel_closed(self)
         try:
             Gui.Selection.removeObserver(self)
         except Exception:
