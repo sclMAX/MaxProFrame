@@ -40,7 +40,7 @@ the inner walls = the walls of A and B on the inside of the corner, meeting at t
 - T1 [S2, S3, S4] Geometry (pure, 3D tube frames): finger solids of each tube and the cuts they need in the other,
   from the two tube axes, inner normals, inner-wall span and the (gap-shifted) miter planes; reuse FingerSettings,
   bounds, tips and the stepped-band ideas of unfolded_geometry (_OpenStep, _overlap, _past_miter); checks and
-  refusals; unit tests (R = 0 and R > 0, 90 and oblique angles, gap 0 and > 0, flip). route=gentle-ai-worker; commit=
+  refusals; unit tests (R = 0 and R > 0, 90 and oblique angles, gap 0 and > 0, flip). route=gentle-ai-worker; commit=T1 (see Log L4) [x]
 - T2 [S1, S5, S6, D1, D2] Objects on straight tubes: Interlock kind/marker, finger pieces on the newest pieces,
   remembered faces, finding both End Miters, Length to finger tips, measured_piece, cut_ends, BOM, delete/undo
   give-back, corner_interlocks skip; tests. route=gentle-ai-worker; commit=
@@ -69,3 +69,33 @@ the inner walls = the walls of A and B on the inside of the corner, meeting at t
 - L3 User answers: Q1 below the fingers "Inglete común (Recomendado)" (other: stepped); Q2 miter gap "Cruzan la
   separación (Recomendado)" (other: refuse); Q3 cut length "Hasta la punta de las aletas (Recomendado)" (other: miter
   length); Q4 required "Los dos End Miter, uno contra otro (Recomendado)" (other: also without a miter).
+- L4 T1 (worker): `miter_finger_geometry.py` (pure; imports interlock_geometry and
+  unfolded_geometry.automatic_step_depth, changes neither). API for T2: `MiterTube(name, face, thickness, direction,
+  section, miter)`: face = the planar outer face of the tube's inner wall (outward, toward the inside of the corner),
+  direction = its axis toward the corner, section = its cross-section face anywhere along the axis (MiterPlane.section
+  of `TrimmedProfile.miter_planes`), miter = (point, normal) of the plane its End Miter cuts, gap included
+  (`plane.shifted(MiterGap / 2)`, either normal sense); `MiterCorner(a, b)` (a = first face, owns the first finger);
+  `check(FingerSettings, corner)`, `make_fingers(...)` -> `MiterFingerShapes(a, b, owners, depth)`, each side
+  `TubeFingers(fingers, cuts, tip)` (tip = (point, axis direction) of the cross-section its fingers end on, for S5);
+  `joined(shape, side)` = fuse fingers, cut cuts, removeSplitter. Geometry: W = n_A x n_B, V = inner vertex at mid
+  height; each level's owner covers the overlap of both bands (its section prolonged past its own plane, across the
+  gap, to its cross-section through the farthest overlap vertex - g/2); the other tube loses its band from g past the
+  overlap and the finger grown by g (g/2 at the tip); levels overlap by g along W; tips as at folded corners. Below
+  the band and the trims (s + g/2 at 90, about 1.5 s at 60/120) the corner is the plain miter. Property of D4 (cross-
+  section cuts): an oblique corner keeps a notch at the inner vertex, 0.5 s^2 |cot(angle)| x height (0 at 90; 34.6 mm^3
+  for s = 2, 30 high, at 60 and 120), as folded-corner fingers. R > 0: each finger keeps its own tube's corner radius,
+  so the rounded edges of both tubes do not match exactly past the miter (not measured). New refusals (InterlockError,
+  translate "MaxProFrame", for T5): "The faces of {} and {} are not the inner walls of an End Miter corner between
+  them." (not planar, a face across its axis, faces not facing each other, planes not parallel, inner vertex off the
+  mid-plane, a wall not ending on its plane: tolerance 1e-3 mm), "{} and {} are not the same size along their corner:
+  their fingers cannot match.", "The finger depth of the corner between {} and {} must be between {min:g} and {max:g}
+  mm." (thicker wall .. half the shallower tube, floor 0.1), "The fingers of the corner between {} and {} do not fit at
+  this angle: make the depth smaller." (a finger + g past the inside of the other tube's far wall), "The fingers of the
+  corner between {} and {} do not reach across the miter gap: make the gap smaller or the depth larger."; plus
+  FingerSettings.check's count, fit and tip messages. Tests tests/test_miter_finger_geometry.py (40 x 30 x 2 tubes,
+  R 0 / 4, 90 / 60 / 120 degrees, gap 0 / 0.5 / 1, Count 2 / 3, Flip, Square / Chamfer / Round): one valid solid
+  each, no overlap, finger-to-other distance >= g, fingers past the other's plane (gap), unchanged below the band,
+  void = notch only, owners/Flip with point probes, tips only on fingers, refusals. RED: ModuleNotFoundError
+  (1 error). GREEN (stable 1.1.4): test_miter_finger_geometry 12 OK (about 10 s), test_interlock_geometry 8 OK.
+  Mutations caught: no +g at the band start (4 failing tests), no trim (6), owners swapped (4), finger to tip + g/2
+  (5), end at the second vertex (5), trim without step clearance (3), band 3 s deep (2). Black 25.1.0 / isort clean.
