@@ -1181,7 +1181,8 @@ class SteppedCornerUnfoldTest(UnfoldFixture):
         self.solid(unfold(chain, replace(corners, joint="Miter")))
 
     def test_step_depth_outside_its_limits_is_refused(self):
-        # S5: at least the wall thickness, under half the depth (rounded down to 0.1 mm) and above the relief (v = t + r).
+        # S5: at least the wall thickness, under half the depth (rounded down to 0.1 mm) and above the relief: t + r
+        # while its kept discs leave the top of its rectangle, lower where they overlap.
         chain = self.rectangle()
         message = "The step depth of the corner between Profile and Profile001 must be between 2 and 24.9 mm."
         for step in (1.9, 25.0, 24.95):
@@ -1195,13 +1196,24 @@ class SteppedCornerUnfoldTest(UnfoldFixture):
         for step in (2.0, 24.9):
             with self.subTest(step=step):
                 self.solid(unfold(chain, bend(joint="Stepped", step_depth=step, **PLAIN)))
-        # r = 30: the relief reaches v = 32, so the band (from d - s) fits down to it: s <= 50 - 32.
+        # r = 30: the discs (radius 30 at u = 0 and u = BA = 48.4) overlap, so the relief only reaches
+        # v = 32 - sqrt(30^2 - 24.2^2) = 14.3: half the depth limits the step, not t + r = 32.
+        self.solid(unfold(chain, bend(radius=30.0, joint="Stepped", step_depth=24.9, **PLAIN)))
+        # r = 60: the bend axis (v = 62) is past the inner wall; the relief reaches 62 - sqrt(60^2 - 47.75^2) = 25.67,
+        # so s <= 50 - 25.67.
         self.assertRefused(
-            "The step depth of the corner between Profile and Profile001 must be between 2 and 18 mm.",
+            "The step depth of the corner between Profile and Profile001 must be between 2 and 24.3 mm.",
             chain,
-            bend(radius=30.0, joint="Stepped", step_depth=18.1),
+            bend(radius=60.0, joint="Stepped", step_depth=24.4),
         )
-        self.solid(unfold(chain, bend(radius=30.0, joint="Stepped", step_depth=18.0, **PLAIN)))
+        self.solid(unfold(chain, bend(radius=60.0, joint="Stepped", step_depth=24.3, **PLAIN)))
+        # r = 100 (outer radius 102, the tutorial's example) with automatic K (0.5 at r / t = 50):
+        # 102 - sqrt(100^2 - 79.33^2) = 41.11, so s <= 8.8.
+        self.assertRefused(
+            "The step depth of the corner between Profile and Profile001 must be between 2 and 8.8 mm.",
+            chain,
+            bend(radius=100.0, k_factor=0.0, joint="Stepped", step_depth=8.9),
+        )
 
     def test_step_that_does_not_fit_at_the_angle_is_refused(self):
         # L8: at 30 degrees the bands overlap far along A: past s = 11.5 A's tab reaches B's side of the V.

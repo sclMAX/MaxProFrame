@@ -85,7 +85,9 @@ s = step depth, g = clearance. A = the tab piece, B = the socket piece.
   v = d - s; in the band v ∈ [d - s, d + t] the rectangle u ∈ [x_A - g/2, BA + x'_B + g/2]; plus T' = A's tab band
   (between the miter line without clearance and x_A + g/2, y ∈ [D - s - g/2, D + t]) mapped into B's frame (rotation
   -θ, then u + BA), which trims B's side walls where A's tip enters B's cavity. The key must stay below the band
-  (YMax <= d - s). Refuse s < t, s beyond the relief (s > d - t - r) or s >= d / 2, and a T' reaching B's bent wall
+  (YMax <= d - s). Refuse s < t, s beyond the relief (s > d - top of the relief cut: t + r while the kept discs leave the top of
+  its rectangle, t + r - sqrt((r - g)^2 - (BA / 2)^2) where they overlap; fix/step-depth-large-radius, 2026-11-16:
+  d - t - r refused every step past an outer radius of d - t) or s >= d / 2, and a T' reaching B's bent wall
   (v < t). With `step_flip` the roles swap (mirror u about BA / 2). Automatic s = max(t, tube outer corner radius:
   Profile `RadiusLarge` when the profile has it, else 0).
 - L9 T1 worker (partial): geometry, refusals and tests in place, 53 + 13 + 42 tests OK on pinned 1.1.4; deviations
