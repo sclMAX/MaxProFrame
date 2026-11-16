@@ -14,6 +14,7 @@ work as before.
 import math
 import os
 import unittest
+from unittest import mock
 
 import FreeCAD as App
 from miter_helpers import use_language
@@ -22,10 +23,12 @@ from test_interlock import G, InterlockObjectFixture
 from test_notch_geometry import TrimFixture
 from test_tab_interlock import RADIUS, T, TabInterlockFixture
 
+from freecad.maxproframe import miter_finger_interlock
 from freecad.maxproframe._utils import piece_stack
 from freecad.maxproframe.best_fit import CutPart, best_fit_decreasing
 from freecad.maxproframe.create_bom import decimal_text, make_cut_list, traverse_assembly
 from freecad.maxproframe.create_end_miter_tool import make_end_miter_profile
+from freecad.maxproframe.create_extend_cut_tool import make_extend_cut_profile
 from freecad.maxproframe.cut_ends import cut_ends
 from freecad.maxproframe.drill_hole import make_drill_hole
 from freecad.maxproframe.extruded_cutout import along_extent
@@ -33,7 +36,12 @@ from freecad.maxproframe.folded_bar import bar_chain, corner_interlocks
 from freecad.maxproframe.folded_chain import base_profile
 from freecad.maxproframe.interlock import interlock_settings, is_interlock, is_miter_interlock, make_interlock
 from freecad.maxproframe.interlock_geometry import FINGERS, FingerSettings, InterlockError
-from freecad.maxproframe.miter_finger_interlock import MiterFace, make_miter_fingers, miter_order, miter_pieces
+from freecad.maxproframe.miter_finger_interlock import (
+    MiterFace,
+    make_miter_fingers,
+    miter_order,
+    miter_pieces,
+)
 from freecad.maxproframe.piece_table import piece_texts
 from freecad.maxproframe.profile_pattern import newest_piece
 
@@ -53,6 +61,7 @@ MISSING_BOTH = (
 SAME_TUBE = "Both faces are on {a}: click the inner wall of each tube of the End Miter corner."
 TWICE = "The corner between {a} and {b} already has fingers: {0}."
 NO_FINGER = "The interlock of the corner between {a} and {b} needs at least 2 fingers."
+GAPS = "The End Miters of {a} and {b} have different gaps: give them the same Gap."
 # angle (inner, degrees), End Miter Gap, outer corner radius of the tubes, settings
 CASES = (
     (90.0, 0.0, RADIUS, {}),
@@ -283,6 +292,60 @@ class MiterFingersTest(MiterFingersFixture):
         self.assertRefused(twice, *self.inner_faces(corner, piece_a, piece_b))
         self.assertRefused(twice, *self.inner_faces(corner))
 
+    def test_one_interlock_per_corner_whatever_the_click_order(self):
+        # S2: the second tube's wall clicked first names the corner the other way round; it has fingers all the same.
+        corner, interlock, piece_a, piece_b = self.fingers()
+        twice = TWICE.format(interlock.Label, a=corner.b.Label, b=corner.a.Label)
+        for first, second in (self.inner_faces(corner, piece_a, piece_b), self.inner_faces(corner)):
+            with self.subTest(first=first.piece.Label):
+                self.assertRefused(twice, second, first)
+
+    def test_an_extend_cut_or_an_end_miter_against_a_third_tube_is_no_end_miter_of_the_corner(self):
+        # S6: B is cut, but not by an End Miter against A.
+        corner = self.mitered(only=0)
+        cut = make_extend_cut_profile(corner.b, (corner.a, (self.face(corner.a, Y),)))
+        self.doc.recompute()
+        self.assertEqual("Valid", cut.getStatusString())
+        order = self.assertRefused(
+            corner.text(MISSING_ONE, corner.b.Label, corner.a.Label),
+            MiterFace(corner.miter_a, self.face(corner.miter_a, Y), None),
+            MiterFace(cut, self.face(cut, -X), None),
+        )
+        self.assertTrue(order.found)
+
+        # B mitered against a third tube C, leaving the corner along +X.
+        a, b = self.tubes(origin=(1000.0, 0.0))
+        c = self.tube(((1000.0, 0, 0), (1000.0 + LENGTH, 0, 0)), "TubeC", RADIUS)
+        miter_a = make_end_miter_profile(a, [b], True, 0.0)
+        miter_b = make_end_miter_profile(b, [c], True, 0.0)
+        self.doc.recompute()
+        for obj in (miter_a, miter_b):
+            self.assertEqual("Valid", obj.getStatusString())
+        order = self.assertRefused(
+            MISSING_ONE.format(b.Label, a.Label, a=a.Label, b=b.Label),
+            MiterFace(miter_a, self.face(miter_a, Y), None),
+            MiterFace(miter_b, self.face(miter_b, -X), None),
+        )
+        self.assertTrue(order.found)
+
+    def test_end_miters_with_different_gaps_are_refused(self):
+        corner = self.mitered(gap=0.5)
+        corner.miter_b.MiterGap = 0.0
+        self.doc.recompute()
+        self.assertRefused(corner.text(GAPS), *self.inner_faces(corner))
+
+        # One Gap changed after the fingers are made: both pieces say so, with the shapes under them.
+        corner, _, piece_a, piece_b = self.fingers(gap=0.5, origin=(1000.0, 0.0))
+        corner.miter_a.MiterGap = 1.0
+        self.doc.recompute()
+        for obj, base in ((piece_a, corner.miter_a), (piece_b, corner.miter_b)):
+            self.assertIn("Invalid", obj.State)
+            self.assertEqual(corner.text(GAPS), obj.getStatusString())
+            self.assertAlmostEqual(base.Shape.Volume, obj.Shape.Volume, delta=VOLUME_TOLERANCE)
+        corner.miter_b.MiterGap = 1.0
+        self.doc.recompute()
+        self.assertInterlocked(corner, piece_a, piece_b)
+
     def test_the_faces_clicked_on_older_pieces_go_on_the_newest_ones(self):
         corner = self.mitered()
         interlock = make_miter_fingers(
@@ -365,6 +428,34 @@ class MiterFingersLifeTest(MiterFingersFixture):
         self.assertInterlocked(corner, piece_a, piece_b)
         self.assertNotAlmostEqual(volumes[0], piece_a.Shape.Volume, places=3)
         self.assertNotAlmostEqual(volumes[1], piece_b.Shape.Volume, places=3)
+
+    def test_touching_a_tube_or_an_end_miter_recomputes_both_pieces_the_same(self):
+        # D1: each piece reads the pieces under the other one, through the Interlock: neither depends on the other.
+        corner, interlock, piece_a, piece_b = self.fingers()
+        self.assertNotIn(piece_b, piece_a.OutListRecursive)
+        self.assertNotIn(piece_a, piece_b.OutListRecursive)
+        shapes = [obj.Shape.copy() for obj in (piece_a, piece_b)]
+        lengths = [obj.Length.Value for obj in (piece_a, piece_b)]
+
+        for touched in (corner.a, corner.b, corner.miter_a, corner.miter_b):
+            with self.subTest(touched=touched.Label):
+                # Each piece moves its fingers onto the piece under it once it has made them.
+                with mock.patch.object(
+                    miter_finger_interlock, "_in_frame", side_effect=miter_finger_interlock._in_frame
+                ) as moved:
+                    touched.touch()
+                    self.doc.recompute()
+
+                self.assertEqual(
+                    sorted((corner.miter_a.Name, corner.miter_b.Name)),
+                    sorted(call.args[0].Name for call in moved.call_args_list),
+                )
+                for obj, shape, length in zip((piece_a, piece_b), shapes, lengths):
+                    self.assertOneSolid(obj)
+                    self.assertLess(obj.Shape.cut(shape).Volume, VOLUME_TOLERANCE)
+                    self.assertLess(shape.cut(obj.Shape).Volume, VOLUME_TOLERANCE)
+                    self.assertAlmostEqual(length, obj.Length.Value, places=6)
+                self.assertInterlocked(corner, piece_a, piece_b)
 
     def test_a_refused_setting_leaves_both_pieces_in_error_with_their_base_shapes(self):
         corner, interlock, piece_a, piece_b = self.fingers()
@@ -456,6 +547,19 @@ class MiterFingersLifeTest(MiterFingersFixture):
             self.assertOneSolid(obj)
             self.assertAlmostEqual(expected, obj.Shape.Volume, delta=VOLUME_TOLERANCE)
             self.assertAlmostEqual(length, obj.Length.Value, places=6)
+
+    def test_a_reopened_wide_corner_keeps_its_length_to_the_finger_tips_before_any_recompute(self):
+        # S5: the Length saved is the one to the tips, not the End Miter's, until the next recompute too.
+        corner, _, piece_a, piece_b = self.fingers(150.0, Depth=15.0)
+        names = (piece_a.Name, piece_b.Name)
+        lengths = (piece_a.Length.Value, piece_b.Length.Value)
+        for length, miter in zip(lengths, (corner.miter_a, corner.miter_b)):
+            self.assertGreater(length, miter.Length.Value + 1.0)
+
+        self.reopen()
+
+        for name, length in zip(names, lengths):
+            self.assertAlmostEqual(length, self.doc.getObject(name).Length.Value, places=6)
 
 
 class FoldedBarBesideMiterFingersTest(MiterCornerMixin, InterlockObjectFixture):
