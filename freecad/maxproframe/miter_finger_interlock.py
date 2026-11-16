@@ -20,17 +20,26 @@ the cut angles of its End Miter (``cut_ends``): the BOM, the Cut List and the Pi
 
 Deleting the Interlock removes both pieces (``Interlock.unsetupObject``) and gives back the pieces under them
 (``tab_interlock.give_back``); undo brings everything back. ``make_miter_fingers`` makes it; ``miter_order`` tells,
-making nothing, whether two faces clicked make one and what is refused (for the Interlock panel). A tube of a Folded
-Bar is refused for now (T3).
+making nothing, whether two faces clicked make one and what is refused (for the Interlock panel).
+
+Either tube, or both, can be the end tube of a Folded Bar (T3: the user's case). A face clicked on the bar stands for
+the face of the tube under the clicked point (``folded_bar.segment_at``, as for Tabs); a click on a bend is refused.
+The finger piece is the newest piece of its tube: the bar folds it at the next recompute of the document
+(``folded_bar.follow_new_pieces``), its shape shows the fingers and the cuts, its unfold carries them and its developed
+length runs to the finger tips (S5). The fingers go only on a free end of a bar (the start of its first tube or the
+end of its last one, on an open bar): a corner at a folded corner of the bar or at the open corner of a closed bar
+(D5) is refused naming the tubes and the bar (``_check_bar_ends``), at creation and at every recompute.
 """
 
 from collections import namedtuple
 
-from freecad.maxproframe._utils import is_foldedbar, is_trimmedbody, piece_stack
+import Part
+
+from freecad.maxproframe._utils import is_trimmedbody, piece_stack
 from freecad.maxproframe.extruded_cutout import along_extent
 from freecad.maxproframe.ff_tools import place_in_container_of, translate
-from freecad.maxproframe.folded_bar import folding_bar
-from freecad.maxproframe.folded_chain import FOLDABLE_FAMILIES, base_profile
+from freecad.maxproframe.folded_bar import bar_chain, folding_bar
+from freecad.maxproframe.folded_chain import FOLDABLE_FAMILIES, ChainError, base_profile
 from freecad.maxproframe.interlock import (
     FINGER_PROPERTIES,
     FINGER_ROLES,
@@ -45,13 +54,14 @@ from freecad.maxproframe.interlock import (
 )
 from freecad.maxproframe.interlock_geometry import FINGERS, FingerSettings, InterlockError
 from freecad.maxproframe.miter_finger_geometry import MiterCorner, MiterTube, TubeFingers, check, joined, make_fingers
-from freecad.maxproframe.profile_pattern import newest_piece
+from freecad.maxproframe.profile_pattern import container_placement, newest_piece, placed
 from freecad.maxproframe.tab_interlock import (
     ViewProviderInterlockPiece,
     _alive,
     _flat_face,
     _InterlockPiece,
     _make_piece,
+    _on_bar,
     face_snapshot,
     found_face,
 )
@@ -63,7 +73,8 @@ DEFAULT_COUNT = FingerSettings().count
 
 MiterFace = namedtuple("MiterFace", "piece sub point")
 MiterFace.__doc__ = """A face clicked for Fingers at an End Miter corner: the face ``sub`` of ``piece`` (a piece of a
-tube), clicked at the global ``point`` (None: the center of the face; kept for the panel and T3)."""
+tube or a Folded Bar), clicked at the global ``point`` (None: the center of the face). On a bar the point picks the
+tube (``folded_bar.segment_at``)."""
 
 MiterOrder = namedtuple("MiterOrder", "first second error found")
 MiterOrder.__doc__ = """Whether two faces clicked make Fingers at an End Miter corner (``miter_order``): the
@@ -94,14 +105,6 @@ def _same_tube(label):
     )
 
 
-def _on_a_bar(names):
-    return InterlockError(
-        translate(
-            "MaxProFrame", "The fingers of the corner between {} and {} cannot go on a tube of a Folded Bar yet."
-        ).format(*names)
-    )
-
-
 def _thickness(profile, names):
     family = getattr(profile, "Family", "")
     if family not in FOLDABLE_FAMILIES:
@@ -111,6 +114,57 @@ def _thickness(profile, names):
             ).format(*names, profile.Label, family)
         )
     return float(profile.Thickness)
+
+
+# The free ends of a Folded Bar.
+
+
+def _bar_end(piece, profile, other):
+    """(bar, whether the end of the tube ``profile`` (of ``piece``) nearest the piece ``other`` is an end of that bar,
+    whether the bar is closed) for a tube a Folded Bar folds, else None. A bar that does not fold says why itself: None
+    too."""
+    bar = folding_bar(piece)
+    if bar is None:
+        return None
+    try:
+        chain = bar_chain(bar)
+    except ChainError:
+        return None
+    index = next((i for i, segment in enumerate(chain.segments) if segment.profile.Name == profile.Name), None)
+    if index is None:
+        return None
+    segment = chain.segments[index]
+    near = placed(other.Shape, container_placement(other))
+    at_start = near.distToShape(Part.Vertex(segment.start))[0] <= near.distToShape(Part.Vertex(segment.end))[0]
+    # The start of the first tube or the end of the last one: an end of the bar, else a folded corner.
+    bar_end = index == 0 if at_start else index == len(chain.segments) - 1
+    return bar, bar_end, chain.closed
+
+
+def _check_bar_ends(names, pieces, profiles):
+    """Raise InterlockError when a Folded Bar folds the tube of either of ``pieces`` and the end of that tube at the
+    corner (its end nearest the other piece) is no free end of the bar: a folded corner, or the open corner of a
+    closed bar (D5)."""
+    for index in (0, 1):
+        found = _bar_end(pieces[index], profiles[index], pieces[1 - index])
+        if found is None:
+            continue
+        bar, bar_end, closed = found
+        if bar_end and not closed:
+            continue
+        if bar_end:
+            text = translate(
+                "MaxProFrame",
+                "The End Miter corner between {} and {} is at the open corner of {}: the fingers go on a free end of a "
+                "Folded Bar.",
+            )
+        else:
+            text = translate(
+                "MaxProFrame",
+                "The End Miter corner between {} and {} is at a folded corner of {}: the fingers go on a free end of a "
+                "Folded Bar.",
+            )
+        raise InterlockError(text.format(*names, bar.Label))
 
 
 # The End Miters.
@@ -172,12 +226,13 @@ def _tube(name, frame, piece, face, thickness, miter):
 
 def _corner(names, first, first_face, second, second_face):
     """The ``MiterCorner`` of the face ``first_face`` of the piece ``first`` (tube A) and ``second_face`` of ``second``
-    (tube B), in the coordinates of the container of ``first``; raises InterlockError for a profile that is no tube or
-    a missing End Miter."""
+    (tube B), in the coordinates of the container of ``first``; raises InterlockError for a profile that is no tube, a
+    tube of a Folded Bar not at a free end of it (``_check_bar_ends``) or a missing End Miter."""
     profiles = base_profile(first), base_profile(second)
     if None in profiles:
         raise _not_a_corner(names)
     thickness = [_thickness(profile, names) for profile in profiles]
+    _check_bar_ends(names, (first, second), profiles)
     miters = _miters(names, (first, second), profiles)
     return MiterCorner(
         *(
@@ -298,25 +353,26 @@ _Located = namedtuple("_Located", "names profiles pieces subs faces snapshots")
 
 
 def _located(first, second):
-    """The two faces ``first`` and ``second`` (``MiterFace``), found on the newest piece of each tube.
+    """The two faces ``first`` and ``second`` (``MiterFace``), found on the newest piece of each tube; a face clicked
+    on a Folded Bar stands for the face of the tube under its point (``tab_interlock._on_bar``).
 
-    Raises InterlockError for a face that is no flat face of a tube, both faces on one tube, a tube of a Folded Bar.
+    Raises InterlockError for a click on a bend of a bar, a face that is no flat face of a tube, both faces on one
+    tube.
     """
-    names = _names(first.piece, second.piece)
-    profiles = base_profile(first.piece), base_profile(second.piece)
+    clicked = [_on_bar(face.piece, face.sub, face.point) for face in (first, second)]
+    names = _names(clicked[0][0], clicked[1][0])
+    profiles = base_profile(clicked[0][0]), base_profile(clicked[1][0])
     if None in profiles:
         raise _not_a_corner(names)
     if profiles[0].Name == profiles[1].Name:
         raise _same_tube(profiles[0].Label)
-    if any(is_foldedbar(face.piece) or folding_bar(face.piece) is not None for face in (first, second)):
-        raise _on_a_bar(names)
     pieces, subs, faces, snapshots = [], [], [], []
-    for face in (first, second):
-        newest = newest_piece(face.piece)
-        picked = _flat_face(face.piece, face.sub)
+    for piece, sub in clicked:
+        newest = newest_piece(piece)
+        picked = _flat_face(piece, sub)
         if picked is None:
             raise _not_a_corner(names)
-        found = found_face(newest, face.sub if newest == face.piece else "", *face_snapshot(face.piece, picked))
+        found = found_face(newest, sub if newest == piece else "", *face_snapshot(piece, picked))
         if found is None:
             raise _not_a_corner(names)
         pieces.append(newest)
@@ -389,10 +445,11 @@ def make_miter_fingers(first, second, **settings):
 
     The faces are found on the newest piece of each tube, which the new pieces go on. ``settings`` are by property
     name (``Count=3``, ``Clearance=0.2``: ``interlock.FINGER_PROPERTIES``); another name raises ValueError. Raises
-    InterlockError, before anything is made, for two faces of one tube, a tube of a Folded Bar, a corner that already
-    has fingers, a tube without its End Miter against the other (S6), faces that are not the inner walls of the corner
-    or fingers that do not fit it (``miter_finger_geometry.check``). Run it in the caller's transaction and recompute
-    the document afterwards.
+    InterlockError, before anything is made, for a click on a bend of a Folded Bar, two faces of one tube, a tube of a
+    bar not at a free end of it, a corner that already has fingers, a tube without its End Miter against the other
+    (S6), faces that are not the inner walls of the corner or fingers that do not fit it
+    (``miter_finger_geometry.check``). Run it in the caller's transaction and recompute the document afterwards: a bar
+    folds the new pieces then.
     """
     _unknown_settings(settings)
     located = _located(first, second)
