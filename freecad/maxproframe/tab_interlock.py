@@ -6,7 +6,9 @@ A Tabs Interlock (``interlock.Interlock`` with ``Kind`` Tabs) holds the settings
 the crossbar wall that carries them) and ``RailFace`` (the piece under the slots and the rail face they go through).
 Each face is remembered as its plane, local to the profile of its tube, with the anchor shift of the section, as a
 Drill Hole remembers its reference: a face FreeCAD renames or loses after a cut or a move of its piece is found again
-on that plane (``found_face``).
+on that plane (``found_face``). As the shape of an Interlock piece changes, the links that name a face of it remembered
+that way (an Interlock's face link and its piece built on that face) get the name of the face found again, so FreeCAD
+reports no missing element reference for them (``_detach_faces``).
 
 Two pieces make it real, each one on top of the stack of its tube, a cutout-like piece (``baseObject``, the profile
 data, ``Cutout``) so the stacks (``piece_stack``, ``base_profile``, ``newest_piece``), the BOM, the Cut List, the Piece
@@ -58,6 +60,8 @@ from freecad.maxproframe.ff_tools import ICONPATH, place_in_container_of, transl
 from freecad.maxproframe.folded_bar import bar_chain, folding_bar, segment_at
 from freecad.maxproframe.folded_chain import FOLDABLE_FAMILIES, ChainError, base_profile
 from freecad.maxproframe.interlock import (
+    FINGER_ROLES,
+    MITER_SIDES,
     SLOTS_ROLE,
     TAB_PROPERTIES,
     TAB_SIDES,
@@ -67,6 +71,7 @@ from freecad.maxproframe.interlock import (
     interlock_pieces,
     interlock_settings,
     is_interlock,
+    is_miter_interlock,
 )
 from freecad.maxproframe.interlock_geometry import TABS, InterlockError, TabSettings
 from freecad.maxproframe.profile import section_shift
@@ -324,6 +329,67 @@ def tab_pieces(obj):
     return pieces.get(TABS_ROLE), pieces.get(SLOTS_ROLE)
 
 
+# The faces linked on a piece, named again as its shape changes.
+
+
+def _remembered_faces(interlock):
+    """[(role of the piece built on the face, face link property, (point, normal, anchor))] of each face the Interlock
+    ``interlock`` remembers: the crossbar and rail faces of a Tabs Interlock, the inner walls of an End Miter corner."""
+    if is_miter_interlock(interlock):
+        return [
+            (role, f"Face{side}", tuple(getattr(interlock, f"{name}{side}") for name in ("Point", "Normal", "Anchor")))
+            for role, side in zip(FINGER_ROLES, MITER_SIDES)
+        ]
+    if str(getattr(interlock, "Kind", "")) == TABS:
+        return [
+            (role, f"{side}Face", _side(interlock, side)[2]) for role, side in zip((TABS_ROLE, SLOTS_ROLE), TAB_SIDES)
+        ]
+    return []
+
+
+def _face_links(piece):
+    """[(object, link property, face name, (point, normal, anchor))] of the links naming a face of ``piece`` that an
+    Interlock remembers on its plane: the face link of the Interlock, and the ``baseObject`` of its piece built on
+    ``piece``."""
+    links = []
+    for user in piece.InList:
+        if not is_interlock(user):
+            continue
+        for role, prop, snapshot in _remembered_faces(user):
+            link = getattr(user, prop, None)
+            if not link or link[0] != piece or not link[1] or not link[1][0]:
+                continue
+            links.append((user, prop, link[1][0], snapshot))
+            for built in interlock_pieces(user):
+                base = built.baseObject
+                if built.InterlockRole == role and base and base[0] == piece and base[1] and base[1][0]:
+                    links.append((built, "baseObject", base[1][0], snapshot))
+    return links
+
+
+def _detach_faces(piece):
+    """Unname the faces of ``piece`` its Interlock links name (``_face_links``) before its shape changes, and return
+    them for ``_name_faces``.
+
+    FreeCAD follows a named face into the new shape by its history; the fusing and refining of an Interlock piece can
+    leave it nowhere, and FreeCAD then reports "<object>.<link> missing element reference" for every link to it and to
+    the pieces stacked on it. The links stay on ``piece``: they are only those of objects built on it, recomputed
+    after it anyway.
+    """
+    links = _face_links(piece)
+    for obj, prop, _, _ in links:
+        setattr(obj, prop, (piece, []))
+    return links
+
+
+def _name_faces(piece, links):
+    """Name in each of ``links`` (``_detach_faces``) the face of the new shape of ``piece`` on the plane it remembers
+    (``found_face``); one with no face there gets back its name."""
+    for obj, prop, sub, snapshot in links:
+        found = found_face(piece, sub, *snapshot)
+        setattr(obj, prop, (piece, [found[0] if found is not None else sub]))
+
+
 # The pieces.
 
 
@@ -363,7 +429,8 @@ class _InterlockPiece(ExtrudedCutout):
         """No cut type to show."""
 
     def execute(self, fp):
-        """The piece under it with the tabs or the slots of its Interlock; with its shape when they are refused."""
+        """The piece under it with the tabs or the slots of its Interlock; with its shape when they are refused. The
+        faces of it the Interlocks built on it link are named again in their new shape (``_detach_faces``)."""
         under = fp.baseObject[0] if fp.baseObject else None
         if under is None:
             return
@@ -371,12 +438,16 @@ class _InterlockPiece(ExtrudedCutout):
             if getattr(child, "ViewObject", None) is not None:
                 child.ViewObject.Visibility = False
         made = None
+        links = _detach_faces(fp)
         try:
             if fp.Interlock is not None:
                 made = self.made(fp)
         finally:
-            fp.Shape = _uncut_shape(under.Shape) if made is None else self.shaped(fp, under, *made)
-            self._update_structure_data(fp, under, made)
+            try:
+                fp.Shape = _uncut_shape(under.Shape) if made is None else self.shaped(fp, under, *made)
+                self._update_structure_data(fp, under, made)
+            finally:
+                _name_faces(fp, links)
 
     def shaped(self, fp, under, joint, shapes):
         raise NotImplementedError

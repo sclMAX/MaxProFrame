@@ -17,6 +17,8 @@ from unittest import mock
 
 import FreeCAD as App
 import Part
+from PySide import QtGui
+from test_custom_profile_link_scope import out_of_scope, report_view
 from test_unfolded_geometry import PLAIN, UnfoldFixture, bend
 
 from freecad.maxproframe import folded_bar
@@ -848,6 +850,82 @@ class UnfoldedBarObjectTest(FoldedBarFixture):
         self.assertAlmostEqual(unfolded.Shape.Volume, solid.Volume, delta=VOLUME_TOLERANCE)
         self.assertAlmostEqual(0.0, solid.BoundBox.XMin, delta=LENGTH_TOLERANCE)
         self.assertAlmostEqual(bar.DevelopedLength.Value, solid.BoundBox.XLength, delta=LENGTH_TOLERANCE)
+
+
+class UnfoldedBarLinkScopeTest(FoldedBarFixture):
+    """An Unfolded Bar stays at the document root, from X = 0, and links its Folded Bar in a Part globally: FreeCAD
+    said "UnfoldedBar links are out of scope. Out of scope links to: FoldedBar" on every recompute of it."""
+
+    def reported(self, action):
+        """What the Report view shows while ``action`` runs."""
+        view = report_view()
+        QtGui.QApplication.processEvents()
+        before = len(view.toPlainText())
+        action()
+        QtGui.QApplication.processEvents()
+        return view.toPlainText()[before:]
+
+    def bar_in_a_part(self):
+        part = self.doc.addObject("App::Part", "Part")
+        self.doc.recompute()
+        _, bar = self.make_bar(container=part, **PLAIN)
+        self.assertIn(bar, part.Group)
+        return part, bar
+
+    def recompute_report(self, bar):
+        def recompute():
+            bar.touch()
+            self.doc.recompute()
+
+        return self.reported(recompute)
+
+    def test_unfolding_a_bar_in_a_part_reports_no_link_out_of_scope(self):
+        part, bar = self.bar_in_a_part()
+        unfolded = []
+
+        report = self.reported(lambda: unfolded.append(make_unfolded_bar(bar)))
+
+        unfolded = unfolded[0]
+        self.assertFalse(out_of_scope(report, unfolded), report)
+        self.assertFalse(out_of_scope(self.recompute_report(bar), unfolded))
+        self.assertEqual("App::PropertyLinkGlobal", unfolded.getTypeIdOfProperty("FoldedBar"))
+        self.assertEqual(bar, unfolded.FoldedBar)
+        # Still at the document root, from X = 0, whatever the placement of the Part.
+        self.assertNotIn(unfolded, part.Group)
+        self.assertIsNone(unfolded.getParentGeoFeatureGroup())
+        self.assertOneSolid(unfolded)
+        self.assertAlmostEqual(0.0, unfolded.Shape.BoundBox.XMin, delta=LENGTH_TOLERANCE)
+        self.assertAlmostEqual(bar.DevelopedLength.Value, unfolded.Shape.BoundBox.XLength, delta=LENGTH_TOLERANCE)
+
+    def test_an_unfolded_bar_saved_with_a_local_link_opens_with_a_global_one(self):
+        _, bar = self.bar_in_a_part()
+        unfolded = make_unfolded_bar(bar)
+        volume = unfolded.Shape.Volume
+        # As saved before the link was global.
+        unfolded.FoldedBar = None
+        unfolded.removeProperty("FoldedBar")
+        unfolded.addProperty("App::PropertyLink", "FoldedBar", "UnfoldedBar", "The folded bar")
+        unfolded.FoldedBar = bar
+        unfolded.purgeTouched()
+        self.assertTrue(out_of_scope(self.recompute_report(bar), unfolded))
+        folder = tempfile.mkdtemp(prefix="mpf_folded_bar_")
+        self.addCleanup(shutil.rmtree, folder, True)
+        path = os.path.join(folder, f"{self.doc.Name}.FCStd")
+        names = (bar.Name, unfolded.Name)
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+
+        self.doc = App.openDocument(path)
+
+        bar, unfolded = (self.doc.getObject(name) for name in names)
+        self.assertEqual("App::PropertyLinkGlobal", unfolded.getTypeIdOfProperty("FoldedBar"))
+        self.assertEqual("UnfoldedBar", unfolded.getGroupOfProperty("FoldedBar"))
+        self.assertEqual(bar, unfolded.FoldedBar)
+        self.assertEqual([unfolded.Name], [obj.Name for obj in bar.InList if obj.Name == unfolded.Name])
+        self.assertEqual([], [obj.Name for obj in self.doc.Objects if "Touched" in obj.State])
+        self.assertFalse(out_of_scope(self.recompute_report(bar), unfolded))
+        self.assertOneSolid(unfolded)
+        self.assertAlmostEqual(volume, unfolded.Shape.Volume, delta=VOLUME_TOLERANCE)
 
 
 class RestoreTest(FoldedBarFixture):
