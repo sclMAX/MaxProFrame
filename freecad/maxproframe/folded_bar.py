@@ -34,8 +34,7 @@ from freecad.maxproframe.ff_tools import ICONPATH, get_param_group, place_in_con
 from freecad.maxproframe.folded_chain import ChainError, build_chain
 from freecad.maxproframe.folded_corner import corner_key, corner_settings, make_folded_corner, set_corner_settings
 from freecad.maxproframe.folded_geometry import fold_bar
-from freecad.maxproframe.interlock import interlock_key, interlock_settings
-from freecad.maxproframe.interlock_geometry import TABS
+from freecad.maxproframe.interlock import interlock_key, interlock_settings, on_folded_corner
 from freecad.maxproframe.profile_pattern import (
     container_placement,
     global_element,
@@ -341,12 +340,13 @@ def corner_interlocks(bar, chain):
     An interlock is matched by its two profiles, in either order (odd/tasks/joint-tabs.md, S7); one missing a profile
     is left out. Raises UnfoldError naming the pieces of an interlock on no folded corner of ``chain`` (the open corner
     of a closed frame, two tubes that do not meet) and the corner and both interlocks of a corner with two (S6). A
-    Tabs Interlock (a T joint, odd/tasks/t-joint-tabs.md) is on no folded corner: it is left out.
+    Tabs Interlock (a T joint, odd/tasks/t-joint-tabs.md) and Fingers at an End Miter corner between two tubes
+    (odd/tasks/miter-fingers.md, D2) are on no folded corner: they are left out (``on_folded_corner``).
     """
     index = {frozenset(profile.Name for profile in _pair(chain, corner)): i for i, corner in enumerate(chain.corners)}
     found = [None] * len(chain.corners)
     for obj in getattr(bar, "Interlocks", ()):
-        key = interlock_key(obj) if _alive(obj) and str(getattr(obj, "Kind", "")) != TABS else None
+        key = interlock_key(obj) if _alive(obj) and on_folded_corner(obj) else None
         if key is None:
             continue
         at = index.get(key)

@@ -43,7 +43,7 @@ the inner walls = the walls of A and B on the inside of the corner, meeting at t
   refusals; unit tests (R = 0 and R > 0, 90 and oblique angles, gap 0 and > 0, flip). route=gentle-ai-worker; commit=T1 (see Log L4) [x]
 - T2 [S1, S5, S6, D1, D2] Objects on straight tubes: Interlock kind/marker, finger pieces on the newest pieces,
   remembered faces, finding both End Miters, Length to finger tips, measured_piece, cut_ends, BOM, delete/undo
-  give-back, corner_interlocks skip; tests. route=gentle-ai-worker; commit=
+  give-back, corner_interlocks skip; tests. route=gentle-ai-worker; commit=T2 (see Log L5) [x]
 - T3 [S1] Folded Bar free end against a straight tube (the user's case): the bar folds the finger piece, the Unfolded
   Bar carries it, developed length to the tips; tests. route=gentle-ai-worker; commit=
 - T4 [S1, S2, S6, S7] Panel: deduce Fingers at a miter corner before Tabs, refusals for missing miters, fields, hints,
@@ -99,3 +99,42 @@ the inner walls = the walls of A and B on the inside of the corner, meeting at t
   (1 error). GREEN (stable 1.1.4): test_miter_finger_geometry 12 OK (about 10 s), test_interlock_geometry 8 OK.
   Mutations caught: no +g at the band start (4 failing tests), no trim (6), owners swapped (4), finger to tip + g/2
   (5), end at the second vertex (5), trim without step clearance (3), band 3 s deep (2). Black 25.1.0 / isort clean.
+- L5 T2 (worker): D2 choice = Kind Fingers + marker: a miter-corner Interlock is Kind Fingers with `AtEndMiter` True
+  (`interlock.is_miter_interlock`); only it gets the marker and `FaceA`/`FaceB` + `PointA..AnchorB` (added by
+  `interlock.add_miter_properties` at creation and on restore; Kind read-only on it), so older documents restore with
+  no new property; `interlock.on_folded_corner` (Fingers and not miter) is what `folded_bar.corner_interlocks` takes now
+  (Tabs and miter Interlocks left out). New `miter_finger_interlock.py`: `MiterFace(piece, sub, point)`,
+  `make_miter_fingers(first, second, **settings)` (settings by FINGER_PROPERTIES name, other names ValueError; first
+  = A owns the first finger), `miter_order(first, second, **settings)` -> `MiterOrder(first, second, error, found)`
+  (keeps the clicked order; found = either tube has an End Miter against the other; for T4 `_deduce`),
+  `miter_pieces(interlock)` -> [A piece, B piece], `interlock_faces`, `interlock_fingers`, `FingerPiece` (on
+  tab_interlock._InterlockPiece, which gained a `made(fp)` hook and `interlock_tooltip()`; label suffix _Fg,
+  InterlockRole FingersA/FingersB, icon interlock-fingers.svg, the A piece shows the Interlock in the tree). Each piece
+  builds the MiterCorner in the frame of the A piece under: faces found on FaceA/FaceB (the pieces under the finger
+  pieces, D1, no cycle), the newest End Miter of each stack against the other tube (`_end_miter`), its
+  `miter_planes(trim)[i].shifted(MiterGap/2)` origin/normal/section, direction = -inward; B's shapes moved to B's frame.
+  `_utils.is_finger_piece` / `sets_its_length` (tab or finger piece) drive length_along_normal, measured_piece and
+  cut_ends (the End Miter's angles). Length = under Length + max(0, tip . d - under's reach along d) (S5). Finding:
+  with s <= depth/2 the miter point (outer wall) is farther than the finger tips at 60-120 degrees, so Length = the
+  End Miter's there; tips set it only at wide corners (150 degrees, Depth 15 on TC80x40: +8.56 mm, tested). Refusals
+  (new texts for T5, MaxProFrame): "Both faces are on {}: click the inner wall of each tube of the End Miter corner.",
+  "The fingers of the corner between {} and {} cannot go on a tube of a Folded Bar yet." (T3 removes it), "The fingers
+  of the corner between {} and {} need two tubes: {} is a {} profile.", "The fingers of the corner between {} and {}
+  need an End Miter of each tube against the other: make them with Miter Ends.", "The fingers of the corner between {}
+  and {} need an End Miter of {} against {}: make it with Miter Ends.", "The corner between {} and {} already has
+  fingers: {}."; App::Property: "Fingers at the inner vertex of an End Miter corner between two tubes", "Piece and
+  inner wall of the first tube, which owns the first finger", "Piece and inner wall of the second tube", "The
+  Interlock of the End Miter corner this piece adds its fingers for". Tests tests/test_miter_finger_interlock.py (14):
+  TC80x40x1.5 tubes, 90/60/120/150 degrees, R 0/3, gap 0/0.5/1, Count/Tip/Flip/Clearance; Valid one-solid pieces, no
+  overlap, each takes from the other's End Miter, stacks/newest/no cycle/tree/icon, owners + Flip probes, S6 messages
+  (A only, B only, neither; found flag), not-inner faces, same tube, Count 1, unknown setting, one per corner, faces
+  clicked on profiles go on the End Miters, Length = extent along the axis, BOM row, piece_texts, Cut List D2,
+  cut_ends/angles/Cutout = End Miter's, drill hole on _Fg keeps Length, settings edit, refused setting keeps base
+  shapes, MiterGap edited after (0.5/1/0), delete/undo/redo with a hole on _Fg, save/reopen + renamed faces, Folded
+  Bar with folded Fingers folds the same with a miter Interlock in the document and in its Interlocks. RED (stable):
+  ImportError is_miter_interlock (1 error). GREEN (stable 1.1.4): miter_finger_interlock 14 OK (one probe fix: points
+  moved into the wall overlap). Mutations caught: corner_interlocks without the skip (1 error), no tip reach (1 fail),
+  sets_its_length = tabs only (5 fails). Preserve OK: miter_finger_geometry 12, interlock 11, interlock_geometry 8,
+  tab_interlock 18, cut_list 27, piece_table 23, cut_ends 15, folded_bar 50, end_miter_geometry 6,
+  tab_interlock_folded_bar 13, interlock_panel 14. Black 25.1.0 / isort 6.0.1 clean. Open for T4: the edit panel on a
+  miter Interlock (double click) is untested; Kind tooltip and command texts.

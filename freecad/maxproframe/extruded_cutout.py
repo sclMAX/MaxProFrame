@@ -16,10 +16,10 @@ from freecad.maxproframe._utils import (
     get_trimmedprofile_from_extrudedcutout,
     is_extrudedcutout,
     is_foldedbar,
-    is_tab_piece,
     length_along_normal,
     restore_custom_profile_link,
     restore_length,
+    sets_its_length,
 )
 from freecad.maxproframe.ff_tools import ICONPATH, PROFILEIMAGES_PATH, PROFILESPATH, UIPATH, translate
 from freecad.maxproframe.frameforge_exceptions import FrameForgeException
@@ -290,10 +290,11 @@ def _uncut_shape(shape):
 
 def measured_piece(cutout):
     """The piece whose length is the Length of ``cutout``: the nearest piece under it that sets a length (the tabs of
-    a Tabs Interlock, which reach past the crossbar end), else the trimmed profile it cuts, else the profile."""
+    a Tabs Interlock, which reach past the crossbar end, the fingers at an End Miter corner), else the trimmed profile
+    it cuts, else the profile."""
     piece = cutout.baseObject[0] if cutout.baseObject else None
     while piece is not None and is_extrudedcutout(piece):
-        if is_tab_piece(piece):
+        if sets_its_length(piece):
             return piece
         piece = piece.baseObject[0] if piece.baseObject else None
     return get_trimmedprofile_from_extrudedcutout(cutout) or get_profile_from_extrudedcutout(cutout)
