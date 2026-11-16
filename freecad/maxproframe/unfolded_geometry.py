@@ -702,12 +702,20 @@ class _Bend:
 
     def check_step(self):
         """The step depth of a stepped corner (S5): at least the wall thickness; at most where the band (from
-        v = depth - s) still clears the relief (v = t + r), and under half the depth, rounded down to 0.1 mm."""
+        v = depth - s) still clears the relief, and under half the depth, rounded down to 0.1 mm."""
         if not self.banded:
             return
         t = self.thickness
-        largest = min(self.depth - t - self.radius, self.depth / 2 - SIZE_TOLERANCE)
+        largest = min(self.depth - self._relief_top(), self.depth / 2 - SIZE_TOLERANCE)
         _check_step_depth(self.names, t, self.step_depth, largest)
+
+    def _relief_top(self):
+        """The highest v the relief cuts: t + r while its kept discs leave the top of its rectangle, lower where they
+        overlap (a bend wider than the tube can have its bend axis past the inner wall); t when they keep it all."""
+        cut = self._relief_cut
+        if cut.isNull() or cut.Area <= SIZE_TOLERANCE:
+            return self.thickness
+        return cut.BoundBox.YMax
 
     def check_step_fit(self):
         """Whether the stepped band fits at the angle of the corner (L8): A's band stays on its side of B's flank on

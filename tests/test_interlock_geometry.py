@@ -215,6 +215,19 @@ class FingerFoldTest(InterlockFixture):
                         point = folded_tests.SteppedFoldTest.folded_point(unfolded, x, TOP - T / 2, w, b_owns)
                         self.assertTrue(self.inside(shape, point), (index, b_owns))
 
+    def test_fingers_fit_a_bend_wider_than_the_tube(self):
+        # A 45 degree bend of outer radius 80 on the 50 mm tube (PruebaLaserCut.FCStd): the bend axis lies past the
+        # inner wall, but the relief its kept discs leave is low, far below the band; automatic depth, 0.5 clearance.
+        chain = self.chain_at(45)
+        corners = replace(self.fingered(0.5, clearance=0.5, depth=0.0), outer_radius=80.0)
+        unfolded = unfold(chain, corners)
+        self.unfolded_solid(unfolded)
+
+        shape = self.solid(fold_bar(chain, unfolded))
+
+        added = math.radians(unfolded.corners[0].bend_angle) * (T / 2 - K * T) * DEPTH * T
+        self.assertAlmostEqual(unfolded.shape.Volume + added, shape.Volume, delta=VOLUME_TOLERANCE)
+
 
 class NoInterlockTest(InterlockFixture):
     """S1: without an interlock a Miter or Stepped corner unfolds and folds as before (the shared band code)."""
