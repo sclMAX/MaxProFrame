@@ -286,11 +286,9 @@ def _side(obj, side):
     return piece, sub, tuple(getattr(obj, f"{side}{name}") for name in ("Point", "Normal", "Anchor"))
 
 
-def interlock_joint(obj):
-    """The ``TJoint`` of the Tabs Interlock ``obj``, in the coordinates of the container of its crossbar piece.
-
-    Raises InterlockError when a face it was made on is gone, and as ``_joint``.
-    """
+def tab_faces(obj):
+    """((crossbar piece, face), (rail piece, face)) of the Tabs Interlock ``obj``: each face found on its piece on the
+    plane it remembers (``found_face``), in the coordinates of that piece. Raises InterlockError when one is gone."""
     faces = []
     for side in TAB_SIDES:
         piece, sub, snapshot = _side(obj, side)
@@ -302,7 +300,15 @@ def interlock_joint(obj):
                 )
             )
         faces.append((piece, found[1]))
-    (crossbar, crossbar_face), (rail, rail_face) = faces
+    return tuple(faces)
+
+
+def interlock_joint(obj):
+    """The ``TJoint`` of the Tabs Interlock ``obj``, in the coordinates of the container of its crossbar piece.
+
+    Raises InterlockError when a face it was made on is gone, and as ``_joint``.
+    """
+    (crossbar, crossbar_face), (rail, rail_face) = tab_faces(obj)
     return _joint(_names(crossbar, rail), crossbar, crossbar_face, rail, rail_face)
 
 

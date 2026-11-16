@@ -140,6 +140,26 @@ def remove_overlay(overlay):
             pass
 
 
+def marker_group(points, color, size=9):
+    """A Coin group drawing the global ``points`` as filled circles ``size`` pixels wide, in ``color``."""
+    from pivy import coin
+
+    try:
+        index = Gui.getMarkerIndex("CIRCLE_FILLED", size)
+    except Exception:
+        index = coin.SoMarkerSet.CIRCLE_FILLED_9_9
+    group = coin.SoSeparator()
+    base_color = coin.SoBaseColor()
+    base_color.rgb.setValue(*color)
+    coordinates = coin.SoCoordinate3()
+    coordinates.point.setValues(0, len(points), [(p.x, p.y, p.z) for p in points])
+    marker_set = coin.SoMarkerSet()
+    marker_set.markerIndex.setValue(index)
+    for child in (base_color, coordinates, marker_set):
+        group.addChild(child)
+    return group
+
+
 def _failures(objects):
     """One line per object that failed to recompute, with FreeCAD's reason; "" when all are valid."""
     return "\n".join(f"{obj.Label}: {obj.getStatusString()}" for obj in objects if not obj.isValid())
@@ -530,26 +550,12 @@ class EndMiterTaskPanel:
             return  # No 3D view (offscreen or another view type): the data is still kept.
         from pivy import coin
 
-        try:
-            index = Gui.getMarkerIndex("CIRCLE_FILLED", 9)
-        except Exception:
-            index = coin.SoMarkerSet.CIRCLE_FILLED_9_9
         # An annotation is drawn over the shapes, so markers inside a profile stay visible.
         node = coin.SoAnnotation()
         for kind, color in MARKER_COLORS.items():
             points = [point for point, marker_kind in self._markers if marker_kind == kind]
-            if not points:
-                continue
-            group = coin.SoSeparator()
-            base_color = coin.SoBaseColor()
-            base_color.rgb.setValue(*color)
-            coordinates = coin.SoCoordinate3()
-            coordinates.point.setValues(0, len(points), [(p.x, p.y, p.z) for p in points])
-            marker_set = coin.SoMarkerSet()
-            marker_set.markerIndex.setValue(index)
-            for child in (base_color, coordinates, marker_set):
-                group.addChild(child)
-            node.addChild(group)
+            if points:
+                node.addChild(marker_group(points, color))
         scene.addChild(node)
         self._marker_node = (scene, node)
 
