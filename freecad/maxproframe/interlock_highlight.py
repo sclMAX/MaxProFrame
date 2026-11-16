@@ -1,10 +1,11 @@
 """Where an Interlock is: its two faces and its corner drawn over the 3D view (odd/tasks/interlock-highlight.md, T1:
 S1-S5; D1, D2).
 
-An Interlock has no shape of its own. ``InterlockOverlay`` draws, over the 3D view of its document, the face of its
-first tube in orange and the face of the second in blue (the colors of Extend / Cut), and a mark in FreeCAD's
-selection color at the inner vertex of the corner or where the crossbar wall meets the rail face (``drawing``). The
-first tube is the one that owns the first finger, Flip included, or the crossbar that carries the tabs. Every kind:
+An Interlock has no shape of its own. ``InterlockOverlay`` draws, over the 3D view of its document, one face in orange
+and the other in blue (the colors of Extend / Cut), and a mark in FreeCAD's selection color at the inner vertex of the
+corner or where the crossbar wall meets the rail face (``drawing``). Orange is the inner wall of the tube that owns
+the first finger, Flip included, or the rail face of Tabs, as the target face of Extend / Cut (L5); blue the inner
+wall of the other tube, or the crossbar wall that carries the tabs. Every kind:
 Fingers at a folded corner (the inner walls on the bar, ``create_interlock_tool.corner_faces``), Fingers at an End
 Miter corner (``miter_finger_interlock.interlock_faces``) and Tabs at a T joint (``tab_interlock.tab_faces``).
 
@@ -12,10 +13,11 @@ The overlay is a Coin annotation added to the scene graph, as the Extend / Cut a
 (``create_end_miter_tool.remove_overlay``): no document object, nothing saved, nothing for TechDraw, the selection
 and the view objects untouched (S3, S5).
 
-The Interlock panel draws it for the Interlock it makes or edits (S2). ``TreeSelection``, one selection observer added
-once, draws it while exactly one Interlock is selected and no Interlock panel is open, and removes it as soon as that
-is no longer so (S3). It draws from the event loop, never inside FreeCAD's selection observer dispatch, and waits while
-a document recomputes (odd/tasks/panel-recompute-deadlock.md, S3).
+The Interlock panel draws it for the Interlock it makes or edits (S2). ``TreeSelection``, one selection and document
+observer added once, draws it while exactly one Interlock is selected and no Interlock panel is shown, removes it as
+soon as that is no longer so, and draws it again after a recompute, so a property changed in the property editor (Flip,
+Count, a face) shows without selecting it again (S3, L5). It draws from the event loop, never inside FreeCAD's observer
+dispatch, and waits while a document recomputes (odd/tasks/panel-recompute-deadlock.md, S3).
 """
 
 from collections import namedtuple
@@ -30,9 +32,10 @@ from freecad.maxproframe.create_folded_bar_tool import _overlay_group, selection
 from freecad.maxproframe.interlock import is_interlock, is_miter_interlock, on_folded_corner
 from freecad.maxproframe.interlock_geometry import FINGERS, TABS
 from freecad.maxproframe.profile_pattern import container_placement, placed
+from freecad.maxproframe.qt_lifetime import is_alive
 from freecad.maxproframe.trimmed_profile import face_normal
 
-# The face of the first tube and of the second: the target and the profile of Extend / Cut.
+# The first face and the second one: the target and the profile of Extend / Cut.
 FIRST_COLOR = HIGHLIGHT_COLORS[TARGET]
 SECOND_COLOR = HIGHLIGHT_COLORS[PROFILE]
 # Pixels across the mark of the corner or the T joint.
@@ -41,9 +44,9 @@ MARK_SIZE = 11
 PARALLEL = 1e-9
 
 Drawing = namedtuple("Drawing", "first second mark")
-Drawing.__doc__ = """What the overlay of an Interlock shows, global: the faces of the ``first`` tube (it owns the first
-finger, or carries the tabs) and of the ``second`` one, each a list of faces, and the ``mark`` point of the corner or
-the T joint (None when a face is lost)."""
+Drawing.__doc__ = """What the overlay of an Interlock shows, global: the ``first`` faces, drawn orange (the inner wall
+of the tube that owns the first finger, or the rail face of Tabs), the ``second`` ones, drawn blue, each a list of
+faces, and the ``mark`` point of the corner or the T joint (None when a face is lost)."""
 
 
 def _alive(obj):
@@ -94,9 +97,10 @@ def meeting_point(first, second, near):
 def drawing(obj):
     """The ``Drawing`` of the Interlock ``obj``, or None when it has no face to show.
 
-    The first tube is tube A (``PieceA``: before the folded corner, the first face clicked at an End Miter corner, the
-    crossbar of Tabs), swapped by Flip for Fingers. The mark is at the inner vertex of the corner, midway across the
-    two inner walls, or where the crossbar wall meets the rail face, at the middle of that wall.
+    Fingers: first the inner wall of tube A (``PieceA``: before the folded corner, the first face clicked at an End
+    Miter corner), swapped by Flip. Tabs: first the rail face (``RailFace``, ``PieceB``), the crossbar wall second.
+    The mark is at the inner vertex of the corner, midway across the two inner walls, or where the crossbar wall meets
+    the rail face, at the middle of that wall.
     """
     if not _alive(obj) or not is_interlock(obj):
         return None
@@ -115,7 +119,8 @@ def drawing(obj):
         else:
             near = (_center(faces_a) + _center(faces_b)) * 0.5
         mark = meeting_point(_plane(faces_a), _plane(faces_b), near)
-    if str(obj.Kind) == FINGERS and bool(getattr(obj, "Flip", False)):
+    if str(obj.Kind) == TABS or (str(obj.Kind) == FINGERS and bool(getattr(obj, "Flip", False))):
+        # The rail face of Tabs is the target of Extend / Cut; Flip gives the first finger to tube B.
         faces_a, faces_b = faces_b, faces_a
     if not faces_a and not faces_b:
         return None
@@ -178,10 +183,22 @@ def panel_closed(panel):
     TREE_SELECTION.later()
 
 
+def _shown(panel):
+    """Whether the Interlock panel ``panel`` is shown: not closed, its form alive and placed in the task view (a panel
+    built but never shown, or one whose form is gone, hides nothing)."""
+    if getattr(panel, "_closed", True):
+        return False
+    form = getattr(panel, "form", None)
+    try:
+        return is_alive(form) and form.parent() is not None
+    except Exception:
+        return False
+
+
 def _panel_open():
-    """Whether an Interlock panel is shown: one opened and not closed, while FreeCAD shows a task dialog."""
-    _PANELS[:] = [panel for panel in _PANELS if not getattr(panel, "_closed", False)]
-    return bool(_PANELS) and bool(Gui.Control.activeDialog())
+    """Whether an Interlock panel is shown while FreeCAD shows a task dialog; the panels closed or gone are dropped."""
+    _PANELS[:] = [panel for panel in _PANELS if not getattr(panel, "_closed", True)]
+    return bool(Gui.Control.activeDialog()) and any(_shown(panel) for panel in _PANELS)
 
 
 def _recomputing():
@@ -200,15 +217,19 @@ def selected_interlock():
 
 
 class TreeSelection:
-    """Selection observer: the overlay of the Interlock selected alone, by the tree or a click, while no Interlock
-    panel is open (S3); gone once it is deselected, the selection cleared, it is deleted or its document closes.
+    """Selection and document observer: the overlay of the Interlock selected alone, by the tree or a click, while no
+    Interlock panel is shown (S3); drawn again after a recompute, so a property changed in the property editor shows
+    (L5); gone once it is deselected, the selection cleared, it is deleted or its document closes.
 
-    It only reads the selection; the overlay is drawn later, from the event loop (never during FreeCAD's selection
-    observer dispatch), and waits while a document recomputes."""
+    It only reads the selection; the overlay is drawn later, from the event loop (never during FreeCAD's observer
+    dispatch), and waits while a document recomputes. One timer: a refresh asked for sooner replaces one waiting for a
+    recompute to end, so a selection is never left waiting behind it (L4)."""
 
     def __init__(self):
         self.overlay = InterlockOverlay()
-        self._scheduled = False
+        self._timer = None
+
+    # Selection observer.
 
     def addSelection(self, doc, obj, sub, point=None):
         self.later()
@@ -222,13 +243,39 @@ class TreeSelection:
     def clearSelection(self, doc):
         self.later()
 
+    # Document observer.
+
+    def slotRecomputedDocument(self, doc):
+        self.later()
+
+    def slotDeletedObject(self, obj):
+        self.later()
+
+    def slotDeletedDocument(self, doc):
+        self.later()
+
+    def slotUndoDocument(self, doc):
+        self.later()
+
+    def slotRedoDocument(self, doc):
+        self.later()
+
+    def pending(self):
+        """Whether a refresh waits to run."""
+        return self._timer is not None and self._timer.isActive()
+
     def later(self, delay=0):
-        if not self._scheduled:
-            self._scheduled = True
-            QtCore.QTimer.singleShot(delay, self.refresh)
+        """Refresh from the event loop in ``delay`` ms, unless one waits to run sooner."""
+        timer = self._timer
+        if timer is None:
+            timer = self._timer = QtCore.QTimer()
+            timer.setSingleShot(True)
+            timer.timeout.connect(self.refresh)
+        if timer.isActive() and timer.remainingTime() <= delay:
+            return
+        timer.start(delay)
 
     def refresh(self):
-        self._scheduled = False
         if _recomputing():
             self.later(GAP_DELAY_MS)
             return
@@ -242,3 +289,4 @@ class TreeSelection:
 if "TREE_SELECTION" not in globals():
     TREE_SELECTION = TreeSelection()
     Gui.Selection.addObserver(TREE_SELECTION)
+    App.addDocumentObserver(TREE_SELECTION)

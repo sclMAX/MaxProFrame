@@ -1,13 +1,17 @@
 """Where an Interlock is, drawn over the 3D view (odd/tasks/interlock-highlight.md, T1: S1-S5; D1, D2).
 
 An Interlock has no shape: selecting it alone in the tree draws its two faces over the 3D view, the first tube's in
-orange and the second's in blue (the colors of Extend / Cut), and a mark in the selection color at the inner vertex of
-its corner or where the crossbar wall meets the rail face; for every kind: Fingers at a folded corner, Fingers at an
+orange and the second's in blue (the colors of Extend / Cut; for Tabs the rail face orange, as the target of Extend /
+Cut, and the crossbar wall blue: L5), and a mark in the selection color at the inner vertex of its corner or where the
+crossbar wall meets the rail face; for every kind: Fingers at a folded corner, Fingers at an
 End Miter corner, Tabs at a T joint (S1, S3, S4). Deselecting it, clearing the selection, deleting it or closing its
-document takes the drawing away. The selection and the visibility of every object stay as they are, and nothing goes
+document takes the drawing away; a recompute draws it again, so a property changed in the property editor shows (L5).
+Each test starts and ends with no task dialog, no selection, no refresh waiting and no overlay (L4). The selection and the visibility of every object stay as they are, and nothing goes
 into the document (S3, S5). The Interlock panel draws the same while it makes or edits one, Flip swapping the colors;
 OK, Cancel and Apply and continue take it away (S2). No geometry while a recompute runs (D2).
 """
+
+from unittest.mock import call, patch
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -21,7 +25,8 @@ from test_recompute_gate import during, hook_execute, watch
 from test_tab_interlock_panel import CROSS_EAST, RAIL_TOP
 from test_unfolded_geometry import PLAIN
 
-from freecad.maxproframe import interlock_highlight
+from freecad.maxproframe import create_interlock_tool, interlock_highlight
+from freecad.maxproframe.create_end_miter_tool import GAP_DELAY_MS
 from freecad.maxproframe.create_folded_bar_tool import selection_color
 from freecad.maxproframe.interlock import make_interlock
 from freecad.maxproframe.miter_finger_interlock import MiterFace, make_miter_fingers, miter_pieces
@@ -76,8 +81,25 @@ def drawn_marks(node):
 class HighlightFixture(MiterPanelFixture):
     def setUp(self):
         super().setUp()
-        self.addCleanup(self.events)
-        self.addCleanup(Gui.Selection.clearSelection)
+        # Self-contained (L4): no task dialog nor selection an earlier test left, no tree refresh waiting.
+        if Gui.Control.activeDialog():
+            Gui.Control.closeDialog()
+        Gui.Selection.clearSelection()
+        self.settle()
+        self.addCleanup(self.assertNothingLeft)
+
+    def settle(self):
+        """Process events until no tree refresh waits."""
+        self.events()
+        self.assertTrue(self.wait_for(lambda: not interlock_highlight.TREE_SELECTION.pending()))
+
+    def assertNothingLeft(self):
+        """At the end of a test: with nothing selected and no panel, no overlay is drawn (S5)."""
+        if Gui.Control.activeDialog():
+            Gui.Control.closeDialog()
+        Gui.Selection.clearSelection()
+        self.settle()
+        self.assertIsNone(interlock_highlight.TREE_SELECTION.overlay.node)
 
     # The three kinds.
 
@@ -223,8 +245,8 @@ class TreeSelectionTest(HighlightFixture):
         self.tree_select(made)
         before = self.state()
 
-        # The crossbar wall that carries the tabs in orange, the rail face in blue.
-        self.assertDrawn(self.overlay(scene, children), ("x", 175.0), ("y", -500.0), T_JOINT)
+        # The rail face in orange, as the target of Extend / Cut; the crossbar wall that carries the tabs in blue.
+        self.assertDrawn(self.overlay(scene, children), ("y", -500.0), ("x", 175.0), T_JOINT)
         self.assertEqual(before, self.state())
 
         gone = {made.Name, tabs.Name, slots.Name}
@@ -291,7 +313,128 @@ class TreeSelectionTest(HighlightFixture):
         self.assertEqual({"children": children}, seen)
         self.assertEqual([], during(calls))
         self.assertTrue(self.wait_for(lambda: scene.getNumChildren() == children + 1))
-        self.assertDrawn(self.overlay(scene, children), ("x", 175.0), ("y", -500.0), T_JOINT)
+        self.assertDrawn(self.overlay(scene, children), ("y", -500.0), ("x", 175.0), T_JOINT)
+
+    def test_flip_changed_while_selected_updates_the_tree_overlay(self):
+        _, _, _, made = self.folded()
+        scene, children = self.scene()
+        self.tree_select(made)
+        self.assertDrawn(self.overlay(scene, children), ("y", 25.0), ("x", 275.0), FOLDED_VERTEX)
+        before = self.state()
+
+        # L5: as the property editor does, then its recompute.
+        made.Flip = True
+        self.doc.recompute()
+        self.events()
+
+        self.assertDrawn(self.overlay(scene, children), ("x", 275.0), ("y", 25.0), FOLDED_VERTEX)
+        self.assertEqual(before[:3], self.state()[:3])
+
+    def test_a_tabs_setting_changed_while_selected_redraws_without_a_recompute_of_its_own(self):
+        _, _, _, made = self.tabs()
+        scene, children = self.scene()
+        self.tree_select(made)
+        self.assertDrawn(self.overlay(scene, children), ("y", -500.0), ("x", 175.0), T_JOINT)
+
+        class Recomputes:
+            count = 0
+
+            def slotRecomputedDocument(self, doc):
+                Recomputes.count += 1
+
+        counter = Recomputes()
+        App.addDocumentObserver(counter)
+        self.addCleanup(App.removeDocumentObserver, counter)
+        with patch.object(interlock_highlight, "drawing", wraps=interlock_highlight.drawing) as drawn:
+            made.Count = 3
+            self.doc.recompute()
+            self.settle()
+
+        # Drawn again once the recompute ended, one overlay, and the redraw recomputed nothing.
+        self.assertEqual([call(made)], drawn.call_args_list)
+        self.assertEqual(1, Recomputes.count)
+        self.assertDrawn(self.overlay(scene, children), ("y", -500.0), ("x", 175.0), T_JOINT)
+
+    def test_non_interlock_selections_draw_nothing(self):
+        rail, crossbar, trim, made = self.tabs()
+        tabs, _ = tab_pieces(made)
+        sketch = rail.AttachmentSupport[0][0]
+        scene, children = self.scene()
+
+        for selected in (
+            ((rail, ""),),
+            ((trim, ""),),
+            ((sketch, ""),),
+            ((made, ""), (rail, "")),
+            ((tabs, "Face1"),),
+            ((tabs, "Edge1"),),
+            ((tabs, "Vertex1"),),
+        ):
+            with self.subTest(selected=[(obj.Label, sub) for obj, sub in selected]):
+                Gui.Selection.clearSelection()
+                for obj, sub in selected:
+                    Gui.Selection.addSelection(self.doc.Name, obj.Name, sub)
+                self.events()
+                self.assertIsNone(self.overlay(scene, children))
+
+    def test_delete_then_undo_then_select_again(self):
+        _, crossbar, trim, made = self.tabs()
+        names = sorted(obj.Name for obj in self.doc.Objects)
+        name = made.Name
+        scene, children = self.scene()
+        self.tree_select(made)
+        self.assertIsNotNone(self.overlay(scene, children))
+
+        self.delete_selected()
+        self.doc.recompute()
+        self.events()
+        self.assertIsNone(self.doc.getObject(name))
+        self.assertIsNone(self.overlay(scene, children))
+
+        self.doc.undo()
+        self.doc.recompute()
+        self.events()
+        self.assertEqual(names, sorted(obj.Name for obj in self.doc.Objects))
+        self.assertIsNone(self.overlay(scene, children))
+        self.tree_select(self.doc.getObject(name))
+
+        self.assertDrawn(self.overlay(scene, children), ("y", -500.0), ("x", 175.0), T_JOINT)
+
+    def test_a_selection_is_not_left_waiting_behind_a_refresh_for_a_recompute(self):
+        # L4, the cause of the CI failures: a refresh run inside a recompute (FreeCAD pumps events there) waits for it
+        # to end; a selection made meanwhile must not wait behind it.
+        _, _, made = self.miter()
+        scene, children = self.scene()
+        interlock_highlight.TREE_SELECTION.later(GAP_DELAY_MS * 20)
+
+        self.tree_select(made)
+
+        self.assertDrawn(self.overlay(scene, children), ("y", -575.0), ("x", -25.0), MITER_VERTEX)
+
+    def test_a_panel_never_shown_does_not_hide_the_tree_overlay(self):
+        # L4: only an Interlock panel shown in the task view keeps the tree from drawing, not one built and dropped
+        # while another task dialog is open.
+        _, _, made = self.miter()
+        scene, children = self.scene()
+        dropped = create_interlock_tool.InterlockTaskPanel()
+        self.addCleanup(dropped.clean)
+
+        class Other:
+            def __init__(self):
+                self.form = QtWidgets.QWidget()
+
+            def getStandardButtons(self):
+                return QtWidgets.QDialogButtonBox.Close
+
+        Gui.Control.showDialog(Other())
+        self.events()
+        self.assertTrue(Gui.Control.activeDialog())
+
+        self.tree_select(made)
+
+        self.assertDrawn(self.overlay(scene, children), ("y", -575.0), ("x", -25.0), MITER_VERTEX)
+        Gui.Control.closeDialog()
+        self.events()
 
 
 class PanelOverlayTest(HighlightFixture):
@@ -344,7 +487,7 @@ class PanelOverlayTest(HighlightFixture):
         panel = self.run_command((trim, CROSS_EAST))
         self.assertIsNone(self.overlay(scene, children))
         self.click(rail, RAIL_TOP)
-        self.assertDrawn(self.overlay(scene, children), ("x", 175.0), ("y", -500.0), T_JOINT)
+        self.assertDrawn(self.overlay(scene, children), ("y", -500.0), ("x", 175.0), T_JOINT)
 
         self.apply()
         self.assertIsNone(self.overlay(scene, children))
@@ -391,7 +534,7 @@ class PanelOverlayTest(HighlightFixture):
 
         self.assertEqual([], during(calls))
         self.assertTrue(self.wait_for(lambda: bool(calls)))
-        self.assertDrawn(self.overlay(scene, children), ("x", 175.0), ("y", -500.0), T_JOINT)
+        self.assertDrawn(self.overlay(scene, children), ("y", -500.0), ("x", 175.0), T_JOINT)
         self.assertTrue(panel.reject())
         self.close_dialog()
         self.assertIsNone(self.overlay(scene, children))

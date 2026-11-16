@@ -56,3 +56,35 @@ kind. Branch feat/interlock-highlight (from main c90e01d); work-unit commits; PR
   test_folded_bar_panel 111 (--timeout 900), test_end_miter_preview 26, test_end_miter_recompute_gate 5,
   test_tab_interlock 18, test_tab_interlock_folded_bar 13, all OK. Black + isort clean. Docs: tutorial Interlock
   paragraph, CHANGELOG Unreleased Improvements. commit: left to the parent.
+- L4 CI of 436aa9f (PR #183) failed only sharded (stable 4/4, weekly 2/4 and 4/4): TreeSelectionTest "unexpectedly
+  None" (no tree overlay). Reproduced locally with `ci/run_tests.py --target stable --timeout 3600 --shard 4/4` (575
+  tests, 1 failure, the same test). Cause (probe in a scratch copy logging every `later` / `refresh` with its stack):
+  FreeCAD pumps Qt events inside `doc.recompute()`, so a tree `refresh` ran inside the fixture's own recompute, found
+  the document recomputing and rescheduled itself in GAP_DELAY_MS (250 ms) with the `_scheduled` flag set; the
+  selection made right after was dropped by that flag (`later` did nothing while one was pending) and the test looked
+  before the 250 ms passed. Run alone the earlier timings hid it. A product bug too: a selection right after a
+  recompute waited behind the retry. Fix (interlock_highlight.py): one restartable single-shot QTimer, a refresh
+  asked for sooner replaces one waiting longer (`later`, `pending`); "a panel is open" only for an Interlock panel
+  not closed whose form is alive and placed in the task view, while FreeCAD shows a task dialog (`_shown`), so a panel
+  built and dropped never hides the tree overlay. Tests self-contained: HighlightFixture.setUp closes a task dialog
+  left open, clears the selection and waits until no refresh is pending; every test ends asserting no tree overlay
+  left (`assertNothingLeft`). New regression tests: a selection is not left waiting behind a refresh for a recompute;
+  a panel never shown does not hide the tree overlay. The "Timeout (0:02:00)!" stack dumps are ci/diagnostics.py's
+  one-shot faulthandler snapshot 120 s into every run (`dump_traceback_later(120, repeat=False)`), not a hang; the
+  base 2a2a8bb has one too. Wall time, local stable shard 4/4: base 2a2a8bb 572 tests 499.3 s; 436aa9f 575 tests
+  532.8 s (1 failure); this change 576 tests 486.2 s: the observer does not slow the suite.
+- L5 User (parent's questions "¿Las pestañas van con el larguero en naranja, como la cara destino de Extender/Cortar?"
+  and "¿Que el resaltado se actualice cuando cambiás una propiedad desde el panel de propiedades?"): "si si". Changed
+  (interlock_highlight.py): Tabs draw the rail face (RailFace, PieceB) orange and the crossbar wall blue; Fingers keep
+  the first tube orange, Flip swaps. The tree observer is also a document observer, added once with it
+  (`App.addDocumentObserver`): after a recompute, an undo / redo, an object deleted or a document closed it refreshes
+  from the event loop (skipped while recomputing), so Flip, Count or a face changed in the property editor and
+  recomputed redraws the overlay without selecting again; it never recomputes. Tests: Tabs assertions swapped; new
+  test_flip_changed_while_selected_updates_the_tree_overlay, test_a_tabs_setting_changed_while_selected_redraws_
+  without_a_recompute_of_its_own (one recompute, one redraw, one overlay), test_non_interlock_selections_draw_nothing
+  (rail, trim, rail sketch, Interlock + rail, Face1 / Edge1 / Vertex1 of the tabs piece), test_delete_then_undo_then_
+  select_again. RED (436aa9f copy, `pending()` read as `_scheduled`): test_interlock_highlight 18 run, 10 failures
+  (Tabs colors, stale Flip, waiting selection, panel never shown). GREEN on FreeCAD 1.1.4: test_interlock_highlight
+  18 OK; full suite by stable shards 1/4 577, 2/4 577, 3/4 576, 4/4 576 tests, all OK. Black + isort clean.
+  docs/tutorial.md and CHANGELOG.md still say the crossbar is orange: the parent updates their wording.
+  commit: left to the parent.
