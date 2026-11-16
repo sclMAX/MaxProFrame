@@ -1,18 +1,30 @@
 """The Interlock panel and its messages show Spanish text when FreeCAD runs in Spanish.
 
-odd/tasks/joint-tabs.md, T4 (S7) and odd/tasks/t-joint-tabs.md, T5 (the Tabs kind). The panel texts and the refusals
-are in the MaxProFrame context of the Spanish catalog, the property tooltips in App::Property; the stored values (Kind,
-Tip) stay in English.
+odd/tasks/joint-tabs.md, T4 (S7), odd/tasks/t-joint-tabs.md, T5 (the Tabs kind) and odd/tasks/miter-fingers.md, T5
+(Fingers at an End Miter corner). The panel texts and the refusals are in the MaxProFrame context of the Spanish
+catalog, the property tooltips in App::Property; the stored values (Kind, Tip) stay in English.
 """
 
 import unittest
 
 from miter_helpers import use_language
 from test_interlock_panel import BOTTOM_INNER, RIGHT_INNER, TOP_INNER, InterlockPanelFixture
+from test_miter_finger_panel import A_EDGE, A_INNER, B_EDGE, B_INNER, MiterPanelFixture
 from test_tab_interlock_panel import CROSS_EAST, CROSS_WEST, RAIL_TOP, TabPanelFixture
 from test_unfolded_geometry import PLAIN
 
 from freecad.maxproframe.ff_tools import translate
+
+# The texts that name the End Miter corner too (odd/tasks/miter-fingers.md, T5).
+KIND_TIP = (
+    "Forma del encastre: Aletas, en el vértice interior de una esquina plegada o de una esquina en inglete; Lengüetas, "
+    "en el extremo de un travesaño a través de ranuras en el larguero en una unión en T"
+)
+HINT_NONE = (
+    "Hacé clic en las paredes interiores de los dos tubos en una esquina plegada de una barra plegada o en una esquina "
+    "en inglete para aletas, o en una pared de un travesaño y en la cara del larguero contra la que apoya para "
+    "lengüetas."
+)
 
 
 def field_label(group, field):
@@ -44,8 +56,7 @@ class TestInterlockPanelSpanish(InterlockPanelFixture):
         self.assertEqual("Tipo", field_label(settings, form.combo_kind))
         self.assertEqual([("Aletas", "Fingers"), ("Lengüetas", "Tabs")], items(form.combo_kind))
         self.assertEqual(
-            "Forma del encastre: Aletas, en el vértice interior de una esquina plegada; Lengüetas, en el extremo de un "
-            "travesaño a través de ranuras en el larguero en una unión en T",
+            KIND_TIP,
             form.combo_kind.toolTip(),
         )
         self.assertEqual("Cantidad", field_label(settings, form.spin_count))
@@ -85,11 +96,7 @@ class TestInterlockPanelSpanish(InterlockPanelFixture):
     def test_the_picking_hints_and_refusals_are_spanish(self):
         _, bar = self.make_bar(**PLAIN)
         panel = self.run_command()
-        self.assertRefused(
-            panel,
-            "Hacé clic en las paredes interiores de los dos tubos en una esquina plegada de una barra plegada para "
-            "aletas, o en una pared de un travesaño y en la cara del larguero contra la que apoya para lengüetas.",
-        )
+        self.assertRefused(panel, HINT_NONE)
 
         self.click(bar, BOTTOM_INNER)
         self.assertRefused(panel, "Hacé clic en la pared interior del otro tubo en esa esquina.")
@@ -177,6 +184,63 @@ class TestTabsPanelSpanish(TabPanelFixture):
         self.assertEqual([], self.interlocks())
 
 
+class TestMiterPanelSpanish(MiterPanelFixture):
+    def setUp(self):
+        super().setUp()
+        use_language(self, "Spanish", "es_ES")
+
+    def test_the_miter_corner_hints_and_fields_speak_spanish(self):
+        _, _, miter_a, miter_b = self.straight_corner()
+        panel = self.run_command()
+        self.assertRefused(panel, HINT_NONE)
+
+        self.click(miter_a, A_INNER)
+        self.assertRefused(
+            panel,
+            "Hacé clic en la pared interior del otro tubo en la esquina en inglete para aletas, o en la otra cara de la "
+            "unión en T para lengüetas.",
+        )
+        self.click(miter_b, B_INNER)
+
+        form = panel.form
+        self.assertEqual("Esquina: TubeA → TubeB", form.label_corner.text())
+        self.assertEqual(KIND_TIP, form.combo_kind.toolTip())
+        self.assertEqual(
+            "Cantidad de aletas, al menos 2; la primera es del tubo de la primera cara en la que hiciste clic",
+            form.spin_count.toolTip(),
+        )
+        self.assertEqual(
+            "Profundidad de la franja de aletas, perpendicular a las paredes interiores; Automático: la profundidad "
+            "del escalón de una unión escalonada",
+            form.spin_depth.toolTip(),
+        )
+        self.assertEqual(
+            "Intercambia los tubos: la primera aleta es del tubo de la segunda cara en la que hiciste clic",
+            form.cb_flip.toolTip(),
+        )
+        self.assertAccepts(panel)
+        # The Interlock made in Spanish documents its properties in Spanish.
+        (made,) = self.interlocks()
+        self.assertEqual(KIND_TIP, made.getDocumentationOfProperty("Kind"))
+        self.assertEqual(
+            "Pieza y pared interior del primer tubo, del que es la primera aleta",
+            made.getDocumentationOfProperty("FaceA"),
+        )
+
+    def test_a_corner_without_end_miters_is_refused_in_spanish(self):
+        a = self.loose(A_EDGE, "TubeA")
+        b = self.loose(B_EDGE, "TubeB")
+        self.doc.recompute()
+        panel = self.run_command((a, A_INNER), (b, B_INNER))
+
+        self.assertRefused(
+            panel,
+            "Las aletas de la esquina entre TubeA y TubeB necesitan un inglete de cada tubo contra el otro: hacelos "
+            "con Crear ingletes.",
+        )
+        self.assertEqual([], self.interlocks())
+
+
 class TestInterlockTextsSpanish(unittest.TestCase):
     def setUp(self):
         use_language(self, "Spanish", "es_ES")
@@ -217,6 +281,36 @@ class TestInterlockTextsSpanish(unittest.TestCase):
                 "MaxProFrame",
                 "The T joint between {} and {} is at a folded corner of {}: the tabs go on a free end of a Folded Bar.",
             ).format("Crossbar", "Rail", "FoldedBar"),
+        )
+
+    def test_the_miter_corner_texts_are_spanish(self):
+        self.assertEqual(
+            "Las aletas de la esquina entre TubeA y TubeB necesitan un inglete de TubeB contra TubeA: hacelo con Crear "
+            "ingletes.",
+            translate(
+                "MaxProFrame",
+                "The fingers of the corner between {} and {} need an End Miter of {} against {}: make it with Miter "
+                "Ends.",
+            ).format("TubeA", "TubeB", "TubeB", "TubeA"),
+        )
+        self.assertEqual(
+            "Los ingletes de TubeA y TubeB tienen separaciones distintas: dales la misma Separación.",
+            translate("MaxProFrame", "The End Miters of {} and {} have different gaps: give them the same Gap.").format(
+                "TubeA", "TubeB"
+            ),
+        )
+        self.assertEqual(
+            "Las aletas de la esquina entre TubeA y TubeB no cruzan la separación del inglete: achicá la separación o "
+            "agrandá la profundidad.",
+            translate(
+                "MaxProFrame",
+                "The fingers of the corner between {} and {} do not reach across the miter gap: make the gap smaller or "
+                "the depth larger.",
+            ).format("TubeA", "TubeB"),
+        )
+        self.assertEqual(
+            "El encastre de la esquina en inglete para el que esta pieza agrega sus aletas",
+            translate("App::Property", "The Interlock of the End Miter corner this piece adds its fingers for"),
         )
 
     def test_the_refusals_of_the_bar_are_spanish(self):

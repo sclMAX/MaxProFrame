@@ -8,6 +8,9 @@ refusal (S7); a tube without its End Miter against the other says which one is m
 Fingers fields are the ones of a folded corner (S2): they update both finger pieces live; the first face clicked is
 tube A, which owns the first finger, and Flip swaps (D3). Apply and continue, Cancel and editing by double click work
 as for the other kinds; folded corners still make folded-corner Fingers and T joints still make Tabs.
+
+T5 (S6): the inner walls of two tubes without any End Miter whose ends meet at a corner say that each tube needs its
+End Miter against the other, not why they make no T joint; a T joint keeps its Tabs refusal.
 """
 
 import time
@@ -18,20 +21,29 @@ from miter_helpers import use_language
 from PySide import QtWidgets
 from test_folded_bar_tools import face_at
 from test_interlock_panel import BOTTOM_INNER, FIRST, HINT_ONE
+from test_recompute_gate import during, hook_execute, watch
 from test_tab_interlock_panel import (
     CROSS_EAST,
+    CROSS_WEST,
+    CROSSBAR_EDGE,
     HINT_NONE,
     LEGS_RIGHT_INNER,
     LEGS_TOP_INNER,
+    NO_END,
+    RAIL_BOTTOM,
     RAIL_TOP,
     TabPanelFixture,
 )
 
+from freecad.maxproframe import create_interlock_tool
 from freecad.maxproframe.create_end_miter_tool import make_end_miter_profile
+from freecad.maxproframe.ff_tools import get_param_group
 from freecad.maxproframe.interlock import interlock_settings, is_miter_interlock
 from freecad.maxproframe.interlock_geometry import FingerSettings
 from freecad.maxproframe.miter_finger_interlock import MiterFace, make_miter_fingers, miter_pieces
 from freecad.maxproframe.profile_pattern import newest_piece
+from freecad.maxproframe.tab_interlock import TabFace, tab_order
+from freecad.maxproframe.trimmed_profile import TrimmedProfile
 
 # Two straight 50 x 50 x 2 tubes meeting at a 90 degree corner at (0, -600), far from the bars of the fixtures: A along
 # +X up to the corner, B up along +Y from it. Their inner walls: A's top face (y = -575), B's left face (x = -25).
@@ -39,6 +51,9 @@ A_EDGE = ((-300, -600, 0), (0, -600, 0))
 B_EDGE = ((0, -600, 0), (0, -300, 0))
 A_INNER = App.Vector(-150, -575, 0)
 B_INNER = App.Vector(-25, -450, 0)
+# Their outer walls (A's bottom face, B's right face).
+A_OUTER = App.Vector(-150, -625, 0)
+B_OUTER = App.Vector(25, -450, 0)
 # The next corner along X, for Apply and continue.
 NEXT = 1000.0
 VOLUME_TOLERANCE = 1e-3
@@ -48,11 +63,17 @@ HINT_MITER = (
     "tabs."
 )
 MISSING_ONE = "The fingers of the corner between {} and {} need an End Miter of {} against {}: make it with Miter Ends."
+MISSING_BOTH = (
+    "The fingers of the corner between {} and {} need an End Miter of each tube against the other: make them with Miter "
+    "Ends."
+)
 GAPS = "The End Miters of {} and {} have different gaps: give them the same Gap."
 TWICE = "The corner between {} and {} already has fingers: {}."
 NO_FINGER = "The interlock of the corner between {} and {} needs at least 2 fingers."
 # The T-joint refusal the user saw at a miter corner (L1): never for a miter corner.
 OFF_RAIL = "do not fall on the flat part"
+DEPTH_REFUSED = "The finger depth of the corner between TubeA and TubeB must be between 2 and 24.9 mm."
+NOT_INNER = "The faces of {} and {} are not the inner walls of an End Miter corner between them."
 # The tooltips of the fields at a miter corner.
 COUNT_TIP = "Number of fingers, at least 2; the tube of the first face clicked owns the first one"
 FLIP_TIP = "Swap the tubes: the tube of the second face clicked owns the first finger"
@@ -314,6 +335,75 @@ class MiterPickTest(MiterPanelFixture):
         self.assertTrue(panel.accept())
 
 
+class UnmiteredCornerTest(MiterPanelFixture):
+    """T5 (S6): two tubes without End Miters at a corner, and the T joints that keep their Tabs refusal."""
+
+    def refused(self, picks, message):
+        """Clicking ``picks`` in a new panel says ``message`` and makes nothing."""
+        names = self.names()
+        panel = self.run_command()
+        for obj, point in picks:
+            self.click(obj, point)
+
+        self.assertRefused(panel, message)
+        self.assertEqual([], self.interlocks())
+        self.assertEqual(names, self.names())
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+
+    def test_two_tubes_without_end_miters_at_a_corner_need_them(self):
+        a = self.loose(A_EDGE, "TubeA")
+        b = self.loose(B_EDGE, "TubeB")
+        self.doc.recompute()
+
+        for picks, labels in (
+            (((a, A_INNER), (b, B_INNER)), ("TubeA", "TubeB")),
+            (((b, B_INNER), (a, A_INNER)), ("TubeB", "TubeA")),
+        ):
+            with self.subTest(labels=labels):
+                self.refused(picks, MISSING_BOTH.format(*labels))
+
+    def test_other_walls_of_that_corner_keep_the_tabs_refusal(self):
+        a = self.loose(A_EDGE, "TubeA")
+        b = self.loose(B_EDGE, "TubeB")
+        self.doc.recompute()
+
+        for picks in (
+            ((a, A_OUTER), (b, B_INNER)),
+            ((a, A_INNER), (b, B_OUTER)),
+            ((b, B_OUTER), (a, A_OUTER)),
+        ):
+            with self.subTest(picks=[point for _, point in picks]):
+                # What Tabs refuse for those faces, as before T5.
+                tabs = tab_order(*(TabFace(obj, face_at(obj, point), point) for obj, point in picks))
+                self.assertIsNotNone(tabs.error)
+                self.assertFalse(tabs.found)
+
+                self.refused(picks, str(tabs.error))
+
+    def test_the_free_end_of_a_folded_bar_and_a_tube_without_end_miters_need_them(self):
+        # The user's layout before any End Miter: the bar's right tube and the loose bottom tube.
+        (bottom, _, _, _), bar = self.make_legs()
+
+        self.refused(((bar, LEGS_RIGHT_INNER), (bottom, BOTTOM_INNER)), MISSING_BOTH.format("Profile001", "Profile"))
+
+    def test_a_t_joint_keeps_its_tabs_refusal(self):
+        # The rail goes on past the crossbar on both sides: no corner, whatever the faces.
+        rail, _, trim = self.straight_t()
+        plain = self.loose(tuple((x + 100, y, z) for x, y, z in CROSSBAR_EDGE), "Plain")
+        self.doc.recompute()
+        no_end = "There is no T joint between Plain and Rail: Plain does not end on the face of Rail."
+
+        for picks, message in (
+            (((trim, CROSS_EAST), (rail, RAIL_BOTTOM)), NO_END),
+            # A crossbar without its Extend / Cut ends 10 mm short of the rail face; its wall clicked faces the nearer
+            # end of the rail, 150 mm away: a T joint, not a corner.
+            (((plain, CROSS_WEST + App.Vector(100, 0, 0)), (rail, RAIL_TOP)), no_end),
+        ):
+            with self.subTest(message=message, first=picks[0][0].Label):
+                self.refused(picks, message)
+
+
 class MiterFieldsTest(MiterPanelFixture):
     def test_the_fields_update_both_finger_pieces(self):
         a, b, miter_a, miter_b = self.straight_corner()
@@ -472,3 +562,123 @@ class MiterEditTest(MiterPanelFixture):
         self.assertEqual(undos + 1, len(self.doc.UndoNames))
         self.assertEqual("Edit Interlock", self.doc.UndoNames[0])
         self.assertMiterFingers(made, a, b, miter_a, miter_b)
+
+
+class MiterRegressionTest(MiterPanelFixture):
+    """The independent verify of T4: what a miter corner must never break, and what it says."""
+
+    def test_a_t_joint_whose_crossbar_is_mitered_against_a_third_tube_still_makes_tabs(self):
+        rail, crossbar, trim = self.straight_t()
+        # The other end of the crossbar: a corner with a third tube, both mitered there.
+        third = self.loose(((150, -200, 0), (400, -200, 0)), "Third")
+        miter = make_end_miter_profile(trim, [third], True, 0.0)
+        make_end_miter_profile(third, [crossbar], True, 0.0)
+        self.doc.recompute()
+        self.assertEqual("Valid", miter.getStatusString())
+        names = self.names()
+
+        for picks in (((miter, CROSS_EAST), (rail, RAIL_TOP)), ((rail, RAIL_TOP), (miter, CROSS_EAST))):
+            with self.subTest(first=picks[0][0].Label):
+                panel = self.run_command(*picks)
+
+                (made,) = self.interlocks()
+                self.assertTabsMade(made, crossbar, rail, miter, rail)
+                self.assertAccepts(panel)
+                self.assertTrue(panel.reject())
+                self.close_dialog()
+                self.assertEqual(names, self.names())
+
+    def test_a_mitered_pair_says_why_it_makes_no_fingers_never_the_t_joint(self):
+        _, _, miter_a, miter_b = self.straight_corner()
+        names = self.names()
+
+        # Fingers deeper than half the tube.
+        get_param_group(writable=True).SetFloat("Interlock Depth", 30.0)
+        panel = self.run_command((miter_a, A_INNER), (miter_b, B_INNER))
+        self.assertRefused(panel, DEPTH_REFUSED)
+        self.assertEqual(names, self.names())
+        self.assertTrue(panel.reject())
+        self.close_dialog()
+
+        # An outer wall.
+        get_param_group(writable=True).RemFloat("Interlock Depth")
+        for picks, labels in (
+            (((miter_a, A_OUTER), (miter_b, B_INNER)), ("TubeA", "TubeB")),
+            (((miter_b, B_INNER), (miter_a, A_OUTER)), ("TubeB", "TubeA")),
+        ):
+            with self.subTest(labels=labels):
+                panel = self.run_command(*picks)
+                self.assertRefused(panel, NOT_INNER.format(*labels))
+                self.assertNotIn("T joint", self.message(panel))
+                self.assertEqual(names, self.names())
+                self.assertTrue(panel.reject())
+                self.close_dialog()
+
+    def test_clicks_waiting_for_a_recompute_are_dropped_when_the_panel_closes(self):
+        _, _, miter_a, miter_b = self.straight_corner()
+        panel = self.run_command()
+        panel._recomputing = True
+        self.click(miter_a, A_INNER)
+        self.click(miter_b, B_INNER)
+        self.events()
+        self.assertEqual(2, len(panel._clicks))
+
+        self.close_dialog()
+        panel._recomputing = False
+        self.wait_for(lambda: False, seconds=1.0)
+
+        self.assertEqual([], panel._clicks)
+        self.assertEqual([], self.interlocks())
+
+    def test_apply_and_continue_from_a_miter_corner_to_a_folded_corner(self):
+        _, _, miter_a, miter_b = self.straight_corner()
+        (right, top, _), bar = self.legs()
+        panel = self.run_command((miter_a, A_INNER), (miter_b, B_INNER))
+        self.assertEqual(FLIP_TIP, panel.form.cb_flip.toolTip())
+        panel.form.spin_count.setValue(4)
+        self.events()
+        self.apply()
+
+        self.click(bar, LEGS_RIGHT_INNER)
+        self.click(bar, LEGS_TOP_INNER)
+
+        (folded,) = [obj for obj in self.interlocks() if not is_miter_interlock(obj)]
+        self.assertEqual((right, top), (folded.PieceA, folded.PieceB))
+        self.assertEqual(4, folded.Count)
+        self.assertEqual(4, panel.form.spin_count.value())
+        self.assertEqual(
+            "Swap the tubes: the tube after the corner owns the first finger", panel.form.cb_flip.toolTip()
+        )
+        self.assertEqual(
+            "Number of fingers, at least 2; the tube before the corner owns the first one",
+            panel.form.spin_count.toolTip(),
+        )
+        self.assertAccepts(panel)
+        self.assertTrue(panel.accept())
+
+    def test_the_second_face_clicked_inside_a_recompute_waits_for_it(self):
+        # odd/tasks/panel-recompute-deadlock.md S3, with a real recompute: FreeCAD pumps Qt events inside it.
+        hooks, state = hook_execute(self, TrimmedProfile)
+        a, b, miter_a, miter_b = self.straight_corner()
+        calls = watch(self, create_interlock_tool, ("miter_order", "tab_order", "clicked_face"), state)
+        panel = self.run_command()
+        self.click(miter_a, A_INNER)
+        seen = {}
+
+        def inside(fp):
+            self.click(miter_b, B_INNER)
+            self.wait_for(lambda: False, seconds=0.5)
+            seen["interlocks"] = len(self.interlocks())
+
+        hooks.append(inside)
+        miter_a.touch()
+        self.doc.recompute()
+
+        self.assertEqual({"interlocks": 0}, seen)
+        self.assertEqual([], during(calls))
+        self.assertTrue(self.wait_for(lambda: bool(self.interlocks())))
+        (made,) = self.interlocks()
+        self.assertMiterFingers(made, a, b, miter_a, miter_b)
+        self.events()
+        self.assertAccepts(panel)
+        self.assertTrue(panel.accept())

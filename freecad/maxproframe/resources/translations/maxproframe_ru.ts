@@ -3135,7 +3135,7 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Click the inner walls of the two tubes at a folded corner of a Folded Bar for fingers, or a wall of a crossbar and the face of the rail it butts against for tabs.</source>
+        <source>Click the inner walls of the two tubes at a folded corner of a Folded Bar or at an End Miter corner for fingers, or a wall of a crossbar and the face of the rail it butts against for tabs.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3183,7 +3183,7 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Shape of the interlock: Fingers, at the inner vertex of a folded corner; Tabs, on the end of a crossbar through slots in the rail at a T joint</source>
+        <source>Shape of the interlock: Fingers, at the inner vertex of a folded corner or of an End Miter corner; Tabs, on the end of a crossbar through slots in the rail at a T joint</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3382,6 +3382,74 @@ All files and sketches on disk will be kept intact.</source>
         <source>The interlock {} lost the face of {} it was made on.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Click the inner wall of the other tube at the End Miter corner for fingers, or the other face of the T joint for tabs.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Number of fingers, at least 2; the tube of the first face clicked owns the first one</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Depth of the finger band across the inner walls; Automatic: the step depth of a Stepped joint</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Swap the tubes: the tube of the second face clicked owns the first finger</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The faces of {} and {} are not the inner walls of an End Miter corner between them.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>{} and {} are not the same size along their corner: their fingers cannot match.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The finger depth of the corner between {} and {} must be between {min:g} and {max:g} mm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The fingers of the corner between {} and {} do not fit at this angle: make the depth smaller.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The fingers of the corner between {} and {} do not reach across the miter gap: make the gap smaller or the depth larger.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Both faces are on {}: click the inner wall of each tube of the End Miter corner.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The fingers of the corner between {} and {} need two tubes: {} is a {} profile.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The fingers of the corner between {} and {} need an End Miter of each tube against the other: make them with Miter Ends.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The fingers of the corner between {} and {} need an End Miter of {} against {}: make it with Miter Ends.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The End Miters of {} and {} have different gaps: give them the same Gap.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The corner between {} and {} already has fingers: {}.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The End Miter corner between {} and {} is at a folded corner of {}: the fingers go on a free end of a Folded Bar.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The End Miter corner between {} and {} is at the open corner of {}: the fingers go on a free end of a Folded Bar.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>MaxProFrame_FoldedBar</name>
@@ -3412,7 +3480,7 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>&lt;b&gt;Interlock&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click two faces. The inner wall faces of the two tubes at a folded corner of a Folded Bar: fingers cut by the laser at the inner vertex of the corner locate one tube on the other. A wall of a crossbar and the face of the rail it butts against (a T joint): tabs on the crossbar end go through slots cut in the rail. Set their count, width, tip and clearance in the panel. Double-click the Interlock to edit it.</source>
+        <source>&lt;b&gt;Interlock&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click two faces. The inner wall faces of the two tubes at a folded corner of a Folded Bar, or at an End Miter corner of two tubes cut against each other with Miter Ends: fingers cut by the laser at the inner vertex of the corner locate one tube on the other. A wall of a crossbar and the face of the rail it butts against (a T joint): tabs on the crossbar end go through slots cut in the rail. Set their count, width, tip and clearance in the panel. Double-click the Interlock to edit it.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3491,7 +3559,7 @@ All files and sketches on disk will be kept intact.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Shape of the interlock: Fingers, at the inner vertex of a folded corner; Tabs, on the end of a crossbar through slots in the rail at a T joint</source>
+        <source>Shape of the interlock: Fingers, at the inner vertex of a folded corner or of an End Miter corner; Tabs, on the end of a crossbar through slots in the rail at a T joint</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3540,6 +3608,22 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>The Tabs Interlock this piece adds its tabs or slots for</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fingers at the inner vertex of an End Miter corner between two tubes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Piece and inner wall of the first tube, which owns the first finger</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Piece and inner wall of the second tube</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The Interlock of the End Miter corner this piece adds its fingers for</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

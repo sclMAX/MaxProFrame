@@ -30,10 +30,14 @@ The finger piece is the newest piece of its tube: the bar folds it at the next r
 length runs to the finger tips (S5). The fingers go only on a free end of a bar (the start of its first tube or the
 end of its last one, on an open bar): a corner at a folded corner of the bar or at the open corner of a closed bar
 (D5) is refused naming the tubes and the bar (``_check_bar_ends``), at creation and at every recompute.
+
+Two tubes with no End Miter at all whose ends meet at a corner, their inner walls clicked, are no T joint either: for
+the panel, ``unmitered_corner`` tells such a pair and gives the S6 refusal (T5).
 """
 
 from collections import namedtuple
 
+import FreeCAD as App
 import Part
 
 from freecad.maxproframe._utils import is_trimmedbody, piece_stack
@@ -63,7 +67,7 @@ from freecad.maxproframe.miter_finger_geometry import (
     joined,
     make_fingers,
 )
-from freecad.maxproframe.profile_pattern import container_placement, newest_piece, placed
+from freecad.maxproframe.profile_pattern import container_placement, global_shape, newest_piece, placed
 from freecad.maxproframe.tab_interlock import (
     ViewProviderInterlockPiece,
     _alive,
@@ -74,9 +78,13 @@ from freecad.maxproframe.tab_interlock import (
     face_snapshot,
     found_face,
 )
-from freecad.maxproframe.trimmed_profile import _container_placement, in_frame_of
+from freecad.maxproframe.trimmed_profile import _container_placement, face_normal, in_frame_of
 
 END_MITER = "End Miter"
+# A corner of two tubes without End Miters (``unmitered_corner``): the sine of the angle between their axes above which
+# they are not parallel, and the cosine above which a face is square to a direction or faces it.
+CROSSING_SINE = 0.1
+SQUARE_COSINE = 1e-3
 # The Interlock a miter corner starts with: the FingerSettings defaults.
 DEFAULT_COUNT = FingerSettings().count
 
@@ -227,6 +235,107 @@ def _miters(names, pieces, profiles):
                 ).format(*names, names[index], names[1 - index])
             )
     return found
+
+
+def _tube_end(piece, profile, normal):
+    """(shape, axis, size) of the tube ``profile`` of ``piece``, global: its piece's shape, its unit axis and the larger
+    side of its section; None when the face ``normal`` is no wall along that axis."""
+    axis = profile.getGlobalPlacement().Rotation.multVec(App.Vector(0, 0, 1))
+    if abs(normal.dot(axis)) > SQUARE_COSINE:
+        return None
+    return global_shape(piece), axis, max(float(profile.ProfileWidth), float(profile.ProfileHeight))
+
+
+def _center(shape):
+    """The center of mass of the solids of ``shape`` (a profile is a CompSolid, which has none of its own), or None."""
+    solids = shape.Solids
+    volume = sum(solid.Volume for solid in solids)
+    if volume <= 0:
+        return None
+    return sum((solid.CenterOfMass * solid.Volume for solid in solids), App.Vector()) * (1.0 / volume)
+
+
+def _crossing(first, second):
+    """(parameter along the axis of ``first``, along that of ``second``) of the closest points of the two axes (point,
+    unit direction), or None for parallel axes or axes farther apart than half the smaller tube; ``first`` and
+    ``second`` are (point, axis, size)."""
+    (p, u, size_a), (q, v, size_b) = first, second
+    w = u.cross(v)
+    if w.Length < CROSSING_SINE:
+        return None
+    d = q - p
+    s = d.cross(v).dot(w) / w.dot(w)
+    t = d.cross(u).dot(w) / w.dot(w)
+    if ((p + u * s) - (q + v * t)).Length > min(size_a, size_b) / 2.0:
+        return None
+    return s, t
+
+
+def _inner_walls_at_a_corner(clicked, profiles):
+    """Whether the faces ``clicked`` ((piece, face name) of each tube ``profiles``) are the inner walls of a corner
+    where the ends of the two tubes meet (``unmitered_corner``)."""
+    tubes, faces = [], []
+    for (piece, sub), profile in zip(clicked, profiles):
+        face = _flat_face(piece, sub)
+        if face is None:
+            return False
+        face = placed(face, container_placement(piece))
+        normal = face_normal(face)
+        tube = _tube_end(piece, profile, normal)
+        if tube is None:
+            return False
+        tubes.append(tube)
+        faces.append((face.CenterOfMass, normal))
+    lines = [(_center(shape), axis, size) for shape, axis, size in tubes]
+    if any(point is None for point, _, _ in lines):
+        return False
+    crossing = _crossing(*lines)
+    if crossing is None:
+        return False
+    away = []
+    for (shape, axis, size), (point, _, _), at in zip(tubes, lines, crossing):
+        low, high = (end - point.dot(axis) for end in along_extent(shape, axis))
+        if min(abs(at - low), abs(high - at)) > size:
+            return False
+        # From the corner toward the far end of the tube.
+        away.append(axis if abs(at - low) < abs(high - at) else -axis)
+    plane = lines[0][1].cross(lines[1][1]).normalize()
+    for (center, normal), (point, axis, _), at, other in zip(faces, lines, crossing, reversed(away)):
+        if abs(normal.dot(plane)) > SQUARE_COSINE or normal.dot(other) < CROSSING_SINE:
+            return False
+        # The outer face of the wall, not the inside of the opposite one.
+        if (center - (point + axis * at)).dot(normal) <= 0:
+            return False
+    return True
+
+
+def unmitered_corner(first, second):
+    """The S6 refusal (InterlockError) for the faces ``first`` and ``second`` (``MiterFace``, in the order clicked)
+    when they are the inner walls of two tubes neither of which has an End Miter against the other, and whose ends
+    meet at a corner: their axes cross within one tube size of an end of each tube, and each face is a wall along its
+    tube, facing the other tube on its side of the axis. None otherwise: a T joint, faces of one tube, a profile that
+    is no tube, a face that is no inner wall. Makes nothing; for the Interlock panel, once Tabs found no T joint."""
+    try:
+        clicked = [_on_bar(face.piece, face.sub, face.point) for face in (first, second)]
+    except InterlockError:
+        return None
+    profiles = [base_profile(piece) if piece is not None else None for piece, _ in clicked]
+    if None in profiles or profiles[0].Name == profiles[1].Name:
+        return None
+    if any(getattr(profile, "Family", "") not in FOLDABLE_FAMILIES for profile in profiles):
+        return None
+    try:
+        if not _inner_walls_at_a_corner(clicked, profiles):
+            return None
+    except Part.OCCError:
+        # A shape the geometry cannot read: the Tabs refusal stays.
+        return None
+    names = _names(*(piece for piece, _ in clicked))
+    try:
+        _miters(names, [newest_piece(piece) for piece, _ in clicked], profiles)
+    except InterlockError as error:
+        return error
+    return None
 
 
 def _check_gaps(names, miters):

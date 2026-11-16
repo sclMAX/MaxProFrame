@@ -534,9 +534,10 @@ In the panel, select the open row to set its **Joint**, **Step depth**, **Flip s
 **Interlock** (Spanish *Encastre*) joins two tubes with parts cut by the laser that locate one on the other while they are welded. It has two kinds, and the two faces you click tell which one it makes:
 
 - **Fingers** (*Aletas*), at a folded corner of a Folded Bar: click the inner walls of its two tubes (see [Fingers at a folded corner](#fingers-at-a-folded-corner)).
+- **Fingers** too, at an **End Miter corner** (*esquina en inglete*), where two separate tubes are each cut by an End Miter against the other: click the inner walls of the two tubes (see [Fingers at an End Miter corner](#fingers-at-an-end-miter-corner)).
 - **Tabs** (*Lengüetas*), at a T joint, where a crossbar ends against a face of a rail: click a wall of the crossbar and the face of the rail it butts against (see [Tabs at a T joint](#tabs-at-a-t-joint)).
 
-Before the second face, the panel says "Click the inner walls of the two tubes at a folded corner of a Folded Bar for fingers, or a wall of a crossbar and the face of the rail it butts against for tabs.".
+Before the first face, the panel says "Click the inner walls of the two tubes at a folded corner of a Folded Bar or at an End Miter corner for fingers, or a wall of a crossbar and the face of the rail it butts against for tabs.". The panel tries the folded corner first, then the End Miter corner, then the T joint: two faces of tubes cut by an End Miter against each other are never taken for a T joint.
 
 #### Fingers at a folded corner
 
@@ -564,6 +565,38 @@ What the panel refuses, saying it at the bottom with **OK** disabled:
 - Fingers that do not fit, naming the corner's two tubes: fewer than 2 ("The interlock of the corner between Profile and Profile001 needs at least 2 fingers."), fingers too wide for the tube, or not wider than the clearance ("The fingers of the corner between Profile and Profile001 do not fit: make them fewer or narrower."), a tip size over half the narrowest finger less the clearance ("The finger tips of the corner between Profile and Profile001 must be between 0 and 8 mm." for three even fingers on a 50 mm tube with a clearance of 0.5 mm), and a depth or an angle the Stepped joint refuses (the step depth messages of [Miter or stepped joint](#miter-or-stepped-joint)).
 
 There is no dovetail: the corner closes by bending, so an undercut could not pass. Other kinds of interlock may come later, such as hooks, clips or a key across a miter.
+
+#### Fingers at an End Miter corner
+
+Two separate tubes that meet at a corner, each one cut by its own **End Miter** against the other (**Create Miter Ends**, Spanish *Crear ingletes*), can interlock with fingers at the inner vertex of the corner too, as at a folded corner: across the inner walls of the two tubes, from their outer face to the finger depth, the walls are split into fingers that belong to one tube and the other in turn. Below the fingers the corner stays cut by the two End Miters. Every cut is straight, square to the tube or to its inner wall, so any tube laser cuts it. The two tubes may be straight profiles, trimmed profiles or cutouts, at any angle, and either or both may be the free end of a Folded Bar.
+
+1. Miter the corner first: **Create Miter Ends** with the two tubes, so each one has its End Miter against the other. Give both End Miters the same **Gap** (*Separación*).
+2. Click **Interlock**.
+3. Click the inner wall of each tube: its face on the inside of the corner. Faces selected before the command count too. After the first face the panel says "Click the inner wall of the other tube at the End Miter corner for fingers, or the other face of the T joint for tabs.". The Interlock is made at once; the **Corner** group (*Esquina*) names the two tubes in the order you clicked them, for example `Corner: TubeA → TubeB`.
+4. The **Fingers** group (*Aletas*) has the same fields as at a folded corner, and each change shows on both tubes at once:
+   - **Count** (*Cantidad*): the number of fingers, at least 2. The tube of the first face you clicked owns the first one.
+   - **Finger width**, **Tip** and **Tip size**, **Clearance**: as at a folded corner.
+   - **Depth** (*Profundidad*): how deep the fingers go across the inner walls, from their outer face. **Automatic** (0) is the automatic step depth of a Stepped joint. It goes from the thicker wall to just under half the shallower tube.
+   - **Flip** (*Invertir*): the tube of the second face you clicked owns the first finger.
+
+   Fingers at a folded corner and at an End Miter corner share their settings: the next one starts with the settings last kept with **OK** or **Apply and continue**.
+5. **OK** keeps the Interlock in one Undo step; **Cancel** leaves the document as it was. **Apply and continue** (*Aplicar y seguir*) keeps it in its own Undo step and waits for the inner walls of the next corner, with the same settings.
+
+With a **Gap** on the End Miters, the cut faces of the two tubes stay that far apart and the fingers cross the gap, half of it on each tube, so the two tubes still interlock. The **Clearance** of the fingers is a setting of its own: it opens every pair of finger faces that meet, as at a folded corner. At an oblique corner, as at a folded corner, the straight cuts leave a small notch at the inner vertex.
+
+Two pieces make it real, one on top of each tube, as a cutout is: each one is labelled as the piece under it with `_Fg` added, with its own fingers and the other tube's fingers cut out of it. The Interlock, labelled after its two tubes, for example `Interlock_TubeA_TubeB`, shows under the `_Fg` piece of the first tube in the tree; no Folded Bar lists it. Its settings are properties of the Interlock: **Kind** (`Fingers`, read-only), **Count**, **Finger Width**, **Tip**, **Tip Size**, **Depth**, **Clearance**, **Flip**, the two tubes (**Piece A**, **Piece B**) and the two faces picked (**Face A**, **Face B**). Double-click the Interlock, or either `_Fg` piece, to edit it in the same panel. Changing an End Miter afterwards, its gap for example, recomputes both pieces. Deleting the Interlock deletes both pieces and gives the pieces under them back: whatever was built on them follows those. Undo brings everything back.
+
+The BOM, the **Cut List** and the **Piece Table** give each tube its length up to the tips of its fingers, with the cut angles of its End Miter. At the usual angles, from 60 to 120 degrees, the outer point of the miter reaches farther than the finger tips, so the length is the one of the End Miter; only at a wide corner (150 degrees, for example) can the finger tips make the tube longer.
+
+On a **Folded Bar**, click the bar itself: the face stands for the face of the tube under the click. The fingers go only on a free end of an open bar, its first or its last tube, against a straight tube or the free end of another bar. The bar folds with the fingers and the cuts, its **Unfolded Bar** carries them, and its developed length runs to the finger tips. At a folded corner of the bar, or at the open corner of a closed frame, the panel says so, for example "The End Miter corner between Profile001 and Profile is at a folded corner of FoldedBar: the fingers go on a free end of a Folded Bar.".
+
+What the panel refuses, saying it at the bottom with **OK** disabled and nothing created, naming the two tubes:
+
+- A missing End Miter, saying what makes it: "The fingers of the corner between TubeA and TubeB need an End Miter of TubeB against TubeA: make it with Miter Ends.", or, for two tubes whose ends meet at a corner without any End Miter, "The fingers of the corner between TubeA and TubeB need an End Miter of each tube against the other: make them with Miter Ends.".
+- End Miters with different gaps: "The End Miters of TubeA and TubeB have different gaps: give them the same Gap.".
+- Faces that are not the inner walls of the corner ("The faces of TubeA and TubeB are not the inner walls of an End Miter corner between them."), two faces of the same tube, a profile that is not a tube, or two tubes that are not the same size along the corner.
+- A corner that has fingers already: "The corner between TubeA and TubeB already has fingers: Interlock_TubeA_TubeB."; double-click that Interlock to edit it.
+- Fingers that do not fit: the Count, width and tip messages of a folded corner, a depth out of its range, from the thicker wall to just under half the shallower tube ("The finger depth of the corner between TubeA and TubeB must be between 2 and 24.9 mm." for 50 mm tubes with a 2 mm wall), fingers too deep for the angle ("... do not fit at this angle: make the depth smaller.") or too short to cross the gap ("... do not reach across the miter gap: make the gap smaller or the depth larger.").
 
 #### Tabs at a T joint
 

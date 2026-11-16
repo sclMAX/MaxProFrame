@@ -20,7 +20,10 @@ and deduces the kind of Interlock from them (``InterlockTaskPanel._deduce``):
 
 A pair that makes neither creates nothing and the panel says why, OK disabled: the refusal of the Tabs order that
 found a T joint (its crossbar ends on the rail face); else the Fingers refusal when both faces are on one Folded Bar, or
-one is on a Folded Bar and the other on no tube; else the refusal of the Tabs order clicked. A click on no face or on a
+one is on a Folded Bar and the other on no tube; else, for the inner walls of two tubes without End Miters whose ends
+meet at a corner, that they need an End Miter of each tube against the other (S6,
+``miter_finger_interlock.unmitered_corner``, odd/tasks/miter-fingers.md T5); else the refusal of the Tabs order
+clicked. A click on no face or on a
 bend of a bar is refused at once. The settings of the kind (Fingers: Count, FingerWidth, Tip, TipSize for a Chamfer or
 Round tip only, Depth, Clearance, Flip; Tabs: the same without Depth and Flip, with the tab Length) update the
 Interlock as they change and recompute the document; whatever its bar or its pieces refuse shows in the panel and keeps
@@ -67,6 +70,7 @@ from freecad.maxproframe.miter_finger_interlock import (
     make_miter_fingers,
     miter_order,
     miter_pieces,
+    unmitered_corner,
 )
 from freecad.maxproframe.profile_pattern import global_shape
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
@@ -181,8 +185,8 @@ def interlock_bar(obj):
 def pick_hint():
     return translate(
         "MaxProFrame",
-        "Click the inner walls of the two tubes at a folded corner of a Folded Bar for fingers, or a wall of a "
-        "crossbar and the face of the rail it butts against for tabs.",
+        "Click the inner walls of the two tubes at a folded corner of a Folded Bar or at an End Miter corner for "
+        "fingers, or a wall of a crossbar and the face of the rail it butts against for tabs.",
     )
 
 
@@ -430,8 +434,8 @@ class InterlockTaskPanel:
         form.combo_kind.setToolTip(
             translate(
                 "MaxProFrame",
-                "Shape of the interlock: Fingers, at the inner vertex of a folded corner; Tabs, on the end of a "
-                "crossbar through slots in the rail at a T joint",
+                "Shape of the interlock: Fingers, at the inner vertex of a folded corner or of an End Miter corner; "
+                "Tabs, on the end of a crossbar through slots in the rail at a T joint",
             )
         )
         settings.addRow(translate("MaxProFrame", "Kind"), form.combo_kind)
@@ -677,8 +681,13 @@ class InterlockTaskPanel:
         order = tab_order(*faces, **_without_kind(self._values[TABS]))
         if order.error is None:
             return TABS, order, None
-        if not order.found and _fingers_meant(first, second):
-            return None, None, fingers_refusal
+        if not order.found:
+            if _fingers_meant(first, second):
+                return None, None, fingers_refusal
+            # S6: the inner walls at a corner of two tubes without End Miters, no T joint.
+            unmitered = unmitered_corner(*(MiterFace(click.obj, click.sub, click.point) for click in (first, second)))
+            if unmitered is not None:
+                return None, None, str(unmitered)
         return None, None, str(order.error)
 
     @staticmethod
@@ -1040,8 +1049,9 @@ class InterlockTaskPanel:
 
 
 class InterlockCommand:
-    """Interlock: fingers that locate the two tubes of a folded corner of a Folded Bar, picked by their inner walls, or
-    tabs on a crossbar end through slots in the rail at a T joint, picked by a crossbar wall and the rail face."""
+    """Interlock: fingers that locate the two tubes of a folded corner of a Folded Bar or of an End Miter corner,
+    picked by their inner walls, or tabs on a crossbar end through slots in the rail at a T joint, picked by a crossbar
+    wall and the rail face."""
 
     def GetResources(self):
         return {
@@ -1050,8 +1060,9 @@ class InterlockCommand:
             "ToolTip": QT_TRANSLATE_NOOP(
                 "MaxProFrame_Interlock",
                 "<b>Interlock</b><br><br>Click two faces. The inner wall faces of the two tubes at a folded corner of "
-                "a Folded Bar: fingers cut by the laser at the inner vertex of the corner locate one tube on the "
-                "other. A wall of a crossbar and the face of the rail it butts against (a T joint): tabs on the "
+                "a Folded Bar, or at an End Miter corner of two tubes cut against each other with Miter Ends: "
+                "fingers cut by the laser at the inner vertex of the corner locate one tube on the other. A wall of a "
+                "crossbar and the face of the rail it butts against (a T joint): tabs on the "
                 "crossbar end go through slots cut in the rail. Set their count, width, tip and clearance in the "
                 "panel. Double-click the Interlock to edit it.",
             ),
