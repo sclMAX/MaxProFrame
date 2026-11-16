@@ -218,3 +218,9 @@ the inner walls = the walls of A and B on the inside of the corner, meeting at t
   interlock_translations 11 OK. Mutations caught: no inner-wall direction/side checks (1 fail + 2 errors), no end
   distance check (1 fail), no busy wait in `_take_clicks` (1 fail). Full native suite (stable 1.1.4, before
   MiterRegressionTest was added): 2283 tests OK in 2626 s. Black 25.1.0 / isort 6.0.1 clean.
+- L9 Delivery: PR per slice, each merged on green CI (stable + weekly): T1 #176 (b519e33), T2 #177 (eb8eaeb), T3
+  #178 (9e075c1), T4 #179 (9244799), T5 #180 (642decf). Independent verifications (Risk item 3): T2 no blocker
+  (old features identical, old documents restore unchanged); T4 one S6 gap (no End Miter at all) fixed in T5; T5 no
+  blocker (164 panel probes: T-joint refusals byte-identical except L-like corners without End Miters, which now get
+  the S6 message; reach of that rule = one tube size from a tube end, advisory). Full native suite 2283 OK on 1.1.4
+  before the last T5 tests. Open: the user's manual test in FreeCAD; optional tightening of the S6 reach.
