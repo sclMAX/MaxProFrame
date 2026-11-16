@@ -45,7 +45,7 @@ the inner walls = the walls of A and B on the inside of the corner, meeting at t
   remembered faces, finding both End Miters, Length to finger tips, measured_piece, cut_ends, BOM, delete/undo
   give-back, corner_interlocks skip; tests. route=gentle-ai-worker; commit=T2 (see Log L5) [x]
 - T3 [S1] Folded Bar free end against a straight tube (the user's case): the bar folds the finger piece, the Unfolded
-  Bar carries it, developed length to the tips; tests. route=gentle-ai-worker; commit=
+  Bar carries it, developed length to the tips; tests. route=gentle-ai-worker; commit=T3 (see Log L6) [x]
 - T4 [S1, S2, S6, S7] Panel: deduce Fingers at a miter corner before Tabs, refusals for missing miters, fields, hints,
   Apply and continue, edit; tests. route=gentle-ai-worker; commit=
 - T5 [S1-S7] Tutorial, CHANGELOG (Unreleased), Spanish .ts/.qm (Qt lrelease from the AppImage), Russian unfinished +
@@ -138,3 +138,25 @@ the inner walls = the walls of A and B on the inside of the corner, meeting at t
   tab_interlock 18, cut_list 27, piece_table 23, cut_ends 15, folded_bar 50, end_miter_geometry 6,
   tab_interlock_folded_bar 13, interlock_panel 14. Black 25.1.0 / isort 6.0.1 clean. Open for T4: the edit panel on a
   miter Interlock (double click) is untested; Kind tooltip and command texts.
+- L6 T3 (worker): `miter_finger_interlock._located` maps a face clicked on a Folded Bar to the tube under the
+  `MiterFace.point` (`tab_interlock._on_bar` / `segment_at`; bend -> "Click a straight part of the folded bar."); T2's
+  guard "... cannot go on a tube of a Folded Bar yet." removed (T5: drop its text). New `_check_bar_ends` (in `_corner`,
+  so at creation and at every recompute, before the End Miter check): for a tube a bar folds, the end of its chain
+  segment nearest the other piece (global distance from the segment start / end to the other piece's shape) must be a
+  free end of an open bar, else "The End Miter corner between {} and {} is at a folded corner of {}: the fingers go on a
+  free end of a Folded Bar." / "... is at the open corner of {}: ..." (D5; new texts for T5, MaxProFrame). No change to
+  folded_bar / unfold / fold needed: follow_new_pieces folds the _Fg piece, the Unfolded Bar carries the fingers and the
+  cuts, DevelopedLength runs to the tips (at 90 degrees the miter point is farther, so unchanged; at 150 degrees with
+  Depth 10 on 50x50x2 the bar is longer). Tests tests/test_miter_finger_interlock_folded_bar.py (13; make_legs user
+  layout with the End Miters the panel makes, TabsOnBarFixture helpers): free end + straight tube at 90 gap 0 and 0.5,
+  straight tube clicked first with Flip, 60 / 120 / 150 (Depth 10) oblique bars, two bars' free ends; each: _Fg on the
+  bar's End Miter, bar Segments, FoldedBar and Unfolded Bar valid one solid with the fingers added and the other's cuts
+  removed (volume deltas, point-for-point via the unfold placements), no overlap with the other tube, DevelopedLength =
+  before + (piece Length - End Miter Length) = Unfolded XLength, BOM length; straight side as T2; refusals (folded
+  corner on the bar, the tube given itself, closed bar open corner, bend) with nothing made; delete/undo/redo;
+  save/reopen. RED (stable 1.1.4): 13 tests, 5 failures + 8 errors ("The faces of FoldedBar and ... are not the inner
+  walls ...", "... cannot go on a tube of a Folded Bar yet."). GREEN (stable): 13 OK (~57 s). Mutation caught: segment
+  end nearest the other piece inverted (1 failure + 9 errors). Preserve OK (stable): miter_finger_interlock 14,
+  folded_bar 50, tab_interlock_folded_bar 13, end_miter_folded_bar 13, unfolded_geometry 66, folded_geometry 21. Black
+  25.1.0 / isort 6.0.1 clean. Not covered: a bar changed after the Interlock so its end becomes a folded corner (the
+  check runs at recompute, untested).
