@@ -52,8 +52,8 @@ FIRST_TABS = TabSettings()
 FIRST_FINGERS = FingerSettings(clearance=0.5)
 # What the panel says.
 HINT_NONE = (
-    "Click the inner walls of the two tubes at a folded corner of a Folded Bar for fingers, or a wall of a crossbar "
-    "and the face of the rail it butts against for tabs."
+    "Click the inner walls of the two tubes at a folded corner of a Folded Bar or at an End Miter corner for fingers, "
+    "or a wall of a crossbar and the face of the rail it butts against for tabs."
 )
 HINT_FINGERS = "Click the inner wall of the other tube at that corner."
 HINT_TABS = (

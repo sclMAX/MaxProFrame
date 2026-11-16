@@ -49,7 +49,7 @@ the inner walls = the walls of A and B on the inside of the corner, meeting at t
 - T4 [S1, S2, S6, S7] Panel: deduce Fingers at a miter corner before Tabs, refusals for missing miters, fields, hints,
   Apply and continue, edit; tests. route=gentle-ai-worker; commit=T4 (see Log L7) [x]
 - T5 [S1-S7] Tutorial, CHANGELOG (Unreleased), Spanish .ts/.qm (Qt lrelease from the AppImage), Russian unfinished +
-  PENDING_TEXTS; full native suite. route=gentle-ai-worker + parent; commit=
+  PENDING_TEXTS; full native suite. route=gentle-ai-worker + parent; commit=T5 (see Log L8) [x]
 
 ## Log
 - L1 User (screenshot: FoldedBar, Profile_TC80x40x1.5_004_Tr_Tr, Profile_TC80x40x1.5_002_Mt; Interlock panel on the
@@ -190,3 +190,31 @@ the inner walls = the walls of A and B on the inside of the corner, meeting at t
   test_interlock 12, 1 error (test used a stale profile after reopen: fixed, preservation). GREEN (stable 1.1.4):
   test_miter_finger_panel 11 OK, interlock_panel 14 OK, tab_interlock_panel 13 OK, miter_finger_interlock 19 OK,
   miter_finger_interlock_folded_bar 13 OK, interlock 12 OK, interlock_translations 8 OK. Black / isort clean.
+- L8 T5 (worker, uncommitted on 329dfd0): texts: pick_hint, the Kind tooltip (MaxProFrame and App::Property) and the
+  command tooltip name the End Miter corner (old sources replaced in es/ru). S6 gap (B1 of the T4 verify):
+  `miter_finger_interlock.unmitered_corner(first, second)` -> the S6 "need an End Miter of each tube against the other"
+  InterlockError (via `_miters`) when both faces are flat walls along two different Square/Rectangular Hollow tubes,
+  axes not parallel (sin > 0.1) and crossing within half the smaller tube, the crossing within one tube size
+  (max ProfileWidth/Height) of an end of each tube, each face normal in the corner plane, toward the other tube's far
+  end and on its side of the axis (outer face of the wall); else None (Part.OCCError -> None; centre = volume-weighted
+  CenterOfMass of the solids: a profile is a CompSolid). `_deduce` calls it only when Tabs refuse with `found` False
+  and `_fingers_meant` is False, so T joints that reach the rail face keep their messages. i18n: 4 changed + 21 new
+  messages (17 MaxProFrame, 4 App::Property) in es ("esquina en inglete" = End Miter corner, "inglete" = End Miter,
+  "Crear ingletes" = Miter Ends, "Separación" = Gap) and ru (unfinished, PENDING_TEXTS); es .qm with the AppImage
+  lrelease (868 finished; HEAD .ts rebuilt byte-identical first), copied to es-AR/es-CO/es-ES (same md5); ru.qm
+  rebuilt byte-identical, unchanged; the T2 text "... cannot go on a tube of a Folded Bar yet." was in no catalog.
+  Docs: tutorial "#### Fingers at an End Miter corner" (+ Interlock intro, hint), README Folded miters line, CHANGELOG
+  Unreleased Improvements "Interlock at an End Miter corner". Tests: test_miter_finger_panel +UnmiteredCornerTest (4:
+  no-miter corner both orders, bar free end + bottom tube, other walls of that corner keep `tab_order`'s refusal,
+  T joint NO_END and a plain crossbar 10 mm short near the far rail end) and MiterRegressionTest (5, from the T4
+  verify: T joint with the crossbar mitered against a third tube makes Tabs both orders; Depth 30 -> "between 2 and
+  24.9 mm", outer wall -> not the inner walls, never "T joint"; clicks waiting for a recompute dropped on close;
+  Apply and continue miter -> folded corner keeps Count 4 and the folded Flip/Count tooltips; second click inside a
+  real TrimmedProfile recompute waits, no geometry during it); test_interlock_translations +3 (miter panel hints,
+  tooltips, FaceA doc and the no-miter refusal in Spanish; miter refusal/property texts) and Spanish Kind/hint updated;
+  HINT_NONE updated in test_interlock_panel / test_tab_interlock_panel. RED (stable 1.1.4, HEAD scratch + new tests):
+  UnmiteredCornerTest 3 tests, 2 failures + 1 cascade error ("There is no T joint between TubeA and TubeB: TubeA does
+  not end on the face of TubeB."); interlock_translations 11, 5 failures. GREEN: miter_finger_panel 20 OK,
+  interlock_translations 11 OK. Mutations caught: no inner-wall direction/side checks (1 fail + 2 errors), no end
+  distance check (1 fail), no busy wait in `_take_clicks` (1 fail). Full native suite (stable 1.1.4, before
+  MiterRegressionTest was added): 2283 tests OK in 2626 s. Black 25.1.0 / isort 6.0.1 clean.

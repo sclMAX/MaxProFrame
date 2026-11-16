@@ -50,10 +50,11 @@ RIGHT_INNER = App.Vector(275, 100, 0)
 TOP_INNER = App.Vector(150, 175, 0)
 LEFT_INNER = App.Vector(25, 100, 0)
 # S6: what the panel says.
-# odd/tasks/t-joint-tabs.md, T4: the hint with no face names both kinds.
+# odd/tasks/t-joint-tabs.md, T4: the hint with no face names both kinds; odd/tasks/miter-fingers.md, T5: and the End
+# Miter corner.
 HINT_NONE = (
-    "Click the inner walls of the two tubes at a folded corner of a Folded Bar for fingers, or a wall of a crossbar "
-    "and the face of the rail it butts against for tabs."
+    "Click the inner walls of the two tubes at a folded corner of a Folded Bar or at an End Miter corner for fingers, "
+    "or a wall of a crossbar and the face of the rail it butts against for tabs."
 )
 HINT_ONE = "Click the inner wall of the other tube at that corner."
 INNER = "Click the inner wall of {}: its face on the inside of the folded corner."

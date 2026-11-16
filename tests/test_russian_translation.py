@@ -17,10 +17,10 @@ PENDING_TEXTS = (
     (
         "MaxProFrame_Interlock",
         "<b>Interlock</b><br><br>Click two faces. The inner wall faces of the two tubes at a folded corner of a "
-        "Folded Bar: fingers cut by the laser at the inner vertex of the corner locate one tube on the other. A wall "
-        "of a crossbar and the face of the rail it butts against (a T joint): tabs on the crossbar end go through "
-        "slots cut in the rail. Set their count, width, tip and clearance in the panel. Double-click the Interlock "
-        "to edit it.",
+        "Folded Bar, or at an End Miter corner of two tubes cut against each other with Miter Ends: fingers cut by "
+        "the laser at the inner vertex of the corner locate one tube on the other. A wall of a crossbar and the face "
+        "of the rail it butts against (a T joint): tabs on the crossbar end go through slots cut in the rail. Set "
+        "their count, width, tip and clearance in the panel. Double-click the Interlock to edit it.",
     ),
     # odd/tasks/joint-tabs.md, T4: the Interlock panel, its refusals and its properties.
     ("MaxProFrame", "The interlock of the corner between {} and {} needs at least 2 fingers."),
@@ -30,8 +30,8 @@ PENDING_TEXTS = (
     ("MaxProFrame", "The corner between {} and {} has two interlocks: {} and {}."),
     (
         "MaxProFrame",
-        "Click the inner walls of the two tubes at a folded corner of a Folded Bar for fingers, or a wall of a "
-        "crossbar and the face of the rail it butts against for tabs.",
+        "Click the inner walls of the two tubes at a folded corner of a Folded Bar or at an End Miter corner for "
+        "fingers, or a wall of a crossbar and the face of the rail it butts against for tabs.",
     ),
     ("MaxProFrame", "Click the inner wall of the other tube at that corner."),
     ("MaxProFrame", "Click the inner wall of {}: its face on the inside of the folded corner."),
@@ -49,8 +49,8 @@ PENDING_TEXTS = (
     ("MaxProFrame", "Kind"),
     (
         "MaxProFrame",
-        "Shape of the interlock: Fingers, at the inner vertex of a folded corner; Tabs, on the end of a crossbar "
-        "through slots in the rail at a T joint",
+        "Shape of the interlock: Fingers, at the inner vertex of a folded corner or of an End Miter corner; Tabs, "
+        "on the end of a crossbar through slots in the rail at a T joint",
     ),
     ("MaxProFrame", "Count"),
     ("MaxProFrame", "Number of fingers, at least 2; the tube before the corner owns the first one"),
@@ -85,8 +85,8 @@ PENDING_TEXTS = (
     ("App::Property", "Profile of the other tube the interlock joins"),
     (
         "App::Property",
-        "Shape of the interlock: Fingers, at the inner vertex of a folded corner; Tabs, on the end of a crossbar "
-        "through slots in the rail at a T joint",
+        "Shape of the interlock: Fingers, at the inner vertex of a folded corner or of an End Miter corner; Tabs, "
+        "on the end of a crossbar through slots in the rail at a T joint",
     ),
     ("App::Property", "Number of fingers, at least 2; the first tube owns the first finger"),
     (
@@ -161,6 +161,51 @@ PENDING_TEXTS = (
     ("App::Property", "Crossbar piece and face that carry the tabs"),
     ("App::Property", "Rail piece and face the slots go through"),
     ("App::Property", "The Tabs Interlock this piece adds its tabs or slots for"),
+    # odd/tasks/miter-fingers.md: Fingers at an End Miter corner, their panel, refusals and properties.
+    (
+        "MaxProFrame",
+        "Click the inner wall of the other tube at the End Miter corner for fingers, or the other face of the T joint "
+        "for tabs.",
+    ),
+    ("MaxProFrame", "Number of fingers, at least 2; the tube of the first face clicked owns the first one"),
+    ("MaxProFrame", "Depth of the finger band across the inner walls; Automatic: the step depth of a Stepped joint"),
+    ("MaxProFrame", "Swap the tubes: the tube of the second face clicked owns the first finger"),
+    ("MaxProFrame", "The faces of {} and {} are not the inner walls of an End Miter corner between them."),
+    ("MaxProFrame", "{} and {} are not the same size along their corner: their fingers cannot match."),
+    ("MaxProFrame", "The finger depth of the corner between {} and {} must be between {min:g} and {max:g} mm."),
+    ("MaxProFrame", "The fingers of the corner between {} and {} do not fit at this angle: make the depth smaller."),
+    (
+        "MaxProFrame",
+        "The fingers of the corner between {} and {} do not reach across the miter gap: make the gap smaller or the "
+        "depth larger.",
+    ),
+    ("MaxProFrame", "Both faces are on {}: click the inner wall of each tube of the End Miter corner."),
+    ("MaxProFrame", "The fingers of the corner between {} and {} need two tubes: {} is a {} profile."),
+    (
+        "MaxProFrame",
+        "The fingers of the corner between {} and {} need an End Miter of each tube against the other: make them "
+        "with Miter Ends.",
+    ),
+    (
+        "MaxProFrame",
+        "The fingers of the corner between {} and {} need an End Miter of {} against {}: make it with Miter Ends.",
+    ),
+    ("MaxProFrame", "The End Miters of {} and {} have different gaps: give them the same Gap."),
+    ("MaxProFrame", "The corner between {} and {} already has fingers: {}."),
+    (
+        "MaxProFrame",
+        "The End Miter corner between {} and {} is at a folded corner of {}: the fingers go on a free end of a "
+        "Folded Bar.",
+    ),
+    (
+        "MaxProFrame",
+        "The End Miter corner between {} and {} is at the open corner of {}: the fingers go on a free end of a "
+        "Folded Bar.",
+    ),
+    ("App::Property", "Fingers at the inner vertex of an End Miter corner between two tubes"),
+    ("App::Property", "Piece and inner wall of the first tube, which owns the first finger"),
+    ("App::Property", "Piece and inner wall of the second tube"),
+    ("App::Property", "The Interlock of the End Miter corner this piece adds its fingers for"),
     # odd/tasks/extend-folded-bar.md, T3: the extend notices.
     ("MaxProFrame", "{} meets neither end of the bar."),
     ("MaxProFrame", "{} is folded by {}: a tube folds into one bar only."),
