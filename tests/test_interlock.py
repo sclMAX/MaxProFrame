@@ -24,7 +24,13 @@ from freecad.maxproframe import interlock as interlock_module
 from freecad.maxproframe.folded_bar import make_unfolded_bar
 from freecad.maxproframe.folded_chain import build_chain
 from freecad.maxproframe.folded_geometry import fold_bar
-from freecad.maxproframe.interlock import interlock_key, interlock_settings, is_interlock, make_interlock
+from freecad.maxproframe.interlock import (
+    interlock_key,
+    interlock_settings,
+    is_interlock,
+    is_miter_interlock,
+    make_interlock,
+)
 from freecad.maxproframe.interlock_geometry import KINDS, TIPS, FingerSettings
 from freecad.maxproframe.unfolded_geometry import unfold
 
@@ -220,6 +226,28 @@ class InterlockObjectTest(InterlockObjectFixture):
         self.assertAlmostEqual(volume, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
         self.assertIn("Hidden", tabs.getEditorMode("Depth"))
         self.assertNotIn("Hidden", tabs.getEditorMode("Length"))
+
+    def test_a_reopened_folded_corner_interlock_gets_no_miter_properties(self):
+        # odd/tasks/miter-fingers.md, D2: only an Interlock at an End Miter corner is marked and remembers faces.
+        profiles, bar = self.make_bar(**PLAIN)
+        bottom, right, _, _ = profiles
+        interlock = make_interlock(bar, bottom, right, Clearance=G)
+        self.doc.recompute()
+        volume, names = bar.Shape.Volume, (bar.Name, interlock.Name)
+
+        self.reopen()
+
+        bar, interlock = (self.doc.getObject(name) for name in names)
+        self.assertFalse(is_miter_interlock(interlock))
+        for name in ("AtEndMiter", "FaceA", "FaceB", "PointA", "NormalB", "AnchorA"):
+            self.assertNotIn(name, interlock.PropertiesList)
+        self.assertEqual(INTERLOCK_PROPERTIES, {n: interlock.getTypeIdOfProperty(n) for n in INTERLOCK_PROPERTIES})
+        self.assertEqual([], interlock.getEditorMode("Kind"))
+        self.assertEqual([interlock], list(bar.Interlocks))
+        bar.touch()
+        self.doc.recompute()
+        self.assertAlmostEqual(volume, bar.Shape.Volume, delta=VOLUME_TOLERANCE)
+        self.assertFolds(bar, list(bar.Segments), FingerSettings(clearance=G))
 
     def test_the_tree_shows_the_interlocks_under_the_bar_and_edits_them_through_the_hook(self):
         profiles, bar = self.make_bar(**PLAIN)

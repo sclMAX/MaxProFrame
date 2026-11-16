@@ -47,7 +47,7 @@ the inner walls = the walls of A and B on the inside of the corner, meeting at t
 - T3 [S1] Folded Bar free end against a straight tube (the user's case): the bar folds the finger piece, the Unfolded
   Bar carries it, developed length to the tips; tests. route=gentle-ai-worker; commit=T3 (see Log L6) [x]
 - T4 [S1, S2, S6, S7] Panel: deduce Fingers at a miter corner before Tabs, refusals for missing miters, fields, hints,
-  Apply and continue, edit; tests. route=gentle-ai-worker; commit=
+  Apply and continue, edit; tests. route=gentle-ai-worker; commit=T4 (see Log L7) [x]
 - T5 [S1-S7] Tutorial, CHANGELOG (Unreleased), Spanish .ts/.qm (Qt lrelease from the AppImage), Russian unfinished +
   PENDING_TEXTS; full native suite. route=gentle-ai-worker + parent; commit=
 
@@ -160,3 +160,33 @@ the inner walls = the walls of A and B on the inside of the corner, meeting at t
   folded_bar 50, tab_interlock_folded_bar 13, end_miter_folded_bar 13, unfolded_geometry 66, folded_geometry 21. Black
   25.1.0 / isort 6.0.1 clean. Not covered: a bar changed after the Interlock so its end becomes a folded corner (the
   check runs at recompute, untested).
+- L7 T4 (worker): create_interlock_tool `_deduce`: folded corner first (unchanged), then
+  `miter_order(MiterFace(first), MiterFace(second), **Fingers settings)`: no error -> Fingers at the miter corner
+  (`make_miter_fingers(first, second)`, first click = tube A, D3); error with `found` -> that refusal shown, Tabs never
+  tried (S6, S7); else Tabs as before. `self.miter` picks the miter tooltips (Count, Depth, Flip); `_invalid` reads
+  `miter_pieces` and the bars folding them; edit/double click (Interlock or either _Fg) unchanged path; Fingers
+  settings shared with folded corners. `Click.mitered` (`miter_finger_interlock.end_mitered`: the clicked tube has an
+  End Miter in its stack) gives the new other-face hint. `_take_clicks` waits (GAP_DELAY_MS reschedule) while the
+  panel or any document recomputes (panel-recompute-deadlock S3). `miter_finger_interlock._check_gaps` (in `_corner`,
+  after `_miters`): End Miters with MiterGap differing by > MEET_TOLERANCE refused. New texts for T5 (MaxProFrame):
+  "Click the inner wall of the other tube at the End Miter corner for fingers, or the other face of the T joint for
+  tabs.", "Number of fingers, at least 2; the tube of the first face clicked owns the first one", "Depth of the finger
+  band across the inner walls; Automatic: the step depth of a Stepped joint", "Swap the tubes: the tube of the second
+  face clicked owns the first finger", "The End Miters of {} and {} have different gaps: give them the same Gap.".
+  Left for T5 (changing them breaks Spanish expectations in tests/test_interlock_translations.py, outside T4's
+  surface): pick_hint, the Kind tooltip and the command tooltip still name only folded corners and T joints. Tests:
+  new tests/test_miter_finger_panel.py (11: straight corner clicked/preselected, Cancel/OK undo; B first owns the first
+  finger, Flip swaps the gains; user's case bar free end + bottom tube, bar folds _Fg, no bar.Interlocks; missing End
+  Miter both click orders and unequal gaps -> message, nothing made; one per corner both orders; T joint -> Tabs and
+  folded corner of the mitered bar -> folded Fingers; clicks during the panel recompute wait; fields update both
+  pieces + Count 1 refusal; Spanish Esquina/Aletas; Apply and continue on two corners; edit via setEdit, double click
+  on the Interlock and on each _Fg); test_miter_finger_interlock +5 (click order twice, Extend Cut / End Miter vs a
+  third tube = MISSING_ONE, unequal gaps at creation and after, touching A/B/either End Miter recomputes both pieces
+  identically (patched `_in_frame` sees both bases once), reopened 150 deg Depth 15 keeps Length); test_interlock +1
+  (reopened folded-corner Interlock has no AtEndMiter/FaceA/FaceB/PointA/NormalB/AnchorA, Kind editable). RED (stable
+  1.1.4): test_miter_finger_panel 11 tests, 9 failures + 7 errors (T-joint hint/refusal, nothing made, flip tooltip,
+  clicks taken during recompute); test_miter_finger_interlock 19, 5 failures (gaps message; touch test's first probe
+  patched FingerPiece.execute, which FreeCAD does not call through the class: rewritten, passes, preservation);
+  test_interlock 12, 1 error (test used a stale profile after reopen: fixed, preservation). GREEN (stable 1.1.4):
+  test_miter_finger_panel 11 OK, interlock_panel 14 OK, tab_interlock_panel 13 OK, miter_finger_interlock 19 OK,
+  miter_finger_interlock_folded_bar 13 OK, interlock 12 OK, interlock_translations 8 OK. Black / isort clean.

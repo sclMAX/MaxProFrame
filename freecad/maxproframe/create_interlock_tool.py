@@ -1,5 +1,6 @@
-"""Interlock command: locating fingers at a folded corner of a Folded Bar (odd/tasks/joint-tabs.md, T3: S1, S6, S7) or
-tabs at a T joint (odd/tasks/t-joint-tabs.md, T4: S1-S4), picked by two faces.
+"""Interlock command: locating fingers at a folded corner of a Folded Bar (odd/tasks/joint-tabs.md, T3: S1, S6, S7),
+fingers at an End Miter corner between two tubes (odd/tasks/miter-fingers.md, T4: S1, S2, S6, S7) or tabs at a T joint
+(odd/tasks/t-joint-tabs.md, T4: S1-S4), picked by two faces.
 
 The panel takes two faces, preselected when the command starts or clicked while it is open (as Drill Hole takes them),
 and deduces the kind of Interlock from them (``InterlockTaskPanel._deduce``):
@@ -7,6 +8,12 @@ and deduces the kind of Interlock from them (``InterlockTaskPanel._deduce``):
 - Fingers: the inner walls of the two tubes meeting at one folded corner of a Folded Bar, each one read at its picked
   point as a face of the tube under it (``folded_bar.segment_at``): the planar faces on the inside of that corner (S3).
   Those make one Interlock on the corner (``interlock.make_interlock``), previewed on the bar.
+- Fingers at an End Miter corner: else, the inner walls of two tubes, each cut by its own End Miter against the other
+  (straight tubes, or the free end of a Folded Bar), in the order clicked: the first one owns the first finger
+  (``miter_finger_interlock.miter_order``, ``make_miter_fingers``: an Interlock of Kind Fingers with a finger piece on
+  each tube). Tried before Tabs: two faces of tubes where either one has an End Miter against the other are a miter
+  corner, never a T joint (S7); what it refuses there (a missing End Miter, End Miters with different gaps, a corner
+  with fingers already) is what the panel says (S6).
 - Tabs: otherwise, a wall of a crossbar and the face of the rail it butts against, clicked in either order
   (``tab_interlock.tab_order``: the order clicked, else the other way round), on straight profiles, trims, cutouts or
   Folded Bars; ``tab_interlock.make_tab_interlock`` adds the tabs and slots pieces.
@@ -18,9 +25,11 @@ bend of a bar is refused at once. The settings of the kind (Fingers: Count, Fing
 Round tip only, Depth, Clearance, Flip; Tabs: the same without Depth and Flip, with the tab Length) update the
 Interlock as they change and recompute the document; whatever its bar or its pieces refuse shows in the panel and keeps
 OK disabled. OK keeps the Interlock, Cancel leaves the document as it was; Apply and continue keeps it in its own Undo
-step and waits for the next two faces. A double click on an Interlock (or on the tabs or slots piece of a Tabs one)
-opens the same panel on it, without picking (``interlock.EDIT_PANEL``); OK keeps the changes in one Undo step, Cancel
-puts its values back. A new Interlock starts with the settings last kept with OK or Apply and continue for its kind.
+step and waits for the next two faces. A double click on an Interlock (or on the tabs or slots piece of a Tabs one, or
+on a finger piece of a miter corner) opens the same panel on it, without picking (``interlock.EDIT_PANEL``); OK keeps
+the changes in one Undo step, Cancel puts its values back. A new Interlock starts with the settings last kept with OK or Apply and continue for its kind
+(Fingers at a folded corner and at a miter corner share theirs). While the panel's own recompute runs, the faces
+clicked and the fields changed wait for it to end (odd/tasks/panel-recompute-deadlock.md, S3).
 """
 
 import os
@@ -39,7 +48,7 @@ from freecad.maxproframe.expression_fields import count_field, length_field
 from freecad.maxproframe.ff_tools import ICONPATH, QT_TRANSLATE_NOOP, add_command, get_param_group, translate
 from freecad.maxproframe.folded_bar import PICK_TOLERANCE, bar_chain, folding_bar, segment_at
 from freecad.maxproframe.folded_chain import ChainError, base_profile, section_offset
-from freecad.maxproframe.interlock import interlock_key, make_interlock
+from freecad.maxproframe.interlock import interlock_key, is_miter_interlock, make_interlock
 from freecad.maxproframe.interlock_geometry import (
     CHAMFER,
     FINGERS,
@@ -50,6 +59,14 @@ from freecad.maxproframe.interlock_geometry import (
     TIPS,
     InterlockError,
     TabSettings,
+)
+from freecad.maxproframe.miter_finger_interlock import (
+    MiterFace,
+    MiterOrder,
+    end_mitered,
+    make_miter_fingers,
+    miter_order,
+    miter_pieces,
 )
 from freecad.maxproframe.profile_pattern import global_shape
 from freecad.maxproframe.qt_lifetime import invalidate_wrapper_on_destroy, keep_alive_until_destroyed
@@ -171,9 +188,16 @@ def pick_hint():
 
 def other_face_hint(first=None):
     """What to click after the face ``first`` (a ``Click``): the other inner wall after an inner wall at a folded
-    corner, else the other face of a T joint."""
+    corner; after a face of a tube cut by an End Miter, the other inner wall of its miter corner or the other face of a
+    T joint; else the other face of a T joint."""
     if first is None or first.fingers is not None:
         return translate("MaxProFrame", "Click the inner wall of the other tube at that corner.")
+    if first.mitered:
+        return translate(
+            "MaxProFrame",
+            "Click the inner wall of the other tube at the End Miter corner for fingers, or the other face of the T "
+            "joint for tabs.",
+        )
     return translate(
         "MaxProFrame",
         "Click the other face of the T joint: the face of the rail the crossbar butts against, or the wall of the "
@@ -278,9 +302,10 @@ def picked_corner(first, second):
     return chain, corner, None
 
 
-Click = namedtuple("Click", "obj sub point fingers refusal")
+Click = namedtuple("Click", "obj sub point fingers refusal mitered", defaults=(False,))
 Click.__doc__ = """A face clicked for an Interlock: ``sub`` of ``obj`` at the global ``point`` (or None); ``fingers``
-the PickedFace when it is an inner wall at a folded corner of a Folded Bar, else None and ``refusal`` says why."""
+the PickedFace when it is an inner wall at a folded corner of a Folded Bar, else None and ``refusal`` says why;
+``mitered`` whether its tube is cut by an End Miter (it may be an inner wall of a miter corner)."""
 
 
 def clicked_face(obj, sub, point=None):
@@ -293,7 +318,8 @@ def clicked_face(obj, sub, point=None):
         if pick.reason:
             return None, pick.reason
     fingers, refusal = picked_face(obj, sub, point)
-    return Click(obj, sub, point, fingers, refusal), None
+    mitered = fingers is None and end_mitered(MiterFace(obj, sub, point))
+    return Click(obj, sub, point, fingers, refusal, mitered), None
 
 
 def _same_corner_tube(first, second):
@@ -344,6 +370,8 @@ class InterlockTaskPanel:
         self.edited = edited
         self.obj = edited
         self.kind = str(edited.Kind) if edited is not None else last_kind()
+        # Whether the Fingers shown are at an End Miter corner: the tool tips say so.
+        self.miter = edited is not None and is_miter_interlock(edited)
         self.bar = interlock_bar(edited) if edited is not None else None
         self.doc = edited.Document if edited is not None else App.ActiveDocument
         # The faces picked so far, at most one until they make the Interlock.
@@ -534,9 +562,35 @@ class InterlockTaskPanel:
         form.groupBox_corner.setTitle(translate("MaxProFrame", "Corner"))
         form.groupBox_settings.setTitle(translate("MaxProFrame", "Fingers"))
         form.label_finger_width.setText(translate("MaxProFrame", "Finger width"))
-        form.spin_count.setToolTip(
-            translate("MaxProFrame", "Number of fingers, at least 2; the tube before the corner owns the first one")
-        )
+        if self.miter:
+            form.spin_count.setToolTip(
+                translate(
+                    "MaxProFrame",
+                    "Number of fingers, at least 2; the tube of the first face clicked owns the first one",
+                )
+            )
+            form.spin_depth.setToolTip(
+                translate(
+                    "MaxProFrame",
+                    "Depth of the finger band across the inner walls; Automatic: the step depth of a Stepped joint",
+                )
+            )
+            form.cb_flip.setToolTip(
+                translate("MaxProFrame", "Swap the tubes: the tube of the second face clicked owns the first finger")
+            )
+        else:
+            form.spin_count.setToolTip(
+                translate("MaxProFrame", "Number of fingers, at least 2; the tube before the corner owns the first one")
+            )
+            form.spin_depth.setToolTip(
+                translate(
+                    "MaxProFrame",
+                    "Depth of the finger band across the bent wall; Automatic: the step depth of a Stepped joint",
+                )
+            )
+            form.cb_flip.setToolTip(
+                translate("MaxProFrame", "Swap the tubes: the tube after the corner owns the first finger")
+            )
         form.spin_finger_width.setToolTip(
             translate(
                 "MaxProFrame",
@@ -601,14 +655,24 @@ class InterlockTaskPanel:
         self._make(kind, made)
 
     def _deduce(self, first, second):
-        """(kind, what makes it, None) for the clicks ``first`` and ``second``: Fingers at a folded corner, else Tabs
-        at a T joint; (None, None, why) when they make neither (the module docstring says which refusal shows)."""
+        """(kind, what makes it, None) for the clicks ``first`` and ``second``: Fingers at a folded corner, else
+        Fingers at an End Miter corner (a ``MiterOrder``), else Tabs at a T joint; (None, None, why) when they make
+        neither (the module docstring says which refusal shows)."""
         if first.fingers is not None and second.fingers is not None:
             corner, fingers_refusal = self._fingers_corner(first.fingers, second.fingers)
             if fingers_refusal is None:
                 return FINGERS, corner, None
         else:
             fingers_refusal = first.refusal if first.fingers is None else second.refusal
+        # S7: a miter corner, made or refused, never goes on to a T joint.
+        miter = miter_order(
+            *(MiterFace(click.obj, click.sub, click.point) for click in (first, second)),
+            **_without_kind(self._values[FINGERS]),
+        )
+        if miter.error is None:
+            return FINGERS, miter, None
+        if miter.found:
+            return None, None, str(miter.error)
         faces = [TabFace(click.obj, click.sub, click.point) for click in (first, second)]
         order = tab_order(*faces, **_without_kind(self._values[TABS]))
         if order.error is None:
@@ -634,27 +698,35 @@ class InterlockTaskPanel:
         return (second.bar, piece_a, piece_b), None
 
     def _make(self, kind, made):
-        """The Interlock of ``kind`` that ``made`` stands for (Fingers: (bar, piece_a, piece_b) in chain order; Tabs:
-        the ``TabOrder``), with the settings of that kind, shown in the fields."""
+        """The Interlock of ``kind`` that ``made`` stands for (Fingers: (bar, piece_a, piece_b) in chain order, or the
+        ``MiterOrder`` of a miter corner; Tabs: the ``TabOrder``), with the settings of that kind, shown in the
+        fields."""
+        miter = isinstance(made, MiterOrder)
         if kind != self.kind:
             self._fill(self._values[kind])
+        if miter != self.miter:
+            self.miter = miter
+            self._show_kind()
         values = self.field_values()
         self._open_transaction("Create Interlock")
-        if kind == FINGERS:
+        if kind == FINGERS and not miter:
             bar, piece_a, piece_b = made
             self.bar = bar
             self.obj = make_interlock(bar, piece_a, piece_b, **values)
         else:
             try:
-                self.obj = make_tab_interlock(
-                    made.crossbar.piece,
-                    made.crossbar.sub,
-                    made.rail.piece,
-                    made.rail.sub,
-                    crossbar_point=made.crossbar.point,
-                    rail_point=made.rail.point,
-                    **_without_kind(values),
-                )
+                if miter:
+                    self.obj = make_miter_fingers(made.first, made.second, **_without_kind(values))
+                else:
+                    self.obj = make_tab_interlock(
+                        made.crossbar.piece,
+                        made.crossbar.sub,
+                        made.rail.piece,
+                        made.rail.sub,
+                        crossbar_point=made.crossbar.point,
+                        rail_point=made.rail.point,
+                        **_without_kind(values),
+                    )
             except InterlockError as error:
                 self.doc.abortTransaction()
                 self._transaction_open = False
@@ -678,6 +750,10 @@ class InterlockTaskPanel:
         pass
 
     def _take_clicks(self):
+        if self._active() and self._busy():
+            # odd/tasks/panel-recompute-deadlock.md S3: no geometry while a recompute runs; the clicks wait for it.
+            QtCore.QTimer.singleShot(GAP_DELAY_MS, self._take_clicks)
+            return
         clicks, self._clicks = self._clicks, []
         for doc, obj, sub, point in clicks:
             if not self._active():
@@ -728,9 +804,11 @@ class InterlockTaskPanel:
         return any(getattr(doc, "Recomputing", False) for doc in App.listDocuments().values())
 
     def _invalid(self):
-        """What the bar of a Fingers Interlock, or the pieces of a Tabs one and the bars folding them, refuse."""
-        if str(self.obj.Kind) == TABS:
-            pieces = [piece for piece in tab_pieces(self.obj) if piece is not None]
+        """What the bar of a Fingers Interlock at a folded corner, or the pieces of a Tabs one or of one at a miter
+        corner and the bars folding them, refuse."""
+        if str(self.obj.Kind) == TABS or is_miter_interlock(self.obj):
+            found = tab_pieces(self.obj) if str(self.obj.Kind) == TABS else miter_pieces(self.obj)
+            pieces = [piece for piece in found if piece is not None]
             objects = pieces + [folding_bar(piece) for piece in pieces]
         else:
             objects = [self.bar]

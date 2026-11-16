@@ -14,9 +14,10 @@ _Fg) as the pieces of a Tabs Interlock are (D1): the piece under it with its own
 fingers cut out of it (``miter_finger_geometry.joined``). Both read the Interlock, which links the pieces under them:
 neither depends on the other. They build the ``MiterCorner`` from the two faces and from the End Miter of each tube
 against the other, found in its stack (S6): its real cut plane, the gap included (``TrimmedProfile.miter_planes``
-shifted by half its ``MiterGap``) and its section. A refusal leaves a piece with the shape under it, in error with the
-InterlockError message. Each piece is as long as it reaches along its axis, its finger tips included (S5), and keeps
-the cut angles of its End Miter (``cut_ends``): the BOM, the Cut List and the Piece Table read them.
+shifted by half its ``MiterGap``) and its section; both End Miters must have the same gap, which the fingers bridge,
+half on each tube. A refusal leaves a piece with the shape under it, in error with the InterlockError message. Each
+piece is as long as it reaches along its axis, its finger tips included (S5), and keeps the cut angles of its End
+Miter (``cut_ends``): the BOM, the Cut List and the Piece Table read them.
 
 Deleting the Interlock removes both pieces (``Interlock.unsetupObject``) and gives back the pieces under them
 (``tab_interlock.give_back``); undo brings everything back. ``make_miter_fingers`` makes it; ``miter_order`` tells,
@@ -53,7 +54,15 @@ from freecad.maxproframe.interlock import (
     is_miter_interlock,
 )
 from freecad.maxproframe.interlock_geometry import FINGERS, FingerSettings, InterlockError
-from freecad.maxproframe.miter_finger_geometry import MiterCorner, MiterTube, TubeFingers, check, joined, make_fingers
+from freecad.maxproframe.miter_finger_geometry import (
+    MEET_TOLERANCE,
+    MiterCorner,
+    MiterTube,
+    TubeFingers,
+    check,
+    joined,
+    make_fingers,
+)
 from freecad.maxproframe.profile_pattern import container_placement, newest_piece, placed
 from freecad.maxproframe.tab_interlock import (
     ViewProviderInterlockPiece,
@@ -184,6 +193,18 @@ def _end_miter(piece, other):
     return None
 
 
+def end_mitered(face):
+    """Whether the tube of the face clicked ``face`` (``MiterFace``; on a Folded Bar, the tube under its point) is cut
+    by an End Miter: the face may be an inner wall of an End Miter corner (for the hints of the Interlock panel)."""
+    try:
+        piece, _ = _on_bar(face.piece, face.sub, face.point)
+    except InterlockError:
+        return False
+    if piece is None or base_profile(piece) is None:
+        return False
+    return any(is_trimmedbody(obj) and obj.TrimmedProfileType == END_MITER for obj in piece_stack(newest_piece(piece)))
+
+
 def _miters(names, pieces, profiles):
     """The End Miter of each of ``pieces`` against the other tube (``_end_miter``); raises InterlockError saying which
     is missing and what makes it (S6)."""
@@ -208,6 +229,18 @@ def _miters(names, pieces, profiles):
     return found
 
 
+def _check_gaps(names, miters):
+    """Raise InterlockError when the End Miters ``miters`` ((End Miter, boundary index) of each tube) have different
+    gaps: the fingers bridge one gap, half of it on each tube (S4)."""
+    gaps = [trim.MiterGap.Value for trim, _ in miters]
+    if abs(gaps[0] - gaps[1]) > MEET_TOLERANCE:
+        raise InterlockError(
+            translate("MaxProFrame", "The End Miters of {} and {} have different gaps: give them the same Gap.").format(
+                *names
+            )
+        )
+
+
 def _tube(name, frame, piece, face, thickness, miter):
     """The ``MiterTube`` of ``face`` (of ``piece``, cut by ``miter``: (End Miter, boundary index)) in the coordinates
     of the container of ``frame``."""
@@ -227,13 +260,15 @@ def _tube(name, frame, piece, face, thickness, miter):
 def _corner(names, first, first_face, second, second_face):
     """The ``MiterCorner`` of the face ``first_face`` of the piece ``first`` (tube A) and ``second_face`` of ``second``
     (tube B), in the coordinates of the container of ``first``; raises InterlockError for a profile that is no tube, a
-    tube of a Folded Bar not at a free end of it (``_check_bar_ends``) or a missing End Miter."""
+    tube of a Folded Bar not at a free end of it (``_check_bar_ends``), a missing End Miter or End Miters with
+    different gaps."""
     profiles = base_profile(first), base_profile(second)
     if None in profiles:
         raise _not_a_corner(names)
     thickness = [_thickness(profile, names) for profile in profiles]
     _check_bar_ends(names, (first, second), profiles)
     miters = _miters(names, (first, second), profiles)
+    _check_gaps(names, miters)
     return MiterCorner(
         *(
             _tube(name, first, piece, face, wall, miter)
@@ -447,7 +482,7 @@ def make_miter_fingers(first, second, **settings):
     name (``Count=3``, ``Clearance=0.2``: ``interlock.FINGER_PROPERTIES``); another name raises ValueError. Raises
     InterlockError, before anything is made, for a click on a bend of a Folded Bar, two faces of one tube, a tube of a
     bar not at a free end of it, a corner that already has fingers, a tube without its End Miter against the other
-    (S6), faces that are not the inner walls of the corner or fingers that do not fit it
+    (S6), End Miters with different gaps, faces that are not the inner walls of the corner or fingers that do not fit it
     (``miter_finger_geometry.check``). Run it in the caller's transaction and recompute the document afterwards: a bar
     folds the new pieces then.
     """
