@@ -1,4 +1,6 @@
-"""Drill Hole reference: the hole stays where it was placed when the vertex it was placed from changes."""
+"""Drill Hole reference: the hole follows its vertex when an end of the piece moves along the profile, and stays
+where it was placed, with a warning, when the vertex is gone.
+"""
 
 import os
 import shutil
@@ -40,19 +42,65 @@ class TestDrillHoleReference(DrillHoleFixture):
         self.assert_hole_at(obj, first.Shape.Volume - ONE_HOLE, 180, 0, 24)
         self.assertEqual(obj.ReferenceWarning, "")
 
+    def test_the_hole_follows_its_corner_when_the_end_moves_along_the_profile(self):
+        # The user's case: a frame resized from a spreadsheet moves the end of a piece; the hole keeps its offsets
+        # from the corner at that end.
+        body = self.tube()
+        obj = self.corner_hole(body, 230.0)
+        # The start end goes from x = -50 to x = 100 (shorter), -300 (longer) and -1000: the old corner is then
+        # nearer the far end than the middle of the face, and still the start end is followed.
+        for offset, start in ((-100.0, 100), (300.0, -300), (1000.0, -1000), (50.0, -50)):
+            with self.subTest(start=start):
+                body.OffsetB = offset
+                self.doc.recompute()
+                self.assert_hole_at(obj, body.Shape.Volume - ONE_HOLE, start + 230, 0, 24)
+                self.assertEqual(obj.ReferenceWarning, "")
+        # Not left at x = 180 by the moves.
+        body.OffsetB = -100.0
+        self.doc.recompute()
+        self.assertFalse(self.empty(obj.Shape, 180, 0, 24))
+
+    def test_a_centered_hole_follows_its_end_when_the_end_moves_along_the_profile(self):
+        # "Middle of" an end edge: 22 mm from the end, in the middle of the face width.
+        body = self.tube()
+        obj = self.corner_hole(body, 22.0, 0.0)
+        obj.CenterAcross = True
+        self.doc.recompute()
+        self.assert_hole_at(obj, body.Shape.Volume - ONE_HOLE, -28, 0, 24)
+        body.OffsetB = 250.0
+        self.doc.recompute()
+        self.assert_hole_at(obj, body.Shape.Volume - ONE_HOLE, -228, 0, 24)
+        self.assertEqual(obj.ReferenceWarning, "")
+
+    def test_a_hole_saved_before_the_reference_side_follows_its_end(self):
+        body = self.tube()
+        obj = self.corner_hole(body, 230.0)
+        # A drill hole saved by 1.15 has no ReferenceSide: opening reads it from the shape as it was saved.
+        obj.removeProperty("ReferenceSide")
+        folder = tempfile.mkdtemp(prefix="drill_hole_side_")
+        self.addCleanup(shutil.rmtree, folder, True)
+        path = os.path.join(folder, "v1150.FCStd")
+        self.doc.saveCopy(path)
+        doc = App.openDocument(path)
+        self.addCleanup(App.closeDocument, doc.Name)
+        body, obj = doc.getObject(body.Name), doc.getObject(obj.Name)
+        body.OffsetB = 1000.0
+        doc.recompute()
+        self.assert_hole_at(obj, body.Shape.Volume - ONE_HOLE, -770, 0, 24)
+        self.assertEqual(obj.ReferenceWarning, "")
+
     def test_the_hole_stays_with_a_warning_when_the_corner_is_gone(self):
         body = self.tube()
         obj = self.corner_hole(body, 230.0)
-        # The start end moves from x = -50 to x = 100: the corner is gone, the hole at x = 180 is still on the tube.
-        body.OffsetB = -100.0
+        # The tube widens from 50 to 60: the corner moves across, from y = -25 to y = -30; no corner is on its line.
+        # The centered anchor moves the snapshot with the section, by 5 across.
+        body.ProfileWidth = 60.0
         self.doc.recompute()
-        self.assert_hole_at(obj, body.Shape.Volume - ONE_HOLE, 180, 0, 24)
-        # Not moved to the offsets from the new start corner.
-        self.assertFalse(self.empty(obj.Shape, 330, 0, 24))
+        self.assert_hole_at(obj, body.Shape.Volume - ONE_HOLE, 180, 5, 24)
         self.assertEqual(obj.ReferenceWarning, WARNING)
 
-        # Back to the 50 mm extension of the fixture: the corner is there again.
-        body.OffsetB = 50.0
+        # Back to the 50 mm tube of the fixture: the corner is there again.
+        body.ProfileWidth = 50.0
         self.doc.recompute()
         self.assert_hole_at(obj, body.Shape.Volume - ONE_HOLE, 180, 0, 24)
         self.assertEqual(obj.ReferenceWarning, "")
@@ -65,15 +113,16 @@ class TestDrillHoleReference(DrillHoleFixture):
 
     def test_a_hole_on_a_hole_stays_when_its_face_reference_is_lost(self):
         # Editing the profile can leave the face of the first hole unresolved: FreeCAD names it "?Face3".
-        # Shortening the start removes the corner the hole is measured from (warning); a bevel keeps it.
-        for name, value, warning in (("OffsetB", -100.0, WARNING), ("BevelACutY", 30.0, "")):
+        # A bevel keeps the corner the holes are measured from. Shortening the start moves it: both holes follow it
+        # (the first one keeps its face named then).
+        for name, value, x, lost in (("OffsetB", -100.0, 330, False), ("BevelACutY", 30.0, 180, True)):
             with self.subTest(change=name):
                 body, first, obj = self.stacked_hole()
                 setattr(body, name, value)
                 self.doc.recompute()
-                self.assertTrue(obj.baseObject[1][0].startswith("?"), obj.baseObject[1])
-                self.assert_hole_at(obj, first.Shape.Volume - ONE_HOLE, 180, 0, 24)
-                self.assertEqual(obj.ReferenceWarning, warning)
+                self.assertEqual(obj.baseObject[1][0].startswith("?"), lost, obj.baseObject[1])
+                self.assert_hole_at(obj, first.Shape.Volume - ONE_HOLE, x, 0, 24)
+                self.assertEqual(obj.ReferenceWarning, "")
                 for each in (obj, first, body):
                     self.doc.removeObject(each.Name)
 

@@ -1,5 +1,10 @@
 ## Changelog
 
+* Unreleased
+
+  **Fixes**
+  - **Drill Hole follows the end of its piece**: when an end of the piece moves along the profile, for example a frame resized from a spreadsheet (width, depth), another **Extend / Cut** or an end offset, a hole measured from a corner of that end now keeps its offsets from it: 22 mm from the end stays 22 mm, also from the **Middle of** an end edge. It kept the old place of the corner, so it was no longer at its distance, with "The reference vertex changed: check the hole." The warning is left for a corner that is really gone, for example when the section changes size. Holes saved before take the end their corner is on when the document opens.
+
 * v1.15.0 (2026-11-16)
 
   **Improvements**
