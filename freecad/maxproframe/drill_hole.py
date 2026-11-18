@@ -132,6 +132,42 @@ def _add_reference_anchor(obj, shift=None):
         obj.ReferenceAnchor = shift
 
 
+def _add_reference_side(obj, side):
+    """Give ``obj`` the end of its face the reference vertex was on when the reference was taken, unless it has it."""
+    if hasattr(obj, "ReferenceSide"):
+        return
+    obj.addProperty(
+        "App::PropertyFloat",
+        "ReferenceSide",
+        "DrillHole",
+        translate("frameforge", "End of the face along the profile the reference vertex was on: 1, -1 or 0"),
+    )
+    obj.setEditorMode("ReferenceSide", ["ReadOnly", "Hidden"])
+    obj.ReferenceSide = side
+
+
+def _side(point, face, axis):
+    """1 or -1 when ``point`` is on the end of ``face`` along ``axis`` or on the other one; 0 in its middle."""
+    shift = (point - face.CenterOfMass).dot(axis)
+    return 0.0 if abs(shift) <= REFERENCE_TOLERANCE else (1.0 if shift > 0 else -1.0)
+
+
+def _follow_along(face, point, axis, side):
+    """Point of the vertex of ``face`` the reference vertex at ``point`` slid to along ``axis``, or None.
+
+    An end of the piece moved along the profile (a longer or shorter piece, another trim): the vertex is on
+    the line through ``point`` along ``axis``, at the end ``side`` of the face; the outermost one there. Without
+    a side, the vertex on the line nearest ``point``.
+    """
+    on_line = [
+        vertex.Point for vertex in face.Vertexes if (vertex.Point - point).cross(axis).Length <= REFERENCE_TOLERANCE
+    ]
+    if side:
+        ends = [candidate for candidate in on_line if _side(candidate, face, axis) == side]
+        return max(ends, key=lambda candidate: candidate.dot(axis) * side, default=None)
+    return min(on_line, key=lambda candidate: candidate.distanceToPoint(point), default=None)
+
+
 def _add_center_properties(obj):
     """Add CenterAlong and CenterAcross, off, when ``obj`` has not got them."""
     for name, tip in (
@@ -303,6 +339,11 @@ def _resolve_face(shape, name, normal, point):
     return min(faces, key=lambda face: face.distToShape(Part.Vertex(point))[0], default=None)
 
 
+def _profile_axis(profile):
+    """Direction ``profile`` is extruded along: its local Z."""
+    return profile.Placement.Rotation.multVec(App.Vector(0, 0, 1))
+
+
 def _builds_on(obj, base):
     """Whether ``obj`` is a cutout or a trim made from ``base``."""
     if is_extrudedcutout(obj):
@@ -406,6 +447,15 @@ class DrillHole(ExtrudedCutout):
         profile = get_profile_from_extrudedcutout(obj) if obj.baseObject else None
         if profile is not None:
             _add_reference_anchor(obj, section_shift(profile))
+            # Saved before ReferenceSide: the shape is still the one the snapshot matches. Read the end of the face
+            # the vertex is on now, before an edit moves it; when it cannot be read, a recompute reads it.
+            if not hasattr(obj, "ReferenceSide") and obj.ReferenceName:
+                try:
+                    point, normal, face = self._snapshot(obj, profile)[:3]
+                except Exception:  # noqa: BLE001 - a base not restored yet: read on recompute.
+                    face = None
+                if face is not None:
+                    _add_reference_side(obj, _side(point, face, _profile_axis(profile)))
         # Saved before the tape length: the length of the piece it cuts, as a cutout gets it.
         restore_length(obj, measured_piece)
 
@@ -425,12 +475,24 @@ class DrillHole(ExtrudedCutout):
                 if fp.baseObject:
                     _relabel(fp, left, fp.baseObject[0])
 
+    def _snapshot(self, fp, profile):
+        """(point, normal, face or None, shape) of the snapshot of ``fp`` on its base shape as it is now."""
+        selected_object, (face_name, *_) = fp.baseObject
+        shape = selected_object.Shape
+        placement = profile.Placement
+        # The anchor moves the section, not the profile: the snapshot moves with the section.
+        point = placement.multVec(fp.ReferencePoint + section_shift(profile) - fp.ReferenceAnchor)
+        normal = placement.Rotation.multVec(fp.ReferenceNormal)
+        face = _resolve_face(shape, face_name.removeprefix(MISSING_ELEMENT_PREFIX), normal, point)
+        return point, normal, face, shape
+
     def reference(self, fp):
         """(vertex point, face normal, face center, face or None) the holes are placed from.
 
         A face or vertex other than the snapshot's (a new hole, or picked by the user) takes a new
         snapshot. Otherwise the snapshot is found again on the base shape: the named vertex, else
-        the vertex now at its place; when none is, the hole keeps the snapshot and warns.
+        the vertex now at its place, else the vertex it slid to when an end of the piece moved along
+        the profile; when none is, the hole keeps the snapshot and warns.
         """
         profile = get_profile_from_extrudedcutout(fp)
         # A new drill hole, or one whose profile could not be read on opening: the anchor it has now.
@@ -456,13 +518,18 @@ class DrillHole(ExtrudedCutout):
             fp.ReferenceNormal = placement.Rotation.inverted().multVec(normal)
             fp.ReferenceName = name
             fp.ReferenceAnchor = section_shift(profile)
+            side = _side(vertex, face, _profile_axis(profile))
+            _add_reference_side(fp, side)
+            fp.ReferenceSide = side
             self._warn(fp, "")
             return vertex, normal, face.CenterOfMass, face
-        # The anchor moves the section, not the profile: the snapshot moves with the section.
-        point = placement.multVec(fp.ReferencePoint + section_shift(profile) - fp.ReferenceAnchor)
-        normal = placement.Rotation.multVec(fp.ReferenceNormal)
+        point, normal, face, shape = self._snapshot(fp, profile)
         vertex = _resolve_vertex(shape, fp.ReferenceVertex, point)
-        face = _resolve_face(shape, face_name, normal, point)
+        if vertex is None and face is not None:
+            axis = _profile_axis(profile)
+            # Taken before ReferenceSide and not read on opening: the end the snapshot is on now.
+            _add_reference_side(fp, _side(point, face, axis))
+            vertex = _follow_along(face, point, axis, fp.ReferenceSide)
         if vertex is None or face is None:
             self._warn(fp, translate("frameforge", "The reference vertex changed: check the hole."))
         else:
@@ -485,9 +552,7 @@ class DrillHole(ExtrudedCutout):
         side of it, forward in the positive direction of each offset (see pattern_positions).
         """
         vertex, normal, center, face = self.reference(fp)
-        profile = get_profile_from_extrudedcutout(fp)
-        # Profiles are extruded along their local Z.
-        axis = profile.Placement.Rotation.multVec(App.Vector(0, 0, 1))
+        axis = _profile_axis(get_profile_from_extrudedcutout(fp))
         # A drill hole saved before the centers has not got them until it is restored.
         center_along, center_across = getattr(fp, "CenterAlong", False), getattr(fp, "CenterAcross", False)
         along, across = _plane_axes(normal, axis, vertex, center, center_along, center_across)

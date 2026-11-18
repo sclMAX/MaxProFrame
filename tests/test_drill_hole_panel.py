@@ -1949,9 +1949,10 @@ class TestDrillHoleEdit(DrillHolePanelFixture):
         self.assertEqual(self.doc.UndoCount, 0)
 
     def test_the_panel_shows_the_reference_warning(self):
-        # S4 surfaced in the panel: the corner is gone, the hole kept its place.
+        # S4 surfaced in the panel: the corner is gone (the section widens, the corner moves across), the hole kept
+        # its place.
         body, obj = self.existing(OffsetAlong=230.0)
-        body.OffsetB = -100.0
+        body.ProfileWidth = 60.0
         self.doc.recompute()
         self.assertEqual(obj.ReferenceWarning, WARNING)
         panel = self.edit(obj)
@@ -2030,7 +2031,7 @@ class TestDrillHoleSpanish(DrillHolePanelFixture):
         self.assertTrue(panel.accept())
         # S4: the warning of a hole whose corner is gone.
         obj.OffsetAlong = 230.0
-        body.OffsetB = -100.0
+        body.ProfileWidth = 60.0
         self.doc.recompute()
         self.assertEqual(obj.ReferenceWarning, "La referencia cambió, revisá el agujero.")
 
