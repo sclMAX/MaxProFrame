@@ -830,6 +830,14 @@ class ViewProviderProfilePattern:
 
         vobj.addDisplayMode(coin.SoGroup(), DISPLAY_MODE)
 
+    def finishRestoring(self):
+        """Draw shown a pattern shown once opened: some FreeCAD versions restore the view hidden as saved after
+        the pattern was shown (a file from before the pattern listed its copies)."""
+        obj = getattr(self, "Object", None)
+        vobj = getattr(obj, "ViewObject", None)
+        if vobj is not None and obj.Visibility and not vobj.Visibility:
+            vobj.Visibility = True
+
     def getDisplayModes(self, vobj):
         return [DISPLAY_MODE]
 
