@@ -320,6 +320,114 @@ class TestCountAndPitch(PatternFixture):
         self.assert_part_shape_holds_every_copy(doc.getObject(part.Name))
 
 
+class TestPatternGroupsItsCopies(PatternFixture):
+    """The pattern lists its copies under it, and a Part reaches them through it, as through a folder."""
+
+    def in_part(self):
+        part = self.doc.addObject("App::Part", "Table")
+        part.addObjects([self.slat, *self.slat.OutList, self.frame])
+        self.doc.recompute()
+        obj = self.pattern(count=3, pitch=100.0)
+        if App.GuiUp:
+            # As the tree does when it shows the Part: the copies the pattern lists leave the list of the Part.
+            part.ViewObject.claimChildren()
+        return part, obj
+
+    @unittest.skipUnless(App.GuiUp, "the tree needs the GUI")
+    def test_the_copies_are_listed_under_the_pattern_not_beside_it(self):
+        part, obj = self.in_part()
+        self.assertEqual(obj.ViewObject.claimChildren(), list(obj.Copies))
+        listed = part.ViewObject.claimChildren()
+        self.assertIn(obj, listed)
+        self.assertFalse(set(obj.Copies) & set(listed))
+
+    def test_a_copy_is_reached_through_the_pattern_where_it_is(self):
+        part, obj = self.in_part()
+        self.assertTrue(obj.Visibility)
+        self.assertIn(f"{obj.Name}.", part.getSubObjects())
+        # FreeCAD hands the sub-objects out as a tuple.
+        # Without the GUI the Part lists the copies itself: the pattern does not hand them out again.
+        handed = [f"{link.Name}." for link in obj.Copies] if App.GuiUp else []
+        self.assertEqual(list(obj.getSubObjects()), handed)
+        for link in obj.Copies:
+            # retType 1: the object; the default (0) gives its shape.
+            self.assertEqual(part.getSubObject(f"{obj.Name}.{link.Name}.", retType=1), link)
+            through = Part.getShape(part, f"{obj.Name}.{link.Name}.")
+            self.assertTrue(through.BoundBox.Center.isEqual(center(link), 1e-6))
+
+    def test_a_folder_that_lists_the_copies_itself_holds_each_copy_once(self):
+        """A folder lists all it holds, the copies too: the pattern does not hand them out again."""
+        folder = self.doc.addObject("App::DocumentObjectGroup", "Slats")
+        folder.addObjects([self.slat, *self.slat.OutList, self.frame])
+        self.doc.recompute()
+        obj = self.pattern(count=3, pitch=100.0)
+        self.assertTrue(all(link.getParentGroup() == folder for link in obj.Copies))
+        centers = sorted(round(solid.BoundBox.Center.x, 6) for solid in Part.getShape(folder).Solids)
+        self.assertEqual(centers, [SLAT_X, 200.0, 300.0, 400.0])
+
+    def test_hiding_the_pattern_hides_its_copies_and_showing_it_shows_them(self):
+        part, obj = self.in_part()
+        if App.GuiUp:
+            # The eye of the tree: a pattern shown is drawn shown, not greyed out.
+            self.assertTrue(obj.ViewObject.isVisible())
+        obj.Visibility = False
+        if App.GuiUp:
+            self.assertFalse(obj.ViewObject.isVisible())
+        self.assertEqual([link.Visibility for link in obj.Copies], [False] * 3)
+        obj.Count = 4
+        self.doc.recompute()
+        self.assertEqual([link.Visibility for link in obj.Copies], [False] * 4)
+        obj.Visibility = True
+        if App.GuiUp:
+            self.assertTrue(obj.ViewObject.isVisible())
+        self.assertEqual([link.Visibility for link in obj.Copies], [True] * 4)
+
+    def test_a_pattern_saved_hidden_with_its_copies_shown_opens_shown(self):
+        """Patterns were hidden before they listed their copies: the Part would leave the copies out of its shape."""
+        part, obj = self.in_part()
+        # As saved before: the pattern hidden, its copies shown. Set in the file, as onChanged would show them.
+        folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, folder)
+        saved = os.path.join(folder, "pattern.FCStd")
+        self.doc.saveAs(saved)
+        old = os.path.join(folder, "old.FCStd")
+        hide_in_file(saved, old, obj.Name)
+        doc = App.openDocument(old)
+        self.addCleanup(App.closeDocument, doc.Name)
+        opened = doc.getObject(obj.Name)
+        self.assertTrue(opened.Visibility)
+        if App.GuiUp:
+            self.assertTrue(opened.ViewObject.isVisible())
+        self.assertEqual([link.Visibility for link in opened.Copies], [True] * 3)
+        centers = sorted(round(s.BoundBox.Center.x, 6) for s in Part.getShape(doc.getObject(part.Name)).Solids)
+        self.assertEqual(centers, [SLAT_X, 200.0, 300.0, 400.0])
+
+
+def hide_in_file(source, target, name):
+    """Copy the FCStd ``source`` to ``target`` with the object ``name`` hidden, in Document.xml and in
+    GuiDocument.xml (the GUI shows or hides it from there), nothing else."""
+    import re
+    import zipfile
+
+    blocks = {"Document.xml": ("<ObjectData", "Object"), "GuiDocument.xml": ("<ViewProviderData", "ViewProvider")}
+    with zipfile.ZipFile(source) as src, zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as dst:
+        for item in src.infolist():
+            data = src.read(item.filename)
+            if item.filename in blocks:
+                section, tag = blocks[item.filename]
+                text = data.decode("utf-8")
+                start = text.index(f'<{tag} name="{name}"', text.index(section))
+                end = text.index(f"</{tag}>", start)
+                block, done = re.subn(
+                    r'(<Property name="Visibility" type="App::PropertyBool"[^>]*>\s*<Bool value=")true',
+                    r"\1false",
+                    text[start:end],
+                )
+                assert done == 1, f"{name} is not shown in {item.filename} of {source}"
+                data = (text[:start] + block + text[end:]).encode("utf-8")
+            dst.writestr(item, data)
+
+
 class TestBetweenFaces(PatternFixture):
     def test_every_piece_the_original_too_sits_between_the_faces_with_equal_gaps(self):
         obj = self.pattern(mode="Between faces", count=5, faces=self.walls())

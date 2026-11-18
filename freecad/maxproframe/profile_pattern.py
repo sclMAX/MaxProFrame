@@ -497,6 +497,8 @@ class ProfilePattern:
     def onChanged(self, obj, prop):
         if prop in ("Count", "Mode", "Sense"):
             self._drop_extra_copies(obj)
+        elif prop == "Visibility":
+            self._show_copies_as(obj)
         elif prop in ("Edge", "Faces"):
             doc = obj.Document
             # Set by hand, by the panel or by Undo (read again once every shape is back). The pattern linking an
@@ -505,8 +507,54 @@ class ProfilePattern:
                 remember_elements(obj)
 
     def onDocumentRestored(self, obj):
-        """Remember the elements the links name as saved: a new size that makes FreeCAD lose them finds them again."""
+        """Remember the elements the links name as saved: a new size that makes FreeCAD lose them finds them again.
+
+        A pattern saved hidden with its copies shown (files from before it listed its copies) is shown.
+        """
         remember_elements(obj)
+        show_if_copies_shown(obj)
+
+    @staticmethod
+    def _show_copies_as(obj):
+        """Hiding or showing the pattern hides or shows its copies, as a folder does; not while it is opened."""
+        doc = obj.Document
+        if doc is None or doc.Restoring or "Copies" not in obj.PropertiesList:
+            return
+        for link in alive_copies(obj):
+            if link.Visibility != obj.Visibility:
+                link.Visibility = obj.Visibility
+
+    def getSubObjects(self, obj, reason=0):
+        """The copies, as the children of a folder: a Part reaches them through the pattern that lists them.
+
+        Only those its Part or folder leaves out (the Part of a shown tree): one it lists itself, as a folder
+        does, or a Part without the GUI, would be there twice.
+        """
+        listed = {}
+        copies = []
+        for link in alive_copies(obj):
+            parent = link.getParentGroup() or link.getParentGeoFeatureGroup()
+            if parent is not None and parent.Name not in listed:
+                listed[parent.Name] = set(parent.getSubObjects())
+            if parent is None or f"{link.Name}." not in listed[parent.Name]:
+                copies.append(f"{link.Name}.")
+        return copies
+
+    def getSubObject(self, obj, subname, retType, matrix, transform, depth):
+        """A path through the pattern to one of its copies goes on in that copy; the pattern moves nothing.
+
+        Any other path (none, or not to a copy): False, FreeCAD resolves it as usual.
+        """
+        name, dot, rest = (subname or "").partition(".")
+        if not dot or not name:
+            return False
+        link = next((link for link in alive_copies(obj) if link.Name == name), None)
+        if link is None:
+            return False
+        found = link.getSubObject(rest, retType=retType, matrix=matrix, transform=True, depth=depth + 1)
+        if found is None or not isinstance(found, tuple):
+            return None
+        return found[:3] if retType == 2 else found[:2]
 
     @staticmethod
     def _drop_extra_copies(obj):
@@ -642,6 +690,9 @@ class ProfilePattern:
         # In the Part of the piece before it links to it: the Part would drag in what the piece links to.
         place_in_container_of(link, piece)
         link.LinkedObject = piece
+        # Shown or hidden with the pattern that lists it.
+        if link.Visibility != obj.Visibility:
+            link.Visibility = obj.Visibility
         return link
 
     def unsetupObject(self, obj):
@@ -656,6 +707,25 @@ class ProfilePattern:
 
     def loads(self, state):
         return None
+
+
+def alive_copies(obj):
+    """The copies of the pattern ``obj`` still in its document."""
+    doc = obj.Document
+    if doc is None:
+        return []
+    return [link for link in getattr(obj, "Copies", ()) if link is not None and doc.getObject(link.Name) is link]
+
+
+def show_if_copies_shown(obj):
+    """Show the pattern ``obj`` when it is hidden and a copy of it is shown; its copies stay as they are.
+
+    Patterns were saved hidden with their copies shown before they listed them: hidden, the Part would leave out
+    of its shape the copies it reaches through the pattern.
+    """
+    if obj.Visibility or not any(link.Visibility for link in alive_copies(obj)):
+        return
+    obj.Visibility = True
 
 
 def follow_newest_pieces(doc):
@@ -745,23 +815,40 @@ if "_NEWEST_PIECE_OBSERVER" not in globals():
     App.addDocumentObserver(_NEWEST_PIECE_OBSERVER)
 
 
+DISPLAY_MODE = "Default"
+
+
 class ViewProviderProfilePattern:
     def __init__(self, vobj):
         vobj.Proxy = self
 
     def attach(self, vobj):
         self.Object = vobj.Object
+        # Nothing to draw (the copies draw themselves), but a display mode: without one FreeCAD never shows the
+        # pattern, and the tree greys it out even while its copies are shown.
+        from pivy import coin
+
+        vobj.addDisplayMode(coin.SoGroup(), DISPLAY_MODE)
+
+    def getDisplayModes(self, vobj):
+        return [DISPLAY_MODE]
+
+    def getDefaultDisplayMode(self):
+        return DISPLAY_MODE
+
+    def setDisplayMode(self, mode):
+        return mode
 
     def getIcon(self):
         return os.path.join(ICONPATH, "profile-pattern.svg")
 
     def claimChildren(self):
-        """Nothing: the copies stay listed in the Part of the piece.
+        """The copies, listed under the pattern; they stay in the Part or folder of the piece.
 
-        A Part leaves out of its shape what another of its objects claims: TechDraw and exports of the Part would
-        show the piece without its copies.
+        A Part leaves out of its shape what another of its objects claims, but the pattern hands its copies out as
+        its sub-objects: the Part still reaches them through it, and TechDraw and exports of the Part show them.
         """
-        return []
+        return list(self.Object.Copies)
 
     def doubleClicked(self, vobj):
         """Edit the pattern: unhandled, the tree of an App::FeaturePython starts renaming it instead."""
