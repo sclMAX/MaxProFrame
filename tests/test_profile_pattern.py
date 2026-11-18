@@ -295,6 +295,30 @@ class TestCountAndPitch(PatternFixture):
         for link in obj.Copies:
             self.assertTrue(center(link).sub(start).cross(X).Length < 1e-6)
 
+    def assert_part_shape_holds_every_copy(self, part):
+        if App.GuiUp:
+            # As the tree does when it shows the Part: what one of its objects claims leaves the shape of the Part.
+            part.ViewObject.claimChildren()
+        centers = sorted(round(solid.BoundBox.Center.x, 6) for solid in Part.getShape(part).Solids)
+        self.assertEqual(centers, [SLAT_X, 200.0, 300.0, 400.0])
+
+    def test_the_shape_of_a_part_holds_the_piece_and_every_copy(self):
+        """TechDraw and exports take the shape of the Part: a view of the Part shows the whole pattern."""
+        part = self.doc.addObject("App::Part", "Table")
+        part.addObjects([self.slat, *self.slat.OutList, self.frame])
+        self.doc.recompute()
+        self.pattern(count=3, pitch=100.0)
+        self.assert_part_shape_holds_every_copy(part)
+        folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, folder)
+        saved, copy = os.path.join(folder, "part.FCStd"), os.path.join(folder, "opened.FCStd")
+        self.doc.saveAs(saved)
+        # Opened from another file: a document of its own, read back from disk.
+        shutil.copy(saved, copy)
+        doc = App.openDocument(copy)
+        self.addCleanup(App.closeDocument, doc.Name)
+        self.assert_part_shape_holds_every_copy(doc.getObject(part.Name))
+
 
 class TestBetweenFaces(PatternFixture):
     def test_every_piece_the_original_too_sits_between_the_faces_with_equal_gaps(self):
