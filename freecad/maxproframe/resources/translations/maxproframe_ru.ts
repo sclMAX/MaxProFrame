@@ -2573,19 +2573,19 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>Profiles and Cuts</source>
-        <translation type="unfinished"></translation>
+        <translation>Профили и сечения</translation>
     </message>
     <message>
         <source>Output</source>
-        <translation type="unfinished"></translation>
+        <translation>Выход</translation>
     </message>
     <message>
         <source>Utilities</source>
-        <translation type="unfinished"></translation>
+        <translation>Утилиты</translation>
     </message>
     <message>
         <source>Profiles Group</source>
-        <translation type="unfinished"></translation>
+        <translation>Группы профилей</translation>
     </message>
 </context>
 <context>
@@ -3116,339 +3116,340 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>The interlock of the corner between {} and {} needs at least 2 fingers.</source>
-        <translation type="unfinished"></translation>
+        <translation>Для сцепления угла между {} и {} требуется как минимум 2 пальца.</translation>
     </message>
     <message>
         <source>The fingers of the corner between {} and {} do not fit: make them fewer or narrower.</source>
-        <translation type="unfinished"></translation>
+        <translation>Элементы в углу между {} и {} не помещаются: уменьшите их количество или сделайте их уже.</translation>
     </message>
     <message>
         <source>The finger tips of the corner between {} and {} must be between 0 and {max:g} mm.</source>
-        <translation type="unfinished"></translation>
+        <translation>Расстояние от вершины угла, образованного {} и {}, до его крайних точек должно составлять от 0 до {max:g} мм.</translation>
     </message>
     <message>
         <source>The interlock between {} and {} is not on a folded corner of {}.</source>
-        <translation type="unfinished"></translation>
+        <translation>Взаимосцепление между {} и {} находится не на загнутом уголке {}.</translation>
     </message>
     <message>
         <source>The corner between {} and {} has two interlocks: {} and {}.</source>
-        <translation type="unfinished"></translation>
+        <translation>Угол между {} и {} имеет два соединения: {} и {}.</translation>
     </message>
     <message>
         <source>Click the inner walls of the two tubes at a folded corner of a Folded Bar or at an End Miter corner for fingers, or a wall of a crossbar and the face of the rail it butts against for tabs.</source>
-        <translation type="unfinished"></translation>
+        <translation>Для создания «пальцев» (выступов) выберите внутренние стенки двух труб в месте сгиба (в углу гнутого элемента) или в месте углового стыка (под углом); для создания «язычков» (соединительных элементов) выберите стенку поперечины и грань профиля, к которой она примыкает.</translation>
     </message>
     <message>
         <source>Click the inner wall of the other tube at that corner.</source>
-        <translation type="unfinished"></translation>
+        <translation>Щёлкните по внутренней стенке другой трубы в этом углу.</translation>
     </message>
     <message>
         <source>Click the inner wall of {}: its face on the inside of the folded corner.</source>
-        <translation type="unfinished"></translation>
+        <translation>Щёлкните по внутренней стенке {}: по той её грани, которая находится с внутренней стороны согнутого угла.</translation>
     </message>
     <message>
         <source>{} is not a Folded Bar: click the inner walls of two tubes of a Folded Bar.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} не является согнутой заготовкой: щелкните по внутренним стенкам двух труб, составляющих согнутую заготовку.</translation>
     </message>
     <message>
         <source>Click both faces on the same Folded Bar.</source>
-        <translation type="unfinished"></translation>
+        <translation>Щёлкните по обеим граням на однй и той же согнутой заготовке.</translation>
     </message>
     <message>
         <source>{} and {} meet at the open corner of {}, which does not fold: click the inner walls at a folded corner.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} и {} сходятся в открытом углу {}, который не сгибается: щелкните по внутренним стенкам в месте сгиба.</translation>
     </message>
     <message>
         <source>{} and {} do not meet at a folded corner of {}: click the inner walls of two tubes that do.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} и {} не соединяются в месте сгиба {}: щелкните по внутренним стенкам двух труб, которые соединяются.</translation>
     </message>
     <message>
         <source>The corner between {} and {} has an interlock already: double-click {} to edit it.</source>
-        <translation type="unfinished"></translation>
+        <translation>В углу между {} и {} уже имеется соединение: дважды щелкните {}, чтобы отредактировать его.</translation>
     </message>
     <message>
         <source>Interlock</source>
-        <translation type="unfinished"></translation>
+        <translation>Сцепление</translation>
     </message>
     <message>
         <source>Corner: {} → {}</source>
-        <translation type="unfinished"></translation>
+        <translation>Угол: {} → {}</translation>
     </message>
     <message>
         <source>Fingers</source>
-        <translation type="unfinished"></translation>
+        <translation>Пальцы</translation>
     </message>
     <message>
         <source>Kind</source>
-        <translation type="unfinished"></translation>
+        <translation>Разновидность</translation>
     </message>
     <message>
         <source>Shape of the interlock: Fingers, at the inner vertex of a folded corner or of an End Miter corner; Tabs, on the end of a crossbar through slots in the rail at a T joint</source>
-        <translation type="unfinished"></translation>
+        <translation>Форма соединительного элемента: «пальцы» — во внутренней вершине согнутого угла или углового соединения типа «ус»; «выступы» — на конце поперечины, проходящие через прорези в направляющей (в Т-образном соединении)</translation>
     </message>
     <message>
         <source>Count</source>
-        <translation type="unfinished"></translation>
+        <translation>Подсчет</translation>
     </message>
     <message>
         <source>Number of fingers, at least 2; the tube before the corner owns the first one</source>
-        <translation type="unfinished"></translation>
+        <translation>Количество пальцев — не менее 2; первый из них находится на трубке перед углом</translation>
     </message>
     <message>
         <source>Finger width</source>
-        <translation type="unfinished"></translation>
+        <translation>Ширина пальца</translation>
     </message>
     <message>
         <source>Even</source>
-        <translation type="unfinished"></translation>
+        <translation>Выровнять</translation>
     </message>
     <message>
         <source>Width of every finger but the two outermost, centered; Even: the fingers split the tube evenly</source>
-        <translation type="unfinished"></translation>
+        <translation>Ширина каждого пальца, за исключением двух крайних, — по центру; равномерное распределение: пальцы делят трубу на равные части</translation>
     </message>
     <message>
         <source>Tip</source>
-        <translation type="unfinished"></translation>
+        <translation>Конец</translation>
     </message>
     <message>
         <source>Square</source>
-        <translation type="unfinished"></translation>
+        <translation>Квадрат</translation>
     </message>
     <message>
         <source>Chamfer</source>
-        <translation type="unfinished"></translation>
+        <translation>Фаска</translation>
     </message>
     <message>
         <source>Round</source>
-        <translation type="unfinished"></translation>
+        <translation>Круг</translation>
     </message>
     <message>
         <source>Corners of each finger tip: Square, Chamfer or Round, to lead it in</source>
-        <translation type="unfinished"></translation>
+        <translation>Углы каждого конца пальца: квадратные, со скосом или закругленные — для более плавного вхождения</translation>
     </message>
     <message>
         <source>Tip size</source>
-        <translation type="unfinished"></translation>
+        <translation>Размер наконечника</translation>
     </message>
     <message>
         <source>Chamfer leg or radius of the finger tip corners, in the inner wall plane</source>
-        <translation type="unfinished"></translation>
+        <translation>Фаска или радиус скругления углов на кончике пальца, в плоскости внутренней стенки</translation>
     </message>
     <message>
         <source>Depth</source>
-        <translation type="unfinished"></translation>
+        <translation>Глубина</translation>
     </message>
     <message>
         <source>Depth of the finger band across the bent wall; Automatic: the step depth of a Stepped joint</source>
-        <translation type="unfinished"></translation>
+        <translation>Глубина пальцевого соединения на изогнутой стенке; автоматический режим: глубина ступени ступенчатого соединения</translation>
     </message>
     <message>
         <source>Gap between every pair of mating finger faces, half on each side</source>
-        <translation type="unfinished"></translation>
+        <translation>Зазор между каждой парой сопрягаемых поверхностей пальцев, распределенный поровну между обеими сторонами</translation>
     </message>
     <message>
         <source>Flip</source>
-        <translation type="unfinished"></translation>
+        <translation>Переворот</translation>
     </message>
     <message>
         <source>Swap the tubes: the tube after the corner owns the first finger</source>
-        <translation type="unfinished"></translation>
+        <translation>Поменяйте трубы местами: за трубой, расположенной после угла, закрепляется первый палец</translation>
     </message>
     <message>
         <source>Create this interlock in its own Undo step and keep the panel open: click the two faces of the next one, with the same settings.</source>
-        <translation type="unfinished"></translation>
+        <translation>Создайте это соединение как отдельный шаг в истории отмены действий (Undo) и оставьте панель открытой: выберите две грани следующего элемента, используя те же настройки.</translation>
     </message>
     <message>
         <source>{} meets neither end of the bar.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} не дотягивается ни до одного из концов заготовки.</translation>
     </message>
     <message>
         <source>{} is folded by {}: a tube folds into one bar only.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} сгибается с помощью {}: труба сгибается в одну заготовку.</translation>
     </message>
     <message>
         <source>{} is another Folded Bar: a tube folds into one bar only.</source>
-        <translation type="unfinished"></translation>
+        <translation>57
+{} — это ещё один вариант согнутой заготовки: труба складывается в одну-единственную заготовку.</translation>
     </message>
     <message>
         <source>{} is a closed frame: it takes no more tubes.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} — это замкнутая рама: в неё больше нельзя добавить трубы.</translation>
     </message>
     <message>
         <source>Click the other face of the T joint: the face of the rail the crossbar butts against, or the wall of the crossbar that carries the tabs.</source>
-        <translation type="unfinished"></translation>
+        <translation>Щёлкните по другой грани Т-образного соединения: по грани направляющей, к которой примыкает поперечина, или по той стороне поперечины, на которой расположены выступы.</translation>
     </message>
     <message>
         <source>T joint</source>
-        <translation type="unfinished"></translation>
+        <translation>T соединение</translation>
     </message>
     <message>
         <source>T joint: {} → {}</source>
-        <translation type="unfinished"></translation>
+        <translation>T соединение: {} → {}</translation>
     </message>
     <message>
         <source>Tabs</source>
-        <translation type="unfinished"></translation>
+        <translation>Выступы</translation>
     </message>
     <message>
         <source>Tab width</source>
-        <translation type="unfinished"></translation>
+        <translation>Ширина выступа</translation>
     </message>
     <message>
         <source>Length</source>
-        <translation type="unfinished"></translation>
+        <translation>Длина</translation>
     </message>
     <message>
         <source>Number of tabs, at least 1, across the flat part of the crossbar wall</source>
-        <translation type="unfinished"></translation>
+        <translation>Количество выступов — не менее 1 — вдоль плоской части стенки поперечины</translation>
     </message>
     <message>
         <source>Width of every tab, with equal gaps between them and at both ends; Even: the tabs and the gaps split the flat part of the wall evenly</source>
-        <translation type="unfinished"></translation>
+        <translation>Ширина каждого выступа, при этом между ними, а также по краям, предусмотрены равные промежутки; «Равномерное распределение»: выступы и промежутки равномерно делят плоскую часть стенки</translation>
     </message>
     <message>
         <source>Corners of each tab tip: Square, Chamfer or Round, to lead it into its slot</source>
-        <translation type="unfinished"></translation>
+        <translation>Варианты оформления концов выступов: прямоугольные, со скошенными краями или закругленные — для облегчения их вставки в пазы</translation>
     </message>
     <message>
         <source>Chamfer leg or radius of the tab tip corners, in the crossbar wall plane</source>
-        <translation type="unfinished"></translation>
+        <translation>Фаска или радиус скругления углов конца выступа — в плоскости стенки поперечины</translation>
     </message>
     <message>
         <source>How far the tabs go across the rail wall, along its normal; Automatic: the rail wall thickness, flush with its inside face</source>
-        <translation type="unfinished"></translation>
+        <translation>На какое расстояние выступы заходят за стенку направляющей (вдоль нормали к ней); «Автоматически»: на толщину стенки направляющей, вровень с её внутренней гранью</translation>
     </message>
     <message>
         <source>Gap around each tab in its slot, half on each side</source>
-        <translation type="unfinished"></translation>
+        <translation>Зазор вокруг каждого выступа в его пазу, распределённый поровну с обеих сторон</translation>
     </message>
     <message>
         <source>There is no T joint between {} and {}: pick a flat face of each tube.</source>
-        <translation type="unfinished"></translation>
+        <translation>Между {} и {} нет Т-образного соединения: выберите плоскую грань на каждой из труб.</translation>
     </message>
     <message>
         <source>Both faces are on {}: click a wall of the crossbar and the face of the rail it butts against.</source>
-        <translation type="unfinished"></translation>
+        <translation>Обе грани находятся на {}: щелкните по грани поперечины и по грани направляющей, к которой она примыкает.</translation>
     </message>
     <message>
         <source>There is no T joint between {} and {}: {crossbar} does not end on the face of {rail}.</source>
-        <translation type="unfinished"></translation>
+        <translation>Между {} и {} отсутствует Т-образное соединение: {crossbar} не заканчивается на грани {rail}.</translation>
     </message>
     <message>
         <source>There is no T joint between {} and {}: {crossbar} runs along the face of {rail}.</source>
-        <translation type="unfinished"></translation>
+        <translation>Между {} и {} нет Т-образного соединения: {crossbar} проходит вдоль грани {rail}.</translation>
     </message>
     <message>
         <source>There is no T joint between {} and {}: the face of {crossbar} is not a wall along it.</source>
-        <translation type="unfinished"></translation>
+        <translation>Между {} и {} нет Т-образного соединения: грань {crossbar} не является стенкой, проходящей вдоль них.</translation>
     </message>
     <message>
         <source>The tabs of the T joint between {} and {} need two tubes: {} is a {} profile.</source>
-        <translation type="unfinished"></translation>
+        <translation>Для выступов Т-образного соединения между {} и {} требуются две трубы: {} представляет собой профиль типа {}.</translation>
     </message>
     <message>
         <source>The interlock of the T joint between {} and {} needs at least 1 tab.</source>
-        <translation type="unfinished"></translation>
+        <translation>Для соединения типа «Т» между {} и {} требуется как минимум один выступ (шип).</translation>
     </message>
     <message>
         <source>The tab length of the T joint between {} and {} must be 0 (automatic) or more.</source>
-        <translation type="unfinished"></translation>
+        <translation>Длина выступа в Т-образном соединении между {} и {} должна составлять 0 (автоматически) или более.</translation>
     </message>
     <message>
         <source>The tabs of the T joint between {} and {} do not fit: make them fewer or narrower.</source>
-        <translation type="unfinished"></translation>
+        <translation>Выступы Т-образного соединения между {} и {} не подходят: сделайте их меньше по количеству или уже.</translation>
     </message>
     <message>
         <source>The tab tips of the T joint between {} and {} must be between 0 and {max:g} mm.</source>
-        <translation type="unfinished"></translation>
+        <translation>Кончики выступов в Т-образном соединении между {} и {} должны находиться в диапазоне от 0 до {max:g} мм.</translation>
     </message>
     <message>
         <source>The slots of the T joint between {} and {} do not fall on the flat part of the face of {rail}.</source>
-        <translation type="unfinished"></translation>
+        <translation>Пазы Т-образного соединения между {} и {} не попадают на плоскую часть грани {rail}.</translation>
     </message>
     <message>
         <source>The T joint between {} and {} already has tabs on that face: {}.</source>
-        <translation type="unfinished"></translation>
+        <translation>В Т-образном соединении между {} и {} на этой грани уже имеются выступы: {}.</translation>
     </message>
     <message>
         <source>The T joint between {} and {} is at a folded corner of {}: the tabs go on a free end of a Folded Bar.</source>
-        <translation type="unfinished"></translation>
+        <translation>Т-образное соединение между {} и {} находится в месте сгиба элемента {}: выступы располагаются на свободном конце согнутой заготовки.</translation>
     </message>
     <message>
         <source>The T joint between {} and {} is at the open corner of {}: the tabs go on a free end of a Folded Bar.</source>
-        <translation type="unfinished"></translation>
+        <translation>Т-образное соединение между {} и {} находится в открытом углу {}: выступы располагаются на свободном конце согнутой заготовки.</translation>
     </message>
     <message>
         <source>The interlock {} lost the face of {} it was made on.</source>
-        <translation type="unfinished"></translation>
+        <translation>Соединительный элемент {} утратил связь с той гранью {}, на которой он был создан.</translation>
     </message>
     <message>
         <source>Click the inner wall of the other tube at the End Miter corner for fingers, or the other face of the T joint for tabs.</source>
-        <translation type="unfinished"></translation>
+        <translation>Щёлкните по внутренней стенке другой трубы в месте углового стыка (End Miter), чтобы создать выступы типа «пальцы», либо по другой грани Т-образного соединения, чтобы создать выступы типа «язычки».</translation>
     </message>
     <message>
         <source>Number of fingers, at least 2; the tube of the first face clicked owns the first one</source>
-        <translation type="unfinished"></translation>
+        <translation>Количество пальцев — не менее 2; труба, прикреплённая к первой грани, относится к первому пальцу</translation>
     </message>
     <message>
         <source>Depth of the finger band across the inner walls; Automatic: the step depth of a Stepped joint</source>
-        <translation type="unfinished"></translation>
+        <translation>Глубина выступа вдоль внутренних стенок; для автоматического режима: глубина ступени в ступенчатом соединении</translation>
     </message>
     <message>
         <source>Swap the tubes: the tube of the second face clicked owns the first finger</source>
-        <translation type="unfinished"></translation>
+        <translation>Поменяйте трубы местами: труба, принадлежащая второй грани, защёлкнулась на первом пальце</translation>
     </message>
     <message>
         <source>The faces of {} and {} are not the inner walls of an End Miter corner between them.</source>
-        <translation type="unfinished"></translation>
+        <translation>Грани {} и {} не являются внутренними стенками углового стыка (соединения «на ус») между ними.</translation>
     </message>
     <message>
         <source>{} and {} are not the same size along their corner: their fingers cannot match.</source>
-        <translation type="unfinished"></translation>
+        <translation>{} и {} имеют разный размер вдоль своего угла: их «пальцы» не могут состыковаться.</translation>
     </message>
     <message>
         <source>The finger depth of the corner between {} and {} must be between {min:g} and {max:g} mm.</source>
-        <translation type="unfinished"></translation>
+        <translation>Глубина выступа в углу между {} и {} должна составлять от {min:g} до {max:g} мм.</translation>
     </message>
     <message>
         <source>The fingers of the corner between {} and {} do not fit at this angle: make the depth smaller.</source>
-        <translation type="unfinished"></translation>
+        <translation>Элементы в углу между {} и {} не стыкуются под таким углом: уменьшите глубину.</translation>
     </message>
     <message>
         <source>The fingers of the corner between {} and {} do not reach across the miter gap: make the gap smaller or the depth larger.</source>
-        <translation type="unfinished"></translation>
+        <translation>Элементы в углу между {} и {} не перекрывают зазор в стыке: уменьшите зазор или увеличьте глубину.</translation>
     </message>
     <message>
         <source>Both faces are on {}: click the inner wall of each tube of the End Miter corner.</source>
-        <translation type="unfinished"></translation>
+        <translation>Обе грани находятся на {}: щелкните по внутренней стенке каждой трубы в месте углового стыка.</translation>
     </message>
     <message>
         <source>The fingers of the corner between {} and {} need two tubes: {} is a {} profile.</source>
-        <translation type="unfinished"></translation>
+        <translation>Для элементов в углу между {} и {} требуются две трубы: {} представляет собой профиль типа {}.</translation>
     </message>
     <message>
         <source>The fingers of the corner between {} and {} need an End Miter of each tube against the other: make them with Miter Ends.</source>
-        <translation type="unfinished"></translation>
+        <translation>Для элементов в углу между {} и {} требуется торцевой запил каждой трубы относительно другой: выполните их командой «Создать скошенные торцы».</translation>
     </message>
     <message>
         <source>The fingers of the corner between {} and {} need an End Miter of {} against {}: make it with Miter Ends.</source>
-        <translation type="unfinished"></translation>
+        <translation>Для элементов в углу между {} и {} требуется торцевой запил {} относительно {}: выполните его командой «Создать скошенные торцы».</translation>
     </message>
     <message>
         <source>The End Miters of {} and {} have different gaps: give them the same Gap.</source>
-        <translation type="unfinished"></translation>
+        <translation>У торцевых стыков {} и {} разные зазоры: установите для них одинаковый зазор.</translation>
     </message>
     <message>
         <source>The corner between {} and {} already has fingers: {}.</source>
-        <translation type="unfinished"></translation>
+        <translation>В углу между {} и {} уже есть выступы: {}.</translation>
     </message>
     <message>
         <source>The End Miter corner between {} and {} is at a folded corner of {}: the fingers go on a free end of a Folded Bar.</source>
-        <translation type="unfinished"></translation>
+        <translation>Угловое соединение «на ус» между {} и {} находится в месте сгиба элемента {}: выступы располагаются на свободном конце согнутой заготовки.</translation>
     </message>
     <message>
         <source>The End Miter corner between {} and {} is at the open corner of {}: the fingers go on a free end of a Folded Bar.</source>
-        <translation type="unfinished"></translation>
+        <translation>Угловое соединение «на ус» между {} и {} расположено в открытом углу {}: выступы (зубцы) находятся на свободном конце согнутой заготовки.</translation>
     </message>
 </context>
 <context>
@@ -3477,11 +3478,11 @@ All files and sketches on disk will be kept intact.</source>
     <name>MaxProFrame_Interlock</name>
     <message>
         <source>Interlock</source>
-        <translation type="unfinished"></translation>
+        <translation>Соединение</translation>
     </message>
     <message>
         <source>&lt;b&gt;Interlock&lt;/b&gt;&lt;br&gt;&lt;br&gt;Click two faces. The inner wall faces of the two tubes at a folded corner of a Folded Bar, or at an End Miter corner of two tubes cut against each other with Miter Ends: fingers cut by the laser at the inner vertex of the corner locate one tube on the other. A wall of a crossbar and the face of the rail it butts against (a T joint): tabs on the crossbar end go through slots cut in the rail. Set their count, width, tip and clearance in the panel. Double-click the Interlock to edit it.</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;b&gt;Соединение с фиксацией&lt;/b&gt;&lt;br&gt;&lt;br&gt;Выберите две грани. Это может быть соединение внутренних стенок двух труб в месте сгиба (в конструкции типа «согнутый профиль») или в месте стыка под углом (когда две трубы обрезаны «на ус» и примыкают друг к другу): лазерная резка формирует на внутренней вершине угла специальные выступы («пальцы»), которые позволяют точно позиционировать одну трубу относительно другой. Также это может быть Т-образное соединение, где поперечный элемент примыкает к продольному: на конце поперечного элемента предусмотрены выступы, которые входят в прорези, выполненные в продольном элементе. В соответствующей панели настроек можно задать количество, ширину, форму наконечников и величину зазора. Чтобы отредактировать соединение, дважды щелкните по нему.</translation>
     </message>
 </context>
 <context>
@@ -3552,79 +3553,79 @@ All files and sketches on disk will be kept intact.</source>
     </message>
     <message>
         <source>Profile of one of the two tubes the interlock joins</source>
-        <translation type="unfinished"></translation>
+        <translation>Профиль одной из двух труб, которые соединяет блокировочный механизм</translation>
     </message>
     <message>
         <source>Profile of the other tube the interlock joins</source>
-        <translation type="unfinished"></translation>
+        <translation>Профиль другой трубы, к которой присоединяется соединительный элемент</translation>
     </message>
     <message>
         <source>Shape of the interlock: Fingers, at the inner vertex of a folded corner or of an End Miter corner; Tabs, on the end of a crossbar through slots in the rail at a T joint</source>
-        <translation type="unfinished"></translation>
+        <translation>Форма соединительного элемента: «пальцы» — во внутренней вершине согнутого угла или углового соединения типа «ус»; «выступы» — на конце поперечины, проходящие через прорези в направляющей (в Т-образном соединении)</translation>
     </message>
     <message>
         <source>Number of fingers, at least 2; the first tube owns the first finger</source>
-        <translation type="unfinished"></translation>
+        <translation>Количество пальцев — не менее 2; первая труба включает в себя первый палец</translation>
     </message>
     <message>
         <source>Width of every finger but the two outermost, centered; 0: the fingers split the tube evenly</source>
-        <translation type="unfinished"></translation>
+        <translation>Ширина каждого пальца, за исключением двух крайних; центрирование; 0: пальцы равномерно распределяют трубку</translation>
     </message>
     <message>
         <source>Corners of each finger tip: Square, Chamfer or Round, to lead it in</source>
-        <translation type="unfinished"></translation>
+        <translation>Углы каждого кончика пальца: квадратные, со скосом или закругленные — для более плавного вхождения</translation>
     </message>
     <message>
         <source>Chamfer leg or radius of the finger tip corners, in the inner wall plane</source>
-        <translation type="unfinished"></translation>
+        <translation>Фаска или радиус скругления углов на кончике пальца, в плоскости внутренней стенки</translation>
     </message>
     <message>
         <source>Depth of the finger band across the bent wall; 0: automatic, the step depth of a Stepped joint</source>
-        <translation type="unfinished"></translation>
+        <translation>Глубина пальцевого соединения вдоль изогнутой стенки; 0: автоматический режим, глубина ступени ступенчатого соединения</translation>
     </message>
     <message>
         <source>Gap between every pair of mating finger faces, half on each side</source>
-        <translation type="unfinished"></translation>
+        <translation>Зазор между каждой парой сопрягаемых поверхностей пальцев, распределенный поровну между обеими сторонами</translation>
     </message>
     <message>
         <source>Swap the tubes: the second one owns the first finger</source>
-        <translation type="unfinished"></translation>
+        <translation>Поменяйте трубы местами: вторая труба соответствует первому пальцу</translation>
     </message>
     <message>
         <source>Interlock objects on the corners of the bar</source>
-        <translation type="unfinished"></translation>
+        <translation>Сцепите объекты по углам заготовки</translation>
     </message>
     <message>
         <source>How far the tabs go across the rail wall, along its normal; 0: automatic, the rail wall thickness</source>
-        <translation type="unfinished"></translation>
+        <translation>На какое расстояние выступы заходят на стенку направляющей (вдоль нормали к ней); 0: автоматически — на толщину стенки направляющей</translation>
     </message>
     <message>
         <source>Crossbar piece and face that carry the tabs</source>
-        <translation type="unfinished"></translation>
+        <translation>Поперечный элемент и лицевая часть, на которых расположены выступы</translation>
     </message>
     <message>
         <source>Rail piece and face the slots go through</source>
-        <translation type="unfinished"></translation>
+        <translation>Элемент направляющей; пазы проходят сквозь него</translation>
     </message>
     <message>
         <source>The Tabs Interlock this piece adds its tabs or slots for</source>
-        <translation type="unfinished"></translation>
+        <translation>В этой детали с фиксаторами вставки (или пазами) предусмотрены специальные выступы или пазы для</translation>
     </message>
     <message>
         <source>Fingers at the inner vertex of an End Miter corner between two tubes</source>
-        <translation type="unfinished"></translation>
+        <translation>Пальцы у внутренней вершины углового стыка (соединения «на ус») между двумя трубами</translation>
     </message>
     <message>
         <source>Piece and inner wall of the first tube, which owns the first finger</source>
-        <translation type="unfinished"></translation>
+        <translation>Элемент и внутренняя стенка первой трубы, к которой относится первый палец</translation>
     </message>
     <message>
         <source>Piece and inner wall of the second tube</source>
-        <translation type="unfinished"></translation>
+        <translation>Элемент и внутренняя стенка второй трубы</translation>
     </message>
     <message>
         <source>The Interlock of the End Miter corner this piece adds its fingers for</source>
-        <translation type="unfinished"></translation>
+        <translation>В месте соединения углового соединения торцевого скоса эта деталь имеет свои выступы для</translation>
     </message>
 </context>
 </TS>
