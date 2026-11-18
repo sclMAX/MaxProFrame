@@ -1,5 +1,10 @@
 ## Changelog
 
+* Unreleased
+
+  **Improvements**
+  - **Profile Pattern lists its copies again**: the copies of a pattern are listed under it in the tree again, instead of loose next to the piece, and hiding or showing the pattern hides or shows its copies, as a folder does. The pattern is no longer greyed out in the tree while it is shown. A TechDraw view or an export of the Part still shows every copy: the Part reaches them through the pattern. A pattern saved hidden with its copies shown opens shown, so its copies stay in the Part.
+
 * v1.15.3 (2026-11-18)
 
   **Fixes**
