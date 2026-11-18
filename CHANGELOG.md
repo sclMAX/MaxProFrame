@@ -1,6 +1,6 @@
 ## Changelog
 
-* Unreleased
+* v1.15.3 (2026-11-18)
 
   **Fixes**
   - **Profile Pattern copies in TechDraw and exports**: a TechDraw view or an export of a Part now shows every copy of a pattern, not only its piece. The tree listed the copies under the pattern, and FreeCAD leaves what is listed that way out of the shape of the Part. The copies are now listed next to the piece, in its Part or folder; files saved before are fixed when they open.
