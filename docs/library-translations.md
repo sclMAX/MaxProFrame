@@ -23,3 +23,5 @@ python3 freecad/maxproframe/compile_translations.py
 ```
 
 This refreshes `maxproframe_es.qm` and its `es-ES`, `es-CO` and `es-AR` copies, the Spanish locales FreeCAD looks for. The committed `.qm` files are built with Qt's `lrelease`, the one bundled in the FreeCAD AppImage (`usr/lib/qt6/bin/lrelease`): `compile_translations.py` gives working catalogs but does not reproduce those files byte for byte. Build `maxproframe_es.qm` and `maxproframe_ru.qm` with it from their `.ts`, and copy `maxproframe_es.qm` to the `es-ES`, `es-CO` and `es-AR` names. Catalog tests cover literal library, card, DXF and sketch-dialog messages plus indirect labels and standard T-Slot names.
+
+A translation keeps every placeholder of its source exactly: `{}`, `{max:g}`, `{crossbar}`, `%s`. The code fills them, so a translated field name (`{поперечина}` for `{crossbar}`) makes the message fail and a dropped one hides the names it should show; reordering them is fine. `tests/test_translation_placeholders.py` checks every `.ts` catalog.

@@ -1,5 +1,10 @@
 ## Changelog
 
+* Unreleased
+
+  **Improvements**
+  - **Russian translation for v1.15**: every text of the workbench is in Russian, the Interlock (Fingers at a folded or End Miter corner, Tabs at a T joint), extending a Folded Bar and the submenus of the one MaxProFrame menu included, which showed in English until now. Contributed by [@c0n5t](https://github.com/c0n5t). Every translation now keeps the placeholders of its text, checked by a test of every catalog: a translated field name such as `{crossbar}` would have made the message fail instead of showing.
+
 * v1.15.1 (2026-11-17)
 
   **Fixes**
