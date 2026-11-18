@@ -756,7 +756,12 @@ class ViewProviderProfilePattern:
         return os.path.join(ICONPATH, "profile-pattern.svg")
 
     def claimChildren(self):
-        return list(self.Object.Copies)
+        """Nothing: the copies stay listed in the Part of the piece.
+
+        A Part leaves out of its shape what another of its objects claims: TechDraw and exports of the Part would
+        show the piece without its copies.
+        """
+        return []
 
     def doubleClicked(self, vobj):
         """Edit the pattern: unhandled, the tree of an App::FeaturePython starts renaming it instead."""
