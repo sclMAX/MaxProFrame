@@ -12,9 +12,9 @@
     "expected_python": [3, 11]
   },
   "weekly": {
-    "label": "FreeCAD weekly-2026.11.18",
-    "url": "https://github.com/FreeCAD/FreeCAD/releases/download/weekly-2026.11.18/FreeCAD_weekly-2026.11.18-Linux-x86_64.AppImage",
-    "sha256": "3d3e5ea89f9edad8a1f151e1d4654a1fe035f944c3d54e3409a2ae033a6e3687",
+    "label": "FreeCAD weekly-2026.11.25",
+    "url": "https://github.com/FreeCAD/FreeCAD/releases/download/weekly-2026.11.25/FreeCAD_weekly-2026.11.25-Linux-x86_64.AppImage",
+    "sha256": "504ea508e912c4a001d1a2adf88b85fac1218145b1916f05134e0b470986d90b",
     "timeout": 540,
     "blocking": false,
     "shards": 4,
